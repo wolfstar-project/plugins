@@ -4,62 +4,62 @@
   "private": true,
   "description": "Official plugins for @wolfstar/http-framework",
   "license": "Apache-2.0",
-	"type": "module",
-	"scripts": {
-		"clean": "node scripts/clean.mjs",
-		"prepare": "husky || true",
-		"lint": "oxlint packages && oxfmt --check packages",
-		"lint:fix": "oxlint --fix packages && oxfmt --write packages",
-		"test": "vitest run",
-		"build": "turbo run build",
-		"typecheck": "turbo run typecheck",
-		"update": "pnpm update --interactive --recursive",
-		"changeset": "changeset add",
-		"publish": "pnpm build && changeset publish",
-		"publish:snapshot": "changeset version --snapshot next && pnpm build && changeset publish --tag next --no-git-tag"
-	},
-	"devDependencies": {
-		"@arethetypeswrong/core": "^0.18.3",
-		"@changesets/cli": "^2.31.0",
-		"@changesets/get-github-info": "^0.8.0",
-		"@changesets/types": "^6.1.0",
-		"@commitlint/cli": "^21.0.2",
-		"@commitlint/config-conventional": "^21.0.2",
-		"@favware/npm-deprecate": "^2.0.0",
-		"@sapphire/ts-config": "^5.0.3",
-		"@swc/core": "^1.15.41",
-		"@types/node": "22.15.21",
-		"@types/ws": "^8.18.1",
-		"@vitest/coverage-v8": "^4.1.9",
-		"cz-conventional-changelog": "^3.3.0",
-		"husky": "9.1.7",
-		"knip": "6.20.0",
-		"nano-staged": "1.0.2",
-		"oxfmt": "0.55.0",
-		"oxlint": "1.70.0",
-		"publint": "^0.3.21",
-		"tsdown": "^0.22.3",
-		"turbo": "^2.9.18",
-		"typescript": "~5.8.3",
-		"unrun": "0.3.1",
-		"vitest": "^4.1.9"
-	},
-	"nano-staged": {
-		"*.{ts,mts,cts,tsx,mjs,cjs,js,jsx,json,jsonc,yml,yaml,md}": "oxfmt --no-error-on-unmatched-pattern",
-		"*.{ts,mts,cts,tsx,mjs,cjs,js,jsx}": "oxlint --fix"
-	},
-	"commitlint": {
-		"extends": [
-			"@commitlint/config-conventional"
-		]
-	},
-	"config": {
-		"commitizen": {
-			"path": "./node_modules/cz-conventional-changelog"
-		}
-	},
-	"engines": {
-		"node": ">=20.0.0"
-	},
+  "type": "module",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "prepare": "husky || true",
+    "lint": "oxlint packages && oxfmt --check packages",
+    "lint:fix": "oxlint --fix packages && oxfmt --write packages",
+    "test": "vitest run",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "update": "pnpm update --interactive --recursive",
+    "changeset": "changeset add",
+    "publish": "pnpm build && changeset publish",
+    "publish:snapshot": "changeset version --snapshot next && pnpm build && changeset publish --tag next --no-git-tag"
+  },
+  "devDependencies": {
+    "@arethetypeswrong/core": "^0.18.3",
+    "@changesets/cli": "^2.31.0",
+    "@changesets/get-github-info": "^0.8.0",
+    "@changesets/types": "^6.1.0",
+    "@commitlint/cli": "^21.0.2",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@favware/npm-deprecate": "^2.0.0",
+    "@sapphire/ts-config": "^5.0.3",
+    "@swc/core": "^1.15.41",
+    "@types/node": "22.15.21",
+    "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^4.1.9",
+    "cz-conventional-changelog": "^3.3.0",
+    "husky": "9.1.7",
+    "knip": "6.20.0",
+    "nano-staged": "1.0.2",
+    "oxfmt": "0.55.0",
+    "oxlint": "1.70.0",
+    "publint": "^0.3.21",
+    "tsdown": "^0.22.3",
+    "turbo": "^2.9.18",
+    "typescript": "~5.8.3",
+    "unrun": "0.3.1",
+    "vitest": "^4.1.9"
+  },
+  "nano-staged": {
+    "*.{ts,mts,cts,tsx,mjs,cjs,js,jsx,json,jsonc,yml,yaml,md}": "oxfmt --no-error-on-unmatched-pattern",
+    "*.{ts,mts,cts,tsx,mjs,cjs,js,jsx}": "oxlint --fix"
+  },
+  "commitlint": {
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "packageManager": "pnpm@11.9.0"
 }

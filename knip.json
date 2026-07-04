@@ -1,13 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "ignoreDependencies": ["@arethetypeswrong/cli"],
   "workspaces": {
     ".": {
       "project": ["*.ts"]
     },
     "packages/*": {
-      "project": ["src/**/*.ts"],
-      "ignoreDependencies": ["@sapphire/pieces"]
+      "project": ["src/**/*.ts"]
     }
   }
 }

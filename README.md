@@ -11,17 +11,9 @@ Structured after [`sapphiredev/plugins`](https://github.com/sapphiredev/plugins)
 
 ## Packages
 
-| Package                                               | Description                                       |
-| ----------------------------------------------------- | ------------------------------------------------- |
-| [`@wolfstar/plugin-logger`](./packages/plugin-logger) | Registers a leveled logger on `container.logger`. |
-
-## How plugins work
-
-Each package hooks into the `@wolfstar/http-framework` plugin system. A plugin subclasses `Plugin`,
-implements one or more symbol-keyed static hooks (`preGenericsInitialization`, `preInitialization`,
-`postInitialization`, `preLoad`, `postListen`) and registers them on `Client.plugins`. Consumers opt in by
-importing the side-effecting `./register` subpath. See
-[`packages/plugin-logger/src/register.ts`](./packages/plugin-logger/src/register.ts) for the reference pattern.
+| Package                                         | Description                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------ |
+| [`@wolfstar/plugin-api`](./packages/plugin-api) | Registers a standalone REST API server for auxiliary routes. |
 
 ## Development
 
