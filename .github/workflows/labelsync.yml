@@ -1,0 +1,16 @@
+name: Automatic Label Sync
+
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  label_sync:
+    uses: wolfstar-project/.github/.github/workflows/reusable-labelsync.yml@fb3b0e52ddb109fec8a64f26a9295c9e72528dc8
+    with:
+      merge-labels: true

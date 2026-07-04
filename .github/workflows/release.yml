@@ -1,0 +1,132 @@
+name: release
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  CI: true
+
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  snapshot_filter:
+    name: Snapshot filter
+    runs-on: ubuntu-latest
+    if: |
+      github.repository_owner == 'wolfstar-project'
+      && (
+          (github.event_name == 'push' && !contains(github.event.head_commit.message, 'chore: version packages') && !contains(github.event.head_commit.message, 'chore: update changelog and release'))
+          || github.event_name == 'workflow_dispatch'
+      )
+    permissions:
+      contents: read
+    outputs:
+      publish: ${{ steps.snapshot_changes.outputs.publish }}
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check snapshot changes
+        id: snapshot_changes
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${{ github.event.before }}" ] || [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" | grep -qE '^(packages/|package.json$)'; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  snapshot:
+    name: Publish @next snapshot
+    runs-on: ubuntu-latest
+    needs: snapshot_filter
+    if: |
+      github.repository_owner == 'wolfstar-project'
+      && needs.snapshot_filter.outputs.publish == 'true'
+    permissions:
+      contents: read
+      pull-requests: read
+      id-token: write
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js v24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Publish snapshot
+        run: pnpm run publish:snapshot
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  release:
+    name: Create Release PR or Publish
+    runs-on: ubuntu-latest
+    if: github.repository_owner == 'wolfstar-project'
+    permissions:
+      contents: write
+      pull-requests: write
+      id-token: write
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.WOLFSTAR_TOKEN }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Setup Node.js v24
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org/
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Process Changesets
+        id: changesets
+        uses: changesets/action@a45c4d594aa4e2c509dc14a9f2b3b67ba3780d0d # v1.9.0
+        with:
+          publish: pnpm run publish
+          title: "chore: update changelog and release"
+          commit: "chore: update changelog and release"
+        env:
+          GITHUB_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

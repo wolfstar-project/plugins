@@ -1,0 +1,15 @@
+{
+  "extends": "@sapphire/ts-config",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "noEmit": true,
+    "declaration": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": false,
+    "skipLibCheck": true,
+    "verbatimModuleSyntax": true
+  }
+}

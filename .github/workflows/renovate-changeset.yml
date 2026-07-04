@@ -1,0 +1,20 @@
+name: Renovate Changesets
+
+on:
+  pull_request:
+    types: [opened, synchronize, labeled]
+    paths:
+      - "packages/**"
+
+jobs:
+  renovate-changeset:
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.user.login == 'renovate[bot]' && contains(github.event.pull_request.labels.*.name, 'dependencies') }}
+    permissions: {}
+    steps:
+      - uses: mscharley/dependency-changesets-action@f25d784f13eb09227429cebd880ade75d19d6283 # v1.1.9
+        with:
+          token: ${{ secrets.WOLFSTAR_TOKEN }}
+          changeset-folder: ".changeset"
+          author-name: "wolfstarbot"
+          author-email: "169603024+wolfstarbot@users.noreply.github.com"

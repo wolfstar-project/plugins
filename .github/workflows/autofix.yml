@@ -1,0 +1,31 @@
+name: autofix.ci
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions: {}
+
+jobs:
+  code:
+    name: Autofix code
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Lint and format fix
+        run: pnpm lint:fix
+      - uses: autofix-ci/action@c5b2d67aa2274e7b5a18224e8171550871fc7e4a # v1.3.4

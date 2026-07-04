@@ -1,0 +1,176 @@
+name: ci
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  merge_group:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: 🔠 Lint project
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run lint
+        run: pnpm lint
+
+  build:
+    name: 🏗️ Build & Typecheck
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Add problem matchers
+        run: echo "::add-matcher::.github/problemMatchers/tsc.json"
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build code
+        run: pnpm build
+
+      - name: Typecheck code
+        run: pnpm typecheck
+
+  unit:
+    name: 🧪 Unit tests
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm test --reporter=default --reporter=junit --outputFile=test-report.junit.xml
+
+      - name: Upload test results to Codecov
+        if: ${{ !cancelled() && github.repository_owner == 'wolfstar-project' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          files: test-report.junit.xml
+          flags: unit
+          report_type: test_results
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+      - name: Upload coverage reports to Codecov
+        if: ${{ !cancelled() && github.repository_owner == 'wolfstar-project' }}
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          disable_search: true
+          files: coverage/lcov.info,coverage/clover.xml
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
+
+  knip:
+    name: 🧹 Unused code check
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for unused code
+        run: pnpm exec knip
+
+  changesets:
+    name: 🦋 Verify changesets
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    if: |
+      github.event_name == 'pull_request'
+      && github.event.pull_request.title != 'chore: update changelog and release'
+      && !startsWith(github.head_ref, 'changeset-release/')
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify changesets
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: pnpm exec changeset status --since=origin/${BASE_REF}

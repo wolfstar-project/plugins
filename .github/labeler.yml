@@ -1,0 +1,77 @@
+packages:env-utilities:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/env-utilities/*
+          - packages/env-utilities/**/*
+
+packages:http-framework:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/http-framework/*
+          - packages/http-framework/**/*
+
+packages:http-framework-i18n:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/http-framework-i18n/*
+          - packages/http-framework-i18n/**/*
+
+packages:i18next-backend:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/i18next-backend/*
+          - packages/i18next-backend/**/*
+
+packages:influx-utilities:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/influx-utilities/*
+          - packages/influx-utilities/**/*
+
+packages:logger:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/logger/*
+          - packages/logger/**/*
+
+packages:reddit-helpers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/reddit-helpers/*
+          - packages/reddit-helpers/**/*
+
+packages:safe-fetch:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/safe-fetch/*
+          - packages/safe-fetch/**/*
+
+packages:shared-http-pieces:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/shared-http-pieces/*
+          - packages/shared-http-pieces/**/*
+
+packages:shared-influx-pieces:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/shared-influx-pieces/*
+          - packages/shared-influx-pieces/**/*
+
+packages:start-banner:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/start-banner/*
+          - packages/start-banner/**/*
+
+packages:twitch-helpers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/twitch-helpers/*
+          - packages/twitch-helpers/**/*
+
+packages:weather-helpers:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/weather-helpers/*
+          - packages/weather-helpers/**/*
