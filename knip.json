@@ -2,7 +2,13 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
     ".": {
-      "project": ["*.ts"]
+      "project": ["*.ts"],
+      "ignoreDependencies": [
+        "@favware/npm-deprecate",
+        "@swc/core",
+        "@types/ws",
+        "cz-conventional-changelog"
+      ]
     },
     "packages/*": {
       "project": ["src/**/*.ts"]
