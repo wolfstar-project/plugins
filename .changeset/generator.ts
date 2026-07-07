@@ -23,6 +23,36 @@ function readEnv() {
 
 const ignoredUsers = new Set<string>(["redstar071"]);
 
+// `@changesets/get-github-info` talks to the GitHub GraphQL API through
+// `node-fetch`, which intermittently throws "Premature close" /
+// "Failed to parse data from GitHub" when a keep-alive socket is dropped.
+// There is no built-in retry, so a single transient drop fails the whole
+// release. Retry transient failures with exponential backoff.
+const TRANSIENT_ERROR =
+  /premature close|Failed to parse data from GitHub|ECONNRESET|ETIMEDOUT|EAI_AGAIN|socket hang up|network timeout|fetch failed|terminated|and retry/i;
+
+const NULL_LINKS = { commit: null, pull: null, user: null } as const;
+
+async function withGitHubRetry<T>(label: string, fn: () => Promise<T>, attempts = 5): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt === attempts || !TRANSIENT_ERROR.test(message)) break;
+      const delayMs = Math.min(1000 * 2 ** (attempt - 1), 8000);
+      // stderr is the only runtime channel visible in CI logs
+      console.warn(
+        `[changelog] ${label} failed (attempt ${attempt}/${attempts}): ${message}. Retrying in ${delayMs}ms…`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+  throw lastError;
+}
+
 const changelogFunctions: ChangelogFunctions = {
   getDependencyReleaseLine: async (changesets, dependenciesUpdated, options) => {
     if (!options.repo) {
@@ -36,11 +66,17 @@ const changelogFunctions: ChangelogFunctions = {
       await Promise.all(
         changesets.map(async (cs) => {
           if (cs.commit) {
-            const { links } = await getInfo({
-              repo: options.repo,
-              commit: cs.commit,
-            });
-            return links.commit;
+            try {
+              const { links } = (await withGitHubRetry(`getInfo(commit=${cs.commit})`, () =>
+                getInfo({
+                  repo: options.repo,
+                  commit: cs.commit!,
+                }),
+              )) as { links: { commit: string } };
+              return links.commit;
+            } catch {
+              return undefined;
+            }
           }
         }),
       )
@@ -88,32 +124,40 @@ const changelogFunctions: ChangelogFunctions = {
 
     const links = await (async () => {
       if (prFromSummary !== undefined) {
-        let { links } = await getInfoFromPullRequest({
-          repo: options.repo,
-          pull: prFromSummary,
-        });
-        if (commitFromSummary) {
-          const shortCommitId = commitFromSummary.slice(0, 7);
-          links = {
-            ...links,
-            commit: `[\`${shortCommitId}\`](${GITHUB_SERVER_URL}/${options.repo}/commit/${commitFromSummary})`,
-          };
+        try {
+          let { links } = await withGitHubRetry(`getInfoFromPullRequest(pull=${prFromSummary})`, () =>
+            getInfoFromPullRequest({
+              repo: options.repo,
+              pull: prFromSummary!,
+            }),
+          );
+          if (commitFromSummary) {
+            const shortCommitId = commitFromSummary.slice(0, 7);
+            links = {
+              ...links,
+              commit: `[\`${shortCommitId}\`](${GITHUB_SERVER_URL}/${options.repo}/commit/${commitFromSummary})`,
+            };
+          }
+          return links;
+        } catch {
+          return NULL_LINKS;
         }
-        return links;
       }
       const commitToFetchFrom = commitFromSummary || changeset.commit;
       if (commitToFetchFrom) {
-        const { links } = await getInfo({
-          repo: options.repo,
-          commit: commitToFetchFrom,
-        });
-        return links;
+        try {
+          const { links } = await withGitHubRetry(`getInfo(commit=${commitToFetchFrom})`, () =>
+            getInfo({
+              repo: options.repo,
+              commit: commitToFetchFrom,
+            }),
+          );
+          return links;
+        } catch {
+          return NULL_LINKS;
+        }
       }
-      return {
-        commit: null,
-        pull: null,
-        user: null,
-      };
+      return NULL_LINKS;
     })();
 
     const users = usersFromSummary.length
@@ -122,7 +166,10 @@ const changelogFunctions: ChangelogFunctions = {
             (userFromSummary) => `[@${userFromSummary}](${GITHUB_SERVER_URL}/${userFromSummary})`,
           )
           .join(", ")
-      : links.user?.toLowerCase().includes("[@thewilloftheshadow]")
+      : links.user &&
+          [...ignoredUsers].some((user) =>
+            links.user!.toLowerCase().includes(`[@${user.toLowerCase()}]`),
+          )
         ? null
         : links.user;
 
