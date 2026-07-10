@@ -9,31 +9,31 @@ import type { Awaitable } from "./Route";
  * (`response.writableEnded`); there is no explicit `next()` callback.
  */
 export abstract class Middleware<
-  Options extends Middleware.Options = Middleware.Options,
+	Options extends Middleware.Options = Middleware.Options,
 > extends Piece<Options, "middlewares"> {
-  /**
-   * The built-in middlewares use the following positions:
-   * - `headers`: 10 (CORS headers, 404/405 short-circuit)
-   * - `body`: 20 (`Content-Length` validation)
-   */
-  public readonly position: number;
+	/**
+	 * The built-in middlewares use the following positions:
+	 * - `headers`: 10 (CORS headers, 404/405 short-circuit)
+	 * - `body`: 20 (`Content-Length` validation)
+	 */
+	public readonly position: number;
 
-  public constructor(context: Middleware.LoaderContext, options: Options) {
-    super(context, options);
-    this.position = options.position ?? 1000;
-  }
+	public constructor(context: Middleware.LoaderContext, options: Options) {
+		super(context, options);
+		this.position = options.position ?? 1000;
+	}
 
-  public abstract run(request: ApiRequest, response: ApiResponse): Awaitable<unknown>;
+	public abstract run(request: ApiRequest, response: ApiResponse): Awaitable<unknown>;
 }
 
 export namespace Middleware {
-  export type LoaderContext = Piece.LoaderContext<"middlewares">;
+	export type LoaderContext = Piece.LoaderContext<"middlewares">;
 
-  export interface Options extends PieceOptions {
-    /**
-     * Middlewares run in ascending order of this value.
-     * @default 1000
-     */
-    position?: number;
-  }
+	export interface Options extends PieceOptions {
+		/**
+		 * Middlewares run in ascending order of this value.
+		 * @default 1000
+		 */
+		position?: number;
+	}
 }
