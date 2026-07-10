@@ -24,10 +24,10 @@ import "@wolfstar/plugin-api/register";
 import { Client } from "@wolfstar/http-framework";
 
 const client = new Client({
-    api: {
-        listenOptions: { port: 4000 },
-        origin: "*",
-    },
+  api: {
+    listenOptions: { port: 4000 },
+    origin: "*",
+  },
 });
 
 await client.load();
@@ -44,9 +44,9 @@ import { HttpCodes } from "@wolfstar/http-framework";
 import { Route } from "@wolfstar/plugin-api";
 
 export class HealthRoute extends Route {
-    public run(_request: Route.Request, response: Route.Response) {
-        response.json({ status: "ok" }, HttpCodes.OK);
-    }
+  public run(_request: Route.Request, response: Route.Response) {
+    response.json({ status: "ok" }, HttpCodes.OK);
+  }
 }
 ```
 
@@ -56,13 +56,13 @@ The route's path and method are inferred from its location: `src/routes/health.g
 
 ```ts
 export class HealthRoute extends Route {
-    public constructor(context: Route.LoaderContext) {
-        super(context, { route: "/status", methods: ["GET", "HEAD"] });
-    }
+  public constructor(context: Route.LoaderContext) {
+    super(context, { route: "/status", methods: ["GET", "HEAD"] });
+  }
 
-    public run(request: Route.Request, response: Route.Response) {
-        response.json({ status: "ok", method: request.method });
-    }
+  public run(request: Route.Request, response: Route.Response) {
+    response.json({ status: "ok", method: request.method });
+  }
 }
 ```
 
@@ -77,13 +77,13 @@ import { Middleware } from "@wolfstar/plugin-api";
 import { randomUUID } from "node:crypto";
 
 export class RequestIdMiddleware extends Middleware {
-    public constructor(context: Middleware.LoaderContext) {
-        super(context, { position: 15 });
-    }
+  public constructor(context: Middleware.LoaderContext) {
+    super(context, { position: 15 });
+  }
 
-    public run(request: Middleware.Request, response: Middleware.Response) {
-        response.setHeader("X-Request-Id", randomUUID());
-    }
+  public run(request: Middleware.Request, response: Middleware.Response) {
+    response.setHeader("X-Request-Id", randomUUID());
+  }
 }
 ```
 

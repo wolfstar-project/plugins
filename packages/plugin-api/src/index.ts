@@ -18,25 +18,25 @@ export { loadListeners } from "./listeners/_load";
 export { loadMiddlewares } from "./middlewares/_load";
 
 declare module "@wolfstar/http-framework" {
-	interface ClientOptions {
-		/**
-		 * Options for the auxiliary REST API server registered by `@wolfstar/plugin-api`.
-		 */
-		api?: ApiServerOptions;
-	}
+  interface ClientOptions {
+    /**
+     * Options for the auxiliary REST API server registered by `@wolfstar/plugin-api`.
+     */
+    api?: ApiServerOptions;
+  }
 }
 
 declare module "@sapphire/pieces" {
-	interface StoreRegistryEntries {
-		routes: RouteStore;
-		middlewares: MiddlewareStore;
-	}
+  interface StoreRegistryEntries {
+    routes: RouteStore;
+    middlewares: MiddlewareStore;
+  }
 
-	interface Container {
-		/**
-		 * The auxiliary REST API server registered by `@wolfstar/plugin-api`. Independent from the
-		 * Discord interactions webhook server (`Client#server`).
-		 */
-		server: ApiServer;
-	}
+  interface Container {
+    /**
+     * The auxiliary REST API server registered by `@wolfstar/plugin-api`. Independent from the
+     * Discord interactions webhook server (`Client#server`).
+     */
+    server: ApiServer;
+  }
 }

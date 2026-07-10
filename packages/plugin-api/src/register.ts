@@ -1,10 +1,10 @@
 import {
-	Client,
-	container,
-	Plugin,
-	postInitialization,
-	postListen,
-	type ClientOptions,
+  Client,
+  container,
+  Plugin,
+  postInitialization,
+  postListen,
+  type ClientOptions,
 } from "@wolfstar/http-framework";
 import "./index";
 import { ApiServer } from "./lib/http/ApiServer";
@@ -22,29 +22,29 @@ import { loadMiddlewares } from "./middlewares/_load";
  * ```
  */
 export class ApiPlugin extends Plugin {
-	public static [postInitialization](this: Client, options: ClientOptions): void {
-		const server = new ApiServer(options.api);
+  public static [postInitialization](this: Client, options: ClientOptions): void {
+    const server = new ApiServer(options.api);
 
-		container.stores //
-			.register(server.routes)
-			.register(server.middlewares);
+    container.stores //
+      .register(server.routes)
+      .register(server.middlewares);
 
-		loadListeners().catch((error: unknown) =>
-			console.error("[plugin-api] Failed to load listeners:", error),
-		);
-		loadMiddlewares().catch((error: unknown) =>
-			console.error("[plugin-api] Failed to load middlewares:", error),
-		);
-	}
+    loadListeners().catch((error: unknown) =>
+      console.error("[plugin-api] Failed to load listeners:", error),
+    );
+    loadMiddlewares().catch((error: unknown) =>
+      console.error("[plugin-api] Failed to load middlewares:", error),
+    );
+  }
 
-	public static async [postListen](this: Client, options: ClientOptions): Promise<void> {
-		if ((options.api?.automaticallyConnect ?? true) === false) return;
-		await container.server.connect();
-	}
+  public static async [postListen](this: Client, options: ClientOptions): Promise<void> {
+    if ((options.api?.automaticallyConnect ?? true) === false) return;
+    await container.server.connect();
+  }
 }
 
 Client.plugins.registerPostInitializationHook(
-	ApiPlugin[postInitialization],
-	"WolfStar-Api-PostInitialization",
+  ApiPlugin[postInitialization],
+  "WolfStar-Api-PostInitialization",
 );
 Client.plugins.registerPostListenHook(ApiPlugin[postListen], "WolfStar-Api-PostListen");

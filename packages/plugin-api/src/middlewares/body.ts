@@ -8,16 +8,16 @@ import { Middleware } from "../lib/structures/Middleware";
  * Runs second (position 20), after CORS headers have been set.
  */
 export class BodyMiddleware extends Middleware {
-	public constructor(context: Middleware.LoaderContext) {
-		super(context, { position: 20 });
-	}
+  public constructor(context: Middleware.LoaderContext) {
+    super(context, { position: 20 });
+  }
 
-	public override run(request: ApiRequest, response: ApiResponse): void {
-		const limit = container.server.options.maximumBodyLength ?? 1024 * 1024 * 50;
-		const contentLength = Number(request.headers["content-length"] ?? 0);
+  public override run(request: ApiRequest, response: ApiResponse): void {
+    const limit = container.server.options.maximumBodyLength ?? 1024 * 1024 * 50;
+    const contentLength = Number(request.headers["content-length"] ?? 0);
 
-		if (contentLength > limit) {
-			response.json({ error: "Payload Too Large" }, HttpCodes.PayloadTooLarge);
-		}
-	}
+    if (contentLength > limit) {
+      response.json({ error: "Payload Too Large" }, HttpCodes.PayloadTooLarge);
+    }
+  }
 }

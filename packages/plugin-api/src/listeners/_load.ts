@@ -11,36 +11,36 @@ import { PluginServerRouterFoundListener } from "./PluginServerRouterFound";
  * store, targeting the `server` container entry (see {@link ApiServer}).
  */
 export async function loadListeners(): Promise<void> {
-	await Promise.all([
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginServerRequest",
-			piece: PluginServerRequestListener,
-		}),
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginServerRouterFound",
-			piece: PluginServerRouterFoundListener,
-		}),
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginServerRouterBranchNotFound",
-			piece: PluginServerRouterBranchNotFoundListener,
-		}),
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginServerRouterBranchMethodNotAllowed",
-			piece: PluginServerRouterBranchMethodNotAllowedListener,
-		}),
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginServerMiddlewareError",
-			piece: PluginServerMiddlewareErrorListener,
-		}),
-		container.stores.loadPiece({
-			store: "listeners",
-			name: "pluginRouteError",
-			piece: PluginRouteErrorListener,
-		}),
-	]);
+  await Promise.all([
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginServerRequest",
+      piece: PluginServerRequestListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginServerRouterFound",
+      piece: PluginServerRouterFoundListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginServerRouterBranchNotFound",
+      piece: PluginServerRouterBranchNotFoundListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginServerRouterBranchMethodNotAllowed",
+      piece: PluginServerRouterBranchMethodNotAllowedListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginServerMiddlewareError",
+      piece: PluginServerMiddlewareErrorListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "pluginRouteError",
+      piece: PluginRouteErrorListener,
+    }),
+  ]);
 }

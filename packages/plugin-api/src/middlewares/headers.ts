@@ -9,21 +9,21 @@ import { Middleware } from "../lib/structures/Middleware";
  * listeners, so it is not duplicated here.
  */
 export class HeadersMiddleware extends Middleware {
-	public constructor(context: Middleware.LoaderContext) {
-		super(context, { position: 10 });
-	}
+  public constructor(context: Middleware.LoaderContext) {
+    super(context, { position: 10 });
+  }
 
-	public override run(request: ApiRequest, response: ApiResponse): void {
-		const origin = container.server.options.origin ?? "*";
+  public override run(request: ApiRequest, response: ApiResponse): void {
+    const origin = container.server.options.origin ?? "*";
 
-		response.setHeader("Access-Control-Allow-Origin", origin);
-		response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
-		response.setHeader(
-			"Access-Control-Allow-Methods",
-			"GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS",
-		);
-		response.setHeader("Date", new Date().toUTCString());
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS",
+    );
+    response.setHeader("Date", new Date().toUTCString());
 
-		if (request.method === "OPTIONS") response.noContent();
-	}
+    if (request.method === "OPTIONS") response.noContent();
+  }
 }
