@@ -13,6 +13,7 @@
     "test": "vitest run",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
+    "docs": "typedoc",
     "update": "pnpm update --interactive --recursive",
     "changeset": "changeset add",
     "publish": "pnpm build && changeset publish",
@@ -40,6 +41,7 @@
     "publint": "^0.3.22",
     "tsdown": "^0.22.14",
     "turbo": "^2.10.7",
+    "typedoc": "^0.28.20",
     "typescript": "~5.8.3",
     "unrun": "0.3.1",
     "vitest": "^4.1.10"

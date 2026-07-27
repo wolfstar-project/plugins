@@ -45,6 +45,9 @@ package-lock.json
 # Ignore Turbo caching
 .turbo/
 
+# TypeDoc output
+/api/
+
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
