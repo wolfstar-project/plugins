@@ -13,7 +13,7 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/wolfstar-project/stars-components.git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
     "directory": "packages/plugin-api"
   },
   "files": [
