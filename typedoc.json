@@ -1,0 +1,15 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "entryPoints": ["packages/*"],
+  "entryPointStrategy": "packages",
+  "out": "api",
+  "readme": "none",
+  "cleanOutputDir": true,
+  "packageOptions": {
+    "entryPoints": ["src/index.ts"],
+    "tsconfig": "../../tsconfig.typedoc.json",
+    "readme": "none",
+    "excludePrivate": true,
+    "excludeInternal": true
+  }
+}
