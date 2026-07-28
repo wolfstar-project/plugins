@@ -11,7 +11,7 @@ jobs:
   stale:
     name: Mark and close stale issues and PRs
     runs-on: ubuntu-latest
-    if: github.repository == 'wolfstar-project/stars-components'
+    if: github.repository == 'wolfstar-project/plugins'
     permissions:
       issues: write
       pull-requests: write

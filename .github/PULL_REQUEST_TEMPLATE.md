@@ -27,9 +27,9 @@
 
 ### Pre-flight Checklist
 
-- [ ] I have read the [Contributing Guidelines](https://github.com/wolfstar-project/stars-components/blob/main/.github/CONTRIBUTING.md) (if applicable)
+- [ ] I have read the [Contributing Guidelines](https://github.com/wolfstar-project/plugins/blob/main/.github/CONTRIBUTING.md) (if applicable)
 - [ ] My code follows the code style of this project
 - [ ] I have added tests that prove my fix is effective or that my feature works
 - [ ] New and existing unit tests pass locally with my changes
 - [ ] I have updated the documentation accordingly
-- [ ] I added a changeset with `pnpm changeset` (or `pnpm changeset add --empty` if no release is needed). See [.changeset/README.md](https://github.com/wolfstar-project/stars-components/blob/main/.changeset/README.md).
+- [ ] I added a changeset with `pnpm changeset` (or `pnpm changeset add --empty` if no release is needed). See [.changeset/README.md](https://github.com/wolfstar-project/plugins/blob/main/.changeset/README.md).

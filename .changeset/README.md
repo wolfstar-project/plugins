@@ -1,6 +1,6 @@
 # Releasing with Changesets
 
-stars-components uses [`@changesets/cli`](https://github.com/changesets/changesets) for monorepo releases.
+plugins uses [`@changesets/cli`](https://github.com/changesets/changesets) for monorepo releases.
 Each `@wolfstar/*` package is versioned independently according to the changesets included in each release.
 
 ---
