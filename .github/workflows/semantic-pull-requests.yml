@@ -18,7 +18,7 @@ jobs:
   semantic-pr:
     name: Validate PR title
     runs-on: ubuntu-latest
-    if: github.repository == 'wolfstar-project/stars-components'
+    if: github.repository == 'wolfstar-project/plugins'
     permissions:
       contents: read
       pull-requests: read
@@ -40,22 +40,11 @@ jobs:
             chore
             revert
           scopes: |
-            env-utilities
-            http-framework
-            http-framework-i18n
-            i18next-backend
-            influx-utilities
-            logger
-            reddit-helpers
-            safe-fetch
-            shared-http-pieces
-            shared-influx-pieces
-            start-banner
-            twitch-helpers
-            weather-helpers
+            plugin-api
             deps
             release
             ci
+
           subjectPattern: ^(?![A-Z]).+$
           subjectPatternError: |
             The subject "{subject}" found in the pull request title "{title}"

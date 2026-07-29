@@ -20,12 +20,12 @@ fail.
 **_Before committing and pushing your changes, please ensure that you do not have any linting errors by running
 `pnpm lint`!_**
 
-### Star Components Concept Guidelines
+### Plugins Concept Guidelines
 
 There are a number of guidelines considered when reviewing Pull Requests to be merged. _This is by no means an
 exhaustive list, but here are some things to consider before/while submitting your ideas._
 
-- Everything in Star Components should be generally useful for the majority of users. Don't let that stop you if
+- Everything in Plugins should be generally useful for the majority of users. Don't let that stop you if
   you've got a good concept though, as your idea still might be a great addition.
 - Everything should be shard compliant. If code you put in a pull request would break when sharding, break other things
   from supporting sharding, or is incompatible with sharding; then you will need to think of a way to make it work with
@@ -39,7 +39,7 @@ exhaustive list, but here are some things to consider before/while submitting yo
 <!-- Link Dump -->
 
 [discord server]: https://join.wolfstar.rocks
-[here]: https://github.com/wolfstar-project/stars-components/pulls
+[here]: https://github.com/wolfstar-project/plugins/pulls
 [oxlint]: https://oxc.rs/docs/guide/usage/linter.html
 [oop paradigms]: https://en.wikipedia.org/wiki/Object-oriented_programming
 [scripts]: /scripts

@@ -1,6 +1,6 @@
 {
   "$schema": "https://unpkg.com/@changesets/config/schema.json",
-  "changelog": ["./generator.ts", { "repo": "wolfstar-project/stars-components" }],
+  "changelog": ["./generator.ts", { "repo": "wolfstar-project/plugins" }],
   "commit": false,
   "fixed": [],
   "linked": [],
