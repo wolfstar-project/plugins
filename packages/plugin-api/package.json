@@ -45,7 +45,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --config-loader unrun",
     "typecheck": "tsc --noEmit",
     "lint": "oxlint src --fix",
     "test": "vitest run",
