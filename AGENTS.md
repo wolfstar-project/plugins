@@ -13,7 +13,7 @@
 
 ### Commands (defined in root `package.json`)
 
-- `pnpm build` — `turbo run build` (tsdown → `dist/`).
+- `pnpm build` — `turbo run build` (tsdown → `dist/esm/`, shared options in `scripts/tsdown.config.ts`).
 - `pnpm test` — `vitest run` (unit + in-process HTTP integration tests).
 - `pnpm typecheck` — `turbo run typecheck` (`tsc --noEmit`).
 - `pnpm lint` / `pnpm lint:fix` — oxlint + oxfmt.
@@ -21,8 +21,9 @@
 
 ### Gotchas
 
-- `pnpm clean` is broken: it runs `node scripts/clean.mjs`, but `scripts/` does not exist in the repo. Do not rely on it.
+- `pnpm clean` is broken: it runs `node scripts/clean.mjs`, but that file does not exist (only `scripts/tsdown.config.ts` is present). Do not rely on it.
 - Git hooks are active (husky): `pre-commit` runs nano-staged (oxfmt + `oxlint --fix`) and `commit-msg` runs commitlint. Commit messages **must** follow Conventional Commits.
+- Vitest is pinned to Vite 6 via `pnpm-workspace.yaml` overrides so TypeScript experimental decorators still transform through esbuild (Vite 8 / oxc does not).
 
 ### Exercising the core functionality (ApiServer)
 
