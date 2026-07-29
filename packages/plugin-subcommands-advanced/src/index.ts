@@ -1,10 +1,5 @@
 export { Command, Subcommand } from "./lib/structures/command.js";
-export {
-  RegisterAsSubcommand,
-  RegisterAsSubcommandGroup,
-  RegisterSubCommand,
-  RegisterSubCommandGroup,
-} from "./lib/utils/decorators.js";
+export { RegisterAsSubcommand, RegisterAsSubcommandGroup } from "./lib/utils/decorators.js";
 export {
   analyzeSubCommandParsed,
   analyzeSubcommandGroupParsed,

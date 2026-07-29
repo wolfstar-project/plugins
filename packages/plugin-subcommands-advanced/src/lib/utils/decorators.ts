@@ -88,9 +88,3 @@ export function RegisterAsSubcommandGroup(
     } as T;
   };
 }
-
-/** @deprecated Use {@link RegisterAsSubcommand} */
-export const RegisterSubCommand = RegisterAsSubcommand;
-
-/** @deprecated Use {@link RegisterAsSubcommandGroup} */
-export const RegisterSubCommandGroup = RegisterAsSubcommandGroup;
