@@ -1,20 +1,23 @@
 {
-  "name": "@wolfstar/plugin-api",
-  "version": "1.1.2",
-  "description": "Plugin for @wolfstar/http-framework exposing a standalone REST API server (routes, middlewares, router)",
+  "name": "@wolfstar/plugin-subcommands-advanced",
+  "version": "1.0.0",
+  "description": "Plugin for @wolfstar/http-framework to modularize slash subcommands into separate command classes",
   "keywords": [
-    "api",
     "discord",
     "http-framework",
     "plugin",
-    "rest",
+    "subcommands",
     "wolfstar"
   ],
+  "homepage": "https://github.com/wolfstar-project/plugins/tree/main/packages/plugin-subcommands-advanced",
+  "bugs": {
+    "url": "https://github.com/wolfstar-project/plugins/issues"
+  },
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/wolfstar-project/plugins.git",
-    "directory": "packages/plugin-api"
+    "directory": "packages/plugin-subcommands-advanced"
   },
   "files": [
     "dist"
@@ -52,14 +55,16 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@sapphire/pieces": "^4.4.1",
-    "@vladfrangu/async_event_emitter": "^2.4.7"
+    "@discordjs/builders": "^1.13.0",
+    "@discordjs/collection": "^2.1.1",
+    "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.0.0"
+    "@wolfstar/http-framework": "^3.1.0",
+    "@wolfstar/http-framework-test-utils": "^3.0.1"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.0.0"
+    "@wolfstar/http-framework": "^3.1.0"
   },
   "engines": {
     "node": ">=20.0.0"
