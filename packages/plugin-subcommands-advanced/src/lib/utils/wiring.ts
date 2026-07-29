@@ -47,9 +47,14 @@ export function wireParentSubcommands(parent: Command): void {
   const resolver = applicationCommandRegistry.ensure(ctor).makeChatInput();
   resolver.setCommand(baseCommandData(snapshot));
 
-  for (const group of snapshot.options ?? []) {
-    if (group.type === ApplicationCommandOptionType.SubcommandGroup) {
-      resolver.addSubcommandGroup(groupDataWithoutSubcommands(group));
+  for (const option of snapshot.options ?? []) {
+    if (option.type === ApplicationCommandOptionType.SubcommandGroup) {
+      resolver.addSubcommandGroup(groupDataWithoutSubcommands(option), getLinkedMethod(option));
+      for (const subcommand of option.options ?? []) {
+        resolver.addSubcommand(subcommand, getLinkedMethod(subcommand), option.name);
+      }
+    } else if (option.type === ApplicationCommandOptionType.Subcommand) {
+      resolver.addSubcommand(option, getLinkedMethod(option));
     }
   }
 
@@ -89,6 +94,24 @@ function baseCommandData(snapshot: RESTPostAPIChatInputApplicationCommandsJSONBo
 function groupDataWithoutSubcommands(group: APIApplicationCommandSubcommandGroupOption) {
   const { options: _options, type: _type, ...rest } = group;
   return rest;
+}
+
+/**
+ * `http-framework` links a subcommand (or group) option to its handler method by
+ * defining a non-enumerable symbol property on the resolved option object. The
+ * symbol is not exported, so it is recovered here by its description to preserve
+ * framework-native subcommand routing when the resolver is rebuilt.
+ */
+const LINKED_METHOD_SYMBOL_DESCRIPTION = "decorated-command.method.link";
+
+function getLinkedMethod(option: object): string | null {
+  for (const symbol of Object.getOwnPropertySymbols(option)) {
+    if (symbol.description === LINKED_METHOD_SYMBOL_DESCRIPTION) {
+      return (Reflect.get(option, symbol) as string | undefined) ?? null;
+    }
+  }
+
+  return null;
 }
 
 function installDelegate(
