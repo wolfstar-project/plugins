@@ -17,7 +17,7 @@ permissions: {}
 jobs:
   semantic-pr:
     name: Validate PR title
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.repository == 'wolfstar-project/plugins'
     permissions:
       contents: read

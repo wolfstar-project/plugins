@@ -18,7 +18,7 @@ concurrency:
 jobs:
   snapshot_filter:
     name: Snapshot filter
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: |
       github.repository_owner == 'wolfstar-project'
       && (
@@ -58,7 +58,7 @@ jobs:
 
   snapshot:
     name: Publish @next snapshot
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     needs: snapshot_filter
     if: |
       github.repository_owner == 'wolfstar-project'
@@ -94,7 +94,7 @@ jobs:
 
   release:
     name: Create Release PR or Publish
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     if: github.repository_owner == 'wolfstar-project'
     permissions:
       contents: write
