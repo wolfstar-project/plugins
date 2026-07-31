@@ -1,0 +1,25 @@
+name: documentation
+
+on:
+    push:
+        branches:
+            - main
+        tags:
+            - 'v*'
+
+permissions:
+    contents: read
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.ref }}
+    cancel-in-progress: true
+
+jobs:
+    docs:
+        # TODO: pin to the commit SHA once wolfstar-project/.github/.github/workflows/reusable-documentation.yml lands.
+        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@main
+        with:
+            project-name: plugins
+            docgen-command: pnpm exec typedoc --options typedoc.json --json docs-output/api.json
+        secrets:
+            WOLFSTAR_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
