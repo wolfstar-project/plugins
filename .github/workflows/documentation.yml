@@ -16,8 +16,8 @@ concurrency:
 
 jobs:
     docs:
-        # TODO: pin to the commit SHA once wolfstar-project/.github/.github/workflows/reusable-documentation.yml lands.
-        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@main
+        # TODO: re-pin to the merge commit SHA once wolfstar-project/.github#42 lands on main.
+        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@b5e791d512273a8434f0216ba6397914c2d2bdc5 # add-reusable-documentation-workflow
         with:
             project-name: plugins
             docgen-command: pnpm exec typedoc --options typedoc.json --json docs-output/api.json
