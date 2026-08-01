@@ -10,7 +10,7 @@ permissions: {}
 jobs:
   code:
     name: Autofix code
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
