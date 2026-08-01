@@ -21,5 +21,6 @@ jobs:
         with:
             project-name: plugins
             docgen-command: pnpm exec typedoc --options typedoc.json --json docs-output/api.json
+            docs-repository: wolfstar-project/docs
         secrets:
             WOLFSTAR_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
