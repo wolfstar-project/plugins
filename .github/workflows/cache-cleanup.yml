@@ -10,7 +10,7 @@ permissions: {}
 
 jobs:
   cleanup:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     permissions:
       actions: write
       contents: read
