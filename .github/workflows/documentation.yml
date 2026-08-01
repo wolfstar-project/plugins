@@ -16,6 +16,7 @@ concurrency:
 
 jobs:
     docs:
+        name: Documentation
         uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@8fdfa590df5f28308ab35137b1dc39819ef70997 # main
         with:
             project-name: plugins
