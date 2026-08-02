@@ -82,15 +82,17 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org/
+          # Do not set registry-url here: it writes an `_authToken=${NODE_AUTH_TOKEN}`
+          # .npmrc that breaks npm OIDC trusted publishing when a classic token is present
+          # (manifests as ERR_PNPM_OTP_NON_INTERACTIVE or a misleading E404 on PUT).
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
       - name: Publish snapshot
         run: pnpm run publish:snapshot
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Auth is npm trusted publishing (OIDC) via id-token: write. Do not inject
+        # NODE_AUTH_TOKEN / NPM_TOKEN — classic tokens require interactive OTP in CI.
 
   release:
     name: Create Release PR or Publish
@@ -115,7 +117,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org/
+          # See snapshot job: avoid setup-node registry-url auth that fights OIDC.
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
@@ -129,4 +131,6 @@ jobs:
           commit: "chore: update changelog and release"
         env:
           GITHUB_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # Publish via npm trusted publishing (OIDC). Each package must have a
+          # Trusted Publisher on npmjs.com pointing at this repo + release.yml.
+          # Do not set NPM_TOKEN / NODE_AUTH_TOKEN here.
