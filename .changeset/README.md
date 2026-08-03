@@ -48,10 +48,14 @@ Without this, `changesets/action` fails when it attempts to open the release PR.
 
 Repository secrets (**Settings → Secrets and variables → Actions**):
 
-| Secret              | Description                                                                                                                                                                                                                        |
-| :------------------ | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Used by `changesets/action` to push commits and open PRs (the default `GITHUB_TOKEN` does not trigger other workflows).                                                            |
-| `NPM_PUBLISH_TOKEN` | An npm **granular access token** with type **Automation** (bypasses 2FA) and publish access to all `@wolfstar/*` packages. Required for `release.yml`. Classic publish tokens will fail with `ERR_PNPM_OTP_NON_INTERACTIVE` in CI. |
+| Secret              | Description                                                                                                                                                                                                                          |
+| :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Used by `changesets/action` to push commits and open PRs (the default `GITHUB_TOKEN` does not trigger other workflows).                                                              |
+| `NPM_PUBLISH_TOKEN` | An npm **granular access token** with type **Automation** (bypasses 2FA) and publish access to all `@wolfstar/*` packages. Same pattern as [`skyra-project/archid-components`](https://github.com/skyra-project/archid-components). Classic tokens fail with `ERR_PNPM_OTP_NON_INTERACTIVE` in CI. |
+
+`release.yml` wires this secret as both `NPM_TOKEN` (for `changesets/action`) and
+`NODE_AUTH_TOKEN` (for `actions/setup-node` / pnpm). Provenance attestations are produced
+in CI via `id-token: write` + `publishConfig.provenance: true` (and `NPM_CONFIG_PROVENANCE`).
 
 ### 3. Install the autofix.ci GitHub App (optional)
 
@@ -82,11 +86,16 @@ Only packages with pending changesets are versioned and published.
 | `pnpm run publish:snapshot` | Publish a `@next` snapshot (CI uses this)         |
 | `pnpm run publish`          | Version, build, and publish to npm (CI uses this) |
 
+Prefer publishing from CI so packages keep npm provenance (Sigstore). Local
+`changeset publish` with `publishConfig.provenance: true` cannot mint attestations and
+often fails with a misleading `E404` on `PUT`.
+
 ### Recovering a failed publish
 
 If the automatic publish step in `release.yml` fails after the release PR is merged:
 
-1. Fix the underlying issue (npm token, network, build failure, etc.).
+1. Confirm `NPM_PUBLISH_TOKEN` is a granular **Automation** token with publish access to
+   the affected `@wolfstar/*` packages (not a classic token).
 2. Re-run the failed **Create Release PR or Publish** job from **Actions**, or trigger
    **release** manually via **Run workflow** on `main`.
 3. The job runs `pnpm run publish` (`pnpm build && changeset publish`).
