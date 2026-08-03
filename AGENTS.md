@@ -22,7 +22,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 - `pnpm test` — `vitest run` (unit + in-process HTTP integration tests).
 - `pnpm typecheck` — `turbo run typecheck` (`tsc --noEmit`).
 - `pnpm lint` / `pnpm lint:fix` — oxlint + oxfmt.
-- `pnpm docs` — `typedoc` (config in root `typedoc.json`), generates API docs from each package's `src/index.ts` into `api/` (gitignored). Members marked `@internal` or `private` are excluded (`excludeInternal`/`excludePrivate`), so use that tag deliberately when adding public exports you don't want documented. CI publishes the same output (as JSON) to `wolfstar-project/docs` on pushes to `main`/`v*` tags via `.github/workflows/documentation.yml`.
+- `pnpm run docs` — `typedoc` (config in root `typedoc.json`); note the explicit `run` is required because plain `pnpm docs` is intercepted by pnpm's built-in `docs` command and fails with `ERR_PNPM_MISSING_PACKAGE_NAME`. It generates API docs from each package's `src/index.ts` into `api/` (gitignored). Members marked `@internal` or `private` are excluded (`excludeInternal`/`excludePrivate`), so use that tag deliberately when adding public exports you don't want documented. CI publishes the same output (as JSON) to `wolfstar-project/docs` on pushes to `main`/`v*` tags via `.github/workflows/documentation.yml`.
 - Turbo `test`/`typecheck` tasks `dependsOn: ["^build"]`, so a build is triggered as needed.
 
 ### Gotchas
