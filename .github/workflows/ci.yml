@@ -31,7 +31,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm + Node.js v24
-        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
           cache: true
@@ -61,7 +61,7 @@ jobs:
         run: echo "::add-matcher::.github/problemMatchers/tsc.json"
 
       - name: Setup pnpm + Node.js v24
-        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
           cache: true
@@ -90,7 +90,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm + Node.js v24
-        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
           cache: true
@@ -133,7 +133,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm + Node.js v24
-        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
           cache: true
@@ -161,7 +161,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup pnpm + Node.js v24
-        uses: pnpm/setup@5d160c5bc68a09337ad0d5654e237e03253b5879 # v1
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
         with:
           runtime: node@24
           cache: true
