@@ -1,4 +1,8 @@
-import { Command as FrameworkCommand, container } from "@wolfstar/http-framework";
+import {
+  applicationCommandRegistry,
+  Command as FrameworkCommand,
+  container,
+} from "@wolfstar/http-framework";
 import {
   analyzeSubCommandParsed,
   analyzeSubcommandGroupParsed,
@@ -28,7 +32,7 @@ export function RegisterAsSubcommand(
   slashSubcommand: SlashSubcommandResolvable,
 ) {
   return function decorate<T extends CommandConstructor>(target: T): T {
-    return class extends target {
+    const decorated = class extends target {
       public constructor(...args: any[]) {
         const [context, baseOptions = {}] = args as [
           FrameworkCommand.LoaderContext,
@@ -44,6 +48,10 @@ export function RegisterAsSubcommand(
         analyzeSubCommandParsed(this, parentCommandName, slashSubcommand);
       }
     } as T;
+
+    applicationCommandRegistry.ensure(decorated as unknown as typeof FrameworkCommand);
+
+    return decorated;
   };
 }
 
@@ -70,7 +78,7 @@ export function RegisterAsSubcommandGroup(
   slashSubcommand: SlashSubcommandResolvable,
 ) {
   return function decorate<T extends CommandConstructor>(target: T): T {
-    return class extends target {
+    const decorated = class extends target {
       public constructor(...args: any[]) {
         const [context, baseOptions = {}] = args as [
           FrameworkCommand.LoaderContext,
@@ -86,5 +94,9 @@ export function RegisterAsSubcommandGroup(
         analyzeSubcommandGroupParsed(this, parentCommandName, groupName, slashSubcommand);
       }
     } as T;
+
+    applicationCommandRegistry.ensure(decorated as unknown as typeof FrameworkCommand);
+
+    return decorated;
   };
 }
