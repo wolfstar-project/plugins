@@ -22,8 +22,8 @@ importers:
         specifier: ^0.8.0
         version: 0.8.0(encoding@0.1.13)
       '@changesets/types':
-        specifier: ^6.1.0
-        version: 6.1.0
+        specifier: ^7.0.0
+        version: 7.0.0
       '@commitlint/cli':
         specifier: ^21.2.2
         version: 21.2.2(@types/node@22.15.21)(typescript@5.8.3)
@@ -215,6 +215,10 @@ packages:
 
   '@changesets/types@6.1.0':
     resolution: {integrity: sha512-rKQcJ+o1nKNgeoYRHKOS07tAMNd3YSN0uHaJOZYjBAgxfV7TUE7JE+z4BzZdQwb5hKaYbayKN5KrYV7ODb2rAA==}
+
+  '@changesets/types@7.0.0':
+    resolution: {integrity: sha512-c5GoiQyt3pxiXjrWSNoP8/GRf4kG+VnKzovx1OQM8dYYALlSwgedmkPmJ+ZqGxqwg9D3Bkj85Uo4KLd5BN3A0w==}
+    engines: {node: ^22.11 || ^24 || >=26}
 
   '@changesets/write@0.4.0':
     resolution: {integrity: sha512-CdTLvIOPiCNuH71pyDu3rA+Q0n65cmAbXnwWH84rKGiFumFzkmHNT8KHTMEchcxN+Kl8I54xGUhJ7l3E7X396Q==}
@@ -3472,6 +3476,8 @@ snapshots:
   '@changesets/types@4.1.0': {}
 
   '@changesets/types@6.1.0': {}
+
+  '@changesets/types@7.0.0': {}
 
   '@changesets/write@0.4.0':
     dependencies:
