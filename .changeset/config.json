@@ -2,6 +2,7 @@
   "$schema": "https://unpkg.com/@changesets/config/schema.json",
   "changelog": ["./generator.ts", { "repo": "wolfstar-project/plugins" }],
   "commit": false,
+  "format": "oxfmt",
   "fixed": [],
   "linked": [],
   "access": "public",

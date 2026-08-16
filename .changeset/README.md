@@ -1,7 +1,11 @@
 # Releasing with Changesets
 
-plugins uses [`@changesets/cli`](https://github.com/changesets/changesets) for monorepo releases.
+plugins uses [`@changesets/cli`](https://github.com/changesets/changesets) v3 for monorepo releases.
 Each `@wolfstar/*` package is versioned independently according to the changesets included in each release.
+
+Changesets v3 requires Node `^22.11 || ^24 || >=26` and pnpm `>=10` — both already pinned by
+`mise.toml` and `packageManager`. Changelog and changeset files are formatted with oxfmt
+(`"format": "oxfmt"` in `config.json`).
 
 ---
 
@@ -48,13 +52,14 @@ Without this, `changesets/action` fails when it attempts to open the release PR.
 
 Repository secrets (**Settings → Secrets and variables → Actions**):
 
-| Secret              | Description                                                                                                                                                                                                                          |
-| :------------------ | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Used by `changesets/action` to push commits and open PRs (the default `GITHUB_TOKEN` does not trigger other workflows).                                                              |
+| Secret              | Description                                                                                                                                                                                                                                                                                        |
+| :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Passed to `changesets/action` through its `github-token` input (v2 ignores the `GITHUB_TOKEN` environment variable) to push commits and open PRs; the default `GITHUB_TOKEN` does not trigger other workflows.                                     |
 | `NPM_PUBLISH_TOKEN` | An npm **granular access token** with type **Automation** (bypasses 2FA) and publish access to all `@wolfstar/*` packages. Same pattern as [`skyra-project/archid-components`](https://github.com/skyra-project/archid-components). Classic tokens fail with `ERR_PNPM_OTP_NON_INTERACTIVE` in CI. |
 
-`release.yml` wires this secret as both `NPM_TOKEN` (for `changesets/action`) and
-`NODE_AUTH_TOKEN` (for `actions/setup-node` / pnpm). Provenance attestations are produced
+`release.yml` wires this secret as `NODE_AUTH_TOKEN` (for `actions/setup-node` / pnpm).
+`changesets/action` v2 no longer writes an `.npmrc` from `NPM_TOKEN`, so npm authentication
+comes solely from `actions/setup-node`'s `registry-url`. Provenance attestations are produced
 in CI via `id-token: write` + `publishConfig.provenance: true` (and `NPM_CONFIG_PROVENANCE`).
 
 ### 3. Install the autofix.ci GitHub App (optional)
@@ -111,6 +116,9 @@ whenever `main` receives a push that changes `packages/` or root `package.json`.
 Changesets snapshots (for example `1.2.3-next.0`) via `pnpm run publish:snapshot`.
 
 Snapshot publish is skipped when the push commit message contains `chore: version packages` or `chore: update changelog and release` (the release PR merge commit).
+`scripts/publish-snapshot.mjs` also exits early when no changesets are pending: `changeset version`
+fails with exit code 1 in that case (v3 behaviour) so that a no-op version step can never be
+followed by a publish that tags already-released versions as `next`.
 
 No manual action is needed. Consumers can install the latest canary via:
 
