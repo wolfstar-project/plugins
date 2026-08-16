@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-subcommands-advanced",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Plugin for @wolfstar/http-framework to modularize slash subcommands into separate command classes",
   "keywords": [
     "discord",
@@ -55,13 +55,13 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@discordjs/builders": "^1.13.0",
+    "@discordjs/builders": "^1.14.1",
     "@discordjs/collection": "^2.1.1",
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.1.0",
-    "@wolfstar/http-framework-test-utils": "^3.0.1"
+    "@wolfstar/http-framework": "^3.1.2",
+    "@wolfstar/http-framework-test-utils": "^3.0.3"
   },
   "peerDependencies": {
     "@wolfstar/http-framework": "^3.1.0"
