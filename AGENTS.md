@@ -14,7 +14,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 ### Toolchain notes (non-obvious)
 
 - `mise.toml` pins Node 24 + pnpm 11 (matches CI), but the Cloud VM's `node` is `v22.14.0` from `/exec-daemon` and is first on `PATH`, so it cannot be overridden. Node 22 satisfies the root `engines` (`^22.11 || ^24 || >=26`, raised from `>=20` by `@changesets/cli` v3 — the published packages still declare `>=20.0.0`), and build/test/lint/typecheck all pass on it.
-- `pnpm` is provided via `corepack` (version `11.17.0`, pinned by `packageManager` in `package.json`). If `pnpm` is ever missing, run `corepack enable`.
+- `pnpm` is provided via `corepack` (version `11.21.0`, pinned by `packageManager` in `package.json`). If `pnpm` is ever missing, run `corepack enable`.
 
 ### Commands (defined in root `package.json`)
 
