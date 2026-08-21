@@ -54,7 +54,7 @@ Repository secrets (**Settings → Secrets and variables → Actions**):
 
 | Secret              | Description                                                                                                                                                                                                                                                                                        |
 | :------------------ | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Passed to `changesets/action` through its `github-token` input (v2 ignores the `GITHUB_TOKEN` environment variable) to push commits and open PRs; the default `GITHUB_TOKEN` does not trigger other workflows.                                     |
+| `WOLFSTAR_TOKEN`    | A GitHub PAT with `repo` and `workflow` scopes. Passed to `changesets/action` through its `github-token` input (v2 ignores the `GITHUB_TOKEN` environment variable) to push commits and open PRs; also exposed as `GITHUB_TOKEN` to the `@next` snapshot changelog generator.                      |
 | `NPM_PUBLISH_TOKEN` | An npm **granular access token** with type **Automation** (bypasses 2FA) and publish access to all `@wolfstar/*` packages. Same pattern as [`skyra-project/archid-components`](https://github.com/skyra-project/archid-components). Classic tokens fail with `ERR_PNPM_OTP_NON_INTERACTIVE` in CI. |
 
 `release.yml` wires this secret as `NODE_AUTH_TOKEN` (for `actions/setup-node` / pnpm).
