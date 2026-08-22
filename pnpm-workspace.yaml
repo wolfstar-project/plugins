@@ -7,7 +7,7 @@ allowBuilds:
 # transform via esbuild (Vite 8 / oxc does not support them).
 overrides:
   "vitest>vite": "6.4.3"
-  "@vitest/mocker>vite": "6.4.3"
+  "@vitest/mocker>vite": "8.2.1"
 minimumReleaseAgeExclude:
   - "@wolfstar/http-framework-test-utils@3.0.1"
   - "@wolfstar/http-framework@3.1.0"
