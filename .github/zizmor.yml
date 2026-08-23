@@ -11,3 +11,9 @@ rules:
   artipacked:
     ignore:
       - release.yml
+  # pkg.pr.new publishes preview tarballs to its own service, authenticated by
+  # the pkg-pr-new GitHub App and the workflow run identity. There is no npm
+  # registry credential involved, so trusted publishing does not apply.
+  use-trusted-publishing:
+    ignore:
+      - pkg-pr-new.yml
