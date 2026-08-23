@@ -1,0 +1,44 @@
+name: pkg.pr.new
+
+on:
+  push:
+    branches:
+      - "**"
+    tags:
+      - "!**"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: pkg-pr-new-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    name: 📦 Publish preview packages
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    if: github.repository_owner == 'wolfstar-project'
+
+    steps:
+      - name: Checkout Project
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm + Node.js v24
+        uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2
+        with:
+          runtime: node@24
+          cache: true
+          install: false
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build code
+        run: pnpm build
+
+      - name: Publish preview packages
+        run: pnpm exec pkg-pr-new publish './packages/*' --pnpm --packageManager=pnpm
