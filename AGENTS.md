@@ -30,9 +30,10 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 - `pnpm clean` is broken: it runs `node scripts/clean.mjs`, but that file does not exist (only `scripts/tsdown.config.ts` is present). Do not rely on it.
 - Git hooks are active (husky): `pre-commit` runs nano-staged (oxfmt + `oxlint --fix`) and `commit-msg` runs commitlint. Commit messages **must** follow Conventional Commits.
 - Vitest is pinned to Vite 6 via `pnpm-workspace.yaml` overrides so TypeScript experimental decorators still transform through esbuild (Vite 8 / oxc does not).
-- CI runs on GitHub-hosted runners (`ubuntu-24.04-arm` for `ci.yml`, `ubuntu-latest` for `release.yml`) — not Blacksmith, despite some now-superseded PR history.
+- CI runs on GitHub-hosted runners (`ubuntu-24.04-arm` for `ci.yml` and `pkg-pr-new.yml`, `ubuntu-latest` for `release.yml`) — not Blacksmith, despite some now-superseded PR history.
 - When adding a new package, add a matching `packages:<name>` entry to **both** `.github/labels.yml` (label sync) and `.github/labeler.yml` (path-based auto-labeling on PRs) — these can drift independently (e.g. `plugin-subcommands-advanced` currently has a label defined but no `labeler.yml` path mapping, so it's never auto-applied).
 - Releases publish via CI (`release.yml`) using the `NPM_PUBLISH_TOKEN` secret (an npm granular _Automation_ token) so npm provenance/Sigstore attestation is attached; local `changeset publish` can't mint attestations and classic npm tokens fail with OTP errors. See `.changeset/README.md`.
+- Every push to any branch (see `.github/workflows/pkg-pr-new.yml`) builds the packages and publishes preview tarballs to [pkg.pr.new](https://pkg.pr.new) via `pnpm exec pkg-pr-new publish`, so unreleased changes from any branch/PR can be installed directly without waiting for a real release.
 
 ### Exercising the core functionality (ApiServer)
 
