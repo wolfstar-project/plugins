@@ -1,0 +1,77 @@
+{
+  "name": "@wolfstar/plugin-i18next",
+  "version": "0.0.0",
+  "description": "Plugin for @wolfstar/http-framework adding i18next-powered internationalization for HTTP interactions",
+  "keywords": [
+    "discord",
+    "http-framework",
+    "i18n",
+    "i18next",
+    "plugin",
+    "wolfstar"
+  ],
+  "homepage": "https://github.com/wolfstar-project/plugins/tree/main/packages/plugin-i18next",
+  "bugs": {
+    "url": "https://github.com/wolfstar-project/plugins/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
+    "directory": "packages/plugin-i18next"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/esm/register.js"
+  ],
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./register": {
+      "import": {
+        "types": "./dist/esm/register.d.ts",
+        "default": "./dist/esm/register.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src --fix",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@discordjs/collection": "^2.1.1",
+    "@sapphire/pieces": "^4.4.1",
+    "@sapphire/result": "^2.8.0",
+    "@sapphire/utilities": "^3.18.2",
+    "@wolfstar/i18next-backend": "^2.0.10",
+    "chokidar": "^4.0.3",
+    "discord-api-types": "^0.38.33",
+    "i18next": "^25.8.18"
+  },
+  "devDependencies": {
+    "@wolfstar/http-framework": "^3.1.2"
+  },
+  "peerDependencies": {
+    "@wolfstar/http-framework": "^3.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

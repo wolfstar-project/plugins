@@ -1,0 +1,7 @@
+{
+  "name": "ping",
+  "nameName": "ping",
+  "nameDescription": "Checks whether the bot is alive",
+  "success": "Pong!",
+  "successWithLatency": "Pong! Took me {{latency}}ms to reply"
+}
