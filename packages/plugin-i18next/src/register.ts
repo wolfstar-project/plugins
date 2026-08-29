@@ -7,9 +7,14 @@ import {
   preLoad,
   type ClientOptions,
 } from "@wolfstar/http-framework";
-import { watch } from "chokidar";
+import { watch, type FSWatcher } from "chokidar";
 import "./index";
 import { InternationalizationHandler } from "./lib/InternationalizationHandler";
+
+/**
+ * The chokidar events that make the languages directory's contents change.
+ */
+const HmrEvents = ["add", "addDir", "change", "unlink", "unlinkDir"] as const;
 
 /**
  * Registers the i18next-powered {@link InternationalizationHandler} on `container.i18n`, loading the
@@ -22,6 +27,12 @@ import { InternationalizationHandler } from "./lib/InternationalizationHandler";
  * ```
  */
 export class I18nextPlugin extends Plugin {
+  /**
+   * The chokidar watcher started by the `postListen` hook when HMR is enabled, or `null` when it is
+   * not. Exposed so it can be closed on shutdown.
+   */
+  public static watcher: FSWatcher | null = null;
+
   public static [preGenericsInitialization](this: Client, options: ClientOptions): void {
     container.i18n = new InternationalizationHandler(options.i18n);
   }
@@ -35,9 +46,20 @@ export class I18nextPlugin extends Plugin {
 
     console.info("[plugin-i18next] HMR enabled. Watching for language changes.");
 
-    watch(container.i18n.languagesDirectory, options.i18n.hmr.options ?? {})
-      .on("change", () => void container.i18n.reloadResources())
-      .on("unlink", () => void container.i18n.reloadResources());
+    // `ignoreInitial` defaults to `true` here: chokidar otherwise replays an `add` for every file
+    // already on disk, which would trigger a reload per translation file on startup.
+    const watcher = watch(container.i18n.languagesDirectory, {
+      ignoreInitial: true,
+      ...options.i18n.hmr.options,
+    });
+
+    // Adding a locale directory or a namespace file emits `addDir` / `add`, not `change`, so all of
+    // them have to be watched for new languages and namespaces to be picked up.
+    for (const event of HmrEvents) {
+      watcher.on(event, () => void container.i18n.reloadResources());
+    }
+
+    I18nextPlugin.watcher = watcher;
   }
 }
 

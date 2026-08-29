@@ -148,21 +148,32 @@ const client = new Client({
 ```
 
 When enabled, the languages directory is watched and `container.i18n.reloadResources()` runs on every
-change or deletion.
+addition, change or deletion — including new locale directories and new namespace files, which are
+registered on i18next and become usable without a restart.
+
+`ignoreInitial` defaults to `true` so the files already on disk do not each trigger a reload on
+startup; pass `hmr.options` to override it or any other chokidar option. The watcher is exposed as
+`I18nextPlugin.watcher`, so it can be closed on shutdown:
+
+```typescript
+import { I18nextPlugin } from "@wolfstar/plugin-i18next/register";
+
+await I18nextPlugin.watcher?.close();
+```
 
 ## Options
 
-| Option                     | Type                                     | Description                                                                     |
-| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| `defaultName`              | `string`                                 | The fallback locale. Defaults to `'en-US'`.                                     |
-| `defaultLanguageDirectory` | `string`                                 | Where to look for languages. Defaults to `<root>/languages`.                    |
-| `defaultMissingKey`        | `string`                                 | The key used to render missing keys, e.g. `'default:default'`.                  |
-| `defaultNS`                | `string`                                 | The namespace prefixed to keys that don't specify one. Defaults to `'default'`. |
-| `backend`                  | `Backend.Options`                        | Extra `@wolfstar/i18next-backend` paths.                                        |
-| `i18next`                  | `InitOptions \| DynamicOptions`          | Raw options forwarded to `i18next.init`.                                        |
-| `formatters`               | `I18nextFormatter[]`                     | Formatters registered on `i18next.services.formatter`.                          |
-| `hmr`                      | `HMROptions`                             | Chokidar-based hot reloading of the languages directory.                        |
-| `fetchLanguage`            | `(context) => Awaitable<string \| null>` | Custom language resolution, used by the `fetch*` helpers.                       |
+| Option                     | Type                                     | Description                                                                             |
+| -------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| `defaultName`              | `string`                                 | The locale used when none of an interaction's locales is loaded. Defaults to `'en-US'`. |
+| `defaultLanguageDirectory` | `string`                                 | Where to look for languages. Defaults to `<root>/languages`.                            |
+| `defaultMissingKey`        | `string`                                 | The key used to render missing keys, e.g. `'default:default'`.                          |
+| `defaultNS`                | `string`                                 | The namespace prefixed to keys that don't specify one. Defaults to `'default'`.         |
+| `backend`                  | `Backend.Options`                        | Extra `@wolfstar/i18next-backend` paths.                                                |
+| `i18next`                  | `InitOptions \| DynamicOptions`          | Raw options forwarded to `i18next.init`.                                                |
+| `formatters`               | `I18nextFormatter[]`                     | Formatters registered on `i18next.services.formatter`.                                  |
+| `hmr`                      | `HMROptions`                             | Chokidar-based hot reloading of the languages directory.                                |
+| `fetchLanguage`            | `(context) => Awaitable<string \| null>` | Custom language resolution, used by the `fetch*` helpers.                               |
 
 ## Credits
 
