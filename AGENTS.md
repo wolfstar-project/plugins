@@ -7,6 +7,7 @@
 `wolfstar-project/plugins` is a **pnpm + Turborepo monorepo of publishable TypeScript libraries**, under `packages/`:
 
 - `@wolfstar/plugin-api` — the core REST server (`ApiServer`).
+- `@wolfstar/plugin-i18next` — i18next-powered internationalization for HTTP interactions.
 - `@wolfstar/plugin-subcommands-advanced` — modularizes slash subcommands into separate command classes.
 
 There is **no runnable app, frontend, backend, dev server, or database**. "Running" the project means build / typecheck / lint / test. Consumers embed the libraries into their own `@wolfstar/http-framework` Discord bot.
