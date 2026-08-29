@@ -24,7 +24,6 @@ import type {
   BuilderWithDescription,
   BuilderWithName,
   BuilderWithNameAndDescription,
-  Interaction,
   InternationalizationContext,
   LocalePrefixKey,
   LocalizedData,
@@ -73,7 +72,7 @@ export function isSupportedDiscordLocale(language: string): language is LocaleSt
 }
 
 /**
- * Resolves the fallback language to use when none of an interaction's locales is loaded.
+ * Resolves the fallback language to use when none of a target's locales is loaded.
  *
  * {@link InternationalizationOptions.defaultName} wins as long as it is both a Discord locale and a
  * loaded language; otherwise `'en-US'` is used.
@@ -89,78 +88,148 @@ function getFallbackLanguageName(): LocaleString {
 }
 
 /**
+ * Narrows a locale to a loaded Discord locale, or `null` when it is neither.
+ * @internal
+ */
+function getLoadedLocale(locale: string | undefined): LocaleString | null {
+  if (!locale) return null;
+  return isSupportedDiscordLocale(locale) && container.i18n.languages.has(locale) ? locale : null;
+}
+
+/**
+ * Builds the {@link InternationalizationContext} for any supported target.
+ *
+ * @remarks
+ * The members of {@link Target} are told apart structurally, since the framework receives raw
+ * payloads rather than class instances: an interaction has `locale`, a message has `channel_id`, a
+ * channel has `type`, and anything left is a guild.
+ * @internal
+ */
+function resolveContext(target: Target): InternationalizationContext {
+  if ("locale" in target) {
+    return {
+      guildId: target.guild_id ?? null,
+      channelId: target.channel_id ?? null,
+      userId: target.user?.id ?? target.member?.user.id ?? null,
+      interactionGuildLocale: target.guild_locale,
+      interactionLocale: target.locale,
+      preferredLocale: target.guild_locale,
+    };
+  }
+
+  if ("channel_id" in target) {
+    return {
+      guildId: target.guild_id ?? null,
+      channelId: target.channel_id,
+      userId: target.author?.id ?? null,
+    };
+  }
+
+  if ("type" in target) {
+    return {
+      guildId: target.guild_id ?? null,
+      channelId: target.id,
+      userId: null,
+    };
+  }
+
+  return {
+    guildId: target.id,
+    channelId: null,
+    userId: null,
+    preferredLocale: target.preferred_locale,
+  };
+}
+
+/**
+ * @internal
+ */
+function getSupportedLanguageNameFromContext(context: InternationalizationContext): LocaleString {
+  // Guild-scoped: the guild's locale is what matters, and the user's is deliberately ignored.
+  // Outside a guild there is no guild locale to prefer, so the user's one is used instead.
+  const preferred = context.guildId
+    ? getLoadedLocale(context.preferredLocale)
+    : getLoadedLocale(context.interactionLocale);
+
+  return preferred ?? getFallbackLanguageName();
+}
+
+/**
+ * @internal
+ */
+function getSupportedUserLanguageNameFromContext(
+  context: InternationalizationContext,
+): LocaleString {
+  return (
+    getLoadedLocale(context.interactionLocale) ??
+    getLoadedLocale(context.preferredLocale) ??
+    getFallbackLanguageName()
+  );
+}
+
+/**
  * Resolves the loaded language that best matches the user's locale, falling back to the guild's one,
  * then to {@link InternationalizationOptions.defaultName}, and finally to `'en-US'`.
- * @param interaction The interaction to read the locales from.
+ *
+ * @remarks
+ * Only an {@link Interaction} carries a user locale. For a {@link GuildTarget} this is equivalent to
+ * {@link getSupportedLanguageName}, and a {@link ChannelTarget} or {@link MessageTarget} always
+ * resolves to the fallback.
+ * @param target The target to read the locales from.
  */
-export function getSupportedUserLanguageName(interaction: Interaction): LocaleString {
-  const { languages } = container.i18n;
-  if (languages.has(interaction.locale)) return interaction.locale;
-  if (interaction.guild_locale && languages.has(interaction.guild_locale)) {
-    return interaction.guild_locale;
-  }
-  return getFallbackLanguageName();
+export function getSupportedUserLanguageName(target: Target): LocaleString {
+  return getSupportedUserLanguageNameFromContext(resolveContext(target));
 }
 
 /**
  * Resolves the `TFunction` for {@link getSupportedUserLanguageName}.
- * @param interaction The interaction to read the locales from.
+ * @param target The target to read the locales from.
  */
-export function getSupportedUserLanguageT(interaction: Interaction): TFunction {
-  return container.i18n.getT(getSupportedUserLanguageName(interaction));
+export function getSupportedUserLanguageT(target: Target): TFunction {
+  return container.i18n.getT(getSupportedUserLanguageName(target));
 }
 
 /**
  * Resolves the loaded language that best matches the guild's locale, falling back to the user's one
- * when the interaction was not sent from a guild, then to
+ * when the target does not belong to a guild, then to
  * {@link InternationalizationOptions.defaultName}, and finally to `'en-US'`.
- * @param interaction The interaction to read the locales from.
+ *
+ * @remarks
+ * The guild locale comes from `guild_locale` on an {@link Interaction} and from `preferred_locale`
+ * on a {@link GuildTarget}. A {@link ChannelTarget} and a {@link MessageTarget} carry no locale, so
+ * they resolve to the fallback unless a custom
+ * {@link InternationalizationHandler.fetchLanguage} hook is used through {@link fetchLanguage}.
+ * @param target The target to read the locales from.
  */
-export function getSupportedLanguageName(interaction: Interaction): LocaleString {
-  const { languages } = container.i18n;
-  if (interaction.guild_id) {
-    if (interaction.guild_locale && languages.has(interaction.guild_locale)) {
-      return interaction.guild_locale;
-    }
-  } else if (languages.has(interaction.locale)) {
-    return interaction.locale;
-  }
-  return getFallbackLanguageName();
+export function getSupportedLanguageName(target: Target): LocaleString {
+  return getSupportedLanguageNameFromContext(resolveContext(target));
 }
 
 /**
  * Resolves the `TFunction` for {@link getSupportedLanguageName}.
- * @param interaction The interaction to read the locales from.
+ * @param target The target to read the locales from.
  */
-export function getSupportedLanguageT(interaction: Interaction): TFunction {
-  return container.i18n.getT(getSupportedLanguageName(interaction));
-}
-
-/**
- * Builds the {@link InternationalizationContext} for an interaction.
- * @internal
- */
-function getContext(interaction: Interaction): InternationalizationContext {
-  return {
-    guildId: interaction.guild_id ?? null,
-    channelId: interaction.channel_id ?? null,
-    userId: interaction.user?.id ?? interaction.member?.user.id ?? null,
-    interactionGuildLocale: interaction.guild_locale,
-    interactionLocale: interaction.locale,
-  };
+export function getSupportedLanguageT(target: Target): TFunction {
+  return container.i18n.getT(getSupportedLanguageName(target));
 }
 
 /**
  * Retrieves the language name for a target, using {@link InternationalizationHandler.fetchLanguage}.
  *
  * If that hook is not defined or returns a nullish value, the language is resolved from the
- * interaction's locales through {@link getSupportedLanguageName}, which itself falls back to
+ * locales the target carries through {@link getSupportedLanguageName}, which itself falls back to
  * {@link InternationalizationOptions.defaultName} and then to `'en-US'`.
+
+ * @remarks
+ * This is the only helper that can resolve a language for a {@link ChannelTarget} or a
+ * {@link MessageTarget}, since those payloads carry no locale and the hook receives their
+ * `guildId` and `channelId`.
  * @param target The target to fetch the language from.
  */
 export async function fetchLanguage(target: Target): Promise<string> {
-  const language = await container.i18n.fetchLanguage(getContext(target));
-  return language ?? getSupportedLanguageName(target);
+  const context = resolveContext(target);
+  const language = await container.i18n.fetchLanguage(context);
+  return language ?? getSupportedLanguageNameFromContext(context);
 }
 
 /**
@@ -177,8 +246,8 @@ export async function fetchT(target: Target): Promise<TFunction> {
  * is honoured.
  *
  * @remarks
- * Use {@link resolveKey} when the language can be resolved from the interaction payload alone, it
- * is synchronous and does not hit the hook.
+ * Use {@link resolveKey} when the language can be resolved from the target payload alone, it is
+ * synchronous and does not hit the hook.
  * @param target The target to fetch the language key from.
  */
 export async function fetchKey<
@@ -216,68 +285,64 @@ export async function fetchKey<
  * Resolves a key with the user's language, as resolved by {@link getSupportedUserLanguageName}.
  */
 export function resolveUserKey<TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedT<TReturn>,
   options?: TOptionsBase | string,
 ): TReturn;
 export function resolveUserKey<TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedT<TReturn>,
   defaultValue: TReturn,
   options?: TOptionsBase | string,
 ): TReturn;
 export function resolveUserKey<TArgs extends NonNullObject, TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedFT<TArgs, TReturn>,
   options?: TOptions<TArgs>,
 ): TReturn;
 export function resolveUserKey<TArgs extends NonNullObject, TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedFT<TArgs, TReturn>,
   defaultValue: TReturn,
   options?: TOptions<TArgs>,
 ): TReturn;
 export function resolveUserKey(
-  interaction: Interaction,
+  target: Target,
   key: string | string[],
   ...args: [any?, any?]
 ): string;
-export function resolveUserKey(interaction: Interaction, ...args: [any, any?, any?]) {
-  return (getSupportedUserLanguageT(interaction) as (...args: any[]) => unknown)(...args);
+export function resolveUserKey(target: Target, ...args: [any, any?, any?]) {
+  return (getSupportedUserLanguageT(target) as (...args: any[]) => unknown)(...args);
 }
 
 /**
  * Resolves a key with the guild's language, as resolved by {@link getSupportedLanguageName}.
  */
 export function resolveKey<TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedT<TReturn>,
   options?: TOptionsBase | string,
 ): TReturn;
 export function resolveKey<TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedT<TReturn>,
   defaultValue: TReturn,
   options?: TOptionsBase | string,
 ): TReturn;
 export function resolveKey<TArgs extends NonNullObject, TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedFT<TArgs, TReturn>,
   options?: TOptions<TArgs>,
 ): TReturn;
 export function resolveKey<TArgs extends NonNullObject, TReturn>(
-  interaction: Interaction,
+  target: Target,
   key: TypedFT<TArgs, TReturn>,
   defaultValue: TReturn,
   options?: TOptions<TArgs>,
 ): TReturn;
-export function resolveKey(
-  interaction: Interaction,
-  key: string | string[],
-  ...args: [any?, any?]
-): string;
-export function resolveKey(interaction: Interaction, ...args: [any, any?, any?]) {
-  return (getSupportedLanguageT(interaction) as (...args: any[]) => unknown)(...args);
+export function resolveKey(target: Target, key: string | string[], ...args: [any?, any?]): string;
+export function resolveKey(target: Target, ...args: [any, any?, any?]) {
+  return (getSupportedLanguageT(target) as (...args: any[]) => unknown)(...args);
 }
 
 let cachedLocales: Collection<LocaleString, TFunction> | null = null;

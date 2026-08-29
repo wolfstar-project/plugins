@@ -110,6 +110,41 @@ const t = await fetchT(interaction);
 const content = await fetchKey(interaction, "commands/ping:success");
 ```
 
+### Targets
+
+Every helper accepts any of four raw payloads, told apart structurally — the framework never has
+`discord.js` class instances to check with `instanceof`:
+
+| Target          | Recognized by | Locale it carries           |
+| --------------- | ------------- | --------------------------- |
+| `Interaction`   | `locale`      | `locale` and `guild_locale` |
+| `MessageTarget` | `channel_id`  | none                        |
+| `ChannelTarget` | `type`        | none                        |
+| `GuildTarget`   | anything else | `preferred_locale`          |
+
+`APIInteraction`, `APIMessage`, `APIChannel` and `APIGuild` all satisfy the matching target, so
+payloads can be passed straight through:
+
+```typescript
+import { getSupportedLanguageName, resolveKey } from "@wolfstar/plugin-i18next";
+
+// A guild resolves through its `preferred_locale`:
+const guild = await container.rest.get(Routes.guild(guildId));
+const language = getSupportedLanguageName(guild);
+const content = resolveKey(guild, Success);
+```
+
+Channels and messages carry no locale of their own, so the synchronous helpers fall back to
+`defaultName` for them. Use the asynchronous `fetch*` helpers instead: the hook receives the
+target's `guildId`, `channelId` and `userId`, which is enough to look the language up.
+
+```typescript
+container.i18n.fetchLanguage = async ({ guildId }) =>
+  guildId ? ((await database.getGuild(guildId))?.language ?? null) : null;
+
+const content = await fetchKey(message, "commands/ping:success");
+```
+
 ### Localizing command builders
 
 ```typescript
