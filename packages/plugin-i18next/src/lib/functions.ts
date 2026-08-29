@@ -1,6 +1,6 @@
 import { Collection } from "@discordjs/collection";
 import { container } from "@sapphire/pieces";
-import { lazy, type NonNullObject } from "@sapphire/utilities";
+import type { NonNullObject } from "@sapphire/utilities";
 import {
   Locale,
   type APIApplicationCommandOptionChoice,
@@ -73,8 +73,24 @@ export function isSupportedDiscordLocale(language: string): language is LocaleSt
 }
 
 /**
- * Resolves the loaded language that best matches the user's locale, falling back to the guild's and
- * then to `'en-US'`.
+ * Resolves the fallback language to use when none of an interaction's locales is loaded.
+ *
+ * {@link InternationalizationOptions.defaultName} wins as long as it is both a Discord locale and a
+ * loaded language; otherwise `'en-US'` is used.
+ * @internal
+ */
+function getFallbackLanguageName(): LocaleString {
+  const { languages, options } = container.i18n;
+  const { defaultName } = options;
+
+  return defaultName && isSupportedDiscordLocale(defaultName) && languages.has(defaultName)
+    ? defaultName
+    : "en-US";
+}
+
+/**
+ * Resolves the loaded language that best matches the user's locale, falling back to the guild's one,
+ * then to {@link InternationalizationOptions.defaultName}, and finally to `'en-US'`.
  * @param interaction The interaction to read the locales from.
  */
 export function getSupportedUserLanguageName(interaction: Interaction): LocaleString {
@@ -83,7 +99,7 @@ export function getSupportedUserLanguageName(interaction: Interaction): LocaleSt
   if (interaction.guild_locale && languages.has(interaction.guild_locale)) {
     return interaction.guild_locale;
   }
-  return "en-US";
+  return getFallbackLanguageName();
 }
 
 /**
@@ -96,7 +112,8 @@ export function getSupportedUserLanguageT(interaction: Interaction): TFunction {
 
 /**
  * Resolves the loaded language that best matches the guild's locale, falling back to the user's one
- * when the interaction was not sent from a guild, and then to `'en-US'`.
+ * when the interaction was not sent from a guild, then to
+ * {@link InternationalizationOptions.defaultName}, and finally to `'en-US'`.
  * @param interaction The interaction to read the locales from.
  */
 export function getSupportedLanguageName(interaction: Interaction): LocaleString {
@@ -108,7 +125,7 @@ export function getSupportedLanguageName(interaction: Interaction): LocaleString
   } else if (languages.has(interaction.locale)) {
     return interaction.locale;
   }
-  return "en-US";
+  return getFallbackLanguageName();
 }
 
 /**
@@ -136,18 +153,14 @@ function getContext(interaction: Interaction): InternationalizationContext {
 /**
  * Retrieves the language name for a target, using {@link InternationalizationHandler.fetchLanguage}.
  *
- * If that hook is not defined or returns a nullish value, there will be a series of fallback
- * attempts in the following descending order:
- * 1. The result of {@link getSupportedLanguageName}, if it is a loaded language.
- * 2. {@link InternationalizationOptions.defaultName}.
- * 3. `'en-US'`.
+ * If that hook is not defined or returns a nullish value, the language is resolved from the
+ * interaction's locales through {@link getSupportedLanguageName}, which itself falls back to
+ * {@link InternationalizationOptions.defaultName} and then to `'en-US'`.
  * @param target The target to fetch the language from.
  */
 export async function fetchLanguage(target: Target): Promise<string> {
   const language = await container.i18n.fetchLanguage(getContext(target));
-  return (
-    language ?? getSupportedLanguageName(target) ?? container.i18n.options.defaultName ?? "en-US"
-  );
+  return language ?? getSupportedLanguageName(target);
 }
 
 /**
@@ -267,10 +280,24 @@ export function resolveKey(interaction: Interaction, ...args: [any, any?, any?])
   return (getSupportedLanguageT(interaction) as (...args: any[]) => unknown)(...args);
 }
 
-const getLocales = lazy(() => {
+let cachedLocales: Collection<LocaleString, TFunction> | null = null;
+let cachedLocalesSize = -1;
+
+/**
+ * The loaded languages Discord supports, keyed by locale.
+ *
+ * @remarks
+ * Memoized on the size of `container.i18n.languages` so that locales discovered by a hot reload
+ * (see {@link InternationalizationHandler.reloadResources}) are picked up without a restart.
+ * @internal
+ */
+function getLocales(): Collection<LocaleString, TFunction> {
+  const { languages } = container.i18n;
+  if (cachedLocales && cachedLocalesSize === languages.size) return cachedLocales;
+
   const locales = new Collection<LocaleString, TFunction>();
 
-  for (const [locale, t] of container.i18n.languages) {
+  for (const [locale, t] of languages) {
     if (!isSupportedDiscordLocale(locale)) {
       process.emitWarning("Unsupported Discord locale", {
         code: "UNSUPPORTED_LOCALE",
@@ -282,10 +309,15 @@ const getLocales = lazy(() => {
     locales.set(locale, t);
   }
 
+  cachedLocales = locales;
+  cachedLocalesSize = languages.size;
   return locales;
-});
+}
 
-const getDefaultT = lazy(() => {
+/**
+ * @internal
+ */
+function getDefaultT(): TFunction {
   const defaultLocale = container.i18n.options.defaultName ?? "en-US";
 
   if (!isSupportedDiscordLocale(defaultLocale)) {
@@ -297,7 +329,7 @@ const getDefaultT = lazy(() => {
   const defaultT = getLocales().get(defaultLocale);
   if (defaultT) return defaultT;
   throw new TypeError(`Could not find ${defaultLocale}`);
-});
+}
 
 /**
  * Gets the value and the localizations from a language key.

@@ -98,18 +98,30 @@ export interface HMROptions {
 
   /**
    * Languages that will be reloaded when updating the languages directory.
+   *
+   * @remarks
+   * Pinning both this and {@link HMROptions.namespaces} skips the directory walk, so languages and
+   * namespaces added while the process is running are not registered on i18next.
    * @default All languages that are automatically resolved from your folder setup
    */
   languages?: string | string[];
 
   /**
    * Namespaces that will be reloaded when updating the languages directory.
+   *
+   * @remarks
+   * Pinning both this and {@link HMROptions.languages} skips the directory walk, so languages and
+   * namespaces added while the process is running are not registered on i18next.
    * @default All namespaces that are automatically resolved from your languages folder setup
    */
   namespaces?: string | string[];
 
   /**
    * The options passed to `chokidar`'s `watch`.
+   *
+   * @remarks
+   * `ignoreInitial` defaults to `true`, since chokidar would otherwise replay an `add` event for
+   * every translation file already on disk and trigger a reload for each of them on startup.
    */
   options?: ChokidarOptions;
 }
