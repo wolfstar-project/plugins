@@ -210,6 +210,57 @@ await I18nextPlugin.watcher?.close();
 | `hmr`                      | `HMROptions`                             | Chokidar-based hot reloading of the languages directory.                                |
 | `fetchLanguage`            | `(context) => Awaitable<string \| null>` | Custom language resolution, used by the `fetch*` helpers.                               |
 
+## Migrating from `@wolfstar/http-framework-i18n`
+
+[`@wolfstar/http-framework-i18n`](https://www.npmjs.com/package/@wolfstar/http-framework-i18n) is deprecated in favour
+of this plugin. The upstream changes are documented in
+[wolfstar-project/stars-components#30](https://github.com/wolfstar-project/stars-components/pull/30); the short version:
+
+```bash
+pnpm remove @wolfstar/http-framework-i18n
+pnpm add @wolfstar/plugin-i18next
+```
+
+```diff
+-import { addFormatters, init, load } from "@wolfstar/http-framework-i18n";
++import "@wolfstar/plugin-i18next/register";
+ import { Client } from "@wolfstar/http-framework";
++import { fileURLToPath } from "node:url";
+
+-await load(new URL("locales", import.meta.url));
+-addFormatters({ name: "uppercase", format: (value) => value.toUpperCase() });
+-await init();
+-
+-const client = new Client();
++const client = new Client({
++  i18n: {
++    defaultLanguageDirectory: fileURLToPath(new URL("languages", import.meta.url)),
++    formatters: [{ name: "uppercase", format: (value) => value.toUpperCase() }],
++  },
++});
+```
+
+`T`, `FT`, `resolveKey`, `resolveUserKey`, `getSupportedLanguageName`, `getSupportedUserLanguageName`,
+`getSupportedLanguageT`, `getSupportedUserLanguageT`, `supportedLanguages`, `isSupportedDiscordLocale`,
+`getLocalizedData`, `applyNameLocalizedBuilder`, `applyDescriptionLocalizedBuilder`, `applyLocalizedBuilder` and
+`createSelectMenuChoiceName` keep the same names and signatures — only the module specifier changes.
+
+| Removed upstream               | Replacement here                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `load(directory)`              | `defaultLanguageDirectory` option                                             |
+| `init(options)`                | The `preLoad` hook; raw options go to the `i18next` option                    |
+| `addFormatters(...formatters)` | `formatters` option                                                           |
+| `getT(locale)`                 | `container.i18n.getT(locale)`                                                 |
+| `loadedLocales`                | `container.i18n.languages`                                                    |
+| `loadedNamespaces`             | `container.i18n.namespaces`                                                   |
+| `loadedPaths`                  | Derived from `defaultLanguageDirectory`; extra paths via the `backend` option |
+| `loadedFormatters`             | `container.i18n.options.formatters`                                           |
+| `Formatter`                    | `I18nextFormatter`                                                            |
+
+Other differences: `@wolfstar/http-framework@^3.1.0` is now a peer dependency, `i18next` moves from `^22` to `^25`, and
+the locales directory defaults to `<root>/languages` instead of an explicit path passed to `load()` — the layout itself
+is unchanged.
+
 ## Credits
 
 Adapted from [`@wolfstar/http-framework-i18n`](https://github.com/wolfstar-project/stars-components/tree/main/packages/http-framework-i18n) and [`@sapphire/plugin-i18next`](https://github.com/sapphiredev/plugins/tree/main/packages/i18next) (MIT).
