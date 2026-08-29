@@ -225,6 +225,7 @@ pnpm add @wolfstar/plugin-i18next
 -import { addFormatters, init, load } from "@wolfstar/http-framework-i18n";
 +import "@wolfstar/plugin-i18next/register";
  import { Client } from "@wolfstar/http-framework";
++import { fileURLToPath } from "node:url";
 
 -await load(new URL("locales", import.meta.url));
 -addFormatters({ name: "uppercase", format: (value) => value.toUpperCase() });
@@ -233,7 +234,7 @@ pnpm add @wolfstar/plugin-i18next
 -const client = new Client();
 +const client = new Client({
 +  i18n: {
-+    defaultLanguageDirectory: new URL("languages", import.meta.url).pathname,
++    defaultLanguageDirectory: fileURLToPath(new URL("languages", import.meta.url)),
 +    formatters: [{ name: "uppercase", format: (value) => value.toUpperCase() }],
 +  },
 +});
