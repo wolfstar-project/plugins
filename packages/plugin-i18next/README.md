@@ -110,6 +110,41 @@ const t = await fetchT(interaction);
 const content = await fetchKey(interaction, "commands/ping:success");
 ```
 
+### Targets
+
+Every helper accepts any of four raw payloads, told apart structurally — the framework never has
+`discord.js` class instances to check with `instanceof`:
+
+| Target          | Recognized by | Locale it carries           |
+| --------------- | ------------- | --------------------------- |
+| `Interaction`   | `locale`      | `locale` and `guild_locale` |
+| `MessageTarget` | `channel_id`  | none                        |
+| `ChannelTarget` | `type`        | none                        |
+| `GuildTarget`   | anything else | `preferred_locale`          |
+
+`APIInteraction`, `APIMessage`, `APIChannel` and `APIGuild` all satisfy the matching target, so
+payloads can be passed straight through:
+
+```typescript
+import { getSupportedLanguageName, resolveKey } from "@wolfstar/plugin-i18next";
+
+// A guild resolves through its `preferred_locale`:
+const guild = await container.rest.get(Routes.guild(guildId));
+const language = getSupportedLanguageName(guild);
+const content = resolveKey(guild, Success);
+```
+
+Channels and messages carry no locale of their own, so the synchronous helpers fall back to
+`defaultName` for them. Use the asynchronous `fetch*` helpers instead: the hook receives the
+target's `guildId`, `channelId` and `userId`, which is enough to look the language up.
+
+```typescript
+container.i18n.fetchLanguage = async ({ guildId }) =>
+  guildId ? ((await database.getGuild(guildId))?.language ?? null) : null;
+
+const content = await fetchKey(message, "commands/ping:success");
+```
+
 ### Localizing command builders
 
 ```typescript
@@ -148,21 +183,83 @@ const client = new Client({
 ```
 
 When enabled, the languages directory is watched and `container.i18n.reloadResources()` runs on every
-change or deletion.
+addition, change or deletion — including new locale directories and new namespace files, which are
+registered on i18next and become usable without a restart.
+
+`ignoreInitial` defaults to `true` so the files already on disk do not each trigger a reload on
+startup; pass `hmr.options` to override it or any other chokidar option. The watcher is exposed as
+`I18nextPlugin.watcher`, so it can be closed on shutdown:
+
+```typescript
+import { I18nextPlugin } from "@wolfstar/plugin-i18next/register";
+
+await I18nextPlugin.watcher?.close();
+```
 
 ## Options
 
-| Option                     | Type                                     | Description                                                                     |
-| -------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------- |
-| `defaultName`              | `string`                                 | The fallback locale. Defaults to `'en-US'`.                                     |
-| `defaultLanguageDirectory` | `string`                                 | Where to look for languages. Defaults to `<root>/languages`.                    |
-| `defaultMissingKey`        | `string`                                 | The key used to render missing keys, e.g. `'default:default'`.                  |
-| `defaultNS`                | `string`                                 | The namespace prefixed to keys that don't specify one. Defaults to `'default'`. |
-| `backend`                  | `Backend.Options`                        | Extra `@wolfstar/i18next-backend` paths.                                        |
-| `i18next`                  | `InitOptions \| DynamicOptions`          | Raw options forwarded to `i18next.init`.                                        |
-| `formatters`               | `I18nextFormatter[]`                     | Formatters registered on `i18next.services.formatter`.                          |
-| `hmr`                      | `HMROptions`                             | Chokidar-based hot reloading of the languages directory.                        |
-| `fetchLanguage`            | `(context) => Awaitable<string \| null>` | Custom language resolution, used by the `fetch*` helpers.                       |
+| Option                     | Type                                     | Description                                                                             |
+| -------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------- |
+| `defaultName`              | `string`                                 | The locale used when none of an interaction's locales is loaded. Defaults to `'en-US'`. |
+| `defaultLanguageDirectory` | `string`                                 | Where to look for languages. Defaults to `<root>/languages`.                            |
+| `defaultMissingKey`        | `string`                                 | The key used to render missing keys, e.g. `'default:default'`.                          |
+| `defaultNS`                | `string`                                 | The namespace prefixed to keys that don't specify one. Defaults to `'default'`.         |
+| `backend`                  | `Backend.Options`                        | Extra `@wolfstar/i18next-backend` paths.                                                |
+| `i18next`                  | `InitOptions \| DynamicOptions`          | Raw options forwarded to `i18next.init`.                                                |
+| `formatters`               | `I18nextFormatter[]`                     | Formatters registered on `i18next.services.formatter`.                                  |
+| `hmr`                      | `HMROptions`                             | Chokidar-based hot reloading of the languages directory.                                |
+| `fetchLanguage`            | `(context) => Awaitable<string \| null>` | Custom language resolution, used by the `fetch*` helpers.                               |
+
+## Migrating from `@wolfstar/http-framework-i18n`
+
+[`@wolfstar/http-framework-i18n`](https://www.npmjs.com/package/@wolfstar/http-framework-i18n) is deprecated in favour
+of this plugin. The upstream changes are documented in
+[wolfstar-project/stars-components#30](https://github.com/wolfstar-project/stars-components/pull/30); the short version:
+
+```bash
+pnpm remove @wolfstar/http-framework-i18n
+pnpm add @wolfstar/plugin-i18next
+```
+
+```diff
+-import { addFormatters, init, load } from "@wolfstar/http-framework-i18n";
++import "@wolfstar/plugin-i18next/register";
+ import { Client } from "@wolfstar/http-framework";
++import { fileURLToPath } from "node:url";
+
+-await load(new URL("locales", import.meta.url));
+-addFormatters({ name: "uppercase", format: (value) => value.toUpperCase() });
+-await init();
+-
+-const client = new Client();
++const client = new Client({
++  i18n: {
++    defaultLanguageDirectory: fileURLToPath(new URL("languages", import.meta.url)),
++    formatters: [{ name: "uppercase", format: (value) => value.toUpperCase() }],
++  },
++});
+```
+
+`T`, `FT`, `resolveKey`, `resolveUserKey`, `getSupportedLanguageName`, `getSupportedUserLanguageName`,
+`getSupportedLanguageT`, `getSupportedUserLanguageT`, `supportedLanguages`, `isSupportedDiscordLocale`,
+`getLocalizedData`, `applyNameLocalizedBuilder`, `applyDescriptionLocalizedBuilder`, `applyLocalizedBuilder` and
+`createSelectMenuChoiceName` keep the same names and signatures — only the module specifier changes.
+
+| Removed upstream               | Replacement here                                                              |
+| ------------------------------ | ----------------------------------------------------------------------------- |
+| `load(directory)`              | `defaultLanguageDirectory` option                                             |
+| `init(options)`                | The `preLoad` hook; raw options go to the `i18next` option                    |
+| `addFormatters(...formatters)` | `formatters` option                                                           |
+| `getT(locale)`                 | `container.i18n.getT(locale)`                                                 |
+| `loadedLocales`                | `container.i18n.languages`                                                    |
+| `loadedNamespaces`             | `container.i18n.namespaces`                                                   |
+| `loadedPaths`                  | Derived from `defaultLanguageDirectory`; extra paths via the `backend` option |
+| `loadedFormatters`             | `container.i18n.options.formatters`                                           |
+| `Formatter`                    | `I18nextFormatter`                                                            |
+
+Other differences: `@wolfstar/http-framework@^3.1.0` is now a peer dependency, `i18next` moves from `^22` to `^25`, and
+the locales directory defaults to `<root>/languages` instead of an explicit path passed to `load()` — the layout itself
+is unchanged.
 
 ## Credits
 

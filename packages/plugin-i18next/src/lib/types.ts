@@ -4,6 +4,8 @@ import type { ChokidarOptions } from "chokidar";
 import type {
   APIInteraction,
   APIPingInteraction,
+  APIUser,
+  ChannelType,
   LocaleString,
   LocalizationMap,
 } from "discord-api-types/v10";
@@ -80,9 +82,59 @@ export type Interaction = Pick<
   Partial<Pick<Exclude<APIInteraction, APIPingInteraction>, "channel_id" | "user" | "member">>;
 
 /**
- * Any value the localization helpers accept as the source of a language.
+ * The subset of a guild payload the localization helpers need.
+ *
+ * @remarks
+ * `APIGuild` satisfies it, as does any partial guild that carries an id. Only a full guild payload
+ * carries `preferred_locale`; without it the guild's id is still handed to
+ * {@link InternationalizationHandler.fetchLanguage}, so a custom hook can resolve the language.
  */
-export type Target = Interaction;
+export interface GuildTarget {
+  id: string;
+  /**
+   * The guild's preferred locale. Typed as `string` rather than `LocaleString` because
+   * `APIGuild` types it as the `Locale` enum; it is validated at runtime.
+   */
+  preferred_locale?: string;
+}
+
+/**
+ * The subset of a channel payload the localization helpers need. Every `APIChannel` member
+ * satisfies it.
+ *
+ * @remarks
+ * A channel payload carries no locale of its own, so the language is resolved from
+ * {@link InternationalizationHandler.fetchLanguage} and then from the configured default.
+ */
+export interface ChannelTarget {
+  id: string;
+  type: ChannelType;
+  guild_id?: string;
+}
+
+/**
+ * The subset of a message payload the localization helpers need. `APIMessage` satisfies it, and
+ * gateway message payloads additionally carry `guild_id`.
+ *
+ * @remarks
+ * Like {@link ChannelTarget}, a message carries no locale of its own.
+ */
+export interface MessageTarget {
+  id: string;
+  channel_id: string;
+  guild_id?: string;
+  author?: Pick<APIUser, "id">;
+}
+
+/**
+ * Any value the localization helpers accept as the source of a language.
+ *
+ * @remarks
+ * The four members are told apart structurally, in this order: an {@link Interaction} has `locale`,
+ * a {@link MessageTarget} has `channel_id`, a {@link ChannelTarget} has `type`, and anything else is
+ * a {@link GuildTarget}.
+ */
+export type Target = Interaction | MessageTarget | ChannelTarget | GuildTarget;
 
 /**
  * Configure whether to use Hot-Module-Replacement (HMR) for your i18next resources using these
@@ -98,18 +150,30 @@ export interface HMROptions {
 
   /**
    * Languages that will be reloaded when updating the languages directory.
+   *
+   * @remarks
+   * Pinning both this and {@link HMROptions.namespaces} skips the directory walk, so languages and
+   * namespaces added while the process is running are not registered on i18next.
    * @default All languages that are automatically resolved from your folder setup
    */
   languages?: string | string[];
 
   /**
    * Namespaces that will be reloaded when updating the languages directory.
+   *
+   * @remarks
+   * Pinning both this and {@link HMROptions.languages} skips the directory walk, so languages and
+   * namespaces added while the process is running are not registered on i18next.
    * @default All namespaces that are automatically resolved from your languages folder setup
    */
   namespaces?: string | string[];
 
   /**
    * The options passed to `chokidar`'s `watch`.
+   *
+   * @remarks
+   * `ignoreInitial` defaults to `true`, since chokidar would otherwise replay an `add` event for
+   * every translation file already on disk and trigger a reload for each of them on startup.
    */
   options?: ChokidarOptions;
 }
@@ -197,6 +261,15 @@ export interface InternationalizationContext {
   interactionGuildLocale?: LocaleString;
   /** The locale the user that sent the interaction is configured with. */
   interactionLocale?: LocaleString;
+  /**
+   * The preferred locale of the guild the target belongs to.
+   *
+   * @remarks
+   * Filled in from `guild_locale` for an {@link Interaction} and from `preferred_locale` for a
+   * {@link GuildTarget}; a {@link ChannelTarget} and a {@link MessageTarget} carry no locale, so it
+   * is left undefined for them.
+   */
+  preferredLocale?: string;
 }
 
 export interface InternationalizationClientOptions {

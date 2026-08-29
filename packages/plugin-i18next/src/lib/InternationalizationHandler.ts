@@ -62,6 +62,11 @@ export class InternationalizationHandler {
   protected readonly backendOptions: Backend.Options;
 
   /**
+   * The tail of the reload queue, used by {@link reloadResources} to run reloads one at a time.
+   */
+  private reloadTask: Promise<void> = Promise.resolve();
+
+  /**
    * @param options The options that `i18next`, `@wolfstar/i18next-backend`, and
    * {@link InternationalizationHandler} should use.
    */
@@ -319,12 +324,51 @@ export class InternationalizationHandler {
    * Reloads the languages and namespaces registered in i18next, used by the HMR watcher registered
    * in `@wolfstar/plugin-i18next/register`.
    */
-  public async reloadResources() {
+  public reloadResources(): Promise<void> {
+    // Serialize reloads: the watcher can fire several events for a single edit (`addDir` followed by
+    // `add`, for instance), and overlapping `i18next.loadLanguages` calls would race each other.
+    this.reloadTask = this.reloadTask.then(() => this.performReload());
+    return this.reloadTask;
+  }
+
+  /**
+   * Registers the languages and namespaces that were discovered after {@link init} ran, so locales
+   * and namespaces added while the process is running become usable without a restart.
+   * @param discovered The result of {@link walkRootDirectory}.
+   */
+  private async registerDiscoveredResources(discovered: {
+    languages: string[];
+    namespaces: string[];
+  }) {
+    const newNamespaces = discovered.namespaces.filter(
+      (namespace) => !this.namespaces.has(namespace),
+    );
+    if (newNamespaces.length > 0) {
+      await i18next.loadNamespaces(newNamespaces);
+      for (const namespace of newNamespaces) this.namespaces.add(namespace);
+    }
+
+    const newLanguages = discovered.languages.filter((language) => !this.languages.has(language));
+    if (newLanguages.length > 0) {
+      await i18next.loadLanguages(newLanguages);
+      for (const language of newLanguages)
+        this.languages.set(language, i18next.getFixedT(language));
+    }
+  }
+
+  /**
+   * @internal
+   */
+  private async performReload() {
     const result = await Result.fromAsync(async () => {
       let languages = this.options.hmr?.languages;
       let namespaces = this.options.hmr?.namespaces;
+
+      // Only walk the directory when at least one of the two was not pinned through the options,
+      // matching what `init` discovers, and register anything that appeared since.
       if (!languages || !namespaces) {
         const languageDirectoryResult = await this.walkRootDirectory(this.languagesDirectory);
+        await this.registerDiscoveredResources(languageDirectoryResult);
         languages ??= languageDirectoryResult.languages;
         namespaces ??= languageDirectoryResult.namespaces;
       }
