@@ -5,17 +5,14 @@ import {
   fetchLanguage,
   fetchT,
   getSupportedLanguageName,
+  getSupportedLanguageT,
   getSupportedUserLanguageName,
+  getSupportedUserLanguageT,
   InternationalizationHandler,
-  resolveKey,
-  resolveUserKey,
-  T,
   type Interaction,
 } from "../src/index";
 
 const languagesDirectory = fileURLToPath(new URL("fixtures/languages-es-only", import.meta.url));
-
-const Success = T("commands/ping:success");
 
 /**
  * An interaction whose locales are both unloaded, so every helper has to fall back.
@@ -64,9 +61,13 @@ describe("defaultName fallback", () => {
     ).resolves.toBe("¡Pong!");
   });
 
-  test("GIVEN unmatched locales THEN the resolve helpers do not throw", () => {
-    expect(resolveKey(makeUnmatchedInteraction(), Success)).toBe("¡Pong!");
-    expect(resolveUserKey(makeUnmatchedInteraction(), Success)).toBe("¡Pong!");
+  test("GIVEN unmatched locales THEN the translation helpers do not throw", () => {
+    expect(getSupportedLanguageT(makeUnmatchedInteraction())("commands/ping:success")).toBe(
+      "¡Pong!",
+    );
+    expect(getSupportedUserLanguageT(makeUnmatchedInteraction())("commands/ping:success")).toBe(
+      "¡Pong!",
+    );
   });
 
   test("GIVEN an unloaded defaultName THEN it falls back to en-US", () => {

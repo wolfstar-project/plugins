@@ -4,7 +4,7 @@ Plugin for [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/
 
 It merges two upstream implementations:
 
-- [`@wolfstar/http-framework-i18n`](https://github.com/wolfstar-project/stars-components/tree/main/packages/http-framework-i18n) — the HTTP-interaction helpers (`resolveKey`, `applyLocalizedBuilder`, typed `T` / `FT` keys).
+- [`@wolfstar/http-framework-i18n`](https://github.com/wolfstar-project/stars-components/tree/main/packages/http-framework-i18n) — the HTTP-interaction helpers (`getSupportedLanguageT`, `applyLocalizedBuilder`, localized builders).
 - [`@sapphire/plugin-i18next`](https://github.com/sapphiredev/plugins/tree/main/packages/i18next) — the plugin architecture (`container.i18n`, `InternationalizationHandler`, custom `fetchLanguage`, formatters, HMR).
 
 Interactions arrive over HTTP as raw payloads, so every helper operates on `discord-api-types` structures instead of `discord.js` class instances.
@@ -61,23 +61,27 @@ languages/
 
 Every top-level directory is a language, every nested `.json` file is a namespace (`commands/ping`).
 
-### Definition
+### Typed keys
 
-```typescript
-import { FT, T } from "@wolfstar/plugin-i18next";
+Keys are typed through i18next's own `CustomTypeOptions` augmentation. Generate it from the locale
+files with
+[`@wolfstar/i18next-type-generator`](https://www.npmjs.com/package/@wolfstar/i18next-type-generator):
 
-export const Success = T("commands/ping:success");
-export const SuccessWithLatency = FT<{ latency: number }>("commands/ping:successWithLatency");
+```bash
+i18next-type-generator ./languages/en-US/ ./src/@types/i18next.d.ts
 ```
+
+See [i18next's TypeScript guide](https://www.i18next.com/overview/typescript) for the options the
+augmentation accepts. Without it every helper still accepts plain strings, only untyped.
 
 ### Consumption
 
 ```typescript
 import {
   getSupportedLanguageName,
+  getSupportedLanguageT,
   getSupportedUserLanguageName,
-  resolveKey,
-  resolveUserKey,
+  getSupportedUserLanguageT,
 } from "@wolfstar/plugin-i18next";
 
 // The guild's language, falling back to the user's one in DMs:
@@ -87,12 +91,15 @@ const guildLanguage = getSupportedLanguageName(interaction);
 const userLanguage = getSupportedUserLanguageName(interaction);
 
 // Synchronous, resolved straight from the interaction payload:
-const content = resolveKey(interaction, Success);
-const userContent = resolveUserKey(interaction, SuccessWithLatency, { latency: 42 });
+const content = getSupportedLanguageT(interaction)("commands/ping:success");
+
+// Passing a namespace binds the returned function to it, dropping the prefix from the keys:
+const t = getSupportedUserLanguageT(interaction, "commands/ping");
+const userContent = t("successWithLatency", { latency: 42 });
 ```
 
-`resolve*` helpers are synchronous and only read the locales carried by the interaction. Use the
-asynchronous `fetch*` helpers when the language comes from somewhere else — they go through
+`getSupported*T` helpers are synchronous and only read the locales carried by the interaction. Use
+the asynchronous `fetch*` helpers when the language comes from somewhere else — they go through
 `container.i18n.fetchLanguage`:
 
 ```typescript
@@ -107,6 +114,7 @@ container.i18n.fetchLanguage = async (context) => {
 
 const language = await fetchLanguage(interaction);
 const t = await fetchT(interaction);
+const scoped = await fetchT(interaction, "commands/ping");
 const content = await fetchKey(interaction, "commands/ping:success");
 ```
 
@@ -126,12 +134,12 @@ Every helper accepts any of four raw payloads, told apart structurally — the f
 payloads can be passed straight through:
 
 ```typescript
-import { getSupportedLanguageName, resolveKey } from "@wolfstar/plugin-i18next";
+import { getSupportedLanguageName, getSupportedLanguageT } from "@wolfstar/plugin-i18next";
 
 // A guild resolves through its `preferred_locale`:
 const guild = await container.rest.get(Routes.guild(guildId));
 const language = getSupportedLanguageName(guild);
-const content = resolveKey(guild, Success);
+const content = getSupportedLanguageT(guild)("commands/ping:success");
 ```
 
 Channels and messages carry no locale of their own, so the synchronous helpers fall back to
@@ -240,9 +248,9 @@ pnpm add @wolfstar/plugin-i18next
 +});
 ```
 
-`T`, `FT`, `resolveKey`, `resolveUserKey`, `getSupportedLanguageName`, `getSupportedUserLanguageName`,
-`getSupportedLanguageT`, `getSupportedUserLanguageT`, `supportedLanguages`, `isSupportedDiscordLocale`,
-`getLocalizedData`, `applyNameLocalizedBuilder`, `applyDescriptionLocalizedBuilder`, `applyLocalizedBuilder` and
+`getSupportedLanguageName`, `getSupportedUserLanguageName`, `getSupportedLanguageT`,
+`getSupportedUserLanguageT`, `supportedLanguages`, `isSupportedDiscordLocale`, `getLocalizedData`,
+`applyNameLocalizedBuilder`, `applyDescriptionLocalizedBuilder`, `applyLocalizedBuilder` and
 `createSelectMenuChoiceName` keep the same names and signatures — only the module specifier changes.
 
 | Removed upstream               | Replacement here                                                              |
@@ -250,16 +258,54 @@ pnpm add @wolfstar/plugin-i18next
 | `load(directory)`              | `defaultLanguageDirectory` option                                             |
 | `init(options)`                | The `preLoad` hook; raw options go to the `i18next` option                    |
 | `addFormatters(...formatters)` | `formatters` option                                                           |
-| `getT(locale)`                 | `container.i18n.getT(locale)`                                                 |
+| `getT(locale, namespace?)`     | `container.i18n.getT(locale, namespace?)`                                     |
 | `loadedLocales`                | `container.i18n.languages`                                                    |
 | `loadedNamespaces`             | `container.i18n.namespaces`                                                   |
 | `loadedPaths`                  | Derived from `defaultLanguageDirectory`; extra paths via the `backend` option |
 | `loadedFormatters`             | `container.i18n.options.formatters`                                           |
 | `Formatter`                    | `I18nextFormatter`                                                            |
 
+`T`, `FT`, `resolveKey` and `resolveUserKey` were removed upstream in
+[wolfstar-project/stars-components#30](https://github.com/wolfstar-project/stars-components/pull/30) and are gone here
+too — see [Migrating off `T` / `FT` / `resolve*`](#migrating-off-t--ft--resolve) below.
+
 Other differences: `@wolfstar/http-framework@^3.1.0` is now a peer dependency, `i18next` moves from `^22` to `^25`, and
 the locales directory defaults to `<root>/languages` instead of an explicit path passed to `load()` — the layout itself
 is unchanged.
+
+## Migrating off `T` / `FT` / `resolve*`
+
+The branded-key helpers were replaced by i18next's native TypeScript support, so keys are plain
+strings typed by the `CustomTypeOptions` augmentation
+[`@wolfstar/i18next-type-generator`](https://www.npmjs.com/package/@wolfstar/i18next-type-generator) emits.
+
+```diff
+-import { FT, T } from "@wolfstar/plugin-i18next";
+-
+-export const Success = T("commands/ping:success");
+-export const SuccessWithLatency = FT<{ latency: number }>("commands/ping:successWithLatency");
+```
+
+| Removed                                | Replacement                                              |
+| -------------------------------------- | -------------------------------------------------------- |
+| `T(key)` / `FT<Args>(key)`             | The key itself, typed by the generated augmentation      |
+| `resolveKey(target, key, options)`     | `getSupportedLanguageT(target)(key, options)`            |
+| `resolveUserKey(target, key, options)` | `getSupportedUserLanguageT(target)(key, options)`        |
+| `TypedT` / `TypedFT`                   | `ParseKeys` from `i18next`                               |
+| `Value` / `Values` / `Difference`      | Interpolation options are inferred from the locale files |
+
+`LocalePrefixKey` is no longer hardcoded to `commands/<file>:<key>`: it is now
+`` `${string}${LocaleSeparator}${string}` ``, with `LocaleSeparator` read from i18next's
+`TypeOptions["nsSeparator"]`.
+
+```diff
+-const content = resolveKey(interaction, Success);
+-const userContent = resolveUserKey(interaction, SuccessWithLatency, { latency: 42 });
++const content = getSupportedLanguageT(interaction)("commands/ping:success");
++const userContent = getSupportedUserLanguageT(interaction, "commands/ping")("successWithLatency", {
++  latency: 42,
++});
+```
 
 ## Credits
 
