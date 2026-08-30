@@ -1,4 +1,4 @@
-import type { Awaitable, NonNullObject } from "@sapphire/utilities";
+import type { Awaitable } from "@sapphire/utilities";
 import type { Backend } from "@wolfstar/i18next-backend";
 import type { ChokidarOptions } from "chokidar";
 import type {
@@ -9,7 +9,7 @@ import type {
   LocaleString,
   LocalizationMap,
 } from "discord-api-types/v10";
-import type { InitOptions } from "i18next";
+import type { InitOptions, TypeOptions } from "i18next";
 
 /**
  * This is a re-exported type from i18next.
@@ -30,43 +30,21 @@ export interface $Dictionary {
 }
 
 /**
- * This is a re-exported type from i18next. It is the returned type from `resolveKey` when
- * `returnObjects` is `true` in the options.
+ * This is a re-exported type from i18next. It is the returned type from the translation helpers
+ * when `returnObjects` is `true` in the options.
  */
 export type $SpecialObject = $Dictionary | Array<string | $Dictionary>;
 
 /**
- * A translation key typed with the value it resolves to, created through {@link T}.
+ * The namespace separator i18next is configured with, `':'` unless `CustomTypeOptions` overrides it.
  */
-export type TypedT<TCustom = string> = string & { __type__: TCustom };
+export type LocaleSeparator = TypeOptions["nsSeparator"];
 
 /**
- * A translation key typed with both the interpolation arguments it takes and the value it resolves
- * to, created through {@link FT}.
+ * A `<namespace><separator><key>` shaped key, used as the root key overload of
+ * {@link applyLocalizedBuilder}.
  */
-export type TypedFT<TArgs extends NonNullObject = NonNullObject, TReturn = string> = string & {
-  __args__: TArgs;
-  __return__: TReturn;
-};
-
-export interface Value<T = string> {
-  value: T;
-}
-
-export interface Values<T = string> {
-  values: readonly T[];
-  count: number;
-}
-
-export interface Difference<T = string> {
-  previous: T;
-  next: T;
-}
-
-/**
- * A `commands/<file>:<key>` shaped key, used as the root key overload of {@link applyLocalizedBuilder}.
- */
-export type LocalePrefixKey = `commands/${string}:${string}`;
+export type LocalePrefixKey = `${string}${LocaleSeparator}${string}`;
 
 /**
  * The subset of an interaction payload the localization helpers need in order to resolve a language.

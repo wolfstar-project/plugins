@@ -16,7 +16,6 @@ import type {
   TFunctionReturn,
   TFunctionReturnOptionalDetails,
   TOptions,
-  TOptionsBase,
 } from "i18next";
 import type {
   $Dictionary,
@@ -28,35 +27,7 @@ import type {
   LocalePrefixKey,
   LocalizedData,
   Target,
-  TypedFT,
-  TypedT,
 } from "./types";
-
-/**
- * Brands a translation key with the type it resolves to.
- * @param k The i18next key.
- * @example
- * ```typescript
- * export const InvalidInput = T('path/to/file:invalidInput');
- * ```
- */
-export function T<TCustom = string>(k: string): TypedT<TCustom> {
-  return k as TypedT<TCustom>;
-}
-
-/**
- * Brands a translation key with both its interpolation arguments and the type it resolves to.
- * @param k The i18next key.
- * @example
- * ```typescript
- * export const AddResult = FT<{ left: number; right: number; result: number }>('path/to/file:addResult');
- * ```
- */
-export function FT<TArgs extends NonNullObject = NonNullObject, TReturn = string>(
-  k: string,
-): TypedFT<TArgs, TReturn> {
-  return k as TypedFT<TArgs, TReturn>;
-}
 
 /**
  * Every locale Discord supports.
@@ -183,10 +154,37 @@ export function getSupportedUserLanguageName(target: Target): LocaleString {
 
 /**
  * Resolves the `TFunction` for {@link getSupportedUserLanguageName}.
+ *
+ * @remarks
+ * Pass the key and its options straight after the target to resolve it in one call; the bound
+ * function is only returned when no key is given. Keys of a namespace other than the default one
+ * carry their `<namespace>:` prefix, or the namespace is passed through the `ns` option.
  * @param target The target to read the locales from.
  */
-export function getSupportedUserLanguageT(target: Target): TFunction {
-  return container.i18n.getT(getSupportedUserLanguageName(target));
+export function getSupportedUserLanguageT(target: Target): TFunction;
+/**
+ * Resolves a key with the user's language, as resolved by {@link getSupportedUserLanguageName}.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options.
+ */
+export function getSupportedUserLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = DefaultNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
+    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+export function getSupportedUserLanguageT(target: Target, ...args: [any?, any?, any?]) {
+  const t = container.i18n.getT(getSupportedUserLanguageName(target));
+  return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
 }
 
 /**
@@ -207,10 +205,37 @@ export function getSupportedLanguageName(target: Target): LocaleString {
 
 /**
  * Resolves the `TFunction` for {@link getSupportedLanguageName}.
+ *
+ * @remarks
+ * Pass the key and its options straight after the target to resolve it in one call; the bound
+ * function is only returned when no key is given. Keys of a namespace other than the default one
+ * carry their `<namespace>:` prefix, or the namespace is passed through the `ns` option.
  * @param target The target to read the locales from.
  */
-export function getSupportedLanguageT(target: Target): TFunction {
-  return container.i18n.getT(getSupportedLanguageName(target));
+export function getSupportedLanguageT(target: Target): TFunction;
+/**
+ * Resolves a key with the guild's language, as resolved by {@link getSupportedLanguageName}.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options.
+ */
+export function getSupportedLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = DefaultNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
+    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+export function getSupportedLanguageT(target: Target, ...args: [any?, any?, any?]) {
+  const t = container.i18n.getT(getSupportedLanguageName(target));
+  return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
 }
 
 /**
@@ -234,6 +259,9 @@ export async function fetchLanguage(target: Target): Promise<string> {
 
 /**
  * Retrieves the language-assigned function from i18next designated to a target's preferred language.
+ *
+ * @remarks
+ * Use {@link fetchKey} to resolve a key in a single call.
  * @param target The target to fetch the language from.
  */
 export async function fetchT(target: Target): Promise<TFunction> {
@@ -246,8 +274,8 @@ export async function fetchT(target: Target): Promise<TFunction> {
  * is honoured.
  *
  * @remarks
- * Use {@link resolveKey} when the language can be resolved from the target payload alone, it is
- * synchronous and does not hit the hook.
+ * Use {@link getSupportedLanguageT} when the language can be resolved from the target payload
+ * alone, it is synchronous and does not hit the hook.
  * @param target The target to fetch the language key from.
  */
 export async function fetchKey<
@@ -279,70 +307,6 @@ export async function fetchKey<
   }
 
   return container.i18n.format<Key, TOpt, Ns, Ret>(language, key, undefined, defaultValueOrOptions);
-}
-
-/**
- * Resolves a key with the user's language, as resolved by {@link getSupportedUserLanguageName}.
- */
-export function resolveUserKey<TReturn>(
-  target: Target,
-  key: TypedT<TReturn>,
-  options?: TOptionsBase | string,
-): TReturn;
-export function resolveUserKey<TReturn>(
-  target: Target,
-  key: TypedT<TReturn>,
-  defaultValue: TReturn,
-  options?: TOptionsBase | string,
-): TReturn;
-export function resolveUserKey<TArgs extends NonNullObject, TReturn>(
-  target: Target,
-  key: TypedFT<TArgs, TReturn>,
-  options?: TOptions<TArgs>,
-): TReturn;
-export function resolveUserKey<TArgs extends NonNullObject, TReturn>(
-  target: Target,
-  key: TypedFT<TArgs, TReturn>,
-  defaultValue: TReturn,
-  options?: TOptions<TArgs>,
-): TReturn;
-export function resolveUserKey(
-  target: Target,
-  key: string | string[],
-  ...args: [any?, any?]
-): string;
-export function resolveUserKey(target: Target, ...args: [any, any?, any?]) {
-  return (getSupportedUserLanguageT(target) as (...args: any[]) => unknown)(...args);
-}
-
-/**
- * Resolves a key with the guild's language, as resolved by {@link getSupportedLanguageName}.
- */
-export function resolveKey<TReturn>(
-  target: Target,
-  key: TypedT<TReturn>,
-  options?: TOptionsBase | string,
-): TReturn;
-export function resolveKey<TReturn>(
-  target: Target,
-  key: TypedT<TReturn>,
-  defaultValue: TReturn,
-  options?: TOptionsBase | string,
-): TReturn;
-export function resolveKey<TArgs extends NonNullObject, TReturn>(
-  target: Target,
-  key: TypedFT<TArgs, TReturn>,
-  options?: TOptions<TArgs>,
-): TReturn;
-export function resolveKey<TArgs extends NonNullObject, TReturn>(
-  target: Target,
-  key: TypedFT<TArgs, TReturn>,
-  defaultValue: TReturn,
-  options?: TOptions<TArgs>,
-): TReturn;
-export function resolveKey(target: Target, key: string | string[], ...args: [any?, any?]): string;
-export function resolveKey(target: Target, ...args: [any, any?, any?]) {
-  return (getSupportedLanguageT(target) as (...args: any[]) => unknown)(...args);
 }
 
 let cachedLocales: Collection<LocaleString, TFunction> | null = null;
@@ -406,7 +370,7 @@ export function getLocalizedData<
   const TOpt extends TOptions = TOptions,
   Ns extends Namespace = DefaultNamespace,
   KPrefix = undefined,
->(key: ParseKeys<Ns, TOpt, KPrefix> | TypedT): LocalizedData {
+>(key: ParseKeys<Ns, TOpt, KPrefix>): LocalizedData {
   const locales = getLocales();
   const defaultT = getDefaultT();
 
@@ -427,7 +391,7 @@ export function applyNameLocalizedBuilder<
   const TOpt extends TOptions = TOptions,
   Ns extends Namespace = DefaultNamespace,
   KPrefix = undefined,
->(builder: T, key: ParseKeys<Ns, TOpt, KPrefix> | TypedT) {
+>(builder: T, key: ParseKeys<Ns, TOpt, KPrefix>) {
   const result = getLocalizedData(key);
   return builder.setName(result.value).setNameLocalizations(result.localizations);
 }
@@ -444,7 +408,7 @@ export function applyDescriptionLocalizedBuilder<
   const TOpt extends TOptions = TOptions,
   Ns extends Namespace = DefaultNamespace,
   KPrefix = undefined,
->(builder: T, key: ParseKeys<Ns, TOpt, KPrefix> | TypedT) {
+>(builder: T, key: ParseKeys<Ns, TOpt, KPrefix>) {
   const result = getLocalizedData(key);
   return builder.setDescription(result.value).setDescriptionLocalizations(result.localizations);
 }
@@ -482,12 +446,9 @@ export function applyLocalizedBuilder<
   builder: T,
   ...params:
     | [root: LocalePrefixKey]
-    | [
-        name: ParseKeys<Ns, TOpt, KPrefix> | TypedT,
-        description: ParseKeys<Ns, TOpt, KPrefix> | TypedT,
-      ]
+    | [name: ParseKeys<Ns, TOpt, KPrefix>, description: ParseKeys<Ns, TOpt, KPrefix>]
 ): T {
-  type LocalKeysType = ParseKeys<Ns, TOpt, KPrefix> | TypedT;
+  type LocalKeysType = ParseKeys<Ns, TOpt, KPrefix>;
 
   const [localeName, localeDescription] =
     params.length === 1
@@ -515,7 +476,7 @@ export function createLocalizedChoice<
   Ns extends Namespace = DefaultNamespace,
   KPrefix = undefined,
 >(
-  key: ParseKeys<Ns, TOpt, KPrefix> | TypedT,
+  key: ParseKeys<Ns, TOpt, KPrefix>,
   options: Omit<APIApplicationCommandOptionChoice<ValueType>, "name" | "name_localizations">,
 ): APIApplicationCommandOptionChoice<ValueType> {
   const result = getLocalizedData(key);
@@ -532,10 +493,12 @@ export function createLocalizedChoice<
  * @param key The i18next key for the name of the select option.
  * @param value The additional select option properties.
  */
-export function createSelectMenuChoiceName<V extends NonNullObject>(
-  key: TypedT,
-  value?: V,
-): createSelectMenuChoiceName.Result<V> {
+export function createSelectMenuChoiceName<
+  V extends NonNullObject,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = DefaultNamespace,
+  KPrefix = undefined,
+>(key: ParseKeys<Ns, TOpt, KPrefix>, value?: V): createSelectMenuChoiceName.Result<V> {
   const result = getLocalizedData(key);
   return {
     ...value,

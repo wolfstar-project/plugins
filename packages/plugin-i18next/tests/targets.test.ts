@@ -13,10 +13,8 @@ import {
   getSupportedLanguageName,
   getSupportedLanguageT,
   getSupportedUserLanguageName,
+  getSupportedUserLanguageT,
   InternationalizationHandler,
-  resolveKey,
-  resolveUserKey,
-  T,
   type ChannelTarget,
   type GuildTarget,
   type Interaction,
@@ -24,8 +22,6 @@ import {
 } from "../src/index";
 
 const languagesDirectory = fileURLToPath(new URL("fixtures/languages", import.meta.url));
-
-const Success = T("commands/ping:success");
 
 const GuildId = "737141877803057244";
 
@@ -52,16 +48,16 @@ describe("guild target", () => {
 
   test("GIVEN a guild THEN its preferred locale is used", () => {
     expect(getSupportedLanguageName(guild)).toBe("es-ES");
-    expect(getSupportedLanguageT(guild)("commands/ping:success")).toBe("¡Pong!");
+    expect(getSupportedLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
   });
 
   test("GIVEN a guild THEN the user helper falls back to its preferred locale", () => {
     expect(getSupportedUserLanguageName(guild)).toBe("es-ES");
   });
 
-  test("GIVEN a guild THEN the resolve helpers use it", () => {
-    expect(resolveKey(guild, Success)).toBe("¡Pong!");
-    expect(resolveUserKey(guild, Success)).toBe("¡Pong!");
+  test("GIVEN a guild THEN the translation helpers use it", () => {
+    expect(getSupportedLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
+    expect(getSupportedUserLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
   });
 
   test("GIVEN an unloaded preferred locale THEN it falls back to defaultName", () => {
