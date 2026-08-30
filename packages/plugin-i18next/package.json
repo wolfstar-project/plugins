@@ -50,7 +50,7 @@
   },
   "scripts": {
     "build": "tsdown --config-loader unrun",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.consumption.json",
     "lint": "oxlint src --fix",
     "test": "vitest run",
     "prepack": "pnpm build"
@@ -66,10 +66,17 @@
     "i18next": "^25.10.10"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.1.3"
+    "@wolfstar/http-framework": "^3.1.3",
+    "@wolfstar/i18next-type-generator": "3.1.0-next-20260830180323"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.1.0"
+    "@wolfstar/http-framework": "^3.1.0",
+    "@wolfstar/i18next-type-generator": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@wolfstar/i18next-type-generator": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"

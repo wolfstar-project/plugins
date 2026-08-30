@@ -20,7 +20,7 @@ import { join } from "node:path";
 import type {
   $Dictionary,
   $NoInfer,
-  $SpecialObject,
+  AnyNamespace,
   InternationalizationContext,
   InternationalizationOptions,
 } from "./types";
@@ -199,9 +199,12 @@ export class InternationalizationHandler {
   public format<
     const Key extends ParseKeys<Ns, TOpt, undefined>,
     const TOpt extends TOptions = TOptions,
-    Ns extends Namespace = DefaultNamespace,
-    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-      TOpt["returnObjects"] extends true ? $SpecialObject : string,
+    Ns extends Namespace = AnyNamespace,
+    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+      Ns,
+      AppendKeyPrefix<Key, undefined>,
+      TOpt
+    >,
     const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
   >(
     locale: string,
@@ -221,9 +224,12 @@ export class InternationalizationHandler {
   public format<
     const Key extends ParseKeys<Ns, TOpt, undefined>,
     const TOpt extends TOptions = TOptions,
-    Ns extends Namespace = DefaultNamespace,
-    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-      TOpt["returnObjects"] extends true ? $SpecialObject : string,
+    Ns extends Namespace = AnyNamespace,
+    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+      Ns,
+      AppendKeyPrefix<Key, undefined>,
+      TOpt
+    >,
   >(
     locale: string,
     key: string | string[],
@@ -242,9 +248,12 @@ export class InternationalizationHandler {
   public format<
     const Key extends ParseKeys<Ns, TOpt, undefined>,
     const TOpt extends TOptions = TOptions,
-    Ns extends Namespace = DefaultNamespace,
-    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-      TOpt["returnObjects"] extends true ? $SpecialObject : string,
+    Ns extends Namespace = AnyNamespace,
+    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+      Ns,
+      AppendKeyPrefix<Key, undefined>,
+      TOpt
+    >,
   >(
     locale: string,
     key: string | string[],
@@ -267,9 +276,12 @@ export class InternationalizationHandler {
   public format<
     const Key extends ParseKeys<Ns, TOpt, undefined>,
     const TOpt extends TOptions = TOptions,
-    Ns extends Namespace = DefaultNamespace,
-    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-      TOpt["returnObjects"] extends true ? $SpecialObject : string,
+    Ns extends Namespace = AnyNamespace,
+    Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+      Ns,
+      AppendKeyPrefix<Key, undefined>,
+      TOpt
+    >,
     const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
     DefaultValue extends string = never,
   >(
@@ -295,7 +307,12 @@ export class InternationalizationHandler {
     const defaultValue = hasDefaultValue
       ? defaultValueOrOptions
       : this.options.defaultMissingKey
-        ? language(this.options.defaultMissingKey, { replace: { key } })
+        ? // `defaultMissingKey` is a runtime option, not a literal key `language` can check
+          // statically against the resources.
+          (language as (key: string, options: $Dictionary) => string)(
+            this.options.defaultMissingKey,
+            { replace: { key } },
+          )
         : "";
 
     return language(

@@ -8,7 +8,6 @@ import {
 } from "discord-api-types/v10";
 import type {
   AppendKeyPrefix,
-  DefaultNamespace,
   InterpolationMap,
   Namespace,
   ParseKeys,
@@ -19,7 +18,7 @@ import type {
 } from "i18next";
 import type {
   $Dictionary,
-  $SpecialObject,
+  AnyNamespace,
   BuilderWithDescription,
   BuilderWithName,
   BuilderWithNameAndDescription,
@@ -171,9 +170,12 @@ export function getSupportedUserLanguageT(target: Target): TFunction;
 export function getSupportedUserLanguageT<
   const Key extends ParseKeys<Ns, TOpt, undefined>,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
-  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
   const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
 >(
   target: Target,
@@ -222,9 +224,12 @@ export function getSupportedLanguageT(target: Target): TFunction;
 export function getSupportedLanguageT<
   const Key extends ParseKeys<Ns, TOpt, undefined>,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
-  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
   const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
 >(
   target: Target,
@@ -281,9 +286,12 @@ export async function fetchT(target: Target): Promise<TFunction> {
 export async function fetchKey<
   const Key extends ParseKeys<Ns, TOpt, undefined>,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
-  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
-    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
   const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
 >(
   target: Target,
@@ -368,7 +376,7 @@ function getDefaultT(): TFunction {
  */
 export function getLocalizedData<
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(key: ParseKeys<Ns, TOpt, KPrefix>): LocalizedData {
   const locales = getLocales();
@@ -389,7 +397,7 @@ export function getLocalizedData<
 export function applyNameLocalizedBuilder<
   T extends BuilderWithName,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(builder: T, key: ParseKeys<Ns, TOpt, KPrefix>) {
   const result = getLocalizedData(key);
@@ -406,7 +414,7 @@ export function applyNameLocalizedBuilder<
 export function applyDescriptionLocalizedBuilder<
   T extends BuilderWithDescription,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(builder: T, key: ParseKeys<Ns, TOpt, KPrefix>) {
   const result = getLocalizedData(key);
@@ -440,7 +448,7 @@ export function applyDescriptionLocalizedBuilder<
 export function applyLocalizedBuilder<
   T extends BuilderWithNameAndDescription,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(
   builder: T,
@@ -473,7 +481,7 @@ export function applyLocalizedBuilder<
 export function createLocalizedChoice<
   ValueType = string | number,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(
   key: ParseKeys<Ns, TOpt, KPrefix>,
@@ -496,7 +504,7 @@ export function createLocalizedChoice<
 export function createSelectMenuChoiceName<
   V extends NonNullObject,
   const TOpt extends TOptions = TOptions,
-  Ns extends Namespace = DefaultNamespace,
+  Ns extends Namespace = AnyNamespace,
   KPrefix = undefined,
 >(key: ParseKeys<Ns, TOpt, KPrefix>, value?: V): createSelectMenuChoiceName.Result<V> {
   const result = getLocalizedData(key);
