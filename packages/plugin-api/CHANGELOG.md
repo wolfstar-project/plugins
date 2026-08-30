@@ -1,5 +1,11 @@
 # @wolfstar/plugin-api
 
+## 1.1.4
+
+### Patch Changes
+
+- [#47](https://github.com/wolfstar-project/plugins/pull/47) [`e21b2a8`](https://github.com/wolfstar-project/plugins/commit/e21b2a8fcd9948b515b5928c994e4cf4a7722346) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 1.1.3
 
 ### Patch Changes
