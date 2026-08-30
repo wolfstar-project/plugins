@@ -61,7 +61,7 @@
     "@sapphire/result": "^2.8.0",
     "@sapphire/utilities": "^3.18.2",
     "@wolfstar/i18next-backend": "^2.0.10",
-    "chokidar": "^4.0.3",
+    "chokidar": "^5.0.0",
     "discord-api-types": "^0.38.33",
     "i18next": "^25.10.10"
   },
