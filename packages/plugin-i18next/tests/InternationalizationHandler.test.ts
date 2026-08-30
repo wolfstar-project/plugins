@@ -140,20 +140,26 @@ describe("language resolution", () => {
 
 describe("key resolution", () => {
   test("GIVEN a key THEN getSupportedLanguageT uses the guild language", () => {
-    expect(getSupportedLanguageT(makeInteraction())("commands/ping:success")).toBe("Pong!");
+    expect(getSupportedLanguageT(makeInteraction(), "commands/ping:success")).toBe("Pong!");
   });
 
   test("GIVEN a key THEN getSupportedUserLanguageT uses the user language", () => {
+    expect(getSupportedUserLanguageT(makeInteraction(), "commands/ping:success")).toBe("¡Pong!");
+  });
+
+  test("GIVEN no key THEN the helpers return the bound function", () => {
     expect(getSupportedUserLanguageT(makeInteraction())("commands/ping:success")).toBe("¡Pong!");
   });
 
-  test("GIVEN a namespace THEN the helpers bind the returned function to it", () => {
-    expect(getSupportedUserLanguageT(makeInteraction(), "commands/ping")("success")).toBe("¡Pong!");
+  test("GIVEN an ns option THEN the key is resolved within it", () => {
+    expect(getSupportedUserLanguageT(makeInteraction(), "success", { ns: "commands/ping" })).toBe(
+      "¡Pong!",
+    );
   });
 
   test("GIVEN interpolation options THEN they are applied", () => {
     expect(
-      getSupportedUserLanguageT(makeInteraction())("commands/ping:successWithLatency", {
+      getSupportedUserLanguageT(makeInteraction(), "commands/ping:successWithLatency", {
         latency: 7,
       }),
     ).toBe("¡Pong! Tardé 7ms en responder");
@@ -164,9 +170,6 @@ describe("key resolution", () => {
     await expect(fetchT(makeInteraction()).then((t) => t("commands/ping:success"))).resolves.toBe(
       "Pong!",
     );
-    await expect(
-      fetchT(makeInteraction(), "commands/ping").then((t) => t("success")),
-    ).resolves.toBe("Pong!");
   });
 
   test("GIVEN a fetchLanguage hook THEN it takes precedence", async () => {

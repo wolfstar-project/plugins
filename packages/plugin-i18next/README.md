@@ -91,11 +91,14 @@ const guildLanguage = getSupportedLanguageName(interaction);
 const userLanguage = getSupportedUserLanguageName(interaction);
 
 // Synchronous, resolved straight from the interaction payload:
-const content = getSupportedLanguageT(interaction)("commands/ping:success");
+const content = getSupportedLanguageT(interaction, "commands/ping:success");
+const userContent = getSupportedUserLanguageT(interaction, "commands/ping:successWithLatency", {
+  latency: 42,
+});
 
-// Passing a namespace binds the returned function to it, dropping the prefix from the keys:
-const t = getSupportedUserLanguageT(interaction, "commands/ping");
-const userContent = t("successWithLatency", { latency: 42 });
+// Omitting the key returns the bound `TFunction` instead, for when several keys share a language:
+const t = getSupportedUserLanguageT(interaction);
+const name = t("commands/ping:name");
 ```
 
 `getSupported*T` helpers are synchronous and only read the locales carried by the interaction. Use
@@ -114,7 +117,6 @@ container.i18n.fetchLanguage = async (context) => {
 
 const language = await fetchLanguage(interaction);
 const t = await fetchT(interaction);
-const scoped = await fetchT(interaction, "commands/ping");
 const content = await fetchKey(interaction, "commands/ping:success");
 ```
 
@@ -139,7 +141,7 @@ import { getSupportedLanguageName, getSupportedLanguageT } from "@wolfstar/plugi
 // A guild resolves through its `preferred_locale`:
 const guild = await container.rest.get(Routes.guild(guildId));
 const language = getSupportedLanguageName(guild);
-const content = getSupportedLanguageT(guild)("commands/ping:success");
+const content = getSupportedLanguageT(guild, "commands/ping:success");
 ```
 
 Channels and messages carry no locale of their own, so the synchronous helpers fall back to
@@ -249,7 +251,8 @@ pnpm add @wolfstar/plugin-i18next
 ```
 
 `getSupportedLanguageName`, `getSupportedUserLanguageName`, `getSupportedLanguageT`,
-`getSupportedUserLanguageT`, `supportedLanguages`, `isSupportedDiscordLocale`, `getLocalizedData`,
+`getSupportedUserLanguageT` (which now also take the key and its options directly, like `resolveKey`
+did), `supportedLanguages`, `isSupportedDiscordLocale`, `getLocalizedData`,
 `applyNameLocalizedBuilder`, `applyDescriptionLocalizedBuilder`, `applyLocalizedBuilder` and
 `createSelectMenuChoiceName` keep the same names and signatures — only the module specifier changes.
 
@@ -289,8 +292,8 @@ strings typed by the `CustomTypeOptions` augmentation
 | Removed                                | Replacement                                              |
 | -------------------------------------- | -------------------------------------------------------- |
 | `T(key)` / `FT<Args>(key)`             | The key itself, typed by the generated augmentation      |
-| `resolveKey(target, key, options)`     | `getSupportedLanguageT(target)(key, options)`            |
-| `resolveUserKey(target, key, options)` | `getSupportedUserLanguageT(target)(key, options)`        |
+| `resolveKey(target, key, options)`     | `getSupportedLanguageT(target, key, options)`            |
+| `resolveUserKey(target, key, options)` | `getSupportedUserLanguageT(target, key, options)`        |
 | `TypedT` / `TypedFT`                   | `ParseKeys` from `i18next`                               |
 | `Value` / `Values` / `Difference`      | Interpolation options are inferred from the locale files |
 
@@ -301,10 +304,12 @@ strings typed by the `CustomTypeOptions` augmentation
 ```diff
 -const content = resolveKey(interaction, Success);
 -const userContent = resolveUserKey(interaction, SuccessWithLatency, { latency: 42 });
-+const content = getSupportedLanguageT(interaction)("commands/ping:success");
-+const userContent = getSupportedUserLanguageT(interaction, "commands/ping")("successWithLatency", {
-+  latency: 42,
-+});
++const content = getSupportedLanguageT(interaction, "commands/ping:success");
++const userContent = getSupportedUserLanguageT(
++  interaction,
++  "commands/ping:successWithLatency",
++  { latency: 42 },
++);
 ```
 
 ## Credits

@@ -62,10 +62,10 @@ describe("defaultName fallback", () => {
   });
 
   test("GIVEN unmatched locales THEN the translation helpers do not throw", () => {
-    expect(getSupportedLanguageT(makeUnmatchedInteraction())("commands/ping:success")).toBe(
+    expect(getSupportedLanguageT(makeUnmatchedInteraction(), "commands/ping:success")).toBe(
       "¡Pong!",
     );
-    expect(getSupportedUserLanguageT(makeUnmatchedInteraction())("commands/ping:success")).toBe(
+    expect(getSupportedUserLanguageT(makeUnmatchedInteraction(), "commands/ping:success")).toBe(
       "¡Pong!",
     );
   });

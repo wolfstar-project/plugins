@@ -154,14 +154,37 @@ export function getSupportedUserLanguageName(target: Target): LocaleString {
 
 /**
  * Resolves the `TFunction` for {@link getSupportedUserLanguageName}.
+ *
+ * @remarks
+ * Pass the key and its options straight after the target to resolve it in one call; the bound
+ * function is only returned when no key is given. Keys of a namespace other than the default one
+ * carry their `<namespace>:` prefix, or the namespace is passed through the `ns` option.
  * @param target The target to read the locales from.
- * @param namespace The namespace to bind the returned function to, defaulting to i18next's one.
  */
-export function getSupportedUserLanguageT<const Ns extends Namespace = DefaultNamespace>(
+export function getSupportedUserLanguageT(target: Target): TFunction;
+/**
+ * Resolves a key with the user's language, as resolved by {@link getSupportedUserLanguageName}.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options.
+ */
+export function getSupportedUserLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = DefaultNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
+    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
   target: Target,
-  namespace?: Ns,
-): TFunction<Ns> {
-  return container.i18n.getT(getSupportedUserLanguageName(target), namespace);
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+export function getSupportedUserLanguageT(target: Target, ...args: [any?, any?, any?]) {
+  const t = container.i18n.getT(getSupportedUserLanguageName(target));
+  return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
 }
 
 /**
@@ -182,14 +205,37 @@ export function getSupportedLanguageName(target: Target): LocaleString {
 
 /**
  * Resolves the `TFunction` for {@link getSupportedLanguageName}.
+ *
+ * @remarks
+ * Pass the key and its options straight after the target to resolve it in one call; the bound
+ * function is only returned when no key is given. Keys of a namespace other than the default one
+ * carry their `<namespace>:` prefix, or the namespace is passed through the `ns` option.
  * @param target The target to read the locales from.
- * @param namespace The namespace to bind the returned function to, defaulting to i18next's one.
  */
-export function getSupportedLanguageT<const Ns extends Namespace = DefaultNamespace>(
+export function getSupportedLanguageT(target: Target): TFunction;
+/**
+ * Resolves a key with the guild's language, as resolved by {@link getSupportedLanguageName}.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options.
+ */
+export function getSupportedLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = DefaultNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> =
+    TOpt["returnObjects"] extends true ? $SpecialObject : string,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
   target: Target,
-  namespace?: Ns,
-): TFunction<Ns> {
-  return container.i18n.getT(getSupportedLanguageName(target), namespace);
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+export function getSupportedLanguageT(target: Target, ...args: [any?, any?, any?]) {
+  const t = container.i18n.getT(getSupportedLanguageName(target));
+  return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
 }
 
 /**
@@ -213,14 +259,13 @@ export async function fetchLanguage(target: Target): Promise<string> {
 
 /**
  * Retrieves the language-assigned function from i18next designated to a target's preferred language.
+ *
+ * @remarks
+ * Use {@link fetchKey} to resolve a key in a single call.
  * @param target The target to fetch the language from.
- * @param namespace The namespace to bind the returned function to, defaulting to i18next's one.
  */
-export async function fetchT<const Ns extends Namespace = DefaultNamespace>(
-  target: Target,
-  namespace?: Ns,
-): Promise<TFunction<Ns>> {
-  return container.i18n.getT(await fetchLanguage(target), namespace);
+export async function fetchT(target: Target): Promise<TFunction> {
+  return container.i18n.getT(await fetchLanguage(target));
 }
 
 /**

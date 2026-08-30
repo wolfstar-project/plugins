@@ -48,7 +48,7 @@ describe("guild target", () => {
 
   test("GIVEN a guild THEN its preferred locale is used", () => {
     expect(getSupportedLanguageName(guild)).toBe("es-ES");
-    expect(getSupportedLanguageT(guild)("commands/ping:success")).toBe("¡Pong!");
+    expect(getSupportedLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
   });
 
   test("GIVEN a guild THEN the user helper falls back to its preferred locale", () => {
@@ -56,8 +56,8 @@ describe("guild target", () => {
   });
 
   test("GIVEN a guild THEN the translation helpers use it", () => {
-    expect(getSupportedLanguageT(guild)("commands/ping:success")).toBe("¡Pong!");
-    expect(getSupportedUserLanguageT(guild)("commands/ping:success")).toBe("¡Pong!");
+    expect(getSupportedLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
+    expect(getSupportedUserLanguageT(guild, "commands/ping:success")).toBe("¡Pong!");
   });
 
   test("GIVEN an unloaded preferred locale THEN it falls back to defaultName", () => {
