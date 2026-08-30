@@ -20,5 +20,9 @@ i18next's `TypeOptions["nsSeparator"]`.
 `getSupportedLanguageT` and `getSupportedUserLanguageT` resolve the key when one is passed, and
 still return the bound `TFunction` when it is not.
 
+The `TFunction` augmentation that declares `lng`, `lngs`, `ns` and `keyPrefix` is kept, so code
+reading the language off a bound function still compiles: i18next assigns those on every function
+`getFixedT` returns but does not type them.
+
 `InternationalizationHandler#getT` takes an optional namespace and returns a `TFunction<Ns>` bound
 to it, so its keys can be written without the `<namespace>:` prefix.

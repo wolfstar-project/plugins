@@ -77,6 +77,14 @@ describe("InternationalizationHandler", () => {
     expect(() => container.i18n.getT("fr")).toThrow(ReferenceError);
   });
 
+  test("GIVEN a fixed function THEN it carries the language it is bound to", () => {
+    expect(container.i18n.getT("en-US").lng).toBe("en-US");
+    expect(container.i18n.getT("es-ES").lng).toBe("es-ES");
+    expect(container.i18n.getT("en-US", "commands/ping").ns).toBe("commands/ping");
+    expect(getSupportedLanguageT(makeInteraction()).lng).toBe("en-US");
+    expect(getSupportedUserLanguageT(makeInteraction()).lng).toBe("es-ES");
+  });
+
   test("GIVEN a namespace THEN getT binds the returned function to it", () => {
     expect(container.i18n.getT("en-US", "commands/ping")("success")).toBe("Pong!");
     expect(container.i18n.getT("es-ES", "commands/ping")("success")).toBe("¡Pong!");

@@ -99,6 +99,9 @@ const userContent = getSupportedUserLanguageT(interaction, "commands/ping:succes
 // Omitting the key returns the bound `TFunction` instead, for when several keys share a language:
 const t = getSupportedUserLanguageT(interaction);
 const name = t("commands/ping:name");
+
+// Bound functions carry the language they were fixed to, as they did in `@wolfstar/http-framework-i18n`:
+t.lng; // 'es-ES
 ```
 
 `getSupported*T` helpers are synchronous and only read the locales carried by the interaction. Use
@@ -296,6 +299,10 @@ strings typed by the `CustomTypeOptions` augmentation
 | `resolveUserKey(target, key, options)` | `getSupportedUserLanguageT(target, key, options)`        |
 | `TypedT` / `TypedFT`                   | `ParseKeys` from `i18next`                               |
 | `Value` / `Values` / `Difference`      | Interpolation options are inferred from the locale files |
+
+`TFunction#lng` (along with `lngs`, `ns` and `keyPrefix`) is still declared, so code reading the
+language off a bound function keeps working — i18next assigns them on every function `getFixedT`
+returns but does not type them.
 
 `LocalePrefixKey` is no longer hardcoded to `commands/<file>:<key>`: it is now
 `` `${string}${LocaleSeparator}${string}` ``, with `LocaleSeparator` read from i18next's
