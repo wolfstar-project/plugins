@@ -50,7 +50,6 @@
   },
   "scripts": {
     "build": "tsdown --config-loader unrun",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.consumption.json",
     "lint": "oxlint src --fix",
     "test": "vitest run",
     "prepack": "pnpm build"
