@@ -65,14 +65,31 @@ Every top-level directory is a language, every nested `.json` file is a namespac
 
 Keys are typed through i18next's own `CustomTypeOptions` augmentation. Generate it from the locale
 files with
-[`@wolfstar/i18next-type-generator`](https://www.npmjs.com/package/@wolfstar/i18next-type-generator):
+[`@wolfstar/i18next-type-generator`](https://www.npmjs.com/package/@wolfstar/i18next-type-generator),
+listed as an optional peer dependency — nothing at runtime depends on it, only the generated types
+consumers opt into:
 
 ```bash
+pnpm add -D @wolfstar/i18next-type-generator
 i18next-type-generator ./languages/en-US/ ./src/@types/i18next.d.ts
 ```
 
-See [i18next's TypeScript guide](https://www.i18next.com/overview/typescript) for the options the
-augmentation accepts. Without it every helper still accepts plain strings, only untyped.
+The generator only emits `CustomTypeOptions.resources`. If `defaultNS` is set to anything other than
+i18next's own `'translation'` default — this plugin's `defaultLanguageDirectory` layout usually
+implies `'default'` — declare it separately, or every helper's default namespace stops satisfying
+i18next's `Namespace` type:
+
+```typescript
+declare module "i18next" {
+  interface CustomTypeOptions {
+    defaultNS: "default";
+  }
+}
+```
+
+See [i18next's TypeScript guide](https://www.i18next.com/overview/typescript) for the other options
+the augmentation accepts. Without any of this every helper still accepts plain strings, only
+untyped.
 
 ### Consumption
 
