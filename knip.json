@@ -12,6 +12,10 @@
     },
     "packages/*": {
       "project": ["src/**/*.ts"]
+    },
+    "packages/plugin-i18next": {
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@wolfstar/i18next-type-generator"]
     }
   }
 }
