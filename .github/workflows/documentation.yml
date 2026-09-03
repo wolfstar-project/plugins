@@ -17,7 +17,7 @@ concurrency:
 jobs:
     docs:
         name: Documentation
-        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@0c9e884aa0e5430520a1f8b81c9bd73808e4854b # main
+        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@8f25e7f1f7df3e0611d29384ae43ac8127d83d76 # main
         with:
             project-name: plugins
             docgen-command: pnpm exec typedoc --options typedoc.json --json docs-output/api.json
