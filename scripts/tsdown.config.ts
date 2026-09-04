@@ -74,7 +74,7 @@ const baseOptions: UserConfig = {
  * Mirrors `wolfstar-project/stars-components/scripts/tsdown.config.ts`.
  */
 export function createTsdownOptions(options?: EnhancedTsdownOptions): UserConfig {
-  const { cjsOptions, esmOptions, entry, target, plugins } = options ?? {};
+  const { attwEntrypoints, cjsOptions, esmOptions, entry, target, plugins } = options ?? {};
   const { formatOptions: cjsFormatOptions, plugins: cjsPlugins } = splitFormatOptions(cjsOptions);
   const { formatOptions: esmFormatOptions, plugins: esmPlugins } = splitFormatOptions(esmOptions);
   const { disabled: cjsDisabled = true, ...cjsRest } = cjsFormatOptions ?? { disabled: true };
@@ -94,6 +94,7 @@ export function createTsdownOptions(options?: EnhancedTsdownOptions): UserConfig
     ...baseOptions,
     attw: {
       ...attwOptions,
+      entrypoints: attwEntrypoints ?? attwOptions.entrypoints,
       profile: cjsDisabled ? "esm-only" : "node16",
     },
     entry: entry ?? baseOptions.entry,
@@ -113,6 +114,12 @@ export function createTsdownOptions(options?: EnhancedTsdownOptions): UserConfig
 }
 
 export interface EnhancedTsdownOptions {
+  /**
+   * The subpath export entrypoints `are-the-types-wrong` validates, relative to the package root.
+   * Defaults to `["."]`, which only checks the main entrypoint — packages shipping additional
+   * subpaths (e.g. `./register`, `./winston`) must list them here or their exports go unchecked.
+   */
+  attwEntrypoints?: string[];
   cjsOptions?: FormatConfigCJS;
   esmOptions?: FormatConfig;
   entry?: UserConfig["entry"];

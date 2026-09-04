@@ -1,0 +1,104 @@
+{
+  "name": "@wolfstar/plugin-logger",
+  "version": "0.1.0",
+  "description": "Plugin for @wolfstar/http-framework providing a pluggable logger with swappable transports (console, Sentry, consola, evlog, winston)",
+  "keywords": [
+    "consola",
+    "evlog",
+    "http-framework",
+    "logger",
+    "logging",
+    "plugin",
+    "sentry",
+    "winston",
+    "wolfstar"
+  ],
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
+    "directory": "packages/plugin-logger"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/esm/register.js"
+  ],
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./register": {
+      "import": {
+        "types": "./dist/esm/register.d.ts",
+        "default": "./dist/esm/register.js"
+      }
+    },
+    "./consola": {
+      "import": {
+        "types": "./dist/esm/consola.d.ts",
+        "default": "./dist/esm/consola.js"
+      }
+    },
+    "./evlog": {
+      "import": {
+        "types": "./dist/esm/evlog.d.ts",
+        "default": "./dist/esm/evlog.js"
+      }
+    },
+    "./winston": {
+      "import": {
+        "types": "./dist/esm/winston.d.ts",
+        "default": "./dist/esm/winston.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "lint": "oxlint src --fix",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "devDependencies": {
+    "@wolfstar/http-framework": "^3.4.0",
+    "consola": "^3.4.2",
+    "evlog": "^2.28.1",
+    "winston": "^3.19.0"
+  },
+  "peerDependencies": {
+    "@sentry/node": "^8.0.0 || ^9.0.0 || ^10.0.0",
+    "@wolfstar/http-framework": "^3.4.0",
+    "consola": "^3.0.0",
+    "evlog": "^2.0.0",
+    "winston": "^3.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@sentry/node": {
+      "optional": true
+    },
+    "consola": {
+      "optional": true
+    },
+    "evlog": {
+      "optional": true
+    },
+    "winston": {
+      "optional": true
+    }
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

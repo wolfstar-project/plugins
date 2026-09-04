@@ -18,6 +18,9 @@
   description: This will not be worked on
 - name: packages:plugin-api
   color: "1d76db"
+- name: packages:plugin-logger
+  color: "1d76db"
+  description: Changes in plugin-logger
 - name: packages:plugins-subcommands-advanced
   color: "1d76db"
   description: Changes in plugins-subcommands-advanced

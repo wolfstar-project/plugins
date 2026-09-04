@@ -5,6 +5,7 @@ import {
   Locale,
   type APIApplicationCommandOptionChoice,
   type LocaleString,
+  type LocalizationMap,
 } from "discord-api-types/v10";
 import type {
   AppendKeyPrefix,
@@ -518,6 +519,6 @@ export function createSelectMenuChoiceName<
 export namespace createSelectMenuChoiceName {
   export type Result<V> = V & {
     name: string;
-    name_localizations: import("discord-api-types/v10").LocalizationMap;
+    name_localizations: LocalizationMap;
   };
 }
