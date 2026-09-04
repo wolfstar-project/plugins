@@ -1,6 +1,6 @@
 import {
   applicationCommandRegistry,
-  Command as FrameworkCommand,
+  type Command as FrameworkCommand,
   container,
 } from "@wolfstar/http-framework";
 import {
