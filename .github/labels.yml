@@ -17,10 +17,10 @@
   color: "ffffff"
   description: This will not be worked on
 - name: packages:plugin-api
-  color: "ededed"
+  color: "1d76db"
 - name: packages:plugins-subcommands-advanced
   color: "1d76db"
   description: Changes in plugins-subcommands-advanced
 - name: packages:plugin-i18next
-  color: "0e8a16"
+  color: "1d76db"
   description: Changes in plugin-i18next
