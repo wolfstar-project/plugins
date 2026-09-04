@@ -42,6 +42,7 @@ jobs:
           scopes: |
             plugin-api
             plugin-i18next
+            plugin-logger
             deps
             release
             ci
