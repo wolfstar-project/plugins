@@ -5,10 +5,10 @@ import {
   type ClientOptions,
 } from "@wolfstar/http-framework";
 import "./index";
-import { WolfStarLogger } from "./lib/WolfStarLogger";
+import { Logger } from "./lib/Logger";
 
 /**
- * Replaces the framework's built-in console logger with a {@link WolfStarLogger}, which fans entries
+ * Replaces the framework's built-in console logger with a {@link Logger}, which fans entries
  * out to the transports configured through `ClientOptions.logger.transports`.
  *
  * Activate by importing the side-effecting entrypoint before creating the client:
@@ -23,7 +23,7 @@ import { WolfStarLogger } from "./lib/WolfStarLogger";
 export class LoggerPlugin extends Plugin {
   public static [preGenericsInitialization](this: Client, options: ClientOptions): void {
     options.logger ??= {};
-    options.logger.instance ??= new WolfStarLogger(options.logger);
+    options.logger.instance ??= new Logger(options.logger);
   }
 }
 

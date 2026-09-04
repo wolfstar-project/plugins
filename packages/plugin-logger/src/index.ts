@@ -3,7 +3,7 @@ import type { Transport } from "./lib/types.js";
 export * from "./lib/transports/ConsoleTransport.js";
 export * from "./lib/transports/SentryTransport.js";
 export * from "./lib/types.js";
-export * from "./lib/WolfStarLogger.js";
+export * from "./lib/Logger.js";
 
 declare module "@wolfstar/http-framework" {
   interface ClientLoggerOptions {

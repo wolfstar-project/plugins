@@ -4,7 +4,7 @@ A plugin for [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfsta
 that replaces the framework's built-in console logger with a pluggable one.
 
 The framework ships a minimal `Logger` writing to `console`, and exposes it as `container.logger`.
-This plugin swaps that implementation for a `WolfStarLogger`, which fans every entry out to a list
+This plugin swaps that implementation for a `Logger`, which fans every entry out to a list
 of **transports** instead of a single hardcoded sink. It implements the same `ILogger` contract, so
 nothing that already writes through `container.logger` needs to change.
 

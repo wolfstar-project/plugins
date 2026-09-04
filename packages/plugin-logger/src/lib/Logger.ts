@@ -10,7 +10,7 @@ import type { LogPayload, Transport } from "./types.js";
  * {@link Transport.level} on top of the logger's, so a Sentry sink can take only `error` and above
  * while the console keeps everything.
  */
-export class WolfStarLogger implements ILogger {
+export class Logger implements ILogger {
   /**
    * The lowest level the logger writes.
    */

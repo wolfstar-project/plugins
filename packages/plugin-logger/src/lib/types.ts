@@ -2,7 +2,7 @@ import type { LogLevel } from "@wolfstar/http-framework";
 
 /**
  * A single log entry, as handed over to every {@link Transport} registered on a
- * {@link WolfStarLogger}.
+ * {@link Logger}.
  */
 export interface LogPayload {
   /**
@@ -22,7 +22,7 @@ export interface LogPayload {
 }
 
 /**
- * A sink a {@link WolfStarLogger} writes entries to.
+ * A sink a {@link Logger} writes entries to.
  *
  * Transports are the extension point that replaces forking the package: implement this interface to
  * add a custom sink, and pass the instance through `ClientLoggerOptions.transports`.

@@ -6,7 +6,7 @@ import {
   type ILogger,
 } from "@wolfstar/http-framework";
 import { describe, expect, test } from "vitest";
-import { WolfStarLogger } from "../src/lib/WolfStarLogger";
+import { Logger } from "../src/lib/Logger";
 import { LoggerPlugin } from "../src/register";
 
 function run(options: Partial<ClientOptions>): ClientOptions {
@@ -19,16 +19,16 @@ function run(options: Partial<ClientOptions>): ClientOptions {
 }
 
 describe("LoggerPlugin", () => {
-  test("GIVEN no logger options THEN a WolfStarLogger is installed", () => {
+  test("GIVEN no logger options THEN a Logger is installed", () => {
     const options = run({});
 
-    expect(options.logger?.instance).toBeInstanceOf(WolfStarLogger);
+    expect(options.logger?.instance).toBeInstanceOf(Logger);
   });
 
   test("GIVEN a level THEN the installed logger honours it", () => {
     const options = run({ logger: { level: LogLevel.Debug } });
 
-    const logger = options.logger!.instance as WolfStarLogger;
+    const logger = options.logger!.instance as Logger;
 
     expect(logger.level).toBe(LogLevel.Debug);
   });
@@ -44,7 +44,7 @@ describe("LoggerPlugin", () => {
     const transport = { log: () => undefined };
     const options = run({ logger: { transports: [transport] } });
 
-    const logger = options.logger!.instance as WolfStarLogger;
+    const logger = options.logger!.instance as Logger;
 
     expect(logger.transports).toEqual([transport]);
   });

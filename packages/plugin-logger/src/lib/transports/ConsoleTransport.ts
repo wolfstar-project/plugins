@@ -17,7 +17,7 @@ const consoleMethods = new Map<LogLevel, ConsoleTransportMethod>([
 /**
  * The default {@link Transport}, writing every entry to the matching `console` method.
  *
- * It carries no dependencies, and is what a {@link WolfStarLogger} falls back to when no transport
+ * It carries no dependencies, and is what a {@link Logger} falls back to when no transport
  * is configured.
  */
 export class ConsoleTransport implements Transport {

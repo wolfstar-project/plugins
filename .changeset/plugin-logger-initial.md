@@ -5,7 +5,7 @@
 Add `@wolfstar/plugin-logger`, a pluggable logger for `@wolfstar/http-framework` that replaces the
 deprecated `@wolfstar/logger`.
 
-It installs a `WolfStarLogger` as `container.logger` through the `preGenericsInitialization` hook,
+It installs a `Logger` as `container.logger` through the `preGenericsInitialization` hook,
 implementing the framework's `ILogger` contract so migrating is a drop-in change. Instead of being
 hardcoded to `console`, it fans every entry out to a list of transports, each able to filter by its
 own level on top of the logger's.

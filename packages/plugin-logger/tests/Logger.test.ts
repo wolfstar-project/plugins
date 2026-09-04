@@ -1,7 +1,7 @@
 import { LogLevel } from "@wolfstar/http-framework";
 import { describe, expect, test, vi } from "vitest";
 import type { LogPayload, Transport } from "../src/lib/types";
-import { WolfStarLogger } from "../src/lib/WolfStarLogger";
+import { Logger } from "../src/lib/Logger";
 
 function createTransport(level?: LogLevel) {
   const payloads: LogPayload[] = [];
@@ -15,9 +15,9 @@ function createTransport(level?: LogLevel) {
   return { payloads, transport };
 }
 
-describe("WolfStarLogger", () => {
+describe("Logger", () => {
   test("GIVEN no transports THEN falls back to a console transport", () => {
-    const logger = new WolfStarLogger();
+    const logger = new Logger();
 
     expect(logger.transports).toHaveLength(1);
     expect(logger.level).toBe(LogLevel.Info);
@@ -25,7 +25,7 @@ describe("WolfStarLogger", () => {
 
   test("GIVEN an entry below the level THEN it is dropped", () => {
     const { payloads, transport } = createTransport();
-    const logger = new WolfStarLogger({ level: LogLevel.Warn, transports: [transport] });
+    const logger = new Logger({ level: LogLevel.Warn, transports: [transport] });
 
     logger.info("dropped");
     logger.warn("kept");
@@ -37,7 +37,7 @@ describe("WolfStarLogger", () => {
 
   test("GIVEN LogLevel.None THEN every entry is silenced", () => {
     const { payloads, transport } = createTransport();
-    const logger = new WolfStarLogger({ level: LogLevel.None, transports: [transport] });
+    const logger = new Logger({ level: LogLevel.None, transports: [transport] });
 
     logger.trace("a");
     logger.debug("b");
@@ -50,7 +50,7 @@ describe("WolfStarLogger", () => {
   });
 
   test("GIVEN a level THEN has reports it correctly", () => {
-    const logger = new WolfStarLogger({ level: LogLevel.Warn });
+    const logger = new Logger({ level: LogLevel.Warn });
 
     expect(logger.has(LogLevel.Info)).toBe(false);
     expect(logger.has(LogLevel.Warn)).toBe(true);
@@ -60,7 +60,7 @@ describe("WolfStarLogger", () => {
   test("GIVEN multiple transports THEN every one receives the entry", () => {
     const first = createTransport();
     const second = createTransport();
-    const logger = new WolfStarLogger({
+    const logger = new Logger({
       level: LogLevel.Trace,
       transports: [first.transport, second.transport],
     });
@@ -74,7 +74,7 @@ describe("WolfStarLogger", () => {
   test("GIVEN a transport with its own level THEN it filters on top of the logger's", () => {
     const verbose = createTransport();
     const errorsOnly = createTransport(LogLevel.Error);
-    const logger = new WolfStarLogger({
+    const logger = new Logger({
       level: LogLevel.Trace,
       transports: [verbose.transport, errorsOnly.transport],
     });
@@ -95,7 +95,7 @@ describe("WolfStarLogger", () => {
         throw new Error("sink is down");
       },
     };
-    const logger = new WolfStarLogger({ transports: [broken, healthy.transport] });
+    const logger = new Logger({ transports: [broken, healthy.transport] });
 
     expect(() => logger.error("still logged")).not.toThrow();
     expect(healthy.payloads).toHaveLength(1);
@@ -107,7 +107,7 @@ describe("WolfStarLogger", () => {
   test("GIVEN a rejecting async transport THEN the rejection is caught", async () => {
     const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const broken: Transport = { log: () => Promise.reject(new Error("network down")) };
-    const logger = new WolfStarLogger({ transports: [broken] });
+    const logger = new Logger({ transports: [broken] });
 
     logger.error("boom");
     await vi.waitFor(() => expect(spy).toHaveBeenCalledOnce());
@@ -127,7 +127,7 @@ describe("WolfStarLogger", () => {
             reject(new Error("thenable rejected")),
         }) as unknown as Promise<void>,
     };
-    const logger = new WolfStarLogger({ transports: [broken] });
+    const logger = new Logger({ transports: [broken] });
 
     logger.error("boom");
     await vi.waitFor(() => expect(spy).toHaveBeenCalledOnce());
@@ -137,7 +137,7 @@ describe("WolfStarLogger", () => {
 
   test("GIVEN close THEN every closable transport is closed", async () => {
     const close = vi.fn();
-    const logger = new WolfStarLogger({ transports: [{ log: () => undefined, close }] });
+    const logger = new Logger({ transports: [{ log: () => undefined, close }] });
 
     await logger.close();
 
@@ -146,7 +146,7 @@ describe("WolfStarLogger", () => {
 
   test("GIVEN a timestamp THEN it is attached to the payload", () => {
     const { payloads, transport } = createTransport();
-    const logger = new WolfStarLogger({ transports: [transport] });
+    const logger = new Logger({ transports: [transport] });
 
     logger.info("timed");
 

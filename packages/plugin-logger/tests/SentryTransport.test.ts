@@ -1,7 +1,7 @@
 import { LogLevel } from "@wolfstar/http-framework";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { SentryTransport, type SentryClientLike } from "../src/lib/transports/SentryTransport";
-import { WolfStarLogger } from "../src/lib/WolfStarLogger";
+import { Logger } from "../src/lib/Logger";
 
 let client: SentryClientLike;
 
@@ -18,7 +18,7 @@ describe("SentryTransport", () => {
   });
 
   test("GIVEN a logger THEN only error and above reach Sentry", () => {
-    const logger = new WolfStarLogger({
+    const logger = new Logger({
       level: LogLevel.Trace,
       transports: [new SentryTransport({ client })],
     });
@@ -71,7 +71,7 @@ describe("SentryTransport", () => {
   });
 
   test("GIVEN a lowered level THEN warnings are forwarded too", () => {
-    const logger = new WolfStarLogger({
+    const logger = new Logger({
       level: LogLevel.Trace,
       transports: [new SentryTransport({ client, level: LogLevel.Warn })],
     });
