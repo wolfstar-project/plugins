@@ -148,8 +148,8 @@ importers:
         version: 10.73.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(supports-color@7.2.0)
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: 3.4.0-next-20260904111115
-        version: 3.4.0-next-20260904111115(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.143.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^3.4.0
+        version: 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.143.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       consola:
         specifier: ^3.4.2
         version: 3.4.2
@@ -2025,8 +2025,8 @@ packages:
     resolution: {integrity: sha512-ZC0R1Bo6tJ0MOfVpcDfxu+i5SMSE+JsouWfUDxyWsVxdNBS6RtFNL4ngfYI31IIOZFmlEEYtMkyUnMQ6yaXbcg==}
     engines: {node: '>=20'}
 
-  '@wolfstar/http-framework@3.4.0-next-20260904111115':
-    resolution: {integrity: sha512-nnaeMbJsYfuCVkZNPWLYUNaiABvNKG7h8t9nbx5ulqyodZ+eAca/KVrkQ0wOZ/YPRMbz18EMt3GXr525ovn0rA==}
+  '@wolfstar/http-framework@3.4.0':
+    resolution: {integrity: sha512-QpmtCod3fF4s2tscnO9ZhXP6vplonJrWOW5X9Rvx5sCDqXioxOlxSiq7NOn/p6ROf/vAqRGiwJOi84K24kG8Cg==}
     engines: {node: '>=20'}
 
   '@wolfstar/i18next-backend@2.0.11':
@@ -5253,7 +5253,7 @@ snapshots:
       '@vladfrangu/async_event_emitter': 2.4.7
       discord-api-types: 0.38.54
 
-  '@wolfstar/http-framework@3.4.0-next-20260904111115(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.143.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/http-framework@3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.143.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@discordjs/builders': 1.14.1
       '@discordjs/collection': 2.1.1
