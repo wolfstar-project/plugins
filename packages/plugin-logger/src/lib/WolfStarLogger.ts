@@ -70,9 +70,11 @@ export class WolfStarLogger implements ILogger {
 
       // A sink must never take the caller down with it: swallow synchronous throws and rejections
       // alike, and report them through `console.error` since the logger itself is what failed.
+      // `Promise.resolve` (rather than `instanceof Promise`) also catches thenables and Promises
+      // from another realm, neither of which pass an `instanceof` check.
       try {
         const result = transport.log(payload);
-        if (result instanceof Promise) result.catch(reportTransportError);
+        if (result) Promise.resolve(result).catch(reportTransportError);
       } catch (error) {
         reportTransportError(error);
       }

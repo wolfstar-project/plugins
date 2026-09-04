@@ -115,6 +115,26 @@ describe("WolfStarLogger", () => {
     spy.mockRestore();
   });
 
+  test("GIVEN a transport rejecting through a thenable THEN the rejection is caught", async () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const broken: Transport = {
+      // A thenable is not `instanceof Promise`, unlike a native Promise — this is deliberately
+      // reproducing that case, hence the lint exception.
+      log: () =>
+        ({
+          // oxlint-disable-next-line unicorn/no-thenable
+          then: (_resolve: unknown, reject: (reason: unknown) => void) =>
+            reject(new Error("thenable rejected")),
+        }) as unknown as Promise<void>,
+    };
+    const logger = new WolfStarLogger({ transports: [broken] });
+
+    logger.error("boom");
+    await vi.waitFor(() => expect(spy).toHaveBeenCalledOnce());
+
+    spy.mockRestore();
+  });
+
   test("GIVEN close THEN every closable transport is closed", async () => {
     const close = vi.fn();
     const logger = new WolfStarLogger({ transports: [{ log: () => undefined, close }] });
