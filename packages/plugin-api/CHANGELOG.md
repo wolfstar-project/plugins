@@ -1,5 +1,15 @@
 # @wolfstar/plugin-api
 
+## 1.1.5
+
+### Patch Changes
+
+- [#70](https://github.com/wolfstar-project/plugins/pull/70) [`9fad109`](https://github.com/wolfstar-project/plugins/commit/9fad109a5a84f609e5c3f9cc7d87e2d86874fbf9) - Validate every published subpath export with `are-the-types-wrong`, not just the main entrypoint.
+
+  `createTsdownOptions` hardcoded `attw.entrypoints` to `["."]`, so the `./register` export of each
+  package shipped unchecked. It now accepts an `attwEntrypoints` option, and all packages list their
+  real entrypoints.
+
 ## 1.1.4
 
 ### Patch Changes

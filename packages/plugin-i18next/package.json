@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-i18next",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "description": "Plugin for @wolfstar/http-framework adding i18next-powered internationalization for HTTP interactions",
   "keywords": [
     "discord",

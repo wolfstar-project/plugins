@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-logger",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plugin for @wolfstar/http-framework providing a pluggable logger with swappable transports (console, Sentry, consola, evlog, winston)",
   "keywords": [
     "consola",
