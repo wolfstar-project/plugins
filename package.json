@@ -13,7 +13,7 @@
     "test": "vitest run",
     "build": "turbo run build",
     "typecheck": "golar typecheck && golar tsc --noEmit -p packages/plugin-i18next/tsconfig.consumption.json",
-    "docs": "typedoc",
+    "docs": "node scripts/generate-docs.mjs --options typedoc.json",
     "update": "pnpm update --interactive --recursive",
     "changeset": "changeset add",
     "publish": "pnpm build && changeset publish",
