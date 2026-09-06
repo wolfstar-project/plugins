@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  vitest>vite: 6.4.3
+  vitest>vite: 8.2.2
   '@vitest/mocker>vite': 6.4.3
 
 importers:
@@ -155,7 +155,7 @@ importers:
         version: 3.4.2
       evlog:
         specifier: ^2.28.1
-        version: 2.28.1(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        version: 2.28.1
       winston:
         specifier: ^3.19.0
         version: 3.19.0
@@ -3772,7 +3772,7 @@ packages:
       '@vitest/ui': 4.1.11
       happy-dom: '*'
       jsdom: '*'
-      vite: 6.4.3
+      vite: 8.2.2
     peerDependenciesMeta:
       '@edge-runtime/vm':
         optional: true
@@ -5741,9 +5741,7 @@ snapshots:
     dependencies:
       '@types/estree': 1.0.9
 
-  evlog@2.28.1(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)):
-    optionalDependencies:
-      vite: 6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)
+  evlog@2.28.1: {}
 
   expand-tilde@2.0.2:
     dependencies:
