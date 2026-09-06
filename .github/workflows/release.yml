@@ -92,7 +92,6 @@ jobs:
         env:
           # The v3 changelog generator queries GitHub while versioning snapshots.
           GITHUB_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
 
   release:
@@ -132,5 +131,4 @@ jobs:
           pr-title: "chore: update changelog and release"
           commit-message: "chore: update changelog and release"
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_PUBLISH_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
