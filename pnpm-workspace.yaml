@@ -3,10 +3,5 @@ packages:
 allowBuilds:
   "@swc/core": true
   esbuild: true
-# Pin Vitest's Vite to 6 so TypeScript experimental decorators continue to
-# transform via esbuild (Vite 8 / oxc does not support them).
-overrides:
-  "vitest>vite": "6.4.3"
-  "@vitest/mocker>vite": "6.4.3"
 minimumReleaseAgeExclude:
   - "@wolfstar/http-framework@3.4.0"

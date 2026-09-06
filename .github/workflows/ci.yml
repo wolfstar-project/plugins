@@ -100,7 +100,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run unit tests
-        run: pnpm test --reporter=default --reporter=junit --outputFile=test-report.junit.xml
+        run: pnpm exec vitest run --reporter=default --reporter=junit --outputFile=test-report.junit.xml
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() && github.repository_owner == 'wolfstar-project' }}
