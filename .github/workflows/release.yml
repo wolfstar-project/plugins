@@ -87,11 +87,6 @@ jobs:
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
 
-      # Trusted publishing needs npm >= 11.5.1; Node 24's bundled npm may be older
-      # depending on the patch version actions/setup-node resolves.
-      - name: Ensure npm supports trusted publishing
-        run: npm install -g npm@latest
-
       - name: Publish snapshot
         run: pnpm run publish:snapshot
         env:
@@ -127,11 +122,6 @@ jobs:
 
       - name: Install Dependencies
         run: pnpm install --frozen-lockfile
-
-      # Trusted publishing needs npm >= 11.5.1; Node 24's bundled npm may be older
-      # depending on the patch version actions/setup-node resolves.
-      - name: Ensure npm supports trusted publishing
-        run: npm install -g npm@latest
 
       # No NPM_TOKEN/NODE_AUTH_TOKEN: npm authenticates via OIDC trusted
       # publishing (id-token: write above), which also implies provenance.
