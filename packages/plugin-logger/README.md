@@ -1,4 +1,18 @@
+<div align="center">
+
+<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
+
 # @wolfstar/plugin-logger
+
+**Pluggable logging with swappable transports for `@wolfstar/http-framework`.**
+
+[![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-logger)](https://npmx.dev/package/@wolfstar/plugin-logger)
+[![downloads](https://npmx.dev/api/registry/badge/downloads/@wolfstar/plugin-logger)](https://npmx.dev/package/@wolfstar/plugin-logger)
+[![license](https://img.shields.io/github/license/wolfstar-project/plugins?style=flat-square&color=informational)](https://github.com/wolfstar-project/plugins/blob/main/LICENSE)
+
+</div>
+
+## Description
 
 A plugin for [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework)
 that replaces the framework's built-in console logger with a pluggable one.

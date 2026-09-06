@@ -1,4 +1,18 @@
-# `@wolfstar/plugin-subcommands-advanced`
+<div align="center">
+
+<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
+
+# @wolfstar/plugin-subcommands-advanced
+
+**Modular slash subcommands for `@wolfstar/http-framework`.**
+
+[![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-subcommands-advanced)](https://npmx.dev/package/@wolfstar/plugin-subcommands-advanced)
+[![downloads](https://npmx.dev/api/registry/badge/downloads/@wolfstar/plugin-subcommands-advanced)](https://npmx.dev/package/@wolfstar/plugin-subcommands-advanced)
+[![license](https://img.shields.io/github/license/wolfstar-project/plugins?style=flat-square&color=informational)](https://github.com/wolfstar-project/plugins/blob/main/LICENSE)
+
+</div>
+
+## Description
 
 Plugin for [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) that lets you split slash **subcommands** (and subcommand groups) into **separate command classes**, instead of putting every handler method on the parent.
 

@@ -1,4 +1,18 @@
-# `@wolfstar/plugin-i18next`
+<div align="center">
+
+<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
+
+# @wolfstar/plugin-i18next
+
+**i18next-powered internationalization for HTTP interactions.**
+
+[![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-i18next)](https://npmx.dev/package/@wolfstar/plugin-i18next)
+[![downloads](https://npmx.dev/api/registry/badge/downloads/@wolfstar/plugin-i18next)](https://npmx.dev/package/@wolfstar/plugin-i18next)
+[![license](https://img.shields.io/github/license/wolfstar-project/plugins?style=flat-square&color=informational)](https://github.com/wolfstar-project/plugins/blob/main/LICENSE)
+
+</div>
+
+## Description
 
 Plugin for [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) that adds an internationalization layer powered by [`i18next`](https://www.npmjs.com/package/i18next) and [`@wolfstar/i18next-backend`](https://www.npmjs.com/package/@wolfstar/i18next-backend).
 

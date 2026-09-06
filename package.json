@@ -35,10 +35,10 @@
     "cz-conventional-changelog": "^3.3.0",
     "golar": "^0.1.10",
     "husky": "9.1.7",
-    "knip": "6.32.3",
+    "knip": "6.34.0",
     "nano-staged": "1.0.2",
-    "oxfmt": "0.65.0",
-    "oxlint": "1.80.0",
+    "oxfmt": "0.66.0",
+    "oxlint": "1.81.0",
     "pkg-pr-new": "^0.0.88",
     "publint": "^0.3.24",
     "tsdown": "^0.22.14",
@@ -65,5 +65,5 @@
   "engines": {
     "node": "^22.11 || ^24 || >=26"
   },
-  "packageManager": "pnpm@11.24.0"
+  "packageManager": "pnpm@11.25.0"
 }
