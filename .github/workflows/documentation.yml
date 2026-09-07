@@ -1,26 +1,28 @@
 name: documentation
 
 on:
-    push:
-        branches:
-            - main
-        tags:
-            - 'v*'
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
 
 permissions:
-    contents: read
+  contents: read
 
 concurrency:
-    group: ${{ github.workflow }}-${{ github.ref }}
-    cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-    docs:
-        name: Documentation
-        uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@8f25e7f1f7df3e0611d29384ae43ac8127d83d76 # main
-        with:
-            project-name: plugins
-            docgen-command: pnpm exec typedoc --options typedoc.json --json docs-output/api.json
-            docs-repository: wolfstar-project/docs
-        secrets:
-            WOLFSTAR_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
+  docs:
+    name: Documentation
+    uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@8f25e7f1f7df3e0611d29384ae43ac8127d83d76 # main
+    with:
+      project-name: plugins
+      # See scripts/generate-docs.mjs: typedoc doesn't support this repo's typescript@7.0.2 yet,
+      # so the script runs it against an isolated, compatible typescript instead.
+      docgen-command: mkdir -p docs-output && node scripts/generate-docs.mjs --options typedoc.json --json docs-output/api.json
+      docs-repository: wolfstar-project/docs
+    secrets:
+      WOLFSTAR_TOKEN: ${{ secrets.WOLFSTAR_TOKEN }}
