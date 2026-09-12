@@ -1,5 +1,13 @@
 # @wolfstar/plugin-subcommands-advanced
 
+## 2.0.4
+
+### Patch Changes
+
+- [#83](https://github.com/wolfstar-project/plugins/pull/83) [`d584e09`](https://github.com/wolfstar-project/plugins/commit/d584e0976680d58118aa950ba8d4f1631c2b9ebd) - fix: defer subcommand builder callbacks until all command pieces have been constructed
+
+- [#75](https://github.com/wolfstar-project/plugins/pull/75) [`80bf45b`](https://github.com/wolfstar-project/plugins/commit/80bf45bb21f4d474a6c9dc72049ddb704669357e) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 2.0.3
 
 ### Patch Changes
