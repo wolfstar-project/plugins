@@ -31,7 +31,7 @@
     "@swc/core": "^1.16.1",
     "@types/node": "22.15.21",
     "@types/ws": "^8.18.1",
-    "@vitest/coverage-v8": "^4.1.11",
+    "@vitest/coverage-v8": "^5.0.0",
     "cz-conventional-changelog": "^3.3.0",
     "golar": "^0.1.10",
     "husky": "9.1.7",
@@ -45,7 +45,7 @@
     "turbo": "^2.10.12",
     "typescript": "7.0.2",
     "unrun": "0.3.1",
-    "vitest": "^4.1.11"
+    "vitest": "^5.0.0"
   },
   "nano-staged": {
     "*.{ts,mts,cts,tsx,mjs,cjs,js,jsx,json,jsonc,yml,yaml,md}": "oxfmt --no-error-on-unmatched-pattern",
