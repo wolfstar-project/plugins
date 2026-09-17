@@ -16,6 +16,9 @@ declare module "i18next" {
         nameDescription: "Checks whether the bot is alive";
         success: "Pong!";
         successWithLatency: "Pong! Took me {{latency}}ms to reply";
+        successWithLatencyAlt: "Pong (alt)! Took me {{latency}}ms to reply";
+        successWithChannel: "Pong! Told {{channel}} I took {{latency}}ms to reply";
+        successWithChannelAlt: "Pong (alt)! Told {{channel}} I took {{latency}}ms to reply";
       };
       default: {
         default: "Missing key: {{key}}";

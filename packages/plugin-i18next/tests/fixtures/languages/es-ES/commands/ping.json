@@ -3,5 +3,8 @@
   "nameName": "ping",
   "nameDescription": "Comprueba si el bot está vivo",
   "success": "¡Pong!",
-  "successWithLatency": "¡Pong! Tardé {{latency}}ms en responder"
+  "successWithLatency": "¡Pong! Tardé {{latency}}ms en responder",
+  "successWithLatencyAlt": "¡Pong (alt)! Tardé {{latency}}ms en responder",
+  "successWithChannel": "¡Pong! Dije en {{channel}} que tardé {{latency}}ms en responder",
+  "successWithChannelAlt": "¡Pong (alt)! Dije en {{channel}} que tardé {{latency}}ms en responder"
 }
