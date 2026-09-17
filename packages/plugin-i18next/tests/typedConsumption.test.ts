@@ -88,6 +88,29 @@ describe("typed consumption", () => {
     ).toBe("¡Pong! Tardé 7ms en responder");
   });
 
+  test("GIVEN a key ternary between two literal keys THEN getSupportedLanguageT applies interpolation options", () => {
+    const useAlt = false;
+    expect(
+      getSupportedLanguageT(
+        makeInteraction(),
+        useAlt ? "commands/ping:successWithLatencyAlt" : "commands/ping:successWithLatency",
+        { latency: "7" },
+      ),
+    ).toBe("Pong! Took me 7ms to reply");
+  });
+
+  test("GIVEN a key ternary and a template-literal-typed option value THEN getSupportedLanguageT applies interpolation options", () => {
+    const useAlt = false;
+    const channel: `<#${string}>` = "<#737141877803057244>";
+    expect(
+      getSupportedLanguageT(
+        makeInteraction(),
+        useAlt ? "commands/ping:successWithChannelAlt" : "commands/ping:successWithChannel",
+        { latency: "7", channel },
+      ),
+    ).toBe("Pong! Told <#737141877803057244> I took 7ms to reply");
+  });
+
   test("GIVEN a namespace THEN container.i18n.getT binds unprefixed keys to it", () => {
     expect(container.i18n.getT("en-US", "commands/ping")("success")).toBe("Pong!");
   });

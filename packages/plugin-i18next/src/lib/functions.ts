@@ -180,6 +180,50 @@ export function getSupportedUserLanguageT<
   const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
 >(
   target: Target,
+  key: Key | Key[],
+  options?: ActualOptions,
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+/**
+ * Resolves a key with the user's language, using i18next's `defaultValue` passed inside `options`.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options, including the `defaultValue` to fall back to.
+ */
+export function getSupportedUserLanguageT<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  options: TOpt & $Dictionary & { defaultValue: string },
+): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * Resolves a key with the user's language, using i18next's positional `defaultValue`.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param defaultValue The value to fall back to when the key is missing.
+ * @param options The interpolation options.
+ */
+export function getSupportedUserLanguageT<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  defaultValue: string,
+  options?: TOpt & $Dictionary,
+): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
+ */
+export function getSupportedUserLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
   ...[key, defaultValueOrOptions, optionsOrUndefined]:
     | [key: Key | Key[], options?: ActualOptions]
     | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
@@ -221,6 +265,50 @@ export function getSupportedLanguageT(target: Target): TFunction;
  * @param target The target to read the locales from.
  * @param key The key or keys to retrieve the content from.
  * @param options The interpolation options.
+ */
+export function getSupportedLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  key: Key | Key[],
+  options?: ActualOptions,
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
+/**
+ * Resolves a key with the guild's language, using i18next's `defaultValue` passed inside `options`.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options, including the `defaultValue` to fall back to.
+ */
+export function getSupportedLanguageT<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  options: TOpt & $Dictionary & { defaultValue: string },
+): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * Resolves a key with the guild's language, using i18next's positional `defaultValue`.
+ * @param target The target to read the locales from.
+ * @param key The key or keys to retrieve the content from.
+ * @param defaultValue The value to fall back to when the key is missing.
+ * @param options The interpolation options.
+ */
+export function getSupportedLanguageT<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  defaultValue: string,
+  options?: TOpt & $Dictionary,
+): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
  */
 export function getSupportedLanguageT<
   const Key extends ParseKeys<Ns, TOpt, undefined>,
@@ -296,26 +384,71 @@ export async function fetchKey<
   const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
 >(
   target: Target,
+  key: Key | Key[],
+  options?: ActualOptions,
+): Promise<TFunctionReturnOptionalDetails<Ret, TOpt>>;
+/**
+ * Resolves a key and its parameters using {@link fetchLanguage}, with i18next's `defaultValue`
+ * passed inside `options`.
+ * @param target The target to fetch the language key from.
+ * @param key The key or keys to retrieve the content from.
+ * @param options The interpolation options, including the `defaultValue` to fall back to.
+ */
+export async function fetchKey<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  options: TOpt & $Dictionary & { defaultValue: string },
+): Promise<TFunctionReturnOptionalDetails<any, TOpt>>;
+/**
+ * Resolves a key and its parameters using {@link fetchLanguage}, with i18next's positional
+ * `defaultValue`.
+ * @param target The target to fetch the language key from.
+ * @param key The key or keys to retrieve the content from.
+ * @param defaultValue The value to fall back to when the key is missing.
+ * @param options The interpolation options.
+ */
+export async function fetchKey<const TOpt extends TOptions = TOptions>(
+  target: Target,
+  key: string | string[],
+  defaultValue: string,
+  options?: TOpt & $Dictionary,
+): Promise<TFunctionReturnOptionalDetails<any, TOpt>>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
+ */
+export async function fetchKey<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
   ...[key, defaultValueOrOptions, optionsOrUndefined]:
     | [key: Key | Key[], options?: ActualOptions]
     | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
     | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
-): Promise<TFunctionReturnOptionalDetails<Ret, TOpt>> {
+): Promise<TFunctionReturnOptionalDetails<Ret, TOpt>>;
+export async function fetchKey(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]: [any?, any?, any?]
+) {
   const parsedOptions =
     typeof defaultValueOrOptions === "string" ? optionsOrUndefined : defaultValueOrOptions;
   const language =
     typeof parsedOptions?.lng === "string" ? parsedOptions.lng : await fetchLanguage(target);
 
   if (typeof defaultValueOrOptions === "string") {
-    return container.i18n.format<Key, TOpt, Ns, Ret>(
-      language,
-      key,
-      defaultValueOrOptions,
-      optionsOrUndefined,
-    );
+    return container.i18n.format(language, key, defaultValueOrOptions, optionsOrUndefined);
   }
 
-  return container.i18n.format<Key, TOpt, Ns, Ret>(language, key, undefined, defaultValueOrOptions);
+  return container.i18n.format(language, key, undefined, defaultValueOrOptions);
 }
 
 let cachedLocales: Collection<LocaleString, TFunction> | null = null;
