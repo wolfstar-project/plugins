@@ -207,6 +207,28 @@ export function getSupportedUserLanguageT<const TOpt extends TOptions = TOptions
   defaultValue: string,
   options?: TOpt & $Dictionary,
 ): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
+ */
+export function getSupportedUserLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
 export function getSupportedUserLanguageT(target: Target, ...args: [any?, any?, any?]) {
   const t = container.i18n.getT(getSupportedUserLanguageName(target));
   return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
@@ -283,6 +305,28 @@ export function getSupportedLanguageT<const TOpt extends TOptions = TOptions>(
   defaultValue: string,
   options?: TOpt & $Dictionary,
 ): TFunctionReturnOptionalDetails<any, TOpt>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
+ */
+export function getSupportedLanguageT<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): TFunctionReturnOptionalDetails<Ret, TOpt>;
 export function getSupportedLanguageT(target: Target, ...args: [any?, any?, any?]) {
   const t = container.i18n.getT(getSupportedLanguageName(target));
   return args.length === 0 ? t : (t as (...rest: any[]) => unknown)(...args);
@@ -369,6 +413,28 @@ export async function fetchKey<const TOpt extends TOptions = TOptions>(
   defaultValue: string,
   options?: TOpt & $Dictionary,
 ): Promise<TFunctionReturnOptionalDetails<any, TOpt>>;
+/**
+ * @deprecated Kept for backward compatibility with callers written against the pre-split generic
+ * signature. Prefer the three narrower overloads above, which TypeScript resolves correctly even
+ * when `key` is a union; this one is only reached when none of them match.
+ */
+export async function fetchKey<
+  const Key extends ParseKeys<Ns, TOpt, undefined>,
+  const TOpt extends TOptions = TOptions,
+  Ns extends Namespace = AnyNamespace,
+  Ret extends TFunctionReturn<Ns, AppendKeyPrefix<Key, undefined>, TOpt> = TFunctionReturn<
+    Ns,
+    AppendKeyPrefix<Key, undefined>,
+    TOpt
+  >,
+  const ActualOptions extends TOpt & InterpolationMap<Ret> = TOpt & InterpolationMap<Ret>,
+>(
+  target: Target,
+  ...[key, defaultValueOrOptions, optionsOrUndefined]:
+    | [key: Key | Key[], options?: ActualOptions]
+    | [key: string | string[], options: TOpt & $Dictionary & { defaultValue: string }]
+    | [key: string | string[], defaultValue: string, options?: TOpt & $Dictionary]
+): Promise<TFunctionReturnOptionalDetails<Ret, TOpt>>;
 export async function fetchKey(
   target: Target,
   ...[key, defaultValueOrOptions, optionsOrUndefined]: [any?, any?, any?]
