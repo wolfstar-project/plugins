@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { readdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { runPublishWithRetry } from './run-with-retry.mjs';
 
 // Changesets v3 makes `changeset version` exit with code 1 when there is nothing
 // to release, so that a no-op version step can no longer be followed by a
@@ -33,4 +34,4 @@ if (!(await hasPendingChangesets())) {
 
 run("changeset", ["version", "--snapshot", "next"]);
 run("pnpm", ["build"]);
-run("changeset", ["publish", "--tag", "next", "--no-git-tag"]);
+runPublishWithRetry("changeset", ["publish", "--tag", "next", "--no-git-tag"]);
