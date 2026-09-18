@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-subcommands-advanced",
-  "version": "2.0.1",
+  "version": "2.0.4",
   "description": "Plugin for @wolfstar/http-framework to modularize slash subcommands into separate command classes",
   "keywords": [
     "discord",
@@ -49,7 +49,6 @@
   },
   "scripts": {
     "build": "tsdown --config-loader unrun",
-    "typecheck": "tsc --noEmit",
     "lint": "oxlint src --fix",
     "test": "vitest run",
     "prepack": "pnpm build"
@@ -60,8 +59,8 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.1.2",
-    "@wolfstar/http-framework-test-utils": "^3.0.3"
+    "@wolfstar/http-framework": "^3.2.1",
+    "@wolfstar/http-framework-test-utils": "^3.0.6"
   },
   "peerDependencies": {
     "@wolfstar/http-framework": "^3.1.0"

@@ -28,11 +28,12 @@ async function loadParentAndChildren(
   const store = container.stores.get("commands");
   await store.unloadAll();
 
+  wireParentSubcommands(parent);
+
   for (const child of children) {
     store.set(child.name, child);
   }
 
-  wireParentSubcommands(parent);
   store.set(parent.name, parent);
   if (parent.router.chatInputName) {
     store.router.addChatInputMapping(parent.router.chatInputName, parent);
@@ -46,12 +47,15 @@ describe("plugin-subcommands-advanced", () => {
   });
 
   it("wires a modular subcommand onto the parent and runs the child chatInputRun", async () => {
+    let builderCalls = 0;
+
     @RegisterCommand({ name: "utils", description: "Utility commands" })
     class UtilsCommand extends Subcommand {}
 
-    @RegisterAsSubcommand("utils", (builder) =>
-      builder.setName("ping").setDescription("Ping the bot"),
-    )
+    @RegisterAsSubcommand("utils", (builder) => {
+      builderCalls++;
+      return builder.setName("ping").setDescription("Ping the bot");
+    })
     class PingCommand extends Command {
       public override chatInputRun(interaction: Command.ChatInputInteraction) {
         return interaction.reply({ content: "Pong from child!" });
@@ -63,9 +67,13 @@ describe("plugin-subcommands-advanced", () => {
     });
 
     const ping = makeCommand(PingCommand);
+    expect(builderCalls).toBe(0);
+
     const parent = makeCommand(UtilsCommand);
     await loadParentAndChildren(parent, [ping]);
 
+    expect(builderCalls).toBe(1);
+    expect(container.stores.get("commands").has("utils/ping")).toBe(true);
     expect(subCommandsRegistry.get("utils")?.has("ping")).toBe(true);
     expect(
       parent.router.routeChatInputInteraction({
@@ -94,6 +102,9 @@ describe("plugin-subcommands-advanced", () => {
   });
 
   it("wires a grouped modular subcommand", async () => {
+    let translationsReady = false;
+    let builderCalls = 0;
+
     @RegisterCommand((builder) =>
       builder
         .setName("utils")
@@ -102,9 +113,11 @@ describe("plugin-subcommands-advanced", () => {
     )
     class UtilsCommand extends Subcommand {}
 
-    @RegisterAsSubcommandGroup("utils", "poll", (builder) =>
-      builder.setName("create").setDescription("Create a poll"),
-    )
+    @RegisterAsSubcommandGroup("utils", "poll", (builder) => {
+      builderCalls++;
+      if (!translationsReady) throw new Error("translations are not ready");
+      return builder.setName("create").setDescription("Create a poll");
+    })
     class PollCreateCommand extends Command {
       public override chatInputRun(interaction: Command.ChatInputInteraction) {
         return interaction.reply({ content: "Poll created!" });
@@ -116,8 +129,14 @@ describe("plugin-subcommands-advanced", () => {
     });
 
     const create = makeCommand(PollCreateCommand);
+    expect(builderCalls).toBe(0);
+
+    translationsReady = true;
     const parent = makeCommand(UtilsCommand);
     await loadParentAndChildren(parent, [create]);
+
+    expect(builderCalls).toBe(1);
+    expect(create.name).toBe("utils/poll/create");
 
     const result = await runner.run({
       ...ChatInputApplicationCommandInteractionData,
@@ -208,6 +227,8 @@ describe("plugin-subcommands-advanced", () => {
   });
 
   it("supports registerSubCommand constructor options", async () => {
+    let builderCalls = 0;
+
     @RegisterCommand({ name: "tools", description: "Tools" })
     class ToolsCommand extends Subcommand {}
 
@@ -217,7 +238,10 @@ describe("plugin-subcommands-advanced", () => {
           ...options,
           registerSubCommand: {
             parentCommandName: "tools",
-            slashSubcommand: (builder) => builder.setName("echo").setDescription("Echo"),
+            slashSubcommand: (builder) => {
+              builderCalls++;
+              return builder.setName("echo").setDescription("Echo");
+            },
           },
         });
       }
@@ -229,8 +253,12 @@ describe("plugin-subcommands-advanced", () => {
 
     const { runner } = createTestHarness();
     const echo = makeCommand(EchoCommand);
+    expect(builderCalls).toBe(0);
+
     const parent = makeCommand(ToolsCommand);
     await loadParentAndChildren(parent, [echo]);
+
+    expect(builderCalls).toBe(1);
 
     const result = await runner.run({
       ...ChatInputApplicationCommandInteractionData,

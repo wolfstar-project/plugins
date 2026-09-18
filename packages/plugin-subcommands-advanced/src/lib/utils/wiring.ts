@@ -4,7 +4,12 @@ import {
   type APIApplicationCommandSubcommandGroupOption,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
 } from "discord-api-types/v10";
-import { subCommandsGroupRegistry, subCommandsRegistry } from "./functions.js";
+import {
+  clearDeferredSubcommands,
+  resolveDeferredSubcommands,
+  subCommandsGroupRegistry,
+  subCommandsRegistry,
+} from "./functions.js";
 import type { SubcommandMappingCollection } from "./types.js";
 
 const wiredParents = new WeakSet<Command>();
@@ -27,6 +32,8 @@ export function hasRegisteredSubcommands(parentName: string): boolean {
  * (Store `loadAll` rebuilds pieces) still satisfy {@link CommandRouter}'s method checks.
  */
 export function wireParentSubcommands(parent: Command): void {
+  resolveDeferredSubcommands();
+
   const parentName = parent.router.chatInputName;
   if (!parentName || !hasRegisteredSubcommands(parentName)) return;
   if (wiredParents.has(parent)) return;
@@ -164,6 +171,7 @@ function lookupEntry(
  * Reset subcommand registries (useful between tests).
  */
 export function clearSubcommandRegistries(): void {
+  clearDeferredSubcommands();
   subCommandsRegistry.clear();
   subCommandsGroupRegistry.clear();
 }

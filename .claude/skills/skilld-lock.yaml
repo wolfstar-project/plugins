@@ -1,0 +1,8 @@
+skills:
+  create-pull-request-skilld:
+    packageName: create-pull-request
+    version: 2.0.2
+    repo: DannyFeliz/create-pull-request
+    source: "ungh://DannyFeliz/create-pull-request"
+    syncedAt: 2026-09-04
+    generator: skilld

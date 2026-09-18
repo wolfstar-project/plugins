@@ -1,5 +1,27 @@
 # @wolfstar/plugin-api
 
+## 1.1.6
+
+### Patch Changes
+
+- [#75](https://github.com/wolfstar-project/plugins/pull/75) [`80bf45b`](https://github.com/wolfstar-project/plugins/commit/80bf45bb21f4d474a6c9dc72049ddb704669357e) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
+## 1.1.5
+
+### Patch Changes
+
+- [#70](https://github.com/wolfstar-project/plugins/pull/70) [`9fad109`](https://github.com/wolfstar-project/plugins/commit/9fad109a5a84f609e5c3f9cc7d87e2d86874fbf9) - Validate every published subpath export with `are-the-types-wrong`, not just the main entrypoint.
+
+  `createTsdownOptions` hardcoded `attw.entrypoints` to `["."]`, so the `./register` export of each
+  package shipped unchecked. It now accepts an `attwEntrypoints` option, and all packages list their
+  real entrypoints.
+
+## 1.1.4
+
+### Patch Changes
+
+- [#47](https://github.com/wolfstar-project/plugins/pull/47) [`e21b2a8`](https://github.com/wolfstar-project/plugins/commit/e21b2a8fcd9948b515b5928c994e4cf4a7722346) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 1.1.3
 
 ### Patch Changes

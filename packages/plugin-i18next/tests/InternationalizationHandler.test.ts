@@ -7,23 +7,18 @@ import {
   createLocalizedChoice,
   fetchLanguage,
   fetchT,
-  FT,
   getLocalizedData,
   getSupportedLanguageName,
+  getSupportedLanguageT,
   getSupportedUserLanguageName,
+  getSupportedUserLanguageT,
   InternationalizationHandler,
   isSupportedDiscordLocale,
-  resolveKey,
-  resolveUserKey,
-  T,
   type BuilderWithNameAndDescription,
   type Interaction,
 } from "../src/index";
 
 const languagesDirectory = fileURLToPath(new URL("fixtures/languages", import.meta.url));
-
-const Success = T("commands/ping:success");
-const SuccessWithLatency = FT<{ latency: number }>("commands/ping:successWithLatency");
 
 function makeInteraction(overrides: Partial<Interaction> = {}): Interaction {
   return {
@@ -80,6 +75,19 @@ describe("InternationalizationHandler", () => {
 
   test("GIVEN an unknown locale THEN getT throws", () => {
     expect(() => container.i18n.getT("fr")).toThrow(ReferenceError);
+  });
+
+  test("GIVEN a fixed function THEN it carries the language it is bound to", () => {
+    expect(container.i18n.getT("en-US").lng).toBe("en-US");
+    expect(container.i18n.getT("es-ES").lng).toBe("es-ES");
+    expect(container.i18n.getT("en-US", "commands/ping").ns).toBe("commands/ping");
+    expect(getSupportedLanguageT(makeInteraction()).lng).toBe("en-US");
+    expect(getSupportedUserLanguageT(makeInteraction()).lng).toBe("es-ES");
+  });
+
+  test("GIVEN a namespace THEN getT binds the returned function to it", () => {
+    expect(container.i18n.getT("en-US", "commands/ping")("success")).toBe("Pong!");
+    expect(container.i18n.getT("es-ES", "commands/ping")("success")).toBe("¡Pong!");
   });
 
   test("GIVEN a known key THEN format resolves it", () => {
@@ -139,18 +147,30 @@ describe("language resolution", () => {
 });
 
 describe("key resolution", () => {
-  test("GIVEN a typed key THEN resolveKey uses the guild language", () => {
-    expect(resolveKey(makeInteraction(), Success)).toBe("Pong!");
+  test("GIVEN a key THEN getSupportedLanguageT uses the guild language", () => {
+    expect(getSupportedLanguageT(makeInteraction(), "commands/ping:success")).toBe("Pong!");
   });
 
-  test("GIVEN a typed key THEN resolveUserKey uses the user language", () => {
-    expect(resolveUserKey(makeInteraction(), Success)).toBe("¡Pong!");
+  test("GIVEN a key THEN getSupportedUserLanguageT uses the user language", () => {
+    expect(getSupportedUserLanguageT(makeInteraction(), "commands/ping:success")).toBe("¡Pong!");
   });
 
-  test("GIVEN a function key THEN its arguments are interpolated", () => {
-    expect(resolveUserKey(makeInteraction(), SuccessWithLatency, { latency: 7 })).toBe(
-      "¡Pong! Tardé 7ms en responder",
+  test("GIVEN no key THEN the helpers return the bound function", () => {
+    expect(getSupportedUserLanguageT(makeInteraction())("commands/ping:success")).toBe("¡Pong!");
+  });
+
+  test("GIVEN an ns option THEN the key is resolved within it", () => {
+    expect(getSupportedUserLanguageT(makeInteraction(), "success", { ns: "commands/ping" })).toBe(
+      "¡Pong!",
     );
+  });
+
+  test("GIVEN interpolation options THEN they are applied", () => {
+    expect(
+      getSupportedUserLanguageT(makeInteraction(), "commands/ping:successWithLatency", {
+        latency: 7,
+      }),
+    ).toBe("¡Pong! Tardé 7ms en responder");
   });
 
   test("GIVEN no fetchLanguage hook THEN fetchLanguage falls back to the interaction locales", async () => {
@@ -174,7 +194,7 @@ describe("key resolution", () => {
 
 describe("builder localization", () => {
   test("GIVEN a key THEN getLocalizedData returns every localization", () => {
-    expect(getLocalizedData(T("commands/ping:name"))).toEqual({
+    expect(getLocalizedData("commands/ping:name")).toEqual({
       value: "ping",
       localizations: { "en-US": "ping", "es-ES": "ping" },
     });
@@ -192,7 +212,7 @@ describe("builder localization", () => {
   });
 
   test("GIVEN a key THEN createLocalizedChoice keeps the extra options", () => {
-    expect(createLocalizedChoice(T("commands/ping:name"), { value: "ping" })).toEqual({
+    expect(createLocalizedChoice("commands/ping:name", { value: "ping" })).toEqual({
       value: "ping",
       name: "ping",
       name_localizations: { "en-US": "ping", "es-ES": "ping" },

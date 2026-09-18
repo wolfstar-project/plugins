@@ -5,5 +5,11 @@
     "correctness": "error",
     "suspicious": "warn"
   },
+  "rules": {
+    "typescript/consistent-type-imports": [
+      "error",
+      { "prefer": "type-imports", "fixStyle": "inline-type-imports" }
+    ]
+  },
   "ignorePatterns": ["dist", "node_modules", ".turbo", "coverage"]
 }
