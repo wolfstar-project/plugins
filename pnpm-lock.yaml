@@ -198,8 +198,8 @@ importers:
         version: 2.4.7
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^3.2.1
-        version: 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^4.0.2
+        version: 4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/plugin-i18next:
     dependencies:
@@ -229,8 +229,8 @@ importers:
         version: 25.10.10(typescript@7.0.2)
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^3.2.1
-        version: 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^4.0.2
+        version: 4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/i18next-type-generator':
         specifier: 3.1.0
         version: 3.1.0
@@ -242,8 +242,8 @@ importers:
         version: 10.73.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(supports-color@7.2.0)
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^3.4.0
-        version: 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^4.0.2
+        version: 4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       consola:
         specifier: ^3.4.2
         version: 3.4.2
@@ -267,11 +267,11 @@ importers:
         version: 0.38.54
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^3.2.1
-        version: 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^4.0.2
+        version: 4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/http-framework-test-utils':
         specifier: ^3.0.6
-        version: 3.0.6(@wolfstar/http-framework@3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.0)
+        version: 3.0.6(@wolfstar/http-framework@4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.0)
 
 packages:
 
@@ -2081,8 +2081,8 @@ packages:
       vitest:
         optional: true
 
-  '@wolfstar/http-framework@3.4.0':
-    resolution: {integrity: sha512-QpmtCod3fF4s2tscnO9ZhXP6vplonJrWOW5X9Rvx5sCDqXioxOlxSiq7NOn/p6ROf/vAqRGiwJOi84K24kG8Cg==}
+  '@wolfstar/http-framework@4.0.2':
+    resolution: {integrity: sha512-kjOTKOUN8WGisXrkrwaQLPtK2J6zEFMj6r2VYg29ekL9It38kdQTpqYtcbLfqVcFNSbGl+tWiKxqzjr4ZAJyiA==}
     engines: {node: '>=20'}
 
   '@wolfstar/i18next-backend@2.0.11':
@@ -2350,10 +2350,6 @@ packages:
 
   chardet@2.2.0:
     resolution: {integrity: sha512-rddelWYNPRrXq6PtNEN2S3f6t9ILzvqaN5pVgi4kqt9jHQaXIial9PznB5iSPVlQSLNaaH22ItWz3EJtQ10+OA==}
-
-  chokidar@4.0.3:
-    resolution: {integrity: sha512-Qgzu8kfBvo+cA4962jnP1KkS6Dop5NS6g7R5LFYJr4b8Ub94PPQXUksCw9PvXoeXPRRddRNC5C1JQUR2SMGtnA==}
-    engines: {node: '>= 14.16.0'}
 
   chokidar@5.0.0:
     resolution: {integrity: sha512-TQMmc3w+5AxjpL8iIiwebF73dRDF4fBIieAqGn9RGCWaEVwQ6Fb2cGe31Yns0RRIzii5goJ1Y7xbMwo1TxMplw==}
@@ -3258,8 +3254,8 @@ packages:
   pkg-types@1.3.1:
     resolution: {integrity: sha512-/Jm5M4RvtBFVkKWRu2BLUTNP8/M2a+UwuAX+ae4770q1qVGtfjG+WTCupoZixokjmHiry8uI+dlY8KXYV5HVVQ==}
 
-  pkg-types@2.3.2:
-    resolution: {integrity: sha512-v0sVXzj7oPGysr543YYZLYbcJNJsKikSsp/fFzoxQ12ewY3ZZr7oCPC8y7OlmxfYB3QPvriXmuPD8KZggE1vqg==}
+  pkg-types@2.3.3:
+    resolution: {integrity: sha512-j/lCFdcppV0JxWpCEITdbDltBxPP6cHT+yNJ6Go2OgoSA9518X847X9z0p6LtA4Nc16+eQzCZjRrWanTGvHJ5w==}
 
   postcss@8.5.26:
     resolution: {integrity: sha512-u82N74LFzG8ca+dD8puPnplTXoGH4fTPpVGuIbt36G3qvNlkvfD0lEAZSxaly3KX8TS/L1A1gsCEmvKmBcVbkQ==}
@@ -3295,10 +3291,6 @@ packages:
   readable-stream@3.6.2:
     resolution: {integrity: sha512-9u/sniCrY3D5WdsERHzHE4G2YCXqoG5FTHUiCC4SIbr6XcLZBY05ya9EKjYek9O5xOAwjGq+1JdGBAS7Q9ScoA==}
     engines: {node: '>= 6'}
-
-  readdirp@4.1.2:
-    resolution: {integrity: sha512-GDhwkLfywWL2s6vEjyhri+eXmfH6j1L7JE27WhqLeYzoh/A3DBaYGEj2H/HFZCn/kMfim73FXxEJTw06WtxQwg==}
-    engines: {node: '>= 14.18.0'}
 
   readdirp@5.1.1:
     resolution: {integrity: sha512-Kko+Y5XQ6fM+Ce3dq3m9YGxnacYZYl9cA1wZjaF3Vbry2L3i1qVg8+CAgNPsXRArPMUMCaOR7oa9Nqntc43JKA==}
@@ -3623,13 +3615,16 @@ packages:
     resolution: {integrity: sha512-LIY910g9TI13YS95lrMFrs8Rm/u/irgHeTWoKCoteeJ04CUJ92eEfj0rVn+7VKMPBpUPiUoBKfhNyLI23EE/KA==}
     engines: {node: '>=18.17'}
 
-  unimport@6.4.0:
-    resolution: {integrity: sha512-JJOOuNMFq8b4ZPBKwQUxEcba4MplskDzYI1Lvrf8rJfWphZTWvPNXWa493qsPngHUmub89w6C7j+SeLWTE/UIQ==}
+  unimport@7.0.2:
+    resolution: {integrity: sha512-5yrZs6kHyx5h1ZgeLxK0EgS/JL7Uhwv9HgzQImW8JccGmbYWyXx7Jc4YhU5+sd1Yk31PlfLQhfbZ1oigXipo3A==}
     engines: {node: '>=18.12.0'}
     peerDependencies:
+      acorn: ^8.0.0
       oxc-parser: '*'
       rolldown: ^1.0.0
     peerDependenciesMeta:
+      acorn:
+        optional: true
       oxc-parser:
         optional: true
       rolldown:
@@ -5163,13 +5158,13 @@ snapshots:
 
   '@vladfrangu/async_event_emitter@2.4.7': {}
 
-  '@wolfstar/http-framework-test-utils@3.0.6(@wolfstar/http-framework@3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.0)':
+  '@wolfstar/http-framework-test-utils@3.0.6(@wolfstar/http-framework@4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.0)':
     dependencies:
-      '@wolfstar/http-framework': 3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/http-framework': 4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
     optionalDependencies:
       vitest: 5.0.0(@opentelemetry/api@1.9.1)(@types/node@22.15.21)(@vitest/coverage-v8@5.0.0)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
 
-  '@wolfstar/http-framework@3.4.0(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/http-framework@4.0.2(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@discordjs/builders': 1.14.1
       '@discordjs/collection': 2.1.1
@@ -5180,13 +5175,14 @@ snapshots:
       '@sapphire/utilities': 3.18.2
       '@vladfrangu/async_event_emitter': 2.4.7
       c12: 3.3.4(magicast@0.5.4)
-      chokidar: 4.0.3
+      chokidar: 5.0.0
       discord-api-types: 0.38.54
       mlly: 1.8.2
-      unimport: 6.4.0(esbuild@0.25.12)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      unimport: 7.0.2(acorn@8.18.0)(esbuild@0.25.12)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
     transitivePeerDependencies:
       - '@farmfe/core'
       - '@rspack/core'
+      - acorn
       - bun-types-no-globals
       - esbuild
       - magicast
@@ -5374,7 +5370,7 @@ snapshots:
       ohash: 2.0.12
       pathe: 2.0.3
       perfect-debounce: 2.1.0
-      pkg-types: 2.3.2
+      pkg-types: 2.3.3
       rc9: 3.1.0
     optionalDependencies:
       magicast: 0.5.4
@@ -5414,10 +5410,6 @@ snapshots:
       supports-color: 7.2.0
 
   chardet@2.2.0: {}
-
-  chokidar@4.0.3:
-    dependencies:
-      readdirp: 4.1.2
 
   chokidar@5.0.0:
     dependencies:
@@ -6006,7 +5998,7 @@ snapshots:
   local-pkg@1.2.1:
     dependencies:
       mlly: 1.8.2
-      pkg-types: 2.3.2
+      pkg-types: 2.3.3
       quansync: 0.2.11
 
   lodash.map@4.6.0: {}
@@ -6348,7 +6340,7 @@ snapshots:
       mlly: 1.8.2
       pathe: 2.0.3
 
-  pkg-types@2.3.2:
+  pkg-types@2.3.3:
     dependencies:
       confbox: 0.3.1
       exsolve: 1.1.1
@@ -6391,8 +6383,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-
-  readdirp@4.1.2: {}
 
   readdirp@5.1.1: {}
 
@@ -6724,9 +6714,8 @@ snapshots:
 
   undici@6.28.0: {}
 
-  unimport@6.4.0(esbuild@0.25.12)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)):
+  unimport@7.0.2(acorn@8.18.0)(esbuild@0.25.12)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)):
     dependencies:
-      acorn: 8.18.0
       escape-string-regexp: 5.0.0
       estree-walker: 3.0.3
       local-pkg: 1.2.1
@@ -6734,13 +6723,14 @@ snapshots:
       mlly: 1.8.2
       pathe: 2.0.3
       picomatch: 4.0.7
-      pkg-types: 2.3.2
+      pkg-types: 2.3.3
       scule: 1.3.0
       strip-literal: 4.0.0
       tinyglobby: 0.2.17
       unplugin: 3.3.0(esbuild@0.25.12)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       unplugin-utils: 0.3.2
     optionalDependencies:
+      acorn: 8.18.0
       oxc-parser: 0.147.0
       rolldown: 1.2.7
     transitivePeerDependencies:
