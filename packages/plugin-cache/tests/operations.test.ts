@@ -1,0 +1,194 @@
+import {
+  ChannelType,
+  GatewayDispatchEvents,
+  GatewayOpcodes,
+  type APIUser,
+  type GatewayDispatchPayload,
+} from "discord-api-types/v10";
+import { describe, expect, test } from "vitest";
+import {
+  applyGatewayDispatch,
+  createCacheOperations,
+  createInMemoryCache,
+  memberKey,
+  messageKey,
+  roleKey,
+} from "../src/index.js";
+
+const user: APIUser = {
+  id: "1",
+  username: "wolf",
+  discriminator: "0",
+  global_name: null,
+  avatar: null,
+};
+
+function dispatch(t: GatewayDispatchEvents, d: unknown): GatewayDispatchPayload {
+  return { op: GatewayOpcodes.Dispatch, s: 1, t, d } as GatewayDispatchPayload;
+}
+
+function message(id: string, channelId: string, content = "hello") {
+  return {
+    id,
+    channel_id: channelId,
+    guild_id: "10",
+    author: user,
+    member: {
+      roles: [],
+      joined_at: "2024-01-01T00:00:00.000Z",
+      deaf: false,
+      mute: false,
+      flags: 0,
+    },
+    content,
+    mentions: [],
+    mention_roles: [],
+  };
+}
+
+function guild(id: string) {
+  return {
+    id,
+    name: "Pack",
+    roles: [{ id: "100", name: "@everyone" }],
+    emojis: [],
+    stickers: [],
+    channels: [{ id: "20", type: ChannelType.GuildText, name: "general" }],
+    threads: [],
+    members: [{ user, roles: [], joined_at: "2024-01-01T00:00:00.000Z" }],
+    presences: [],
+    voice_states: [],
+    stage_instances: [],
+    guild_scheduled_events: [],
+    soundboard_sounds: [],
+  };
+}
+
+describe("createCacheOperations", () => {
+  test("GIVEN an INTERACTION_CREATE THEN nothing is cached", () => {
+    expect(createCacheOperations(dispatch(GatewayDispatchEvents.InteractionCreate, {}))).toEqual(
+      [],
+    );
+  });
+
+  test("GIVEN a MESSAGE_CREATE THEN the message, its author, and its member are upserted", () => {
+    const operations = createCacheOperations(
+      dispatch(GatewayDispatchEvents.MessageCreate, message("30", "20")),
+    );
+
+    expect(operations.map(({ type, store }) => `${type}:${store}`)).toEqual([
+      "upsert:messages",
+      "upsert:users",
+      "upsert:members",
+    ]);
+  });
+});
+
+describe("applyGatewayDispatch", () => {
+  test("GIVEN a GUILD_CREATE THEN its collections are split into their own entity caches", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("10")));
+
+    const stored = cache.guilds.get("10")!;
+    expect(stored.name).toBe("Pack");
+    expect(stored).not.toHaveProperty("channels");
+    expect(stored).not.toHaveProperty("members");
+    expect(cache.channels.get("20")).toMatchObject({ name: "general", guild_id: "10" });
+    expect(cache.members.get(memberKey("10", "1"))).toMatchObject({ guild_id: "10" });
+    expect(cache.roles.get(roleKey("10", "100"))).toMatchObject({
+      name: "@everyone",
+      guild_id: "10",
+    });
+    expect(cache.users.get("1")).toEqual(user);
+  });
+
+  test("GIVEN an update THEN it is merged into the cached entry", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("10")));
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.GuildMemberUpdate, {
+        guild_id: "10",
+        user,
+        roles: ["100"],
+        nick: "alpha",
+      }),
+    );
+
+    expect(cache.members.get(memberKey("10", "1"))).toMatchObject({
+      nick: "alpha",
+      roles: ["100"],
+      joined_at: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  test("GIVEN a CHANNEL_DELETE THEN the channel's messages are dropped", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageCreate, message("30", "20")),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageCreate, message("31", "21")),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ChannelDelete, { id: "20", type: ChannelType.GuildText }),
+    );
+
+    expect(cache.messages.has(messageKey("20", "30"))).toBe(false);
+    expect(cache.messages.has(messageKey("21", "31"))).toBe(true);
+  });
+
+  test("GIVEN a GUILD_DELETE THEN every guild-scoped entity is dropped", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("10")));
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("11")));
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildDelete, { id: "10" }));
+
+    expect(cache.guilds.has("10")).toBe(false);
+    expect(cache.members.has(memberKey("10", "1"))).toBe(false);
+    expect(cache.roles.has(roleKey("10", "100"))).toBe(false);
+    expect(cache.guilds.has("11")).toBe(true);
+    expect(cache.members.has(memberKey("11", "1"))).toBe(true);
+    // Users are global, they outlive the guilds they were seen in.
+    expect(cache.users.has("1")).toBe(true);
+  });
+
+  test("GIVEN an unavailable GUILD_DELETE THEN the guild data is kept", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("10")));
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.GuildDelete, { id: "10", unavailable: true }),
+    );
+
+    expect(cache.guilds.get("10")).toMatchObject({ name: "Pack", unavailable: true });
+    expect(cache.members.has(memberKey("10", "1"))).toBe(true);
+  });
+
+  test("GIVEN a MESSAGE_DELETE_BULK THEN every listed message is dropped", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageCreate, message("30", "20")),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageCreate, message("31", "20")),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageDeleteBulk, { ids: ["30", "31"], channel_id: "20" }),
+    );
+
+    expect(cache.messages.getSize()).toBe(0);
+  });
+});
