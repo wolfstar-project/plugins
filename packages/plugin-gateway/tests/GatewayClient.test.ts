@@ -31,7 +31,8 @@ const user: APIUser = {
 function createClient(cache: Cache | null = createInMemoryCache()) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
-    discordToken: "MjY2NjI0NzYwNzgyMjU4MTg2.token.secret",
+    discordToken: "test-token",
+    clientId: "266624760782258186",
     intents: 0,
     cache: cache ?? undefined,
   });
