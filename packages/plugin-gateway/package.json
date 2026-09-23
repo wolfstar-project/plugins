@@ -1,0 +1,63 @@
+{
+  "name": "@wolfstar/plugin-gateway",
+  "version": "0.0.0",
+  "description": "Gateway (WebSocket) support for @wolfstar/http-framework: a GatewayClient emitting Structures, backed by a pluggable cache",
+  "keywords": [
+    "discord",
+    "gateway",
+    "http-framework",
+    "plugin",
+    "websocket",
+    "wolfstar"
+  ],
+  "homepage": "https://github.com/wolfstar-project/plugins/tree/main/packages/plugin-gateway",
+  "bugs": {
+    "url": "https://github.com/wolfstar-project/plugins/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
+    "directory": "packages/plugin-gateway"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "lint": "oxlint src --fix",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@discordjs/ws": "^2.0.4",
+    "@wolfstar/plugin-cache": "workspace:^",
+    "discord-api-types": "^0.38.33"
+  },
+  "devDependencies": {
+    "@wolfstar/http-framework": "^3.4.0"
+  },
+  "peerDependencies": {
+    "@wolfstar/http-framework": "^3.4.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

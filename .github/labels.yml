@@ -21,6 +21,9 @@
 - name: packages:plugin-cache
   color: "1d76db"
   description: Changes in plugin-cache
+- name: packages:plugin-gateway
+  color: "1d76db"
+  description: Changes in plugin-gateway
 - name: packages:plugin-logger
   color: "1d76db"
   description: Changes in plugin-logger

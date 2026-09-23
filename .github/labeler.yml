@@ -8,6 +8,11 @@ packages:plugin-cache:
       - any-glob-to-any-file:
           - packages/plugin-cache/*
           - packages/plugin-cache/**/*
+packages:plugin-gateway:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/plugin-gateway/*
+          - packages/plugin-gateway/**/*
 packages:plugin-i18next:
   - changed-files:
       - any-glob-to-any-file:
