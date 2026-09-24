@@ -8,7 +8,9 @@ import { Client, container, type ClientOptions } from "@wolfstar/http-framework"
 import { applyGatewayDispatch, type Cache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
+  GatewayOpcodes,
   type GatewayDispatchPayload,
+  type GatewayReadyDispatchData,
   type GatewayIntentBits,
 } from "discord-api-types/v10";
 import { ChannelManager } from "./managers/ChannelManager.js";
@@ -20,6 +22,8 @@ import { ThreadManager } from "./managers/ThreadManager.js";
 import { UserManager } from "./managers/UserManager.js";
 import type { User } from "./structures/User.js";
 import { DispatchHandlers, type DispatchHandler } from "./util/dispatch.js";
+import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
+import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayEventMap, GatewayEventName } from "./util/events.js";
 
 export interface GatewayClientOptions extends ClientOptions {
@@ -51,6 +55,23 @@ export interface GatewayClientOptions extends ClientOptions {
    * `initialPresence`.
    */
   gateway?: Partial<Omit<OptionalWebSocketManagerOptions, "token" | "shardCount" | "shardIds">>;
+  /**
+   * What to do with a dispatch whose cache read or write fails, e.g. while Redis is unreachable. The error is always
+   * reported through the `error` event (or the logger when nobody listens to it).
+   *
+   * - `"skip"`: drop the dispatch's event, so listeners never see state the cache does not hold.
+   * - `"emitUncached"`: still emit the event, built from the payload alone, with `null` as the previous state.
+   *
+   * @default "skip"
+   */
+  cacheFailure?: "skip" | "emitUncached";
+  /**
+   * The time, in milliseconds, after which a dispatch still being processed is reported as a `DispatchTimeoutError`
+   * through the `error` event. The dispatch is not cancelled. `null` disables the check.
+   *
+   * @default 30_000
+   */
+  dispatchTimeout?: number | null;
 }
 
 /**
@@ -99,13 +120,29 @@ export class GatewayClient extends Client {
   public readonly members: GuildMemberManager;
   public readonly roles: RoleManager;
 
-  // Dispatches are processed sequentially per shard, so an asynchronous cache never reorders them.
-  readonly #queues = new Map<number, Promise<void>>();
+  /**
+   * What happens to a dispatch whose cache read or write fails, see {@link GatewayClientOptions.cacheFailure}.
+   */
+  public readonly cacheFailure: "skip" | "emitUncached";
+
+  /**
+   * See {@link GatewayClientOptions.dispatchTimeout}.
+   */
+  public readonly dispatchTimeout: number | null;
+
+  // Dispatches of a guild are processed in order, so an asynchronous cache never reorders them, while different
+  // guilds proceed concurrently.
+  readonly #queue = new DispatchQueue();
+
+  readonly #shardCount: number | null;
 
   public constructor(options: GatewayClientOptions) {
     super(options);
 
     this.cache = options.cache;
+    this.cacheFailure = options.cacheFailure ?? "skip";
+    this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
+    this.#shardCount = options.shardCount ?? null;
     this.users = new UserManager(this);
     this.guilds = new GuildManager(this);
     this.channels = new ChannelManager(this);
@@ -125,19 +162,10 @@ export class GatewayClient extends Client {
     });
 
     this.gateway.on(WebSocketShardEvents.Dispatch, (payload, shardId) => {
-      const previous = this.#queues.get(shardId) ?? Promise.resolve();
-      const next = previous.then(() =>
-        this.handleDispatch(payload, shardId).catch((error: unknown) => {
-          // Emitting "error" without listeners throws, which would reject the queue and stall the shard.
-          if (this.listenerCount("error") > 0) this.emit("error", error);
-          else
-            this.logger.error(
-              `[Gateway] [Shard ${shardId}] Failed to process ${payload.t}:`,
-              error,
-            );
-        }),
+      const partition = dispatchPartition(payload);
+      void this.#queue.enqueue(shardId, partition, () =>
+        this.runDispatch(payload, shardId, partition),
       );
-      this.#queues.set(shardId, next);
     });
     this.gateway.on(WebSocketShardEvents.Resumed, (shardId) => this.emit("shardResume", shardId));
     this.gateway.on(WebSocketShardEvents.Closed, (code, shardId) =>
@@ -170,7 +198,15 @@ export class GatewayClient extends Client {
    * Resolves once every dispatch received so far has been processed.
    */
   public async idle(): Promise<void> {
-    await Promise.all(this.#queues.values());
+    await this.#queue.idle();
+  }
+
+  /**
+   * The dispatches received but not processed yet, and the partitions (guilds, direct message channels) they are
+   * queued in. A growing `pending` count usually means a slow or unreachable cache.
+   */
+  public get queueStats(): DispatchQueueStats {
+    return this.#queue.stats;
   }
 
   /**
@@ -189,12 +225,99 @@ export class GatewayClient extends Client {
     const handler = DispatchHandlers[payload.t] as
       | DispatchHandler<typeof payload.t, GatewayEventName>
       | undefined;
-    const state = await handler?.before?.(this, payload.d as never);
+    let state: unknown;
+    try {
+      state = await handler?.before?.(this, payload.d as never);
+      if (this.cache) {
+        if (payload.t === GatewayDispatchEvents.Ready)
+          await this.reconcileGuilds(payload.d, shardId);
+        await applyGatewayDispatch(this.cache, payload);
+      }
+    } catch (error) {
+      if (this.cacheFailure === "skip") throw error;
+      this.reportError(error, payload.t, shardId);
+      state = undefined;
+    }
 
-    if (this.cache) await applyGatewayDispatch(this.cache, payload);
     if (!handler) return;
 
     const args = await handler.build(this, payload.d as never, state, shardId);
     this.emit(handler.event, ...(args as GatewayEventMap[GatewayEventName]));
+  }
+
+  /**
+   * Drops the cached guilds of a shard its `READY` no longer lists, and emits `guildDelete` for each of them.
+   *
+   * @remarks
+   * They are the guilds the bot left while it was disconnected, or while the process was down with a persistent
+   * cache. Discord does not replay those removals on a new session, so the cache would otherwise keep them forever.
+   *
+   * @param data The `READY` data.
+   * @param shardId The shard that received it.
+   */
+  protected async reconcileGuilds(data: GatewayReadyDispatchData, shardId: number): Promise<void> {
+    if (!this.cache) return;
+
+    const cached = await this.cache.guilds.keys();
+    if (cached.length === 0) return;
+
+    let count = data.shard?.[1] ?? this.#shardCount;
+    if (count === null) {
+      try {
+        count = await this.gateway.getShardCount();
+      } catch (error) {
+        // Without the shard count, the guilds of this shard cannot be told apart: keep them rather than fail `READY`.
+        this.reportError(error, GatewayDispatchEvents.Ready, shardId);
+        return;
+      }
+    }
+
+    const listed = new Set(data.guilds.map((guild) => guild.id));
+    const shardCount = BigInt(count);
+    for (const id of cached) {
+      if (listed.has(id) || Number((BigInt(id) >> 22n) % shardCount) !== shardId) continue;
+
+      const guild = (await this.guilds.get(id)) ?? null;
+      await applyGatewayDispatch(this.cache, {
+        op: GatewayOpcodes.Dispatch,
+        s: 0,
+        t: GatewayDispatchEvents.GuildDelete,
+        d: { id },
+      });
+      this.emit("guildDelete", guild, { id });
+    }
+  }
+
+  private async runDispatch(
+    payload: GatewayDispatchPayload,
+    shardId: number,
+    partition: string | null,
+  ): Promise<void> {
+    const timeout = this.dispatchTimeout;
+    const timer =
+      timeout === null
+        ? null
+        : setTimeout(() => {
+            this.reportError(
+              new DispatchTimeoutError(payload.t, shardId, partition, timeout),
+              payload.t,
+              shardId,
+            );
+          }, timeout);
+    timer?.unref?.();
+
+    try {
+      await this.handleDispatch(payload, shardId);
+    } catch (error) {
+      this.reportError(error, payload.t, shardId);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  // Emitting "error" without listeners throws, which would reject the queue and stall the partition.
+  private reportError(error: unknown, type: string, shardId: number): void {
+    if (this.listenerCount("error") > 0) this.emit("error", error);
+    else this.logger.error(`[Gateway] [Shard ${shardId}] Failed to process ${type}:`, error);
   }
 }

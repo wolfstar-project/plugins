@@ -71,7 +71,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "guildCreate",
     // The cached entry has the collections stripped, prefer it over the (much larger) payload.
     build: async (client, data) => [
-      (await client.guilds.get(data.id)) ??
+      (await cachedOrUndefined(client.guilds.get(data.id))) ??
         client.guilds.createStructure(data as CacheEntityTypes["guilds"]),
     ],
   },
@@ -159,7 +159,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     // The payload is partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
       previous ?? null,
-      (await client.members.get(data.guild_id, data.user.id)) ??
+      (await cachedOrUndefined(client.members.get(data.guild_id, data.user.id))) ??
         client.members.createStructure(data as CacheEntityTypes["members"]),
     ],
   },
@@ -208,3 +208,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     },
   },
 };
+
+/**
+ * Resolves a cache read, or `undefined` when the cache cannot be read, so an event can still be built from its
+ * payload. The failure itself was already reported while applying the dispatch.
+ */
+function cachedOrUndefined<Value>(read: Promise<Value | undefined>): Promise<Value | undefined> {
+  return read.catch(() => undefined);
+}

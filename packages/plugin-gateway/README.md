@@ -64,13 +64,15 @@ await client.listen({ port: 8080 }); // the interactions endpoint, as usual
 
 On top of the `Client` options:
 
-| Option       | Default     | Description                                                                               |
-| ------------ | ----------- | ----------------------------------------------------------------------------------------- |
-| `intents`    | —           | The gateway intents.                                                                      |
-| `cache`      | `undefined` | A `Cache` from `@wolfstar/plugin-cache`, see [Caching](#caching).                         |
-| `shardCount` | `null`      | Total shards across every process, `null` for Discord's recommendation.                   |
-| `shardIds`   | `null`      | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.     |
-| `gateway`    | `{}`        | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...). |
+| Option            | Default     | Description                                                                                                       |
+| ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
+| `intents`         | —           | The gateway intents.                                                                                              |
+| `cache`           | `undefined` | A `Cache` from `@wolfstar/plugin-cache`, see [Caching](#caching).                                                 |
+| `shardCount`      | `null`      | Total shards across every process, `null` for Discord's recommendation.                                           |
+| `shardIds`        | `null`      | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                             |
+| `gateway`         | `{}`        | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...).                         |
+| `cacheFailure`    | `"skip"`    | On a cache read/write failure, `"skip"` drops the event, `"emitUncached"` emits it from the payload.              |
+| `dispatchTimeout` | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it. |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
 
@@ -105,7 +107,20 @@ The mapping lives in a single declarative table, `DispatchHandlers`. Dispatches 
 are still written to the cache and emitted as `raw`. `INTERACTION_CREATE` is never processed:
 interactions are served by the HTTP endpoint.
 
-Dispatches are processed one at a time per shard, so an asynchronous cache never reorders them.
+Dispatches of the same guild (or direct message channel) are processed in order, so an
+asynchronous cache never reorders them, while different guilds proceed concurrently: a slow guild
+does not hold the others back. Dispatches that belong to no guild, such as `READY` or `USER_UPDATE`,
+wait for everything queued before them on their shard, and everything after them waits for them.
+`client.queueStats` reports the pending dispatches, and one still running after `dispatchTimeout`
+is reported as a `DispatchTimeoutError` through the `error` event, without being cancelled.
+
+A cache failure (Redis down, corrupt value) is always reported through `error`. With the default
+`cacheFailure: "skip"` the event is dropped, so listeners never see state the cache does not hold;
+with `"emitUncached"` it is emitted anyway, built from the payload, with `null` as previous state.
+
+On `READY`, the cached guilds of that shard which `READY` no longer lists are dropped and emitted as
+`guildDelete`: the bot left them while disconnected, or while the process was down with a
+persistent cache, and Discord does not replay those removals.
 
 ## Listeners
 
@@ -162,8 +177,10 @@ The cache only holds raw API data, managers build the structures:
 | `client.roles`    | `guildId`, `roleId`                   |
 
 - `get` only reads the cache, resolving to `undefined` on a miss;
-- `fetch` reads the cache, falling back to the REST API (and caching the result);
-- `refresh` always hits the REST API, then updates the cache.
+- `fetch` reads the cache, falling back to the REST API (and caching the result). Pass
+  `{ force: true }` after the IDs to always hit the API, `{ cache: false }` not to store the result:
+  `client.messages.fetch(channelId, messageId, { force: true })`;
+- `refresh` is `fetch` with `{ force: true }`.
 
 Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
 [`@wolfstar/plugin-cache`](../plugin-cache).
