@@ -1,5 +1,6 @@
 export * from "./CachedManager.js";
 export * from "./ChannelManager.js";
+export * from "./ChannelMessageManager.js";
 export * from "./GuildEmojiManager.js";
 export * from "./GuildEmojiRoleManager.js";
 export * from "./GuildInviteManager.js";
@@ -8,6 +9,8 @@ export * from "./GuildMemberManager.js";
 export * from "./GuildMemberRoleManager.js";
 export * from "./GuildStickerManager.js";
 export * from "./MessageManager.js";
+export * from "./ReactionManager.js";
+export * from "./ReactionUserManager.js";
 export * from "./RoleManager.js";
 export * from "./ThreadManager.js";
 export * from "./UserManager.js";
