@@ -56,6 +56,10 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     return new Role(data);
   }
 
+  public keyOf(data: CacheEntityTypes["roles"]): string {
+    return this.resolveKey(data.guild_id, data.id);
+  }
+
   public resolveKey(guildId: string, roleId: string): string {
     return roleKey(guildId, roleId);
   }
@@ -68,13 +72,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    */
   public async fetchAll(guildId: string): Promise<Role[]> {
     const roles = (await container.rest.get(Routes.guildRoles(guildId))) as APIRole[];
-    const structures = await Promise.all(
-      roles.map(async (role) => {
-        const raw = { ...role, guild_id: guildId };
-        await this.cache?.set(this.resolveKey(guildId, role.id), raw);
-        return this.createStructure(raw);
-      }),
-    );
+    const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
 
     return structures.toSorted((a, b) => b.comparePositionTo(a));
   }
@@ -228,10 +226,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     return { ...role, guild_id: guildId };
   }
 
-  private async store(guildId: string, role: APIRole): Promise<Role> {
-    const raw = { ...role, guild_id: guildId };
-    await this.cache?.set(this.resolveKey(guildId, role.id), raw);
-    return this.createStructure(raw);
+  private store(guildId: string, role: APIRole): Promise<Role> {
+    return this._add({ ...role, guild_id: guildId });
   }
 }
 

@@ -85,7 +85,7 @@ export class ClientUser extends User {
   public async edit(options: ClientUserEditOptions): Promise<this> {
     const body: RESTPatchAPICurrentUserJSONBody = options;
     const user = (await container.rest.patch(Routes.user("@me"), { body })) as APIUser;
-    await getGatewayClient().cache?.users.set(user.id, user);
+    await getGatewayClient().users._add(user);
     return this[kPatch](user);
   }
 

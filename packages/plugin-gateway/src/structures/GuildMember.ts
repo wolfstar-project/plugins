@@ -26,6 +26,17 @@ function timestamp(value: string | null | undefined): number | null {
  * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
+  #user: User | undefined;
+
+  /**
+   * @param data The raw member.
+   * @param relations The member's user as resolved from the cache, by `client.members`.
+   */
+  public constructor(data: CacheEntityTypes["members"], relations: { user?: User } = {}) {
+    super(data);
+    this.#user = relations.user;
+  }
+
   /**
    * The ID of the member's user, or `null` if the payload did not include it.
    */
@@ -37,12 +48,19 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
     return this[kData].guild_id;
   }
 
+  public override [kPatch](data: Readonly<Partial<CacheEntityTypes["members"]>>): this {
+    // A payload carrying the user is fresher than the one resolved when the member was built.
+    if (data.user) this.#user = undefined;
+    return super[kPatch](data);
+  }
+
   /**
-   * The member's user, or `null` if the payload did not include it.
+   * The member's user, or `null` if the payload did not include it. Resolved from `client.users` when the member
+   * comes from a manager.
    */
   public get user(): User | null {
     const { user } = this[kData];
-    return user ? new User(user) : null;
+    return this.#user ?? (user ? new User(user) : null);
   }
 
   public get nickname(): string | null {

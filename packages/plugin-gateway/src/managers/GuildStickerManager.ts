@@ -9,7 +9,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Sticker } from "../structures/Sticker.js";
 import type { User } from "../structures/User.js";
 import { container } from "../util/container.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
  * The options to upload a sticker with.
@@ -54,6 +54,29 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
 
   public createStructure(data: CacheEntityTypes["stickers"]): Sticker {
     return new Sticker(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["stickers"]): string {
+    return this.resolveKey(data.id);
+  }
+
+  /**
+   * Adds a sticker to the cache, and its uploader to `client.users`.
+   *
+   * @internal
+   */
+  public override async _add(
+    data: CacheEntityTypes["stickers"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<Sticker> {
+    if (data.user) await this.client.users._add(data.user, cache);
+    return super._add(data, cache, options);
+  }
+
+  public override async hydrate(data: CacheEntityTypes["stickers"]): Promise<Sticker> {
+    const user = data.user ? await this.client.users.resolveData(data.user) : undefined;
+    return new Sticker(data, { user });
   }
 
   public resolveKey(stickerId: string): string {
@@ -138,9 +161,9 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
     const prefix = `${this.guildId}:`;
     const keys = (await cache.keys()).filter((key) => key.startsWith(prefix));
     const values = await Promise.all(keys.map((key) => cache.get(key)));
-    return values
-      .filter((value) => value !== undefined)
-      .map((value) => this.createStructure(value));
+    return Promise.all(
+      values.filter((value) => value !== undefined).map((value) => this.hydrate(value)),
+    );
   }
 
   protected async fetchRaw(stickerId: string) {
@@ -150,10 +173,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
     return { ...sticker, guild_id: this.guildId };
   }
 
-  private async store(sticker: APISticker): Promise<Sticker> {
-    const raw = { ...sticker, guild_id: this.guildId };
-    await this.cache?.set(this.resolveKey(sticker.id), raw);
-    if (sticker.user) await this.client.cache?.users.set(sticker.user.id, sticker.user);
-    return this.createStructure(raw);
+  private store(sticker: APISticker): Promise<Sticker> {
+    return this._add({ ...sticker, guild_id: this.guildId });
   }
 }

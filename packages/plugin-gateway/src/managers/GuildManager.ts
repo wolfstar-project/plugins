@@ -45,6 +45,10 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     return new Guild(data);
   }
 
+  public keyOf(data: CacheEntityTypes["guilds"]): string {
+    return data.id;
+  }
+
   public resolveKey(guildId: string): string {
     return guildId;
   }
@@ -222,9 +226,8 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     return (await container.rest.get(Routes.guild(guildId), { query })) as APIGuild;
   }
 
-  private async store(guild: APIGuild): Promise<Guild> {
-    await this.cache?.set(guild.id, guild);
-    return this.createStructure(guild);
+  private store(guild: APIGuild): Promise<Guild> {
+    return this._add(guild);
   }
 
   // The same cascade as a `GUILD_DELETE`, so no channel, member, or role of the guild outlives it. It is queued with

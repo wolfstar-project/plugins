@@ -1,6 +1,6 @@
 import { Routes, type APIUser, type ReactionType } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { User } from "../structures/User.js";
+import { type User } from "../structures/User.js";
 import { container } from "../util/container.js";
 
 /**
@@ -38,8 +38,7 @@ export class ReactionUserManager {
       Routes.channelMessageReaction(this.channelId, this.messageId, this.emoji),
       { query },
     )) as APIUser[];
-    await Promise.all(users.map((user) => this.client.cache?.users.set(user.id, user)));
-    return users.map((user) => new User(user));
+    return Promise.all(users.map((user) => this.client.users._add(user)));
   }
 
   /**

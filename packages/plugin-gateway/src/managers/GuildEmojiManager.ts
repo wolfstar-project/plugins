@@ -9,7 +9,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { User } from "../structures/User.js";
 import { container } from "../util/container.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
  * The options to create an emoji with.
@@ -55,6 +55,29 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
 
   public createStructure(data: CacheEntityTypes["emojis"]): GuildEmoji {
     return new GuildEmoji(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["emojis"]): string {
+    return this.resolveKey(data.id!);
+  }
+
+  /**
+   * Adds an emoji to the cache, and its uploader to `client.users`.
+   *
+   * @internal
+   */
+  public override async _add(
+    data: CacheEntityTypes["emojis"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<GuildEmoji> {
+    if (data.user) await this.client.users._add(data.user, cache);
+    return super._add(data, cache, options);
+  }
+
+  public override async hydrate(data: CacheEntityTypes["emojis"]): Promise<GuildEmoji> {
+    const author = data.user ? await this.client.users.resolveData(data.user) : undefined;
+    return new GuildEmoji(data, { author });
   }
 
   public resolveKey(emojiId: string): string {
@@ -141,9 +164,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     const prefix = `${this.guildId}:`;
     const keys = (await cache.keys()).filter((key) => key.startsWith(prefix));
     const values = await Promise.all(keys.map((key) => cache.get(key)));
-    return values
-      .filter((value) => value !== undefined)
-      .map((value) => this.createStructure(value));
+    return Promise.all(
+      values.filter((value) => value !== undefined).map((value) => this.hydrate(value)),
+    );
   }
 
   protected async fetchRaw(emojiId: string) {
@@ -151,10 +174,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     return { ...emoji, guild_id: this.guildId };
   }
 
-  private async store(emoji: APIEmoji): Promise<GuildEmoji> {
-    const raw = { ...emoji, guild_id: this.guildId };
-    await this.cache?.set(this.resolveKey(emoji.id!), raw);
-    if (emoji.user) await this.client.cache?.users.set(emoji.user.id, emoji.user);
-    return this.createStructure(raw);
+  private store(emoji: APIEmoji): Promise<GuildEmoji> {
+    return this._add({ ...emoji, guild_id: this.guildId });
   }
 }

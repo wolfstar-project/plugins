@@ -15,7 +15,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { GuildMember } from "../structures/GuildMember.js";
 import { container } from "../util/container.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
  * The options to edit a member with.
@@ -122,6 +122,30 @@ export class GuildMemberManager extends CachedManager<
 
   public createStructure(data: CacheEntityTypes["members"]): GuildMember {
     return new GuildMember(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["members"]): string {
+    if (!data.user) throw new TypeError("Cannot key a member without its user");
+    return this.resolveKey(data.guild_id, data.user.id);
+  }
+
+  /**
+   * Adds a member to the cache, and its user to `client.users`.
+   *
+   * @internal
+   */
+  public override async _add(
+    data: CacheEntityTypes["members"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<GuildMember> {
+    if (data.user) await this.client.users._add(data.user, cache);
+    return super._add(data, cache, options);
+  }
+
+  public override async hydrate(data: CacheEntityTypes["members"]): Promise<GuildMember> {
+    const user = data.user ? await this.client.users.resolveData(data.user) : undefined;
+    return new GuildMember(data, { user });
   }
 
   public resolveKey(guildId: string, userId: string): string {
@@ -386,14 +410,10 @@ export class GuildMemberManager extends CachedManager<
     return { ...member, guild_id: guildId };
   }
 
-  private async store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
+  // Members without their user cannot be keyed, so they are built without being cached.
+  private store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
     const raw = { ...member, guild_id: guildId };
-    if (member.user) {
-      await this.cache?.set(this.resolveKey(guildId, member.user.id), raw);
-      await this.client.cache?.users.set(member.user.id, member.user);
-    }
-
-    return this.createStructure(raw);
+    return raw.user ? this._add(raw) : this.hydrate(raw);
   }
 
   // The role endpoints answer 204 without the member, so the cached entry is patched instead of refetched.

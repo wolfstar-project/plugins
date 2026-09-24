@@ -2,20 +2,15 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   Routes,
   type APIDMChannel,
-  type APIMessage,
   type APIUser,
   type RESTPostAPICurrentUserCreateDMChannelJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { DMChannel } from "../structures/DMChannel.js";
-import { Message } from "../structures/Message.js";
+import type { DMChannel } from "../structures/DMChannel.js";
+import type { Message } from "../structures/Message.js";
 import { User } from "../structures/User.js";
 import { container } from "../util/container.js";
-import {
-  resolveMessageOptions,
-  type MessageCreateOptions,
-  type MessagePayloadResolvable,
-} from "../util/messages.js";
+import type { MessageCreateOptions, MessagePayloadResolvable } from "../util/messages.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -28,6 +23,10 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
 
   public createStructure(data: CacheEntityTypes["users"]): User {
     return new User(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["users"]): string {
+    return data.id;
   }
 
   public resolveKey(userId: string): string {
@@ -46,8 +45,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
   public async createDM(userId: string): Promise<DMChannel> {
     const body: RESTPostAPICurrentUserCreateDMChannelJSONBody = { recipient_id: userId };
     const channel = (await container.rest.post(Routes.userChannels(), { body })) as APIDMChannel;
-    await this.client.cache?.channels.set(channel.id, channel);
-    return new DMChannel(channel);
+    return (await this.client.channels._add(channel)) as DMChannel;
   }
 
   /**
@@ -74,12 +72,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
     options: MessagePayloadResolvable<MessageCreateOptions>,
   ): Promise<Message> {
     const channel = await this.createDM(userId);
-    const { body, files } = resolveMessageOptions(options);
-    const message = (await container.rest.post(Routes.channelMessages(channel.id), {
-      body,
-      files,
-    })) as APIMessage;
-    return new Message(message);
+    return this.client.messages.send(channel.id, options);
   }
 
   protected async fetchRaw(userId: string) {

@@ -28,6 +28,10 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     return createChannel(data) as AnyThreadChannel;
   }
 
+  public keyOf(data: CacheEntityTypes["threads"]): string {
+    return data.id;
+  }
+
   public resolveKey(threadId: string): string {
     return threadId;
   }

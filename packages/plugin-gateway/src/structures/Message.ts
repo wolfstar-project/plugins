@@ -32,6 +32,17 @@ import { User } from "./User.js";
 
 const ZeroWidthSpace = String.fromCodePoint(0x20_0b);
 
+/**
+ * The relations of a {@link Message}, resolved from the cache by `client.messages`.
+ */
+export interface MessageRelations {
+  author?: User;
+  /**
+   * The author as a member, `null` outside of guilds.
+   */
+  member?: GuildMember | null;
+}
+
 // The message types a user can send; every other type is a system message.
 const NonSystemTypes: readonly MessageType[] = [
   MessageType.Default,
@@ -49,6 +60,26 @@ const NonSystemTypes: readonly MessageType[] = [
  * overwrites come with the channel phase of #54.
  */
 export class Message extends Structure<CacheEntityTypes["messages"]> {
+  #author: User | undefined;
+  #member: GuildMember | null | undefined;
+
+  /**
+   * @param data The raw message.
+   * @param relations The author and its member as resolved from the cache, by `client.messages`.
+   */
+  public constructor(data: CacheEntityTypes["messages"], relations: MessageRelations = {}) {
+    super(data);
+    this.#author = relations.author;
+    this.#member = relations.member;
+  }
+
+  public override [kPatch](data: Readonly<Partial<CacheEntityTypes["messages"]>>): this {
+    // A payload carrying the author is fresher than the one resolved when the message was built.
+    if (data.author) this.#author = undefined;
+    if (data.author || data.member) this.#member = undefined;
+    return super[kPatch](data);
+  }
+
   public get id() {
     return this[kData].id;
   }
@@ -76,14 +107,19 @@ export class Message extends Structure<CacheEntityTypes["messages"]> {
     return !NonSystemTypes.includes(this.type);
   }
 
+  /**
+   * The author. Resolved from `client.users` when the message comes from a manager, so it has the latest known data of
+   * the user, not only the copy embedded in the message.
+   */
   public get author(): User {
-    return new User(this[kData].author);
+    return this.#author ?? new User(this[kData].author);
   }
 
   /**
    * The author as a guild member, or `null` for messages sent outside of a guild or by a webhook.
    */
   public get member(): GuildMember | null {
+    if (this.#member !== undefined) return this.#member;
     const { member, guild_id: guildId, author } = this[kData];
     return member && guildId
       ? new GuildMember({ ...member, user: author, guild_id: guildId })

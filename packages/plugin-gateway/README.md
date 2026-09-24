@@ -188,7 +188,16 @@ The cache only holds raw API data, managers build the structures:
 - `fetch` reads the cache, falling back to the REST API (and caching the result). Pass
   `{ force: true }` after the IDs to always hit the API, `{ cache: false }` not to store the result:
   `client.messages.fetch(channelId, messageId, { force: true })`;
-- `refresh` is `fetch` with `{ force: true }`.
+- `refresh` is `fetch` with `{ force: true }`;
+- `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`.
+
+Like discord.js's `CachedManager#_add`, every API payload goes through the manager's `_add`, which
+merges it into the cached entry (the fields a partial payload lacks keep their cached value) and
+builds the structure. Relations are resolved from the cache too: `message.author` is the entry of
+`client.users`, `message.member` the one of `client.members`, and the same goes for
+`member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. `_add` is asynchronous,
+since the cache can be Redis. A structure built by hand, with `new Message(data)`, falls back to
+the copy embedded in its payload.
 
 Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
 [`@wolfstar/plugin-cache`](../plugin-cache).

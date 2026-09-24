@@ -10,6 +10,22 @@ import { User } from "./User.js";
  * A custom emoji of a guild.
  */
 export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
+  #author: User | undefined;
+
+  /**
+   * @param data The raw emoji.
+   * @param relations The uploader as resolved from the cache, by the guild's emoji manager.
+   */
+  public constructor(data: CacheEntityTypes["emojis"], relations: { author?: User } = {}) {
+    super(data);
+    this.#author = relations.author;
+  }
+
+  public override [kPatch](data: Readonly<Partial<CacheEntityTypes["emojis"]>>): this {
+    if (data.user) this.#author = undefined;
+    return super[kPatch](data);
+  }
+
   public override get id(): string {
     return this[kData].id!;
   }
@@ -55,7 +71,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
    */
   public get author(): User | null {
     const { user } = this[kData];
-    return user ? new User(user) : null;
+    return this.#author ?? (user ? new User(user) : null);
   }
 
   /**
