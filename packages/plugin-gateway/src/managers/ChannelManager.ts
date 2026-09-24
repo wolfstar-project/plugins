@@ -26,7 +26,7 @@ import { TextChannel } from "../structures/TextChannel.js";
 import { VoiceChannel } from "../structures/VoiceChannel.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { container } from "../util/container.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
 
 /**
@@ -126,6 +126,21 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
 
   public resolveKey(channelId: string): string {
     return channelId;
+  }
+
+  /**
+   * Adds a channel to the cache, handing threads to `client.threads`, whose cache holds them.
+   *
+   * @internal
+   */
+  public override _add(
+    data: CacheEntityTypes["channels"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<AnyChannel> {
+    return createChannel(data).isThread()
+      ? this.client.threads._add(data as CacheEntityTypes["threads"], cache, options)
+      : super._add(data, cache, options);
   }
 
   /**

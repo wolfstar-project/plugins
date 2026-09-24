@@ -5,6 +5,7 @@ import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
 import { ChannelParentMixin } from "./mixins/ChannelParentMixin.js";
 import { ChannelPermissionMixin } from "./mixins/ChannelPermissionMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
+import { ChannelThreadsMixin } from "./mixins/ChannelThreadsMixin.js";
 import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelTopicMixin } from "./mixins/ChannelTopicMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
@@ -19,7 +20,8 @@ export interface ForumChannel
     ChannelSlowmodeMixin<ChannelType.GuildForum>,
     ChannelTopicMixin<ChannelType.GuildForum>,
     ThreadOnlyChannelMixin<ChannelType.GuildForum>,
-    ChannelWebhooksMixin<ChannelType.GuildForum> {}
+    ChannelWebhooksMixin<ChannelType.GuildForum>,
+    ChannelThreadsMixin<ChannelType.GuildForum> {}
 
 /**
  * A guild forum channel.
@@ -35,4 +37,5 @@ Mixin(ForumChannel, [
   ChannelTopicMixin,
   ThreadOnlyChannelMixin,
   ChannelWebhooksMixin,
+  ChannelThreadsMixin,
 ]);

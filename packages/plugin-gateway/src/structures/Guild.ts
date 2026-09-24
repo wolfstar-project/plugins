@@ -14,6 +14,7 @@ import {
   type RESTPatchAPIGuildJSONBody,
 } from "discord-api-types/v10";
 import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
+import type { FetchedThreads } from "../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
 import type { GuildIncidentActionsOptions } from "../managers/GuildManager.js";
 import type { GuildInviteManager } from "../managers/GuildInviteManager.js";
@@ -272,6 +273,13 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get stickers(): GuildStickerManager {
     return getGatewayClient().guilds.stickers(this.id);
+  }
+
+  /**
+   * Fetches the active threads of the guild, and caches them.
+   */
+  public fetchActiveThreads(): Promise<FetchedThreads> {
+    return getGatewayClient().threads.fetchActive(this.id);
   }
 
   /**
