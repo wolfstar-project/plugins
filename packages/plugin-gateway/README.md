@@ -320,6 +320,21 @@ Permissions are computed like Discord does: guild permissions, then the `@everyo
 roles' overwrites, and the member's. Threads use their parent's overwrites. The message
 `fetch*able()` checks use them too.
 
+### Webhooks
+
+`client.webhooks` fetches, creates, edits, and deletes webhooks, and posts with their token like
+discord.js's `WebhookClient`. Text, announcement, voice, stage, forum, and media channels have
+`fetchWebhooks` and `createWebhook`, guilds `fetchWebhooks`, and announcement channels
+`addFollower`. Webhooks are not cached: Discord only says that they changed (`webhooksUpdate`).
+
+```ts
+const webhook = await channel.createWebhook({ name: "Howler" });
+const message = await webhook.send({ content: "Awoo", username: "Pack" });
+await webhook.editMessage(message.id, "Awoo!");
+
+const fetched = await client.fetchWebhook(webhookId, token); // no bot authorization needed
+```
+
 ### Messages
 
 `Message` follows discord.js: `attachments`, `embeds`, `mentions` (`MessageMentions`), `reactions`

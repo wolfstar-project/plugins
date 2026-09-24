@@ -4,6 +4,7 @@ import { Mixin } from "./Mixin.js";
 import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
 import { ChannelParentMixin } from "./mixins/ChannelParentMixin.js";
 import { ChannelPermissionMixin } from "./mixins/ChannelPermissionMixin.js";
+import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
 import { ChannelTopicMixin } from "./mixins/ChannelTopicMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
@@ -17,7 +18,8 @@ export interface TextChannel
     ChannelParentMixin<ChannelType.GuildText>,
     ChannelPermissionMixin<ChannelType.GuildText>,
     ChannelSlowmodeMixin<ChannelType.GuildText>,
-    ChannelTopicMixin<ChannelType.GuildText> {}
+    ChannelTopicMixin<ChannelType.GuildText>,
+    ChannelWebhooksMixin<ChannelType.GuildText> {}
 
 /**
  * A guild text channel.
@@ -32,4 +34,5 @@ Mixin(TextChannel, [
   ChannelPermissionMixin,
   ChannelSlowmodeMixin,
   ChannelTopicMixin,
+  ChannelWebhooksMixin,
 ]);
