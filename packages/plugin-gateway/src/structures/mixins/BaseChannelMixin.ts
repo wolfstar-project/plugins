@@ -1,5 +1,5 @@
 import { Routes, type APIChannel, type ChannelType } from "discord-api-types/v10";
-import { container } from "../../util/container.js";
+import { container, getGatewayClient } from "../../util/container.js";
 import type { Channel, ChannelDataType } from "../Channel.js";
 import { kPatch } from "../Structure.js";
 
@@ -10,10 +10,12 @@ export interface BaseChannelMixin<Type extends ChannelType = ChannelType> extend
  */
 export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
   /**
-   * Deletes the channel, or closes it for a direct message.
+   * Deletes the channel, or closes it for a direct message, and drops it from the cache.
+   *
+   * @param reason The reason for the audit log.
    */
-  public async delete(): Promise<this> {
-    await container.rest.delete(Routes.channel(this.id));
+  public async delete(reason?: string): Promise<this> {
+    await getGatewayClient().channels.delete(this.id, reason);
     return this;
   }
 

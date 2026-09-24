@@ -1,6 +1,7 @@
 import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import { kData } from "../Structure.js";
+import { editChannel } from "./edit.js";
 
 type Data = { topic?: string | null };
 
@@ -12,5 +13,9 @@ export interface ChannelTopicMixin<Type extends ChannelType = ChannelType> exten
 export class ChannelTopicMixin<Type extends ChannelType = ChannelType> {
   public get topic(): string | null {
     return (this[kData] as Data).topic ?? null;
+  }
+
+  public setTopic(topic: string | null, reason?: string): Promise<this> {
+    return editChannel(this, { topic, reason });
   }
 }

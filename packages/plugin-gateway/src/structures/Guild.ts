@@ -13,6 +13,7 @@ import {
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
 } from "discord-api-types/v10";
+import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
 import type { GuildIncidentActionsOptions } from "../managers/GuildManager.js";
 import type { GuildInviteManager } from "../managers/GuildInviteManager.js";
@@ -270,6 +271,13 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get stickers(): GuildStickerManager {
     return getGatewayClient().guilds.stickers(this.id);
+  }
+
+  /**
+   * The channels of the guild.
+   */
+  public get channels(): GuildChannelManager {
+    return getGatewayClient().guilds.channels(this.id);
   }
 
   /**

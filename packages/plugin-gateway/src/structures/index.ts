@@ -24,6 +24,7 @@ export * from "./Message.js";
 export * from "./MessageMentions.js";
 export * from "./MessageReaction.js";
 export * from "./Mixin.js";
+export * from "./PermissionOverwrites.js";
 export * from "./Poll.js";
 export * from "./PollAnswer.js";
 export * from "./PrivateThreadChannel.js";

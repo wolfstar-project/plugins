@@ -1,6 +1,7 @@
-import type { ChannelType } from "discord-api-types/v10";
+import type { ChannelType, VideoQualityMode } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import { kData } from "../Structure.js";
+import { editChannel } from "./edit.js";
 
 type Data = {
   bitrate?: number;
@@ -35,5 +36,33 @@ export class VoiceChannelMixin<Type extends ChannelType = ChannelType> {
 
   public get videoQualityMode(): number | null {
     return (this[kData] as Data).video_quality_mode ?? null;
+  }
+
+  public setBitrate(bitrate: number, reason?: string): Promise<this> {
+    return editChannel(this, { bitrate, reason });
+  }
+
+  /**
+   * Sets the user limit.
+   *
+   * @param userLimit The user limit, `0` for none.
+   * @param reason The reason for the audit log.
+   */
+  public setUserLimit(userLimit: number, reason?: string): Promise<this> {
+    return editChannel(this, { userLimit, reason });
+  }
+
+  /**
+   * Sets the voice region.
+   *
+   * @param rtcRegion The region, `null` for automatic.
+   * @param reason The reason for the audit log.
+   */
+  public setRTCRegion(rtcRegion: string | null, reason?: string): Promise<this> {
+    return editChannel(this, { rtcRegion, reason });
+  }
+
+  public setVideoQualityMode(videoQualityMode: VideoQualityMode, reason?: string): Promise<this> {
+    return editChannel(this, { videoQualityMode, reason });
   }
 }
