@@ -159,6 +159,41 @@ describe("thread creation", () => {
   });
 });
 
+describe("thread defaults", () => {
+  test("GIVEN no type THEN a public thread is created, an announcement one in announcement channels", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+
+    const text = (await cacheParent(client)) as TextChannel;
+    await text.threads.create({ name: "hunt" });
+    await client.cache!.channels.set(channelId, {
+      id: channelId,
+      type: ChannelType.GuildAnnouncement,
+      name: "news",
+      guild_id: guildId,
+    } as never);
+    await text.threads.create({ name: "hunt" });
+
+    const types = post.mock.calls.map(
+      ([, options]) => (options as { body: { type: number } }).body.type,
+    );
+    expect(types).toEqual([ChannelType.PublicThread, ChannelType.AnnouncementThread]);
+  });
+
+  test("GIVEN members.fetch with withMember THEN it asks the API for the guild member", async () => {
+    const client = createClient();
+    await client.cache!.threads.set(threadId, thread() as never);
+    const get = vi.spyOn(container.rest, "get").mockResolvedValue(threadMember());
+    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+
+    await cached.members.fetch(userId, { withMember: true });
+
+    const [route, options] = get.mock.calls[0]!;
+    expect(route).toBe(Routes.threadMembers(threadId, userId));
+    expect((options as { query: URLSearchParams }).query.toString()).toBe("with_member=true");
+  });
+});
+
 describe("thread actions", () => {
   test("GIVEN setArchived THEN the thread stays in the thread cache, archived", async () => {
     const client = createClient();

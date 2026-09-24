@@ -1,11 +1,12 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { RawFile } from "@discordjs/rest";
 import {
+  ChannelType,
   Routes,
+  type ThreadChannelType,
   type APIMessage,
   type APIThreadChannel,
   type APIThreadMember,
-  type ChannelType,
   type RESTGetAPIChannelThreadsArchivedPublicResult,
   type RESTGetAPIGuildThreadsResult,
   type RESTPostAPIChannelThreadsJSONBody,
@@ -42,9 +43,10 @@ export interface ThreadCreateOptions {
   autoArchiveDuration?: ThreadAutoArchiveDuration;
   rateLimitPerUser?: number;
   /**
-   * The type of a thread without a message: public (the default) or private.
+   * The type of a thread without a message: public (the default; an announcement thread in announcement channels) or
+   * private.
    */
-  type?: ChannelType.PublicThread | ChannelType.PrivateThread;
+  type?: ChannelType.PublicThread | ChannelType.PrivateThread | ChannelType.AnnouncementThread;
   /**
    * Whether non-moderators can add members to a private thread.
    */
@@ -132,7 +134,9 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     let body: RESTPostAPIChannelThreadsJSONBody | RESTPostAPIGuildForumThreadsJSONBody;
     let files: RawFile[] | undefined;
     if (options.message === undefined) {
-      body = { ...common, type: options.type, invitable: options.invitable };
+      // Discord defaults to a private thread: pick discord.js's default, public (or announcement), client-side.
+      const type = options.type ?? (await this.defaultThreadType(channelId));
+      body = { ...common, type, invitable: options.invitable };
     } else {
       const message = resolveMessageOptions(options.message);
       body = { ...common, message: message.body, applied_tags: options.appliedTags?.slice() };
@@ -194,6 +198,13 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
       guildId,
       result.has_more,
     );
+  }
+
+  private async defaultThreadType(channelId: string): Promise<ThreadChannelType> {
+    const parent = await this.client.channels.fetch(channelId);
+    return parent.type === ChannelType.GuildAnnouncement
+      ? ChannelType.AnnouncementThread
+      : ChannelType.PublicThread;
   }
 
   private async storeList(

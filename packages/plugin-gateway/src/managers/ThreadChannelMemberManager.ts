@@ -24,11 +24,18 @@ export class ThreadChannelMemberManager {
 
   /**
    * Gets a member of the thread from the cache, falling back to the API.
+   *
+   * @param userId The ID of the user.
+   * @param options The cache options, and whether to include the guild member (which always calls the API).
    */
-  public fetch(userId: string, options?: FetchOptions): Promise<ThreadMember> {
-    return options
-      ? this.client.threadMembers.fetch(this.threadId, userId, options)
-      : this.client.threadMembers.fetch(this.threadId, userId);
+  public fetch(
+    userId: string,
+    options: FetchOptions & { withMember?: boolean } = {},
+  ): Promise<ThreadMember> {
+    const { withMember, ...fetchOptions } = options;
+    return withMember
+      ? this.client.threadMembers.fetchWithMember(this.threadId, userId, { withMember })
+      : this.client.threadMembers.fetch(this.threadId, userId, fetchOptions);
   }
 
   /**
