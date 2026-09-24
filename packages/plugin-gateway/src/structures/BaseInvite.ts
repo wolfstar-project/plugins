@@ -32,7 +32,7 @@ export interface InviteRelations {
  * @typeParam Data The raw invite data this structure wraps.
  */
 export class BaseInvite<Data extends InviteData = InviteData> extends Structure<Data> {
-  declare protected [kRelations]: InviteRelations;
+  declare public [kRelations]: InviteRelations;
 
   /**
    * @param data The raw invite.

@@ -215,3 +215,26 @@ describe("guild relations", () => {
     expect(role![kClone]({ name: "Beta" }).guild?.id).toBe(guildId);
   });
 });
+
+describe("guild relations of guild assets", () => {
+  const guild = { id: guildId, name: "Pack", icon: null, owner_id: user.id, features: [] } as never;
+
+  test("GIVEN a cached guild THEN emojis, stickers, and invites resolve it", async () => {
+    const client = createClient();
+    await client.cache!.guilds.set(guildId, guild);
+    vi.spyOn(container.rest, "get").mockImplementation(async (route: string) => {
+      if (route.includes("emojis")) return { id: "7", name: "howl", roles: [] };
+      if (route.includes("stickers"))
+        return { id: "8", name: "wolf", tags: "wolf", type: 2, format_type: 1 };
+      return { code: "wolves", type: 0, channel: null };
+    });
+
+    const emoji = await client.guilds.emojis(guildId).fetch("7");
+    const sticker = await client.guilds.stickers(guildId).fetch("8");
+    const invite = await client.guilds.invites(guildId).fetch("wolves");
+
+    expect(emoji.guild).toBeInstanceOf(Guild);
+    expect(sticker.guild?.id).toBe(guildId);
+    expect(invite.guild).toBeInstanceOf(Guild);
+  });
+});

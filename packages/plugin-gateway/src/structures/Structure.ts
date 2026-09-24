@@ -53,9 +53,12 @@ export abstract class Structure<
   declare protected [kData]: Readonly<Data>;
 
   /**
-   * The relations of this structure, resolved from the cache by its manager. Subclasses narrow its type.
+   * The relations of this structure, resolved from the cache by its manager. Subclasses narrow its type. Public only
+   * so that {@link Structure.dropRelations} can check relation names against it.
+   *
+   * @internal
    */
-  declare protected [kRelations]: object;
+  declare public [kRelations]: object;
 
   /**
    * @param data The raw API data.
@@ -99,7 +102,7 @@ export abstract class Structure<
    *
    * @param names The names of the relations.
    */
-  protected dropRelations(...names: string[]): void {
+  protected dropRelations(...names: (keyof this[typeof kRelations] & string)[]): void {
     const relations: Record<string, unknown> = { ...this[kRelations] };
     for (const name of names) delete relations[name];
     this[kRelations] = relations;

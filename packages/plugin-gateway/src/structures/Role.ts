@@ -28,7 +28,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   CacheEntityTypes["roles"],
   Omitted
 > {
-  declare protected [kRelations]: { guild?: Guild | null };
+  declare public [kRelations]: { guild?: Guild | null };
 
   /**
    * The template used for removing data from the raw data stored for each role

@@ -62,7 +62,7 @@ const NonSystemTypes: readonly MessageType[] = [
  * overwrites come with the channel phase of #54.
  */
 export class Message extends Structure<CacheEntityTypes["messages"]> {
-  declare protected [kRelations]: MessageRelations;
+  declare public [kRelations]: MessageRelations;
 
   /**
    * @param data The raw message.

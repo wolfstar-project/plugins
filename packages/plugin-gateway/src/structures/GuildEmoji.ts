@@ -11,7 +11,7 @@ import { User } from "./User.js";
  * A custom emoji of a guild.
  */
 export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
-  declare protected [kRelations]: { author?: User; guild?: Guild | null };
+  declare public [kRelations]: { author?: User; guild?: Guild | null };
 
   /**
    * @param data The raw emoji.

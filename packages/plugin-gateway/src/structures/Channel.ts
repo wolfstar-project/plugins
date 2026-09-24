@@ -35,7 +35,7 @@ const ThreadTypes: readonly ChannelType[] = [
 export class Channel<Type extends ChannelType = ChannelType> extends Structure<
   ChannelDataType<Type>
 > {
-  declare protected [kRelations]: ChannelRelations;
+  declare public [kRelations]: ChannelRelations;
 
   /**
    * @param data The raw channel.

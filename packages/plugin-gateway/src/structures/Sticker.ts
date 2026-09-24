@@ -12,7 +12,7 @@ import { User } from "./User.js";
  * A sticker: a standard one from a sticker pack, or a custom one of a guild.
  */
 export class Sticker extends Structure<APISticker> {
-  declare protected [kRelations]: { user?: User; guild?: Guild | null };
+  declare public [kRelations]: { user?: User; guild?: Guild | null };
 
   /**
    * @param data The raw sticker.

@@ -27,7 +27,7 @@ function timestamp(value: string | null | undefined): number | null {
  * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
-  declare protected [kRelations]: { user?: User; guild?: Guild | null };
+  declare public [kRelations]: { user?: User; guild?: Guild | null };
 
   /**
    * @param data The raw member.
