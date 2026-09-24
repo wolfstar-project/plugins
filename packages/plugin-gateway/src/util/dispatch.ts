@@ -380,13 +380,15 @@ type ReactionData = {
   burst_colors?: string[];
 };
 
-// The reaction as the cache holds it after the dispatch, else one without counts.
+// The reaction as the cache holds it after the dispatch. When the message is cached but the reaction is gone (its
+// last user removed it), the counts are known to be zero; only an uncached message leaves them unknown.
 async function reactionOf(client: GatewayClient, data: ReactionData): Promise<MessageReaction> {
   const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
-  return message?.reactions.resolve(data.emoji) ?? partialReaction(data);
+  if (!message) return partialReaction(data);
+  return message.reactions.resolve(data.emoji) ?? partialReaction(data, true);
 }
 
-function partialReaction(data: ReactionData): MessageReaction {
+function partialReaction(data: ReactionData, emptied = false): MessageReaction {
   return new MessageReaction({
     channel_id: data.channel_id,
     message_id: data.message_id,
@@ -394,6 +396,7 @@ function partialReaction(data: ReactionData): MessageReaction {
     me: false,
     me_burst: false,
     burst_colors: data.burst_colors ?? [],
+    ...(emptied && { count: 0, count_details: { normal: 0, burst: 0 } }),
   });
 }
 

@@ -102,14 +102,18 @@ export interface GatewayEventMap {
   messageDeleteBulk: [messages: Message[], data: GatewayMessageDeleteBulkDispatchData];
 
   /**
-   * Emitted when a user reacts to a message. The reaction has its counts when the message is cached, and the user is
-   * `null` when neither the payload (outside of guilds) nor the cache has it.
+   * Emitted when a user reacts to a message. The reaction has its counts when the message is cached (`count` is
+   * `null` otherwise), and the user is `null` when neither the payload (outside of guilds) nor the cache has it.
    */
   messageReactionAdd: [
     reaction: MessageReaction,
     user: User | null,
     details: MessageReactionEventDetails,
   ];
+  /**
+   * Emitted when a user removes their reaction. Like `messageReactionAdd`, `count` is `null` only when the message is
+   * not cached: removing the last reaction of an emoji from a cached message gives a count of `0`.
+   */
   messageReactionRemove: [
     reaction: MessageReaction,
     user: User | null,

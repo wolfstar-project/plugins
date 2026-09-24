@@ -123,6 +123,17 @@ describe("reaction events", () => {
     expect(details.userId).toBe(user.id);
   });
 
+  test("GIVEN the last reaction of an emoji removed from a cached message THEN its count is 0", async () => {
+    const client = createClient();
+    await createMessage(client);
+    await dispatch(client, GatewayDispatchEvents.MessageReactionAdd, reaction(user.id));
+    const calls = record(client, "messageReactionRemove");
+
+    await dispatch(client, GatewayDispatchEvents.MessageReactionRemove, reaction(user.id));
+
+    expect(calls[0]![0].count).toBe(0);
+  });
+
   test("GIVEN REMOVE_ALL and REMOVE_EMOJI THEN the removed reactions are emitted", async () => {
     const client = createClient();
     await createMessage(client);
