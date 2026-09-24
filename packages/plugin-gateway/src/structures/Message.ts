@@ -1,5 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
+  ChannelType,
   MessageFlags,
   MessageReferenceType,
   MessageType,
@@ -338,6 +339,8 @@ export class Message extends Structure<CacheEntityTypes["messages"]> {
    */
   public async fetchCrosspostable(): Promise<boolean> {
     if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) return false;
+    const channel = await this.fetchChannel();
+    if (channel.type !== ChannelType.GuildAnnouncement) return false;
     return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
   }
 

@@ -108,7 +108,15 @@ export class MessageReaction extends Structure<MessageReactionData> {
     const current = message.reactions.cache.find(
       (reaction) => reaction.emoji.identifier === identifier,
     );
-    return current ? this[kPatch](current.toJSON()) : this[kPatch]({ count: 0, me: false });
+    return current
+      ? this[kPatch](current.toJSON())
+      : this[kPatch]({
+          count: 0,
+          count_details: { normal: 0, burst: 0 },
+          me: false,
+          me_burst: false,
+          burst_colors: [],
+        });
   }
 
   public valueOf(): string {

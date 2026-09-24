@@ -273,3 +273,33 @@ describe("MessageManager", () => {
     expect(channel.messages.channelId).toBe(channelId);
   });
 });
+
+describe("Message#fetchCrosspostable", () => {
+  test("GIVEN a message outside of an announcement channel THEN it is not crosspostable", async () => {
+    createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue({
+      id: channelId,
+      type: ChannelType.GuildText,
+      name: "general",
+      guild_id: guildId,
+    });
+
+    await expect(new Message(message({ guild_id: guildId })).fetchCrosspostable()).resolves.toBe(
+      false,
+    );
+  });
+
+  test("GIVEN the bot's message in an announcement channel THEN it is crosspostable", async () => {
+    createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue({
+      id: channelId,
+      type: ChannelType.GuildAnnouncement,
+      name: "news",
+      guild_id: guildId,
+    });
+
+    await expect(new Message(message({ guild_id: guildId })).fetchCrosspostable()).resolves.toBe(
+      true,
+    );
+  });
+});

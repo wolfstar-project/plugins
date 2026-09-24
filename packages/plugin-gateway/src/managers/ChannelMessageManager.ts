@@ -1,7 +1,14 @@
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Message } from "../structures/Message.js";
 import type { FetchOptions } from "./CachedManager.js";
-import type { MessageListOptions, PinnedMessage } from "./MessageManager.js";
+import type { EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
+import type { User } from "../structures/User.js";
+import type {
+  MessageListOptions,
+  MessageThreadCreateOptions,
+  PinnedMessage,
+} from "./MessageManager.js";
+import type { AnyThreadChannel } from "./ThreadManager.js";
 import type {
   MessageCreateOptions,
   MessageEditOptions,
@@ -75,5 +82,44 @@ export class ChannelMessageManager {
 
   public crosspost(messageId: string): Promise<Message> {
     return this.client.messages.crosspost(this.channelId, messageId);
+  }
+
+  public bulkDelete(messages: readonly string[] | number, filterOld = false): Promise<string[]> {
+    return this.client.messages.bulkDelete(this.channelId, messages, filterOld);
+  }
+
+  public forward(messageId: string, targetChannelId: string): Promise<Message> {
+    return this.client.messages.forward(this.channelId, messageId, targetChannelId);
+  }
+
+  public react(messageId: string, emoji: EmojiIdentifierResolvable): Promise<void> {
+    return this.client.messages.react(this.channelId, messageId, emoji);
+  }
+
+  public removeReactionEmoji(messageId: string, emoji: EmojiIdentifierResolvable): Promise<void> {
+    return this.client.messages.removeReactionEmoji(this.channelId, messageId, emoji);
+  }
+
+  public removeAllReactions(messageId: string): Promise<void> {
+    return this.client.messages.removeAllReactions(this.channelId, messageId);
+  }
+
+  public startThread(
+    messageId: string,
+    options: MessageThreadCreateOptions,
+  ): Promise<AnyThreadChannel> {
+    return this.client.messages.startThread(this.channelId, messageId, options);
+  }
+
+  public endPoll(messageId: string): Promise<Message> {
+    return this.client.messages.endPoll(this.channelId, messageId);
+  }
+
+  public fetchPollAnswerVoters(
+    messageId: string,
+    answerId: number,
+    options?: { limit?: number; after?: string },
+  ): Promise<User[]> {
+    return this.client.messages.fetchPollAnswerVoters(this.channelId, messageId, answerId, options);
   }
 }
