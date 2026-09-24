@@ -1,5 +1,5 @@
-import type { GatewayEventName } from "../GatewayEvents.js";
-import type { EventGatewayListener } from "../structures/EventGatewayListener.js";
+import type { GatewayEventName } from "./events.js";
+import type { EventGatewayListener } from "../EventGatewayListener.js";
 
 type ListenerConstructor = new (...args: any[]) => EventGatewayListener<any>;
 

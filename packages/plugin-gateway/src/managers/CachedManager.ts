@@ -27,10 +27,11 @@ export abstract class CachedManager<
   /**
    * The name of the entity cache this manager reads from.
    */
-  public abstract readonly entity: Name;
+  public readonly entity: Name;
 
-  public constructor(client: GatewayClient) {
+  public constructor(client: GatewayClient, entity: Name) {
     this.client = client;
+    this.entity = entity;
   }
 
   /**

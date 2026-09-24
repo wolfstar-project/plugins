@@ -11,18 +11,16 @@ import {
   type GatewayDispatchPayload,
   type GatewayIntentBits,
 } from "discord-api-types/v10";
-import { DispatchHandlers, type DispatchHandler } from "./dispatch.js";
-import type { GatewayEventMap, GatewayEventName } from "./GatewayEvents.js";
-import {
-  ChannelManager,
-  GuildManager,
-  GuildMemberManager,
-  MessageManager,
-  RoleManager,
-  ThreadManager,
-  UserManager,
-} from "./managers/index.js";
+import { ChannelManager } from "./managers/ChannelManager.js";
+import { GuildManager } from "./managers/GuildManager.js";
+import { GuildMemberManager } from "./managers/GuildMemberManager.js";
+import { MessageManager } from "./managers/MessageManager.js";
+import { RoleManager } from "./managers/RoleManager.js";
+import { ThreadManager } from "./managers/ThreadManager.js";
+import { UserManager } from "./managers/UserManager.js";
 import type { User } from "./structures/User.js";
+import { DispatchHandlers, type DispatchHandler } from "./util/dispatch.js";
+import type { GatewayEventMap, GatewayEventName } from "./util/events.js";
 
 export interface GatewayClientOptions extends ClientOptions {
   /**

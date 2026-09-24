@@ -1,5 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { CDN, type ImageOptions } from "./cdn.js";
+import type { ImageURLOptions } from "@discordjs/rest";
+import { cdn } from "../util/cdn.js";
 import { kData, snowflakeTimestamp, Structure } from "./Structure.js";
 
 /**
@@ -64,9 +65,9 @@ export class Guild extends Structure<CacheEntityTypes["guilds"]> {
    * Gets the URL of the guild's icon, or `null` if it has none.
    * @param options The image options.
    */
-  public iconURL(options?: ImageOptions): string | null {
+  public iconURL(options?: ImageURLOptions): string | null {
     const { icon } = this[kData];
-    return icon ? CDN.guildIcon(this.id, icon, options) : null;
+    return icon ? cdn.icon(this.id, icon, options) : null;
   }
 
   public toString(): string {

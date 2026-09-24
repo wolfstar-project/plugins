@@ -1,5 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { CDN, type ImageOptions } from "./cdn.js";
+import type { ImageURLOptions } from "@discordjs/rest";
+import { cdn } from "../util/cdn.js";
 import { kData, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
@@ -62,17 +63,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Gets the URL of the member's guild avatar, or `null` if they have none.
    * @param options The image options.
    */
-  public avatarURL(options?: ImageOptions): string | null {
+  public avatarURL(options?: ImageURLOptions): string | null {
     const { avatar } = this[kData];
     const { id } = this;
-    return avatar && id ? CDN.memberAvatar(this.guildId, id, avatar, options) : null;
+    return avatar && id ? cdn.guildMemberAvatar(this.guildId, id, avatar, options) : null;
   }
 
   /**
    * Gets the URL of the member's guild avatar, falling back to their user's avatar.
    * @param options The image options.
    */
-  public displayAvatarURL(options?: ImageOptions): string | null {
+  public displayAvatarURL(options?: ImageURLOptions): string | null {
     return this.avatarURL(options) ?? this.user?.displayAvatarURL(options) ?? null;
   }
 

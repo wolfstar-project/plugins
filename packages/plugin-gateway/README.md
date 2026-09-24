@@ -170,16 +170,48 @@ Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothi
 
 ## Structures
 
-`User`, `Guild`, `Channel`, `Message`, `GuildMember`, and `Role` wrap the raw data behind typed
-getters, and never hold a reference to the client. They extend `Structure`, whose `kData`,
-`kPatch`, and `kClone` symbols are exported, so they can be subclassed.
+`User`, `Guild`, `Message`, `GuildMember`, and `Role` wrap the raw data behind typed getters.
+Channels get one class per type (`TextChannel`, `VoiceChannel`, `ForumChannel`,
+`PublicThreadChannel`, `DMChannel`, ...), all extending `Channel` and composed from mixins
+(`GuildChannelMixin`, `ChannelTopicMixin`, `ThreadChannelMixin`, ...), following
+`@discordjs/structures` and the layout of discord.js's `@discordjs/next` prototype.
+`ChannelManager` picks the class matching the channel type, `BaseChannel` covers the unknown ones.
+
+```ts
+client.on("channelCreate", (channel) => {
+  if (channel instanceof TextChannel) console.log(channel.name, channel.topic);
+});
+```
+
+Structures never hold a reference to the client. Every channel has `fetch()` and `delete()`
+(from `BaseChannelMixin`), which go through the framework's REST client.
+
+`Structure`, `Mixin`, and the `kData`, `kPatch`, and `kClone` symbols are exported, so structures
+can be subclassed and new mixins written:
+
+```ts
+import { Mixin, TextChannel, kData } from "@wolfstar/plugin-gateway";
+
+class MyTextChannel extends TextChannel {}
+Mixin(MyTextChannel, [MyMixin]);
+```
 
 > [!NOTE]
 > The RFC planned to build on
 > [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures).
 > It is only published as `dev` snapshots, requires Node.js 24.17, does not export its data symbols
 > (making subclasses impossible outside discord.js), and has no `Guild` nor `GuildMember` yet, so
-> this package ships a small `Structure` modelled after it instead.
+> this package ships a small `Structure` and `Mixin` modelled after it instead.
+
+## Subpath exports
+
+Like `@discordjs/next`, the gateway and REST libraries are re-exported, so a bot does not need to
+depend on them directly:
+
+| Import                          | Re-exports        |
+| ------------------------------- | ----------------- |
+| `@wolfstar/plugin-gateway/rest` | `@discordjs/rest` |
+| `@wolfstar/plugin-gateway/ws`   | `@discordjs/ws`   |
 
 ## Limitations
 

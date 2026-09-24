@@ -15,6 +15,8 @@ import {
   GatewayClient,
   GuildMember,
   Message,
+  PublicThreadChannel,
+  TextChannel,
   User,
   type GatewayEventMap,
   type GatewayEventName,
@@ -288,6 +290,62 @@ describe("GatewayClient", () => {
     await client.idle();
 
     expect(calls.map(([emitted]) => emitted.content)).toEqual(["first", "second"]);
+  });
+});
+
+describe("ChannelManager", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("GIVEN CHANNEL_CREATE THEN the structure matches the channel type", async () => {
+    const client = createClient();
+    const calls = record(client, "channelCreate");
+
+    await dispatch(client, GatewayDispatchEvents.ChannelCreate, {
+      id: "20",
+      type: ChannelType.GuildText,
+      guild_id: "10",
+      name: "general",
+      topic: "hi",
+    });
+
+    const [[channel]] = calls;
+    expect(channel).toBeInstanceOf(TextChannel);
+    expect((channel as TextChannel).topic).toBe("hi");
+  });
+
+  test("GIVEN THREAD_CREATE THEN the thread resolves through client.channels", async () => {
+    const client = createClient();
+    const calls = record(client, "threadCreate");
+
+    await dispatch(client, GatewayDispatchEvents.ThreadCreate, {
+      id: "40",
+      type: ChannelType.PublicThread,
+      guild_id: "10",
+      parent_id: "20",
+      name: "thread",
+    });
+
+    expect(calls[0]![0]).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.threads.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.channels.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.cache!.channels.has("40")).toBe(false);
+  });
+
+  test("GIVEN a thread refresh THEN it is written to the thread cache", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue({
+      id: "40",
+      type: ChannelType.PrivateThread,
+      name: "secret",
+    });
+
+    const thread = await client.channels.refresh("40");
+
+    expect(thread.isThread()).toBe(true);
+    expect(await client.cache!.threads.has("40")).toBe(true);
+    expect(await client.cache!.channels.has("40")).toBe(false);
   });
 });
 

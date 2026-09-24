@@ -270,6 +270,9 @@ importers:
 
   packages/plugin-gateway:
     dependencies:
+      '@discordjs/rest':
+        specifier: ^2.6.0
+        version: 2.6.3
       '@discordjs/ws':
         specifier: ^2.0.4
         version: 2.0.4

@@ -1,7 +1,7 @@
 import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type { GatewayClient } from "./GatewayClient.js";
-import type { GatewayEventMap, GatewayEventName } from "./GatewayEvents.js";
+import type { GatewayClient } from "../GatewayClient.js";
+import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
 /**
  * The data of the dispatch of type `Type`.

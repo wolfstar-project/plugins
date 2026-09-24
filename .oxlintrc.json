@@ -11,5 +11,19 @@
       { "prefer": "type-imports", "fixStyle": "inline-type-imports" }
     ]
   },
+  "overrides": [
+    {
+      "files": ["packages/plugin-gateway/src/structures/**/*.ts"],
+      "rules": {
+        "typescript/no-unsafe-declaration-merging": "off"
+      }
+    },
+    {
+      "files": ["packages/plugin-gateway/src/structures/mixins/*.ts"],
+      "rules": {
+        "no-unused-vars": ["error", { "varsIgnorePattern": "^Type$" }]
+      }
+    }
+  ],
   "ignorePatterns": ["dist", "node_modules", ".turbo", "coverage"]
 }

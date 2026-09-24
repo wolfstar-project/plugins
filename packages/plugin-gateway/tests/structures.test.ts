@@ -1,6 +1,18 @@
 import { ChannelType } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
-import { Channel, kClone, kPatch, Role, snowflakeTimestamp, User } from "../src/index.js";
+import {
+  BaseChannel,
+  Channel,
+  DMChannel,
+  kClone,
+  kPatch,
+  Mixin,
+  PublicThreadChannel,
+  Role,
+  snowflakeTimestamp,
+  TextChannel,
+  User,
+} from "../src/index.js";
 
 const data = {
   id: "266624760782258186",
@@ -56,13 +68,13 @@ describe("User", () => {
     expect(`${user}`).toBe(`<@${data.id}>`);
   });
 
-  test("GIVEN an animated avatar THEN the URL defaults to gif", () => {
+  test("GIVEN an animated avatar THEN the URL is a gif unless forced static", () => {
     const user = new User({ ...data, avatar: "a_hash" });
 
     expect(user.avatarURL({ size: 64 })).toBe(
       `https://cdn.discordapp.com/avatars/${data.id}/a_hash.gif?size=64`,
     );
-    expect(user.avatarURL({ extension: "webp" })).toBe(
+    expect(user.avatarURL({ forceStatic: true })).toBe(
       `https://cdn.discordapp.com/avatars/${data.id}/a_hash.webp`,
     );
   });
@@ -74,26 +86,113 @@ describe("User", () => {
 });
 
 describe("Channel", () => {
-  test("GIVEN a thread THEN isThread is true", () => {
-    const thread = new Channel({
+  test("GIVEN a text channel THEN its mixins expose the guild channel fields", () => {
+    const channel = new TextChannel({
+      id: "1",
+      type: ChannelType.GuildText,
+      guild_id: "2",
+      name: "general",
+      topic: "hello",
+      parent_id: "3",
+      position: 4,
+      rate_limit_per_user: 5,
+    } as never);
+
+    expect(channel).toBeInstanceOf(Channel);
+    expect(channel.guildId).toBe("2");
+    expect(channel.name).toBe("general");
+    expect(channel.topic).toBe("hello");
+    expect(channel.parentId).toBe("3");
+    expect(channel.position).toBe(4);
+    expect(channel.rateLimitPerUser).toBe(5);
+    expect(channel.nsfw).toBe(false);
+    expect(channel.isThread()).toBe(false);
+    expect(`${channel}`).toBe("<#1>");
+  });
+
+  test("GIVEN a public thread THEN its thread metadata is exposed", () => {
+    const thread = new PublicThreadChannel({
       id: "1",
       type: ChannelType.PublicThread,
       name: "thread",
+      owner_id: "9",
+      applied_tags: ["7"],
+      thread_metadata: {
+        archived: true,
+        locked: false,
+        auto_archive_duration: 60,
+        archive_timestamp: "2024-01-01T00:00:00.000Z",
+      },
     } as never);
 
     expect(thread.isThread()).toBe(true);
-    expect(thread.isDMBased()).toBe(false);
     expect(thread.name).toBe("thread");
+    expect(thread.ownerId).toBe("9");
+    expect(thread.appliedTagIds).toEqual(["7"]);
+    expect(thread.archived).toBe(true);
+    expect(thread.archiveTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
+    expect(thread.autoArchiveDuration).toBe(60);
   });
 
-  test("GIVEN a DM THEN fields it does not have fall back", () => {
-    const dm = new Channel({ id: "1", type: ChannelType.DM, recipients: [] } as never);
+  test("GIVEN a DM THEN its recipients are users", () => {
+    const dm = new DMChannel({ id: "1", type: ChannelType.DM, recipients: [data] } as never);
 
     expect(dm.isDMBased()).toBe(true);
-    expect(dm.guildId).toBeNull();
-    expect(dm.topic).toBeNull();
-    expect(dm.nsfw).toBe(false);
-    expect(`${dm}`).toBe("<#1>");
+    expect(dm.recipients[0]).toBeInstanceOf(User);
+    expect(dm.recipients[0]!.username).toBe("wolf");
+    expect(dm).not.toHaveProperty("topic");
+  });
+
+  test("GIVEN kClone on a mixed channel THEN the clone keeps its class and mixins", () => {
+    const channel = new TextChannel({ id: "1", type: ChannelType.GuildText, name: "a" } as never);
+    const clone = channel[kClone]({ name: "b" } as never);
+
+    expect(clone).toBeInstanceOf(TextChannel);
+    expect(clone.name).toBe("b");
+    expect(channel.name).toBe("a");
+  });
+
+  test("GIVEN an unknown channel type THEN it falls back to BaseChannel", () => {
+    const channel = new BaseChannel({ id: "1", type: 99 } as never);
+
+    expect(channel.type).toBe(99);
+    expect(typeof channel.fetch).toBe("function");
+  });
+});
+
+describe("Mixin", () => {
+  test("GIVEN conflicting members THEN the target and the earlier mixins win", () => {
+    class First {
+      public get value() {
+        return "first";
+      }
+
+      public only() {
+        return "only";
+      }
+    }
+
+    class Second {
+      public get value() {
+        return "second";
+      }
+    }
+
+    class Own {
+      public get value() {
+        return "own";
+      }
+    }
+
+    class Target {
+      public readonly kind = "target";
+    }
+    Mixin(Target, [First, Second]);
+    Mixin(Own, [First]);
+
+    expect((new Target() as First).value).toBe("first");
+    expect((new Target() as First).only()).toBe("only");
+    expect(new Own().value).toBe("own");
   });
 });
 

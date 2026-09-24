@@ -1,5 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { CDN, type ImageOptions } from "./cdn.js";
+import type { ImageURLOptions } from "@discordjs/rest";
+import { cdn } from "../util/cdn.js";
 import { kData, snowflakeTimestamp, Structure } from "./Structure.js";
 
 /**
@@ -56,17 +57,27 @@ export class User extends Structure<CacheEntityTypes["users"]> {
    * Gets the URL of the user's avatar, or `null` if they have none.
    * @param options The image options.
    */
-  public avatarURL(options?: ImageOptions): string | null {
+  public avatarURL(options?: ImageURLOptions): string | null {
     const { avatar } = this[kData];
-    return avatar ? CDN.avatar(this.id, avatar, options) : null;
+    return avatar ? cdn.avatar(this.id, avatar, options) : null;
   }
 
   /**
    * Gets the URL of the user's avatar, falling back to their default avatar.
    * @param options The image options.
    */
-  public displayAvatarURL(options?: ImageOptions): string {
-    return this.avatarURL(options) ?? CDN.defaultAvatar(this.id, this.discriminator);
+  public displayAvatarURL(options?: ImageURLOptions): string {
+    return this.avatarURL(options) ?? cdn.defaultAvatar(this.defaultAvatarIndex);
+  }
+
+  /**
+   * The index of the user's default avatar: migrated users (discriminator `"0"`) derive it from their ID, legacy ones
+   * from their discriminator.
+   */
+  public get defaultAvatarIndex(): number {
+    return this.discriminator === "0"
+      ? Number((BigInt(this.id) >> 22n) % 6n)
+      : Number(this.discriminator) % 5;
   }
 
   public toString(): `<@${string}>` {

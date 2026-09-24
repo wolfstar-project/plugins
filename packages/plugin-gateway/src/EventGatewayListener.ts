@@ -1,6 +1,6 @@
 import { Listener } from "@wolfstar/http-framework";
 import type { Awaitable } from "@wolfstar/plugin-cache";
-import type { GatewayEventMap, GatewayEventName } from "../GatewayEvents.js";
+import type { GatewayEventMap, GatewayEventName } from "./util/events.js";
 
 /**
  * A {@link Listener} bound to one of the {@link GatewayEventMap} events of the {@link GatewayClient}, with strongly

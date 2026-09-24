@@ -34,6 +34,18 @@
         "types": "./dist/esm/index.d.ts",
         "default": "./dist/esm/index.js"
       }
+    },
+    "./rest": {
+      "import": {
+        "types": "./dist/esm/exports/rest.d.ts",
+        "default": "./dist/esm/exports/rest.js"
+      }
+    },
+    "./ws": {
+      "import": {
+        "types": "./dist/esm/exports/ws.d.ts",
+        "default": "./dist/esm/exports/ws.js"
+      }
     }
   },
   "publishConfig": {
@@ -47,6 +59,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
+    "@discordjs/rest": "^2.6.0",
     "@discordjs/ws": "^2.0.4",
     "@wolfstar/plugin-cache": "workspace:^",
     "discord-api-types": "^0.38.33"

@@ -7,12 +7,13 @@ import type {
   GatewayMessageDeleteDispatchData,
   GatewayThreadDeleteDispatchData,
 } from "discord-api-types/v10";
-import type { Channel } from "./structures/Channel.js";
-import type { Guild } from "./structures/Guild.js";
-import type { GuildMember } from "./structures/GuildMember.js";
-import type { Message } from "./structures/Message.js";
-import type { Role } from "./structures/Role.js";
-import type { User } from "./structures/User.js";
+import type { AnyChannel } from "../managers/ChannelManager.js";
+import type { AnyThreadChannel } from "../managers/ThreadManager.js";
+import type { Guild } from "../structures/Guild.js";
+import type { GuildMember } from "../structures/GuildMember.js";
+import type { Message } from "../structures/Message.js";
+import type { Role } from "../structures/Role.js";
+import type { User } from "../structures/User.js";
 
 /**
  * The events a {@link GatewayClient} emits on top of the base `Client`'s ones, and their arguments.
@@ -52,13 +53,13 @@ export interface GatewayEventMap {
    */
   guildDelete: [guild: Guild | null, data: GatewayGuildDeleteDispatchData];
 
-  channelCreate: [channel: Channel];
-  channelUpdate: [oldChannel: Channel | null, newChannel: Channel];
-  channelDelete: [channel: Channel];
+  channelCreate: [channel: AnyChannel];
+  channelUpdate: [oldChannel: AnyChannel | null, newChannel: AnyChannel];
+  channelDelete: [channel: AnyChannel];
 
-  threadCreate: [thread: Channel];
-  threadUpdate: [oldThread: Channel | null, newThread: Channel];
-  threadDelete: [thread: Channel | null, data: GatewayThreadDeleteDispatchData];
+  threadCreate: [thread: AnyThreadChannel];
+  threadUpdate: [oldThread: AnyThreadChannel | null, newThread: AnyThreadChannel];
+  threadDelete: [thread: AnyThreadChannel | null, data: GatewayThreadDeleteDispatchData];
 
   messageCreate: [message: Message];
   messageUpdate: [oldMessage: Message | null, newMessage: Message];
