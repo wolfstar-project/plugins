@@ -1,4 +1,9 @@
-import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
+import {
+  GatewayDispatchEvents,
+  type APIPartialEmoji,
+  type GatewayDispatchPayload,
+  type GatewayMessagePollVoteDispatchData,
+} from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { ClientUser } from "../structures/ClientUser.js";
@@ -6,6 +11,8 @@ import { kPatch } from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
 import type { Sticker } from "../structures/Sticker.js";
+import { MessageReaction } from "../structures/MessageReaction.js";
+import { PollAnswer } from "../structures/PollAnswer.js";
 import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
@@ -182,6 +189,51 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: (_client, data, previous) => [previous ?? [], data],
   },
 
+  [GatewayDispatchEvents.MessageReactionAdd]: {
+    event: "messageReactionAdd",
+    build: async (client, data) => [
+      await reactionOf(client, data),
+      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      { userId: data.user_id, type: data.type, burst: data.burst },
+    ],
+  },
+  [GatewayDispatchEvents.MessageReactionRemove]: {
+    event: "messageReactionRemove",
+    build: async (client, data) => [
+      await reactionOf(client, data),
+      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      { userId: data.user_id, type: data.type, burst: data.burst },
+    ],
+  },
+  [GatewayDispatchEvents.MessageReactionRemoveAll]: {
+    event: "messageReactionRemoveAll",
+    before: async (client, data) =>
+      (await client.messages.get(data.channel_id, data.message_id))?.reactions.cache ?? [],
+    build: async (client, data, previous: MessageReaction[] | undefined) => [
+      (await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id))) ?? null,
+      previous ?? [],
+      data,
+    ],
+  },
+  [GatewayDispatchEvents.MessageReactionRemoveEmoji]: {
+    event: "messageReactionRemoveEmoji",
+    before: async (client, data) =>
+      (await client.messages.get(data.channel_id, data.message_id))?.reactions.resolve(
+        data.emoji,
+      ) ?? undefined,
+    build: (_client, data, previous: MessageReaction | undefined) => [
+      previous ?? partialReaction(data),
+    ],
+  },
+  [GatewayDispatchEvents.MessagePollVoteAdd]: {
+    event: "messagePollVoteAdd",
+    build: async (client, data) => [await pollAnswerOf(client, data), data.user_id],
+  },
+  [GatewayDispatchEvents.MessagePollVoteRemove]: {
+    event: "messagePollVoteRemove",
+    build: async (client, data) => [await pollAnswerOf(client, data), data.user_id],
+  },
+
   [GatewayDispatchEvents.GuildMemberAdd]: {
     event: "guildMemberAdd",
     build: async (client, data) => [await client.members.hydrate(data)],
@@ -321,6 +373,47 @@ function diff<Value extends Diffable>(
  * Resolves a cache read, or `undefined` when the cache cannot be read, so an event can still be built from its
  * payload. The failure itself was already reported while applying the dispatch.
  */
+type ReactionData = {
+  channel_id: string;
+  message_id: string;
+  emoji: APIPartialEmoji;
+  burst_colors?: string[];
+};
+
+// The reaction as the cache holds it after the dispatch, else one without counts.
+async function reactionOf(client: GatewayClient, data: ReactionData): Promise<MessageReaction> {
+  const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
+  return message?.reactions.resolve(data.emoji) ?? partialReaction(data);
+}
+
+function partialReaction(data: ReactionData): MessageReaction {
+  return new MessageReaction({
+    channel_id: data.channel_id,
+    message_id: data.message_id,
+    emoji: data.emoji,
+    me: false,
+    me_burst: false,
+    burst_colors: data.burst_colors ?? [],
+  });
+}
+
+// The answer as the cache holds it after the dispatch, else one with only its ID.
+async function pollAnswerOf(
+  client: GatewayClient,
+  data: GatewayMessagePollVoteDispatchData,
+): Promise<PollAnswer> {
+  const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
+  return (
+    message?.poll?.answers.find((answer) => answer.id === data.answer_id) ??
+    new PollAnswer({
+      answer_id: data.answer_id,
+      poll_media: {},
+      channel_id: data.channel_id,
+      message_id: data.message_id,
+    })
+  );
+}
+
 function cachedOrUndefined<Value>(read: Promise<Value | undefined>): Promise<Value | undefined> {
   return read.catch(() => undefined);
 }

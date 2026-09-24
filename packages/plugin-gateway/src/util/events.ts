@@ -7,6 +7,8 @@ import type {
   GatewayInviteDeleteDispatchData,
   GatewayMessageDeleteBulkDispatchData,
   GatewayMessageDeleteDispatchData,
+  GatewayMessageReactionRemoveAllDispatchData,
+  ReactionType,
   GatewayThreadDeleteDispatchData,
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
@@ -18,10 +20,27 @@ import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { GuildInvite } from "../structures/GuildInvite.js";
 import type { GuildMember } from "../structures/GuildMember.js";
 import type { Message } from "../structures/Message.js";
+import type { MessageReaction } from "../structures/MessageReaction.js";
+import type { PollAnswer } from "../structures/PollAnswer.js";
 import type { Role } from "../structures/Role.js";
 import type { Sticker } from "../structures/Sticker.js";
 import type { Typing } from "../structures/Typing.js";
 import type { User } from "../structures/User.js";
+
+/**
+ * What a reaction event says besides the reaction and the user.
+ */
+export interface MessageReactionEventDetails {
+  /**
+   * The ID of the user who reacted, known even when the user is not.
+   */
+  userId: string;
+  type: ReactionType;
+  /**
+   * Whether the reaction is a super reaction.
+   */
+  burst: boolean;
+}
 
 /**
  * The events a {@link GatewayClient} emits on top of the base `Client`'s ones, and their arguments.
@@ -81,6 +100,38 @@ export interface GatewayEventMap {
   messageUpdate: [oldMessage: Message | null, newMessage: Message];
   messageDelete: [message: Message | null, data: GatewayMessageDeleteDispatchData];
   messageDeleteBulk: [messages: Message[], data: GatewayMessageDeleteBulkDispatchData];
+
+  /**
+   * Emitted when a user reacts to a message. The reaction has its counts when the message is cached, and the user is
+   * `null` when neither the payload (outside of guilds) nor the cache has it.
+   */
+  messageReactionAdd: [
+    reaction: MessageReaction,
+    user: User | null,
+    details: MessageReactionEventDetails,
+  ];
+  messageReactionRemove: [
+    reaction: MessageReaction,
+    user: User | null,
+    details: MessageReactionEventDetails,
+  ];
+  /**
+   * Emitted when every reaction is removed from a message, with the reactions the cache held.
+   */
+  messageReactionRemoveAll: [
+    message: Message | null,
+    reactions: MessageReaction[],
+    data: GatewayMessageReactionRemoveAllDispatchData,
+  ];
+  /**
+   * Emitted when every reaction with one emoji is removed from a message.
+   */
+  messageReactionRemoveEmoji: [reaction: MessageReaction];
+  /**
+   * Emitted when a user votes for a poll answer. The answer has its text and counts when the message is cached.
+   */
+  messagePollVoteAdd: [answer: PollAnswer, userId: string];
+  messagePollVoteRemove: [answer: PollAnswer, userId: string];
 
   guildMemberAdd: [member: GuildMember];
   guildMemberUpdate: [oldMember: GuildMember | null, newMember: GuildMember];
