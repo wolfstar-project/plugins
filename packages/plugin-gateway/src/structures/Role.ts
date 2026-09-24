@@ -204,12 +204,14 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * @param reason The reason for the audit log.
    */
   public async setPosition(position: number, reason?: string): Promise<this> {
-    await getGatewayClient().roles.setPositions(
+    const roles = await getGatewayClient().roles.setPositions(
       this.guildId,
       [{ role: this.id, position }],
       reason,
     );
-    return this[kPatch]({ position });
+    // Discord may clamp or shift the requested position: keep what it actually applied.
+    const updated = roles.find((role) => role.id === this.id);
+    return updated ? this[kPatch](updated.toJSON()) : this;
   }
 
   /**
