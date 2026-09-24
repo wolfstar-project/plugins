@@ -3,6 +3,9 @@ import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { ClientUser } from "../structures/ClientUser.js";
 import { kPatch } from "../structures/Structure.js";
+import { GuildEmoji } from "../structures/GuildEmoji.js";
+import { GuildInvite } from "../structures/GuildInvite.js";
+import { Sticker } from "../structures/Sticker.js";
 import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
@@ -43,6 +46,28 @@ export interface DispatchHandler<
     state: any,
     shardId: number,
   ): Awaitable<GatewayEventMap[Event]>;
+}
+
+/**
+ * An event with its arguments, as emitted by a {@link MultiDispatchHandler}.
+ */
+export type GatewayEventTuple = {
+  [Event in GatewayEventName]: [event: Event, ...args: GatewayEventMap[Event]];
+}[GatewayEventName];
+
+/**
+ * Describes how a gateway dispatch turns into any number of {@link GatewayEventMap} events, e.g. one per emoji a
+ * `GUILD_EMOJIS_UPDATE` changes.
+ */
+export interface MultiDispatchHandler<Type extends GatewayDispatchEvents> {
+  /**
+   * Runs before the dispatch is written to the cache, used to read the previous state.
+   */
+  before?(client: GatewayClient, data: DispatchData<Type>): Promise<unknown>;
+  /**
+   * Runs after the dispatch is written to the cache, and lists the events to emit, in order.
+   */
+  emit(client: GatewayClient, data: DispatchData<Type>, state: any): Awaitable<GatewayEventTuple[]>;
 }
 
 /**
@@ -191,6 +216,17 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
+  [GatewayDispatchEvents.InviteCreate]: {
+    event: "inviteCreate",
+    build: (_client, data) => [new GuildInvite(data)],
+  },
+  [GatewayDispatchEvents.InviteDelete]: {
+    event: "inviteDelete",
+    before: async (client, data) =>
+      data.guild_id ? client.guilds.invites(data.guild_id).get(data.code) : undefined,
+    build: (_client, data, previous) => [previous ?? null, data],
+  },
+
   [GatewayDispatchEvents.TypingStart]: {
     event: "typingStart",
     build: (_client, data) => [new Typing(data)],
@@ -214,6 +250,60 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     },
   },
 };
+
+/**
+ * The table of the dispatches that turn into several events, diffed against the cache.
+ *
+ * @remarks
+ * Without a cache there is nothing to diff against, so these dispatches only reach `raw`.
+ */
+export const MultiDispatchHandlers: {
+  [Type in GatewayDispatchEvents]?: MultiDispatchHandler<Type>;
+} = {
+  [GatewayDispatchEvents.GuildEmojisUpdate]: {
+    before: (client, data) => client.guilds.emojis(data.guild_id).listCached(),
+    emit: (client, data, previous: GuildEmoji[] | undefined) => {
+      if (!client.cache || !previous) return [];
+      const current = data.emojis.map(
+        (emoji) => new GuildEmoji({ ...emoji, guild_id: data.guild_id }),
+      );
+      return diff(previous, current, "emojiCreate", "emojiUpdate", "emojiDelete");
+    },
+  },
+  [GatewayDispatchEvents.GuildStickersUpdate]: {
+    before: (client, data) => client.guilds.stickers(data.guild_id).listCached(),
+    emit: (client, data, previous: Sticker[] | undefined) => {
+      if (!client.cache || !previous) return [];
+      const current = data.stickers.map(
+        (sticker) => new Sticker({ ...sticker, guild_id: data.guild_id }),
+      );
+      return diff(previous, current, "stickerCreate", "stickerUpdate", "stickerDelete");
+    },
+  },
+};
+
+type Diffable = { id: string | null; equals(other: never): boolean };
+
+// Lists the create, update, and delete events turning `previous` into `current`, matched by ID.
+function diff<Value extends Diffable>(
+  previous: readonly Value[],
+  current: readonly Value[],
+  create: string,
+  update: string,
+  remove: string,
+): GatewayEventTuple[] {
+  const before = new Map(previous.map((value) => [value.id, value]));
+  const events: unknown[][] = [];
+  for (const value of current) {
+    const old = before.get(value.id);
+    if (!old) events.push([create, value]);
+    else if (!old.equals(value as never)) events.push([update, old, value]);
+    before.delete(value.id);
+  }
+
+  for (const value of before.values()) events.push([remove, value]);
+  return events as GatewayEventTuple[];
+}
 
 /**
  * Resolves a cache read, or `undefined` when the cache cannot be read, so an event can still be built from its

@@ -98,6 +98,12 @@ On top of the `Client` options:
 | `guildMemberRemove`                                       | `member \| null`, `data`                       |
 | `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete` | same shapes as members                         |
 | `userUpdate`                                              | `oldUser \| null`, `newUser`                   |
+| `emojiCreate` / `emojiDelete`                             | `emoji`                                        |
+| `emojiUpdate`                                             | `oldEmoji`, `newEmoji`                         |
+| `stickerCreate` / `stickerDelete`                         | `sticker`                                      |
+| `stickerUpdate`                                           | `oldSticker`, `newSticker`                     |
+| `inviteCreate`                                            | `invite`                                       |
+| `inviteDelete`                                            | `invite \| null`, `data`                       |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -223,6 +229,31 @@ Mixin(MyTextChannel, [MyMixin]);
 > very same symbols, re-exported for subclasses and mixins. It is only published as `dev` snapshots
 > requiring Node.js 24.17 (hence this package's `engines`), and has no `Guild` nor `GuildMember`
 > yet: the structures here are this package's own, following its conventions.
+
+### Guilds, emojis, stickers and invites
+
+`Guild` has every field of the API, its CDN URLs, and discord.js's editing methods (`edit`,
+`setName`, `setIcon`, `setSystemChannel`, ..., `disableInvites`, `setIncidentActions`, `leave`,
+`delete`), plus `fetchOwner`, `fetchPreview`, `fetchVanityData`, and `fetchVoiceRegions`. Its
+emojis, stickers, and invites have their own managers, reachable from the guild or the client:
+
+```ts
+const guild = await client.guilds.fetch(guildId);
+
+const emoji = await guild.emojis.create({ attachment: "data:image/png;base64,...", name: "howl" });
+await emoji.roles.add(roleId);
+
+await client.guilds
+  .stickers(guildId)
+  .create({ file: { name: "wolf.png", data }, name: "wolf", tags: "wolf" });
+
+const invite = await guild.invites.create(channelId, { maxAge: 3600 });
+const fetched = await client.fetchInvite("https://discord.gg/wolves");
+```
+
+The client also has discord.js's `fetchSticker`, `fetchStickerPacks`, and `fetchVoiceRegions`.
+`emojiCreate`/`Update`/`Delete` and the sticker events come from diffing `GUILD_EMOJIS_UPDATE` and
+`GUILD_STICKERS_UPDATE` against the cache, so a client without cache only gets them through `raw`.
 
 ### Users, members and roles
 
