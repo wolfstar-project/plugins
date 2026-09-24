@@ -103,6 +103,10 @@ export abstract class CachedManager<
    * Like discord.js's `_patch`, the payload is shallowly merged into the cached entry, so the fields a partial payload
    * lacks keep their cached value. With `cache` set to `false`, the merged entry is built but not written.
    *
+   * The merge is a read followed by a write, not an atomic operation: on a shared cache, a write landing in between
+   * (another process, or a dispatch outside the guild's queue) is overwritten. `@wolfstar/plugin-cache` merges partial
+   * dispatches the same way, and the fields at stake are refreshed by the next payload of the entity.
+   *
    * @param data The raw data.
    * @param cache Whether to write the merged entry to the cache.
    * @param options The cache key, when it cannot be derived from the data.
