@@ -95,7 +95,17 @@ const cache = createRedisCache({
 
 Compressed values are tagged, so turning compression on or off never breaks reading the values
 already stored. Each entity cache keeps a sorted set index (`<prefix>:<entity>:@index`) used by
-`keys`, `entries`, `getSize`, and `clear`.
+`keys`, `entries`, `getSize`, and `clear`. A value and its index entry are written and deleted in
+one `MULTI` transaction, and with a `ttl` every write also prunes the expired index entries, so the
+index stays bounded even when nothing enumerates it. The client must therefore support `multi()`,
+which `ioredis` does.
+
+#### Errors
+
+A missing value is not an error: `get` resolves to `undefined`. A value that cannot be read back
+(invalid JSON, or compressed bytes that fail to decompress) rejects with a `CacheValueError`
+carrying the Redis `key`, and the original error as `cause`. Connection errors are not wrapped, they
+propagate as the client throws them. `@wolfstar/plugin-gateway` surfaces both as an `error` event.
 
 ### Custom stores
 

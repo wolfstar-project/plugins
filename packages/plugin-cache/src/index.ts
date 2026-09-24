@@ -14,6 +14,7 @@ export {
   type CacheOperation,
 } from "./lib/operations.js";
 export {
+  CacheValueError,
   createRedisCache,
   DefaultRedisCachePrefix,
   RedisEntityCache,
@@ -22,6 +23,7 @@ export {
   type RedisCacheOptions,
   type RedisClientLike,
   type RedisEntityCacheOptions,
+  type RedisTransactionLike,
 } from "./lib/redis.js";
 export type {
   Awaitable,

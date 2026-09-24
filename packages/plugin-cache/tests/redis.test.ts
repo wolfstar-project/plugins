@@ -1,99 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { createRedisCache, RedisEntityCache, type RedisClientLike } from "../src/index.js";
-
-function score(value: string | number): number {
-  if (value === "+inf") return Infinity;
-  if (value === "-inf") return -Infinity;
-  return Number(value);
-}
-
-/**
- * A minimal in-memory Redis, honouring `PX` expirations through `Date.now()`.
- */
-class FakeRedis implements RedisClientLike {
-  public readonly strings = new Map<string, { value: string; expiresAt: number }>();
-  public readonly sortedSets = new Map<string, Map<string, number>>();
-
-  public async get(key: string) {
-    return this.read(key);
-  }
-
-  public async mget(...keys: string[]) {
-    return keys.map((key) => this.read(key));
-  }
-
-  public async set(key: string, value: string, _mode?: "PX", milliseconds?: number) {
-    this.strings.set(key, {
-      value,
-      expiresAt: milliseconds === undefined ? Infinity : Date.now() + milliseconds,
-    });
-    return "OK";
-  }
-
-  public async del(...keys: string[]) {
-    let deleted = 0;
-    for (const key of keys) {
-      if ((this.read(key) !== null && this.strings.delete(key)) || this.sortedSets.delete(key))
-        deleted++;
-    }
-    return deleted;
-  }
-
-  public async exists(...keys: string[]) {
-    return keys.filter((key) => this.read(key) !== null).length;
-  }
-
-  public async zadd(key: string, ...scoreMembers: (string | number)[]) {
-    const set = this.sortedSet(key);
-    for (let index = 0; index < scoreMembers.length; index += 2) {
-      set.set(String(scoreMembers[index + 1]), score(scoreMembers[index]!));
-    }
-    return scoreMembers.length / 2;
-  }
-
-  public async zrem(key: string, ...members: string[]) {
-    const set = this.sortedSet(key);
-    return members.filter((member) => set.delete(member)).length;
-  }
-
-  public async zrange(key: string, _start: string, _stop: string) {
-    return [...this.sortedSet(key).entries()]
-      .toSorted(([, a], [, b]) => a - b)
-      .map(([member]) => member);
-  }
-
-  public async zcard(key: string) {
-    return this.sortedSet(key).size;
-  }
-
-  public async zremrangebyscore(key: string, min: number | string, max: number | string) {
-    const set = this.sortedSet(key);
-    let removed = 0;
-    for (const [member, value] of set) {
-      if (value >= score(min) && value <= score(max)) {
-        set.delete(member);
-        removed++;
-      }
-    }
-    return removed;
-  }
-
-  private read(key: string): string | null {
-    const entry = this.strings.get(key);
-    if (!entry) return null;
-    if (entry.expiresAt <= Date.now()) {
-      this.strings.delete(key);
-      return null;
-    }
-    return entry.value;
-  }
-
-  private sortedSet(key: string) {
-    let set = this.sortedSets.get(key);
-    if (!set) this.sortedSets.set(key, (set = new Map()));
-    return set;
-  }
-}
+import { CacheValueError, createRedisCache, RedisEntityCache } from "../src/index.js";
+import { FakeRedis } from "./fixtures/FakeRedis.js";
 
 describe("RedisEntityCache", () => {
   let redis: FakeRedis;
@@ -181,6 +88,76 @@ describe("RedisEntityCache", () => {
 
     expect(await compressed.get("a")).toBe("plain");
     expect(await plain.get("b")).toBe("compressed");
+  });
+});
+
+describe("RedisEntityCache failures", () => {
+  let redis: FakeRedis;
+
+  beforeEach(() => {
+    redis = new FakeRedis();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("GIVEN a ttl THEN every write prunes expired index entries, even without reads", async () => {
+    vi.useFakeTimers();
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test", ttl: 10 });
+
+    await cache.set("a", 1);
+    vi.advanceTimersByTime(11_000);
+    await cache.set("b", 2);
+
+    expect([...redis.sortedSets.get("test:@index")!.keys()]).toEqual(["b"]);
+  });
+
+  test("GIVEN a Redis outage THEN the client's error propagates unwrapped", async () => {
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+    const outage = new Error("ECONNREFUSED");
+    redis.failure = outage;
+
+    await expect(cache.get("a")).rejects.toBe(outage);
+    await expect(cache.set("a", 1)).rejects.toBe(outage);
+    await expect(cache.delete("a")).rejects.toBe(outage);
+  });
+
+  test("GIVEN an aborted transaction THEN set rejects instead of silently skipping the write", async () => {
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+    redis.abortTransactions = true;
+
+    await expect(cache.set("a", 1)).rejects.toThrow("aborted");
+    expect(redis.strings.size).toBe(0);
+  });
+
+  test("GIVEN invalid JSON THEN get rejects with a CacheValueError naming the key", async () => {
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+    await redis.set("test:a", "{not json");
+
+    const error = await cache.get("a").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(CacheValueError);
+    expect((error as CacheValueError).key).toBe("test:a");
+    expect((error as CacheValueError).cause).toBeInstanceOf(SyntaxError);
+  });
+
+  test.each(["gz:", "br:"])(
+    "GIVEN corrupt %s compressed bytes THEN get and entries reject with a CacheValueError",
+    async (marker) => {
+      const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+      await redis.set("test:a", `${marker}bm90IGNvbXByZXNzZWQ=`);
+      await redis.zadd("test:@index", "+inf", "a");
+
+      await expect(cache.get("a")).rejects.toBeInstanceOf(CacheValueError);
+      await expect(cache.entries()).rejects.toBeInstanceOf(CacheValueError);
+    },
+  );
+
+  test("GIVEN a missing value THEN get resolves to undefined rather than rejecting", async () => {
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+
+    await expect(cache.get("missing")).resolves.toBeUndefined();
   });
 });
 
