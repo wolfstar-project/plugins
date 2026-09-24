@@ -320,6 +320,24 @@ describe("READY reconciliation", () => {
     expect(await client.guilds.get(otherShardGuild)).toBeDefined();
   });
 
+  test("GIVEN an unreachable cache THEN READY is still emitted under the default skip policy", async () => {
+    const cache = createInMemoryCache();
+    await cache.guilds.set("11", guild("11") as never);
+    vi.spyOn(cache.guilds, "keys").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.users, "set").mockRejectedValue(new Error("down"));
+    const client = createClient(cache, { shardCount: 1 });
+    const errors = record(client, "error");
+    const ready = record(client, "shardReady");
+
+    send(client, GatewayDispatchEvents.Ready, { user, guilds: [], session_id: "s" });
+    await client.idle();
+
+    expect(ready).toHaveLength(1);
+    expect(client.user?.id).toBe(user.id);
+    // One for the reconciliation, one for writing READY itself.
+    expect(errors).toHaveLength(2);
+  });
+
   test("GIVEN an unknown shard count THEN READY is still processed and the guilds are kept", async () => {
     const client = createClient(createInMemoryCache());
     vi.spyOn(client.gateway, "getShardCount").mockRejectedValue(new Error("401: Unauthorized"));

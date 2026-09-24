@@ -225,16 +225,17 @@ export class GatewayClient extends Client {
     const handler = DispatchHandlers[payload.t] as
       | DispatchHandler<typeof payload.t, GatewayEventName>
       | undefined;
+    // `READY` is never dropped: it sets `client.user` and `shardReady` from the payload alone, and a shard without it
+    // looks dead to the bot. Reconciling the cache with it is best effort, see `reconcileGuilds`.
+    const isReady = payload.t === GatewayDispatchEvents.Ready;
+    if (isReady) await this.reconcileGuilds(payload.d, shardId);
+
     let state: unknown;
     try {
       state = await handler?.before?.(this, payload.d as never);
-      if (this.cache) {
-        if (payload.t === GatewayDispatchEvents.Ready)
-          await this.reconcileGuilds(payload.d, shardId);
-        await applyGatewayDispatch(this.cache, payload);
-      }
+      if (this.cache) await applyGatewayDispatch(this.cache, payload);
     } catch (error) {
-      if (this.cacheFailure === "skip") throw error;
+      if (this.cacheFailure === "skip" && !isReady) throw error;
       this.reportError(error, payload.t, shardId);
       state = undefined;
     }
@@ -252,26 +253,28 @@ export class GatewayClient extends Client {
    * They are the guilds the bot left while it was disconnected, or while the process was down with a persistent
    * cache. Discord does not replay those removals on a new session, so the cache would otherwise keep them forever.
    *
+   * It is best effort: any failure (cache unreachable, unknown shard count) is reported through `error` and stops the
+   * reconciliation, keeping the remaining guilds, but never fails `READY` itself.
+   *
    * @param data The `READY` data.
    * @param shardId The shard that received it.
    */
   protected async reconcileGuilds(data: GatewayReadyDispatchData, shardId: number): Promise<void> {
+    try {
+      await this.dropUnlistedGuilds(data, shardId);
+    } catch (error) {
+      this.reportError(error, GatewayDispatchEvents.Ready, shardId);
+    }
+  }
+
+  private async dropUnlistedGuilds(data: GatewayReadyDispatchData, shardId: number): Promise<void> {
     if (!this.cache) return;
 
     const cached = await this.cache.guilds.keys();
     if (cached.length === 0) return;
 
-    let count = data.shard?.[1] ?? this.#shardCount;
-    if (count === null) {
-      try {
-        count = await this.gateway.getShardCount();
-      } catch (error) {
-        // Without the shard count, the guilds of this shard cannot be told apart: keep them rather than fail `READY`.
-        this.reportError(error, GatewayDispatchEvents.Ready, shardId);
-        return;
-      }
-    }
-
+    // Without the shard count, the guilds of this shard cannot be told apart from the others'.
+    const count = data.shard?.[1] ?? this.#shardCount ?? (await this.gateway.getShardCount());
     const listed = new Set(data.guilds.map((guild) => guild.id));
     const shardCount = BigInt(count);
     for (const id of cached) {

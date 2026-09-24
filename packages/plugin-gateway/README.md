@@ -116,11 +116,13 @@ is reported as a `DispatchTimeoutError` through the `error` event, without being
 
 A cache failure (Redis down, corrupt value) is always reported through `error`. With the default
 `cacheFailure: "skip"` the event is dropped, so listeners never see state the cache does not hold;
-with `"emitUncached"` it is emitted anyway, built from the payload, with `null` as previous state.
+with `"emitUncached"` it is emitted anyway, built from the payload, with `null` as previous state. `READY` is the
+exception: it is always emitted, since it sets `client.user` from the payload alone.
 
 On `READY`, the cached guilds of that shard which `READY` no longer lists are dropped and emitted as
 `guildDelete`: the bot left them while disconnected, or while the process was down with a
-persistent cache, and Discord does not replay those removals.
+persistent cache, and Discord does not replay those removals. This is best effort: a failure (cache unreachable,
+unknown shard count) is reported through `error` and keeps the remaining guilds.
 
 ## Listeners
 
