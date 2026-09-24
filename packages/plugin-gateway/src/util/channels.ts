@@ -118,7 +118,8 @@ export interface GuildChannelEditOptions {
    */
   parent?: IdResolvable | null;
   /**
-   * Whether to copy the new category's overwrites, when `parent` is set.
+   * Whether to copy the category's overwrites: the new one with `parent`, else the current one. Exclusive with
+   * `permissionOverwrites`.
    */
   lockPermissions?: boolean;
   rtcRegion?: string | null;

@@ -252,6 +252,16 @@ describe("channel editing", () => {
     expect(channel.parentId).toBe(categoryId);
   });
 
+  test("GIVEN lockPermissions with explicit overwrites THEN edit rejects the call", async () => {
+    const client = createClient();
+    const patch = vi.spyOn(container.rest, "patch");
+
+    await expect(
+      client.channels.edit(channelId, { lockPermissions: true, permissionOverwrites: [] }),
+    ).rejects.toThrow(TypeError);
+    expect(patch).not.toHaveBeenCalled();
+  });
+
   test("GIVEN delete THEN the channel and its messages leave the cache", async () => {
     const client = createClient();
     await seedGuild(client);

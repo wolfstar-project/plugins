@@ -164,6 +164,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * @param options The fields to edit, and the reason for the audit log.
    */
   public async edit(channelId: string, options: GuildChannelEditOptions): Promise<AnyChannel> {
+    if (options.lockPermissions && options.permissionOverwrites) {
+      throw new TypeError("Pass either lockPermissions or permissionOverwrites, not both");
+    }
+
     const body = toChannelBody(options);
     if (options.lockPermissions) {
       const parentId =
