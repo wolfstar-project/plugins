@@ -337,6 +337,14 @@ export function createCacheOperations(
         raw: data,
         merge: true,
       });
+      if (data.creator) {
+        operations.push({
+          type: "upsert",
+          store: "users",
+          key: data.creator.id,
+          raw: data.creator,
+        });
+      }
       break;
     }
 

@@ -358,6 +358,106 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
         (await client.presences.hydrate(data)),
     ],
   },
+  [GatewayDispatchEvents.GuildScheduledEventCreate]: {
+    event: "guildScheduledEventCreate",
+    build: async (client, data) => [
+      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildScheduledEventUpdate]: {
+    event: "guildScheduledEventUpdate",
+    before: (client, data) => client.guilds.scheduledEvents(data.guild_id).get(data.id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildScheduledEventDelete]: {
+    event: "guildScheduledEventDelete",
+    build: async (client, data) => [
+      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildScheduledEventUserAdd]: {
+    event: "guildScheduledEventUserAdd",
+    build: async (client, data) => [
+      (await cachedOrUndefined(
+        client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
+      )) ?? null,
+      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      data,
+    ],
+  },
+  [GatewayDispatchEvents.GuildScheduledEventUserRemove]: {
+    event: "guildScheduledEventUserRemove",
+    build: async (client, data) => [
+      (await cachedOrUndefined(
+        client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
+      )) ?? null,
+      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      data,
+    ],
+  },
+  [GatewayDispatchEvents.StageInstanceCreate]: {
+    event: "stageInstanceCreate",
+    build: async (client, data) => [
+      await client.guilds.stageInstances(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.StageInstanceUpdate]: {
+    event: "stageInstanceUpdate",
+    before: (client, data) => client.guilds.stageInstances(data.guild_id).get(data.channel_id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.guilds.stageInstances(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.StageInstanceDelete]: {
+    event: "stageInstanceDelete",
+    build: async (client, data) => [
+      await client.guilds.stageInstances(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildSoundboardSoundCreate]: {
+    event: "guildSoundboardSoundCreate",
+    build: async (client, data) => [
+      await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildSoundboardSoundUpdate]: {
+    event: "guildSoundboardSoundUpdate",
+    before: (client, data) => client.guilds.soundboardSounds(data.guild_id!).get(data.sound_id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.GuildSoundboardSoundDelete]: {
+    event: "guildSoundboardSoundDelete",
+    before: (client, data) => client.guilds.soundboardSounds(data.guild_id).get(data.sound_id),
+    build: (_client, data, previous) => [previous ?? null, data],
+  },
+  [GatewayDispatchEvents.GuildSoundboardSoundsUpdate]: {
+    event: "guildSoundboardSoundsUpdate",
+    build: async (client, data) => {
+      const sounds = client.guilds.soundboardSounds(data.guild_id);
+      return [
+        await Promise.all(data.soundboard_sounds.map((sound) => sounds.hydrate(sound))),
+        data.guild_id,
+      ];
+    },
+  },
+  [GatewayDispatchEvents.SoundboardSounds]: {
+    event: "soundboardSounds",
+    build: async (client, data) => {
+      const sounds = client.guilds.soundboardSounds(data.guild_id);
+      return [
+        await Promise.all(data.soundboard_sounds.map((sound) => sounds.hydrate(sound))),
+        data.guild_id,
+      ];
+    },
+  },
+
   [GatewayDispatchEvents.GuildBanAdd]: {
     event: "guildBanAdd",
     build: async (client, data) => [await client.guilds.bans(data.guild_id).hydrate(data)],

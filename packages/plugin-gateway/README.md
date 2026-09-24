@@ -113,6 +113,15 @@ On top of the `Client` options:
 | `inviteDelete`                                            | `invite \| null`, `data`                       |
 | `voiceStateUpdate`                                        | `oldState \| null`, `newState`                 |
 | `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`           |
+| `guildScheduledEventCreate` / `guildScheduledEventDelete` | `event`                                        |
+| `guildScheduledEventUpdate`                               | `oldEvent \| null`, `newEvent`                 |
+| `guildScheduledEventUserAdd` / `...UserRemove`            | `event \| null`, `user \| null`, `data`        |
+| `stageInstanceCreate` / `stageInstanceDelete`             | `stageInstance`                                |
+| `stageInstanceUpdate`                                     | `oldStageInstance \| null`, `newStageInstance` |
+| `guildSoundboardSoundCreate`                              | `sound`                                        |
+| `guildSoundboardSoundUpdate`                              | `oldSound \| null`, `newSound`                 |
+| `guildSoundboardSoundDelete`                              | `sound \| null`, `data`                        |
+| `guildSoundboardSoundsUpdate` / `soundboardSounds`        | `sounds`, `guildId`                            |
 | `guildBanAdd` / `guildBanRemove`                          | `ban`                                          |
 | `guildAuditLogEntryCreate`                                | `entry`                                        |
 | `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                         |
@@ -381,6 +390,26 @@ for (const entry of entries) console.log(entry.executor?.username, entry.targetI
 
 const rule = await guild.autoModerationRules.fetch(ruleId);
 await rule.setKeywordFilter(["awoo"]);
+```
+
+### Scheduled events, stages, and soundboard
+
+`guild.scheduledEvents` creates, edits, and deletes `GuildScheduledEvent`s and fetches their
+subscribers. Stage channels have `createStageInstance` and `fetchStageInstance` (a
+`StageInstance`, managed by `guild.stageInstances`). `guild.soundboardSounds` uploads and edits
+`SoundboardSound`s, `client.fetchDefaultSoundboardSounds()` lists Discord's own, and voice channels
+play them with `sendSoundboardSound`.
+
+```ts
+const event = await guild.scheduledEvents.create({
+  name: "Full moon",
+  scheduledStartTime: Date.now() + 86_400_000,
+  scheduledEndTime: Date.now() + 90_000_000,
+  privacyLevel: GuildScheduledEventPrivacyLevel.GuildOnly,
+  entityType: GuildScheduledEventEntityType.External,
+  entityMetadata: { location: "The den" },
+});
+await event.setStatus(GuildScheduledEventStatus.Active);
 ```
 
 ### Webhooks

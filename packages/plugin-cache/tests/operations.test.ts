@@ -242,6 +242,24 @@ describe("applyGatewayDispatch", () => {
   });
 });
 
+describe("scheduled events", () => {
+  test("GIVEN a GUILD_SCHEDULED_EVENT_CREATE THEN its creator is cached", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.GuildScheduledEventCreate, {
+        id: "40",
+        guild_id: "10",
+        name: "Full moon",
+        creator: user,
+      }),
+    );
+
+    expect(await cache.users.get(user.id)).toEqual(user);
+  });
+});
+
 describe("reactions and poll votes", () => {
   const key = messageKey("20", "30");
   const wolf = { id: null, name: "🐺" };

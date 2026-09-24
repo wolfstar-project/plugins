@@ -35,6 +35,9 @@ import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
 import { GuildBanManager } from "./GuildBanManager.js";
 import { GuildChannelManager } from "./GuildChannelManager.js";
+import { GuildScheduledEventManager } from "./GuildScheduledEventManager.js";
+import { GuildSoundboardSoundManager } from "./GuildSoundboardSoundManager.js";
+import { StageInstanceManager } from "./StageInstanceManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 import { GuildEmojiManager } from "./GuildEmojiManager.js";
 import { GuildInviteManager } from "./GuildInviteManager.js";
@@ -103,6 +106,33 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 
   public resolveKey(guildId: string): string {
     return guildId;
+  }
+
+  /**
+   * Gets the manager of a guild's scheduled events.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public scheduledEvents(guildId: string): GuildScheduledEventManager {
+    return new GuildScheduledEventManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's stage instances.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public stageInstances(guildId: string): StageInstanceManager {
+    return new StageInstanceManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's soundboard sounds.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public soundboardSounds(guildId: string): GuildSoundboardSoundManager {
+    return new GuildSoundboardSoundManager(this.client, guildId);
   }
 
   /**
