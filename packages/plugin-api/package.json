@@ -55,7 +55,7 @@
     "@vladfrangu/async_event_emitter": "^2.4.7"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.2.1"
+    "@wolfstar/http-framework": "^3.6.0"
   },
   "peerDependencies": {
     "@wolfstar/http-framework": "^3.0.0"
