@@ -113,6 +113,11 @@ On top of the `Client` options:
 | `inviteDelete`                                            | `invite \| null`, `data`                       |
 | `voiceStateUpdate`                                        | `oldState \| null`, `newState`                 |
 | `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`           |
+| `guildBanAdd` / `guildBanRemove`                          | `ban`                                          |
+| `guildAuditLogEntryCreate`                                | `entry`                                        |
+| `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                         |
+| `autoModerationRuleUpdate`                                | `oldRule \| null`, `newRule`                   |
+| `autoModerationActionExecution`                           | `execution`                                    |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -361,6 +366,21 @@ client.on("voiceStateUpdate", (oldState, newState) => {
 
 const voice = await member.fetchVoiceState();
 await voice?.setChannel(afkChannelId, "idle");
+```
+
+### Moderation
+
+`guild.bans` lists, fetches (with the reason, which the gateway does not send), creates, and
+removes bans. `guild.fetchAuditLogs()` returns a page of `GuildAuditLogsEntry`s with their
+executors, and `guild.autoModerationRules` manages `AutoModerationRule`s, whose setters
+(`setKeywordFilter`, `setAllowList`, ...) keep the rest of the trigger:
+
+```ts
+const { entries } = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberBanAdd, limit: 10 });
+for (const entry of entries) console.log(entry.executor?.username, entry.targetId, entry.reason);
+
+const rule = await guild.autoModerationRules.fetch(ruleId);
+await rule.setKeywordFilter(["awoo"]);
 ```
 
 ### Webhooks

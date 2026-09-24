@@ -6,7 +6,9 @@ import {
 } from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import { AutoModerationActionExecution } from "../structures/AutoModerationActionExecution.js";
 import { ClientUser } from "../structures/ClientUser.js";
+import { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
 import { kPatch } from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
@@ -355,6 +357,59 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       (await cachedOrUndefined(client.presences.get(data.guild_id, data.user.id))) ??
         (await client.presences.hydrate(data)),
     ],
+  },
+  [GatewayDispatchEvents.GuildBanAdd]: {
+    event: "guildBanAdd",
+    build: async (client, data) => [await client.guilds.bans(data.guild_id).hydrate(data)],
+  },
+  [GatewayDispatchEvents.GuildBanRemove]: {
+    event: "guildBanRemove",
+    before: (client, data) => client.guilds.bans(data.guild_id).get(data.user.id),
+    build: async (client, data, previous) => [
+      previous ?? (await client.guilds.bans(data.guild_id).hydrate(data)),
+    ],
+  },
+  [GatewayDispatchEvents.GuildAuditLogEntryCreate]: {
+    event: "guildAuditLogEntryCreate",
+    build: async (client, data) => {
+      const [executor, guild] = await Promise.all([
+        data.user_id ? cachedOrUndefined(client.users.get(data.user_id)) : undefined,
+        cachedOrUndefined(client.guilds.get(data.guild_id)),
+      ]);
+      return [new GuildAuditLogsEntry(data, { executor: executor ?? null, guild: guild ?? null })];
+    },
+  },
+  [GatewayDispatchEvents.AutoModerationRuleCreate]: {
+    event: "autoModerationRuleCreate",
+    build: async (client, data) => [
+      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.AutoModerationRuleUpdate]: {
+    event: "autoModerationRuleUpdate",
+    before: (client, data) => client.guilds.autoModerationRules(data.guild_id).get(data.id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.AutoModerationRuleDelete]: {
+    event: "autoModerationRuleDelete",
+    build: async (client, data) => [
+      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.AutoModerationActionExecution]: {
+    event: "autoModerationActionExecution",
+    build: async (client, data) => {
+      const [user, guild] = await Promise.all([
+        cachedOrUndefined(client.users.get(data.user_id)),
+        cachedOrUndefined(client.guilds.get(data.guild_id)),
+      ]);
+      return [
+        new AutoModerationActionExecution(data, { user: user ?? null, guild: guild ?? null }),
+      ];
+    },
   },
   [GatewayDispatchEvents.VoiceServerUpdate]: {
     event: "voiceServerUpdate",

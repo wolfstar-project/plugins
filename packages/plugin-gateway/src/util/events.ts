@@ -17,7 +17,11 @@ import type {
 } from "discord-api-types/v10";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
+import type { AutoModerationActionExecution } from "../structures/AutoModerationActionExecution.js";
+import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
 import type { Guild } from "../structures/Guild.js";
+import type { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
+import type { GuildBan } from "../structures/GuildBan.js";
 import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { GuildInvite } from "../structures/GuildInvite.js";
 import type { GuildMember } from "../structures/GuildMember.js";
@@ -199,6 +203,26 @@ export interface GatewayEventMap {
    * Emitted when a guild's voice server changes, e.g. to hand a voice connection a new endpoint.
    */
   voiceServerUpdate: [data: GatewayVoiceServerUpdateDispatchData];
+
+  /**
+   * Emitted when a user is banned. Bans from the gateway have no reason.
+   */
+  guildBanAdd: [ban: GuildBan];
+  /**
+   * Emitted when a ban is lifted, with the cached ban (and its reason, if it was fetched) when there is one.
+   */
+  guildBanRemove: [ban: GuildBan];
+  /**
+   * Emitted when an entry is added to a guild's audit log. Needs the `GuildModeration` intent.
+   */
+  guildAuditLogEntryCreate: [entry: GuildAuditLogsEntry];
+  autoModerationRuleCreate: [rule: AutoModerationRule];
+  autoModerationRuleUpdate: [oldRule: AutoModerationRule | null, newRule: AutoModerationRule];
+  autoModerationRuleDelete: [rule: AutoModerationRule];
+  /**
+   * Emitted when auto moderation takes an action. Needs the `AutoModerationExecution` intent.
+   */
+  autoModerationActionExecution: [execution: AutoModerationActionExecution];
   /**
    * Emitted when a member joins, leaves, or moves between voice channels, or changes their voice settings.
    */
