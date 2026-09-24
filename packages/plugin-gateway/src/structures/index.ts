@@ -17,5 +17,6 @@ export * from "./Role.js";
 export * from "./StageChannel.js";
 export * from "./Structure.js";
 export * from "./TextChannel.js";
+export * from "./Typing.js";
 export * from "./User.js";
 export * from "./VoiceChannel.js";

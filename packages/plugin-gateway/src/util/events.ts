@@ -1,4 +1,5 @@
 import type {
+  GatewayChannelPinsUpdateDispatchData,
   GatewayDispatchPayload,
   GatewayGuildDeleteDispatchData,
   GatewayGuildMemberRemoveDispatchData,
@@ -6,6 +7,8 @@ import type {
   GatewayMessageDeleteBulkDispatchData,
   GatewayMessageDeleteDispatchData,
   GatewayThreadDeleteDispatchData,
+  GatewayVoiceServerUpdateDispatchData,
+  GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
@@ -13,6 +16,7 @@ import type { Guild } from "../structures/Guild.js";
 import type { GuildMember } from "../structures/GuildMember.js";
 import type { Message } from "../structures/Message.js";
 import type { Role } from "../structures/Role.js";
+import type { Typing } from "../structures/Typing.js";
 import type { User } from "../structures/User.js";
 
 /**
@@ -56,6 +60,14 @@ export interface GatewayEventMap {
   channelCreate: [channel: AnyChannel];
   channelUpdate: [oldChannel: AnyChannel | null, newChannel: AnyChannel];
   channelDelete: [channel: AnyChannel];
+  /**
+   * Emitted when a message is pinned or unpinned; `data.last_pin_timestamp` is the time of the last pin left.
+   */
+  channelPinsUpdate: [data: GatewayChannelPinsUpdateDispatchData];
+  /**
+   * Emitted when a webhook of a channel is created, updated, or deleted.
+   */
+  webhooksUpdate: [data: GatewayWebhooksUpdateDispatchData];
 
   threadCreate: [thread: AnyThreadChannel];
   threadUpdate: [oldThread: AnyThreadChannel | null, newThread: AnyThreadChannel];
@@ -75,6 +87,12 @@ export interface GatewayEventMap {
   guildRoleDelete: [role: Role | null, data: GatewayGuildRoleDeleteDispatchData];
 
   userUpdate: [oldUser: User | null, newUser: User];
+
+  typingStart: [typing: Typing];
+  /**
+   * Emitted when a guild's voice server changes, e.g. to hand a voice connection a new endpoint.
+   */
+  voiceServerUpdate: [data: GatewayVoiceServerUpdateDispatchData];
 }
 
 /**

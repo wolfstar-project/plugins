@@ -1,43 +1,50 @@
-/**
- * The symbol under which a {@link Structure} stores its raw API data.
- */
-export const kData = Symbol("wolfstar.structures.data");
+import { Structure as BaseStructure } from "@discordjs/structures";
+
+// `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
+// are created with `Symbol.for`, in the global registry, so the same key yields the very same symbols here. Each is
+// typed as a `unique symbol` of our own, which lets the subclasses below declare typed members keyed by them.
 
 /**
- * The symbol of the method patching a {@link Structure}'s raw data in place.
+ * The symbol under which a {@link Structure} stores its raw API data, shared with `@discordjs/structures`.
  */
-export const kPatch = Symbol("wolfstar.structures.patch");
+export const kData: unique symbol = Symbol.for("djs.structures.data") as never;
 
 /**
- * The symbol of the method cloning a {@link Structure}, optionally patching the clone.
+ * The symbol of the method patching a {@link Structure}'s raw data in place, shared with `@discordjs/structures`.
  */
-export const kClone = Symbol("wolfstar.structures.clone");
+export const kPatch: unique symbol = Symbol.for("djs.structures.patch") as never;
+
+/**
+ * The symbol of the method cloning a {@link Structure}, shared with `@discordjs/structures`.
+ */
+export const kClone: unique symbol = Symbol.for("djs.structures.clone") as never;
 
 /**
  * The Discord epoch, used to extract timestamps from snowflakes.
  */
 const DiscordEpoch = 1_420_070_400_000n;
 
+type Patch<Data> = (this: object, data: Readonly<Partial<Data>>) => unknown;
+
 /**
- * The base class every structure extends: a thin, typed wrapper around a raw API payload.
+ * The base class every structure extends: `@discordjs/structures`' `Structure`, with its data and patch/clone methods
+ * made reachable from subclasses outside of discord.js.
  *
  * @remarks
- * Modelled after `@discordjs/structures`' `Structure`, which is not used directly as it is only published as
- * pre-release snapshots and keeps its data symbols private, making it impossible to extend outside of discord.js.
  * Structures never hold a reference to a client, so they can be built from any raw payload, be it a gateway dispatch,
  * a cache hit, or a REST response.
  *
  * @typeParam Data The raw API data this structure wraps.
+ * @typeParam Omitted The keys the structure's `DataTemplate` strips from the stored data.
  */
-export abstract class Structure<Data extends object> {
+export abstract class Structure<
+  Data extends object,
+  Omitted extends keyof Data | "" = "",
+> extends BaseStructure<Data, Omitted> {
   /**
    * The raw API data of this structure.
    */
-  protected [kData]: Readonly<Data>;
-
-  public constructor(data: Readonly<Data>) {
-    this[kData] = { ...data };
-  }
+  declare protected [kData]: Readonly<Data>;
 
   /**
    * Patches the raw data of this structure in place, with a shallow merge.
@@ -46,7 +53,10 @@ export abstract class Structure<Data extends object> {
    * @returns This structure.
    */
   public [kPatch](data: Readonly<Partial<Data>>): this {
-    this[kData] = { ...this[kData], ...data };
+    (BaseStructure.prototype as unknown as Record<typeof kPatch, Patch<Data>>)[kPatch].call(
+      this,
+      data,
+    );
     return this;
   }
 
@@ -57,16 +67,10 @@ export abstract class Structure<Data extends object> {
    * @returns The copy.
    */
   public [kClone](patch?: Readonly<Partial<Data>>): this {
-    const clone = Object.create(Object.getPrototypeOf(this) as object) as this;
-    clone[kData] = { ...this[kData], ...patch };
-    return clone;
-  }
-
-  /**
-   * Gets a copy of the raw API data of this structure.
-   */
-  public toJSON(): Data {
-    return { ...this[kData] };
+    return (BaseStructure.prototype as unknown as Record<typeof kClone, Patch<Data>>)[kClone].call(
+      this,
+      patch ?? ({} as Readonly<Partial<Data>>),
+    ) as this;
   }
 }
 

@@ -1,6 +1,7 @@
 import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
 /**
@@ -99,6 +100,15 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: (client, data) => [client.channels.createStructure(data)],
   },
 
+  [GatewayDispatchEvents.ChannelPinsUpdate]: {
+    event: "channelPinsUpdate",
+    build: (_client, data) => [data],
+  },
+  [GatewayDispatchEvents.WebhooksUpdate]: {
+    event: "webhooksUpdate",
+    build: (_client, data) => [data],
+  },
+
   [GatewayDispatchEvents.ThreadCreate]: {
     event: "threadCreate",
     build: (client, data) => [client.threads.createStructure(data)],
@@ -177,6 +187,15 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "guildRoleDelete",
     before: (client, data) => client.roles.get(data.guild_id, data.role_id),
     build: (_client, data, previous) => [previous ?? null, data],
+  },
+
+  [GatewayDispatchEvents.TypingStart]: {
+    event: "typingStart",
+    build: (_client, data) => [new Typing(data)],
+  },
+  [GatewayDispatchEvents.VoiceServerUpdate]: {
+    event: "voiceServerUpdate",
+    build: (_client, data) => [data],
   },
 
   [GatewayDispatchEvents.UserUpdate]: {
