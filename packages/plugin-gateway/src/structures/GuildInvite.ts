@@ -1,7 +1,8 @@
 import { getGatewayClient } from "../util/container.js";
 import { BaseInvite } from "./BaseInvite.js";
 import { InviteGuild } from "./InviteGuild.js";
-import { kData } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, kRelations } from "./Structure.js";
 
 /**
  * An invite to a guild.
@@ -12,11 +13,12 @@ export class GuildInvite extends BaseInvite {
   }
 
   /**
-   * The partial guild the API returns with the invite, if any.
+   * The guild the invite leads to: the cached guild when the invite comes from a manager, like discord.js, else the
+   * partial guild the API returns with the invite, if any.
    */
-  public get guild(): InviteGuild | null {
+  public get guild(): Guild | InviteGuild | null {
     const { guild } = this[kData];
-    return guild ? new InviteGuild(guild) : null;
+    return this[kRelations].guild ?? (guild ? new InviteGuild(guild) : null);
   }
 
   /**

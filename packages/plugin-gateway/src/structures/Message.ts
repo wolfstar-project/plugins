@@ -27,7 +27,7 @@ import { GuildMember } from "./GuildMember.js";
 import { MessageMentions } from "./MessageMentions.js";
 import { Poll } from "./Poll.js";
 import type { EmojiIdentifierResolvable } from "./ReactionEmoji.js";
-import { kData, kPatch, snowflakeTimestamp, Structure } from "./Structure.js";
+import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
 const ZeroWidthSpace = String.fromCodePoint(0x20_0b);
@@ -41,6 +41,8 @@ export interface MessageRelations {
    * The author as a member, `null` outside of guilds.
    */
   member?: GuildMember | null;
+  guild?: Guild | null;
+  channel?: AnyChannel | null;
 }
 
 // The message types a user can send; every other type is a system message.
@@ -60,23 +62,20 @@ const NonSystemTypes: readonly MessageType[] = [
  * overwrites come with the channel phase of #54.
  */
 export class Message extends Structure<CacheEntityTypes["messages"]> {
-  #author: User | undefined;
-  #member: GuildMember | null | undefined;
+  declare protected [kRelations]: MessageRelations;
 
   /**
    * @param data The raw message.
-   * @param relations The author and its member as resolved from the cache, by `client.messages`.
+   * @param relations The author, member, guild, and channel as resolved from the cache, by `client.messages`.
    */
   public constructor(data: CacheEntityTypes["messages"], relations: MessageRelations = {}) {
-    super(data);
-    this.#author = relations.author;
-    this.#member = relations.member;
+    super(data, relations);
   }
 
   public override [kPatch](data: Readonly<Partial<CacheEntityTypes["messages"]>>): this {
     // A payload carrying the author is fresher than the one resolved when the message was built.
-    if (data.author) this.#author = undefined;
-    if (data.author || data.member) this.#member = undefined;
+    if (data.author) this.dropRelations("author", "member");
+    else if (data.member) this.dropRelations("member");
     return super[kPatch](data);
   }
 
@@ -112,18 +111,35 @@ export class Message extends Structure<CacheEntityTypes["messages"]> {
    * the user, not only the copy embedded in the message.
    */
   public get author(): User {
-    return this.#author ?? new User(this[kData].author);
+    return this[kRelations].author ?? new User(this[kData].author);
   }
 
   /**
    * The author as a guild member, or `null` for messages sent outside of a guild or by a webhook.
    */
   public get member(): GuildMember | null {
-    if (this.#member !== undefined) return this.#member;
+    const { member: resolved } = this[kRelations];
+    if (resolved !== undefined) return resolved;
     const { member, guild_id: guildId, author } = this[kData];
     return member && guildId
       ? new GuildMember({ ...member, user: author, guild_id: guildId })
       : null;
+  }
+
+  /**
+   * The guild the message was sent in, from the cache. `null` outside of guilds, when the guild is not cached, or when
+   * the message was not built by a manager: use {@link Message.fetchGuild} to always get it.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the message
+   * was not built by a manager: use {@link Message.fetchChannel} to always get it.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
   }
 
   public get webhookId(): string | null {

@@ -1,8 +1,8 @@
 import { container } from "@wolfstar/http-framework";
-import { createInMemoryCache, memberKey, messageKey } from "@wolfstar/plugin-cache";
-import { MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
+import { createInMemoryCache, memberKey, messageKey, roleKey } from "@wolfstar/plugin-cache";
+import { ChannelType, MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { GatewayClient, User } from "../src/index.js";
+import { GatewayClient, Guild, kClone, Message, TextChannel, User } from "../src/index.js";
 
 const guildId = "100000000000000010";
 const channelId = "200000000000000020";
@@ -152,5 +152,66 @@ describe("relations", () => {
     const member = await client.members.fetch(guildId, user.id);
 
     expect(member.user?.banner).toBe("banner");
+  });
+});
+
+describe("guild relations", () => {
+  const guild = { id: guildId, name: "Pack", icon: null, owner_id: user.id, features: [] } as never;
+
+  test("GIVEN a cached guild THEN structures from managers resolve it", async () => {
+    const client = createClient();
+    await client.cache!.guilds.set(guildId, guild);
+    await client.cache!.channels.set(channelId, {
+      id: channelId,
+      type: ChannelType.GuildText,
+      name: "general",
+      guild_id: guildId,
+    } as never);
+    await client.cache!.roles.set(roleKey(guildId, "5"), {
+      id: "5",
+      name: "Alpha",
+      guild_id: guildId,
+    } as never);
+    await client.cache!.messages.set(
+      messageKey(channelId, "1200000000000000000"),
+      message({ guild_id: guildId }),
+    );
+
+    const channel = await client.channels.get(channelId);
+    const role = await client.roles.get(guildId, "5");
+    const cached = await client.messages.get(channelId, "1200000000000000000");
+
+    expect((channel as TextChannel).guild).toBeInstanceOf(Guild);
+    expect(role?.guild?.name).toBe("Pack");
+    expect(cached?.guild?.id).toBe(guildId);
+    expect(cached?.channel).toBeInstanceOf(TextChannel);
+  });
+
+  test("GIVEN an uncached guild or a hand-built structure THEN guild is null", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue({
+      user,
+      roles: [],
+      joined_at: "2026-01-01T00:00:00.000Z",
+    });
+
+    const member = await client.members.fetch(guildId, user.id);
+
+    expect(member.guild).toBeNull();
+    expect(new Message(message({ guild_id: guildId })).guild).toBeNull();
+  });
+
+  test("GIVEN a clone THEN it keeps the resolved relations", async () => {
+    const client = createClient();
+    await client.cache!.guilds.set(guildId, guild);
+    await client.cache!.roles.set(roleKey(guildId, "5"), {
+      id: "5",
+      name: "Alpha",
+      guild_id: guildId,
+    } as never);
+
+    const role = await client.roles.get(guildId, "5");
+
+    expect(role![kClone]({ name: "Beta" }).guild?.id).toBe(guildId);
   });
 });

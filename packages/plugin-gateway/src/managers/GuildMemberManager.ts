@@ -144,8 +144,11 @@ export class GuildMemberManager extends CachedManager<
   }
 
   public override async hydrate(data: CacheEntityTypes["members"]): Promise<GuildMember> {
-    const user = data.user ? await this.client.users.resolveData(data.user) : undefined;
-    return new GuildMember(data, { user });
+    const [user, guild] = await Promise.all([
+      data.user ? this.client.users.resolveData(data.user) : undefined,
+      this.cachedGuild(data.guild_id),
+    ]);
+    return new GuildMember(data, { user, guild });
   }
 
   public resolveKey(guildId: string, userId: string): string {

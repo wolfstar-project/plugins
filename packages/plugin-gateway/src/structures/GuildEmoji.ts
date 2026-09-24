@@ -3,26 +3,29 @@ import type { GuildEmojiEditOptions } from "../managers/GuildEmojiManager.js";
 import { GuildEmojiRoleManager } from "../managers/GuildEmojiRoleManager.js";
 import { getGatewayClient } from "../util/container.js";
 import { Emoji } from "./Emoji.js";
-import { kData, kPatch } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, kPatch, kRelations } from "./Structure.js";
 import { User } from "./User.js";
 
 /**
  * A custom emoji of a guild.
  */
 export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
-  #author: User | undefined;
+  declare protected [kRelations]: { author?: User; guild?: Guild | null };
 
   /**
    * @param data The raw emoji.
-   * @param relations The uploader as resolved from the cache, by the guild's emoji manager.
+   * @param relations The uploader and guild as resolved from the cache, by the guild's emoji manager.
    */
-  public constructor(data: CacheEntityTypes["emojis"], relations: { author?: User } = {}) {
-    super(data);
-    this.#author = relations.author;
+  public constructor(
+    data: CacheEntityTypes["emojis"],
+    relations: { author?: User; guild?: Guild | null } = {},
+  ) {
+    super(data, relations);
   }
 
   public override [kPatch](data: Readonly<Partial<CacheEntityTypes["emojis"]>>): this {
-    if (data.user) this.#author = undefined;
+    if (data.user) this.dropRelations("author");
     return super[kPatch](data);
   }
 
@@ -32,6 +35,21 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
 
   public get guildId() {
     return this[kData].guild_id;
+  }
+
+  /**
+   * The guild, from the cache. `null` when the guild is not cached, or when the emoji was not built by a manager: use
+   * `fetchGuild()` to always get it.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * Fetches the guild, cache first.
+   */
+  public fetchGuild(): Promise<Guild> {
+    return getGatewayClient().guilds.fetch(this.guildId);
   }
 
   /**
@@ -71,7 +89,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"]> {
    */
   public get author(): User | null {
     const { user } = this[kData];
-    return this.#author ?? (user ? new User(user) : null);
+    return this[kRelations].author ?? (user ? new User(user) : null);
   }
 
   /**

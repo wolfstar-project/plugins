@@ -103,15 +103,23 @@ export class MessageManager extends CachedManager<
 
   public override async hydrate(data: CacheEntityTypes["messages"]): Promise<Message> {
     const { author, member, guild_id: guildId } = data;
-    // A webhook is not a user: its author only holds for this message.
-    const resolvedAuthor = data.webhook_id
-      ? this.client.users.createStructure(author)
-      : await this.client.users.resolveData(author);
-    const resolvedMember =
+    const [resolvedAuthor, resolvedMember, guild, channel] = await Promise.all([
+      // A webhook is not a user: its author only holds for this message.
+      data.webhook_id
+        ? this.client.users.createStructure(author)
+        : this.client.users.resolveData(author),
       member && guildId
-        ? await this.client.members.resolveData({ ...member, user: author, guild_id: guildId })
-        : null;
-    return new Message(data, { author: resolvedAuthor, member: resolvedMember });
+        ? this.client.members.resolveData({ ...member, user: author, guild_id: guildId })
+        : null,
+      this.cachedGuild(guildId),
+      this.client.channels.get(data.channel_id),
+    ]);
+    return new Message(data, {
+      author: resolvedAuthor,
+      member: resolvedMember,
+      guild,
+      channel: channel ?? null,
+    });
   }
 
   public resolveKey(channelId: string, messageId: string): string {

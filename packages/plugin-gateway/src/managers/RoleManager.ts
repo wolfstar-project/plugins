@@ -60,6 +60,10 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     return this.resolveKey(data.guild_id, data.id);
   }
 
+  public override async hydrate(data: CacheEntityTypes["roles"]): Promise<Role> {
+    return new Role(data, { guild: await this.cachedGuild(data.guild_id) });
+  }
+
   public resolveKey(guildId: string, roleId: string): string {
     return roleKey(guildId, roleId);
   }

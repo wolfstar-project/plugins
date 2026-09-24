@@ -20,6 +20,12 @@ export const kPatch: unique symbol = Symbol.for("djs.structures.patch") as never
 export const kClone: unique symbol = Symbol.for("djs.structures.clone") as never;
 
 /**
+ * The symbol under which a {@link Structure} stores its relations: the structures its manager resolved from the cache,
+ * like a message's author or a channel's guild.
+ */
+export const kRelations: unique symbol = Symbol.for("wolfstar.structures.relations") as never;
+
+/**
  * The Discord epoch, used to extract timestamps from snowflakes.
  */
 const DiscordEpoch = 1_420_070_400_000n;
@@ -47,6 +53,20 @@ export abstract class Structure<
   declare protected [kData]: Readonly<Data>;
 
   /**
+   * The relations of this structure, resolved from the cache by its manager. Subclasses narrow its type.
+   */
+  declare protected [kRelations]: object;
+
+  /**
+   * @param data The raw API data.
+   * @param relations The related structures, resolved from the cache by the structure's manager.
+   */
+  public constructor(data: Readonly<Partial<Data>>, relations: object = {}) {
+    super(data as never);
+    this[kRelations] = relations;
+  }
+
+  /**
    * Patches the raw data of this structure in place, with a shallow merge.
    *
    * @param data The updated data.
@@ -67,10 +87,22 @@ export abstract class Structure<
    * @returns The copy.
    */
   public [kClone](patch?: Readonly<Partial<Data>>): this {
-    return (BaseStructure.prototype as unknown as Record<typeof kClone, Patch<Data>>)[kClone].call(
-      this,
-      patch ?? ({} as Readonly<Partial<Data>>),
-    ) as this;
+    const clone = (BaseStructure.prototype as unknown as Record<typeof kClone, Patch<Data>>)[
+      kClone
+    ].call(this, patch ?? ({} as Readonly<Partial<Data>>)) as this;
+    clone[kRelations] = { ...this[kRelations] };
+    return clone;
+  }
+
+  /**
+   * Forgets resolved relations, e.g. when a patch carries fresher data for them.
+   *
+   * @param names The names of the relations.
+   */
+  protected dropRelations(...names: string[]): void {
+    const relations: Record<string, unknown> = { ...this[kRelations] };
+    for (const name of names) delete relations[name];
+    this[kRelations] = relations;
   }
 }
 

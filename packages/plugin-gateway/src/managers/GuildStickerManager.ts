@@ -75,8 +75,11 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
   }
 
   public override async hydrate(data: CacheEntityTypes["stickers"]): Promise<Sticker> {
-    const user = data.user ? await this.client.users.resolveData(data.user) : undefined;
-    return new Sticker(data, { user });
+    const [user, guild] = await Promise.all([
+      data.user ? this.client.users.resolveData(data.user) : undefined,
+      this.cachedGuild(data.guild_id),
+    ]);
+    return new Sticker(data, { user, guild });
   }
 
   public resolveKey(stickerId: string): string {

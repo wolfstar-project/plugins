@@ -195,7 +195,10 @@ Like discord.js's `CachedManager#_add`, every API payload goes through the manag
 merges it into the cached entry (the fields a partial payload lacks keep their cached value) and
 builds the structure. Relations are resolved from the cache too: `message.author` is the entry of
 `client.users`, `message.member` the one of `client.members`, and the same goes for
-`member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. `_add` is asynchronous,
+`member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. Every structure of a guild
+(channels, threads, members, roles, messages, emojis, stickers, invites) has `guild`, the cached
+guild, and messages have `channel`. These are `null` when the entity is not cached; `fetchGuild()`
+and `fetchChannel()` always get it. `_add` is asynchronous,
 since the cache can be Redis. A structure built by hand, with `new Message(data)`, falls back to
 the copy embedded in its payload.
 
