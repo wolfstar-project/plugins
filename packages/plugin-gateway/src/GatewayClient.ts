@@ -24,6 +24,8 @@ import { GuildMemberManager } from "./managers/GuildMemberManager.js";
 import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
 import { WebhookManager } from "./managers/WebhookManager.js";
+import { VoiceStateManager } from "./managers/VoiceStateManager.js";
+import { PresenceManager } from "./managers/PresenceManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
 import { ThreadMemberManager } from "./managers/ThreadMemberManager.js";
 import { UserManager } from "./managers/UserManager.js";
@@ -138,6 +140,8 @@ export class GatewayClient extends Client {
   public readonly members: GuildMemberManager;
   public readonly roles: RoleManager;
   public readonly webhooks: WebhookManager;
+  public readonly voiceStates: VoiceStateManager;
+  public readonly presences: PresenceManager;
 
   /**
    * What happens to a dispatch whose cache read or write fails, see {@link GatewayClientOptions.cacheFailure}.
@@ -171,6 +175,8 @@ export class GatewayClient extends Client {
     this.members = new GuildMemberManager(this);
     this.roles = new RoleManager(this);
     this.webhooks = new WebhookManager(this);
+    this.voiceStates = new VoiceStateManager(this);
+    this.presences = new PresenceManager(this);
 
     this.gateway = new WebSocketManager({
       ...options.gateway,

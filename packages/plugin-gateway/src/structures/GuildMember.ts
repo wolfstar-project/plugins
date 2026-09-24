@@ -1,4 +1,4 @@
-import type { ImageURLOptions } from "@discordjs/rest";
+import { DiscordAPIError, type ImageURLOptions } from "@discordjs/rest";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIAvatarDecorationData } from "discord-api-types/v10";
 import type { BanOptions, GuildMemberEditOptions } from "../managers/GuildMemberManager.js";
@@ -12,6 +12,8 @@ import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { PermissionsBitField } from "../util/PermissionsBitField.js";
 import type { DMChannel } from "./DMChannel.js";
 import type { Message } from "./Message.js";
+import type { Presence } from "./Presence.js";
+import type { VoiceState } from "./VoiceState.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, Structure } from "./Structure.js";
 import { User } from "./User.js";
@@ -268,6 +270,30 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this);
+  }
+
+  /**
+   * Fetches the member's voice state, cache first. discord.js: `member.voice`.
+   *
+   * @returns The voice state, or `null` when the member is not connected to voice.
+   */
+  public async fetchVoiceState(): Promise<VoiceState | null> {
+    try {
+      return await getGatewayClient().voiceStates.fetch(this.guildId, this.requireId());
+    } catch (error) {
+      // Discord answers 404 (Unknown Voice State) for members who are not connected.
+      if (error instanceof DiscordAPIError && error.status === 404) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Gets the member's presence from the cache. discord.js: `member.presence`.
+   *
+   * @returns The presence, or `null` when it is not cached (the bot needs the `GuildPresences` intent).
+   */
+  public async fetchPresence(): Promise<Presence | null> {
+    return (await getGatewayClient().presences.get(this.guildId, this.requireId())) ?? null;
   }
 
   /**

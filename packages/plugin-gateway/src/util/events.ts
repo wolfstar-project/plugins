@@ -25,10 +25,12 @@ import type { Message } from "../structures/Message.js";
 import type { MessageReaction } from "../structures/MessageReaction.js";
 import type { PollAnswer } from "../structures/PollAnswer.js";
 import type { Role } from "../structures/Role.js";
+import type { Presence } from "../structures/Presence.js";
 import type { Sticker } from "../structures/Sticker.js";
 import type { ThreadMember } from "../structures/ThreadMember.js";
 import type { Typing } from "../structures/Typing.js";
 import type { User } from "../structures/User.js";
+import type { VoiceState } from "../structures/VoiceState.js";
 
 /**
  * What a reaction event says besides the reaction and the user.
@@ -197,6 +199,14 @@ export interface GatewayEventMap {
    * Emitted when a guild's voice server changes, e.g. to hand a voice connection a new endpoint.
    */
   voiceServerUpdate: [data: GatewayVoiceServerUpdateDispatchData];
+  /**
+   * Emitted when a member joins, leaves, or moves between voice channels, or changes their voice settings.
+   */
+  voiceStateUpdate: [oldState: VoiceState | null, newState: VoiceState];
+  /**
+   * Emitted when a member's status or activities change. Needs the `GuildPresences` intent.
+   */
+  presenceUpdate: [oldPresence: Presence | null, newPresence: Presence];
 }
 
 /**
