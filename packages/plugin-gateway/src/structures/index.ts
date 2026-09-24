@@ -7,6 +7,7 @@ export * from "./DMChannel.js";
 export * from "./ForumChannel.js";
 export * from "./GroupDMChannel.js";
 export * from "./Guild.js";
+export * from "./ClientUser.js";
 export * from "./GuildMember.js";
 export * from "./MediaChannel.js";
 export * from "./Message.js";

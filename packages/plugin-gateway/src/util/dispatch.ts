@@ -1,6 +1,8 @@
 import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import { ClientUser } from "../structures/ClientUser.js";
+import { kPatch } from "../structures/Structure.js";
 import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
@@ -61,7 +63,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.Ready]: {
     event: "shardReady",
     build: (client, data, _state, shardId) => {
-      const user = client.users.createStructure(data.user);
+      const user = new ClientUser(data.user);
       client.user = user;
       return [shardId, user];
     },
@@ -202,9 +204,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "userUpdate",
     before: (client, data) => client.users.get(data.id),
     build: (client, data, previous) => {
-      const user = client.users.createStructure(data);
-      if (client.user?.id === user.id) client.user = user;
-      return [previous ?? null, user];
+      // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
+      if (client.user?.id === data.id) {
+        client.user[kPatch](data);
+        return [previous ?? null, client.user];
+      }
+
+      return [previous ?? null, client.users.createStructure(data)];
     },
   },
 };

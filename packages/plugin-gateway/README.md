@@ -224,6 +224,34 @@ Mixin(MyTextChannel, [MyMixin]);
 > requiring Node.js 24.17 (hence this package's `engines`), and has no `Guild` nor `GuildMember`
 > yet: the structures here are this package's own, following its conventions.
 
+### Users, members and roles
+
+They follow discord.js's API, with one difference: anything discord.js reads synchronously from its
+cache is asynchronous here, since the cache can be Redis.
+
+```ts
+const member = await client.members.fetch(guildId, userId);
+
+await member.roles.add(roleId, "verified");
+await member.timeout(10 * 60_000, "spam");
+
+const permissions = await member.fetchPermissions(); // discord.js: member.permissions
+if (await member.fetchKickable()) await member.kick(); // discord.js: member.kickable
+
+const highest = await member.roles.fetchHighest(); // discord.js: member.roles.highest
+await highest?.setColors({ primaryColor: 0xff0000 });
+
+await client.user?.setActivity("with wolves", { type: ActivityType.Competing });
+await (await client.users.fetch(userId)).send("Welcome!");
+```
+
+`client.user` is a `ClientUser`, which edits the bot's profile and sets its presence on every shard.
+`client.members` also lists, searches, adds (OAuth2), edits, kicks, bans and prunes members;
+`client.roles` creates, edits, moves and deletes roles, and fetches all of a guild's roles or their
+member counts. Permissions are `PermissionsBitField`s, computed like Discord does: owner and
+administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
+(`permissionsIn`) come with the channel phase.
+
 ## Subpath exports
 
 Like `@discordjs/next`, the gateway and REST libraries are re-exported, so a bot does not need to

@@ -20,7 +20,7 @@ import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
 import { UserManager } from "./managers/UserManager.js";
-import type { User } from "./structures/User.js";
+import type { ClientUser } from "./structures/ClientUser.js";
 import { DispatchHandlers, type DispatchHandler } from "./util/dispatch.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
@@ -110,7 +110,7 @@ export class GatewayClient extends Client {
   /**
    * The bot user, set once the first shard receives `READY`.
    */
-  public user: User | null = null;
+  public user: ClientUser | null = null;
 
   public readonly users: UserManager;
   public readonly guilds: GuildManager;

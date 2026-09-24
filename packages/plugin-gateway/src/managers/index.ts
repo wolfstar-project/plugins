@@ -2,6 +2,7 @@ export * from "./CachedManager.js";
 export * from "./ChannelManager.js";
 export * from "./GuildManager.js";
 export * from "./GuildMemberManager.js";
+export * from "./GuildMemberRoleManager.js";
 export * from "./MessageManager.js";
 export * from "./RoleManager.js";
 export * from "./ThreadManager.js";
