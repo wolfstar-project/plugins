@@ -120,6 +120,28 @@ describe("dispatchPartition", () => {
 });
 
 describe("DispatchQueue", () => {
+  test("GIVEN a task of the client for a guild THEN it runs after the guild's dispatches, on their shard", async () => {
+    const queue = new DispatchQueue();
+    const order: string[] = [];
+    let release!: () => void;
+
+    void queue.enqueue(3, "guild:a", async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      order.push("dispatch");
+    });
+    const task = queue.enqueueGuild("a", async () => {
+      order.push("client");
+    });
+    await Promise.resolve();
+    expect(order).toEqual([]);
+    release();
+    await task;
+
+    expect(order).toEqual(["dispatch", "client"]);
+  });
+
   test("GIVEN one partition THEN tasks run in order, and other partitions run concurrently", async () => {
     const queue = new DispatchQueue();
     const order: string[] = [];

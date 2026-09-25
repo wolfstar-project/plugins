@@ -56,6 +56,8 @@ export function dispatchPartition(payload: GatewayDispatchPayload): string | nul
  */
 export class DispatchQueue {
   readonly #shards = new Map<number, ShardQueue>();
+  // The shard each guild's dispatches come from, for the tasks the client queues on its own.
+  readonly #guildShards = new Map<string, number>();
   #pending = 0;
 
   /**
@@ -73,6 +75,7 @@ export class DispatchQueue {
   ): Promise<void> {
     const shard = this.shard(shardId);
     this.#pending++;
+    if (partition?.startsWith("guild:")) this.#guildShards.set(partition, shardId);
 
     const previous =
       partition === null
@@ -94,6 +97,19 @@ export class DispatchQueue {
     }
 
     return run;
+  }
+
+  /**
+   * Queues a task in a guild's partition, on the shard the guild's dispatches come from: a cache write the client
+   * makes on its own then stays in order with them. Before any dispatch of the guild, there is nothing to order it
+   * with, and it runs on shard 0.
+   *
+   * @param guildId The ID of the guild.
+   * @param task The task to run once the previous task of the guild is done.
+   */
+  public enqueueGuild(guildId: string, task: () => Promise<void>): Promise<void> {
+    const partition = `guild:${guildId}`;
+    return this.enqueue(this.#guildShards.get(partition) ?? 0, partition, task);
   }
 
   /**

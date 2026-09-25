@@ -209,6 +209,28 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * Runs a cache write of the client's own (e.g. after leaving a guild) in order with the guild's dispatches.
+   *
+   * @param guildId The ID of the guild.
+   * @param task The cache write.
+   * @internal
+   */
+  public async runInGuildOrder<Value>(guildId: string, task: () => Promise<Value>): Promise<Value> {
+    let outcome: { value: Value } | { error: unknown } | undefined;
+    // Queued tasks must never reject: the outcome is carried out of the queue instead.
+    await this.#queue.enqueueGuild(guildId, async () => {
+      try {
+        outcome = { value: await task() };
+      } catch (error) {
+        outcome = { error };
+      }
+    });
+
+    if ("error" in outcome!) throw outcome.error;
+    return outcome!.value;
+  }
+
+  /**
    * Resolves once every dispatch received so far has been processed.
    */
   public async idle(): Promise<void> {

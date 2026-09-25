@@ -227,15 +227,19 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     return this.createStructure(guild);
   }
 
-  // The same cascade as a `GUILD_DELETE`, so no channel, member, or role of the guild outlives it.
+  // The same cascade as a `GUILD_DELETE`, so no channel, member, or role of the guild outlives it. It is queued with
+  // the guild's dispatches, so it never interleaves with one still being written.
   private async forget(guildId: string): Promise<void> {
-    if (!this.client.cache) return;
-    await applyGatewayDispatch(this.client.cache, {
-      op: GatewayOpcodes.Dispatch,
-      s: 0,
-      t: GatewayDispatchEvents.GuildDelete,
-      d: { id: guildId },
-    });
+    const { cache } = this.client;
+    if (!cache) return;
+    await this.client.runInGuildOrder(guildId, () =>
+      applyGatewayDispatch(cache, {
+        op: GatewayOpcodes.Dispatch,
+        s: 0,
+        t: GatewayDispatchEvents.GuildDelete,
+        d: { id: guildId },
+      }),
+    );
   }
 }
 
