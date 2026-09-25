@@ -104,20 +104,20 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
   }
 
   /**
-   * Fetches a channel from the API, bypassing and then updating the cache. Threads are written to the thread cache.
+   * Stores a channel fetched from the API, writing threads to the thread cache.
    *
-   * @param channelId The ID of the channel.
+   * @param args The ID of the channel.
+   * @param raw The raw channel.
    */
-  public override async refresh(channelId: string): Promise<AnyChannel> {
-    const data = await this.fetchRaw(channelId);
-    const channel = this.createStructure(data);
-    if (channel.isThread()) {
-      await this.client.cache?.threads.set(channelId, data as CacheEntityTypes["threads"]);
+  protected override async storeRaw(
+    [channelId]: [channelId: string],
+    raw: CacheEntityTypes["channels"],
+  ): Promise<void> {
+    if (createChannel(raw).isThread()) {
+      await this.client.cache?.threads.set(channelId, raw as CacheEntityTypes["threads"]);
     } else {
-      await this.cache?.set(channelId, data);
+      await this.cache?.set(channelId, raw);
     }
-
-    return channel;
   }
 
   protected async fetchRaw(channelId: string) {
