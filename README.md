@@ -15,7 +15,7 @@
 
 ## Overview
 
-Plugins is a monorepo containing **four publishable TypeScript packages** under the `@wolfstar` npm scope. They extend [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) with REST APIs, internationalization, pluggable logging, and advanced slash-command composition.
+Plugins is a monorepo containing **five publishable TypeScript packages** under the `@wolfstar` npm scope. They extend [`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) with REST APIs, internationalization, pluggable logging, advanced slash-command composition, and a pluggable Discord entity cache.
 
 **Technology Stack:**
 
@@ -62,6 +62,7 @@ pnpm add @wolfstar/http-framework @wolfstar/plugin-logger
 | Package                                                                           | Description                                                                   | Version                                                                                                                                                         |
 | --------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | [`@wolfstar/plugin-api`](./packages/plugin-api)                                   | Standalone REST API server with routes, middlewares, and filesystem routing   | [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-api)](https://npmx.dev/package/@wolfstar/plugin-api)                                   |
+| [`@wolfstar/plugin-cache`](./packages/plugin-cache)                               | Storage-agnostic Discord entity cache (in-memory and Redis, with compression) | [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-cache)](https://npmx.dev/package/@wolfstar/plugin-cache)                               |
 | [`@wolfstar/plugin-i18next`](./packages/plugin-i18next)                           | i18next-powered internationalization for HTTP interactions                    | [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-i18next)](https://npmx.dev/package/@wolfstar/plugin-i18next)                           |
 | [`@wolfstar/plugin-logger`](./packages/plugin-logger)                             | Pluggable logger with console, Sentry, consola, evlog, and winston transports | [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-logger)](https://npmx.dev/package/@wolfstar/plugin-logger)                             |
 | [`@wolfstar/plugin-subcommands-advanced`](./packages/plugin-subcommands-advanced) | Modular slash subcommands implemented as separate command classes             | [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-subcommands-advanced)](https://npmx.dev/package/@wolfstar/plugin-subcommands-advanced) |

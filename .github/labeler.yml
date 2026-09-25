@@ -3,6 +3,11 @@ packages:plugin-api:
       - any-glob-to-any-file:
           - packages/plugin-api/*
           - packages/plugin-api/**/*
+packages:plugin-cache:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/plugin-cache/*
+          - packages/plugin-cache/**/*
 packages:plugin-i18next:
   - changed-files:
       - any-glob-to-any-file:
