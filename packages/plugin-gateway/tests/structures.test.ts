@@ -214,7 +214,7 @@ describe("Mixin", () => {
 });
 
 describe("Role", () => {
-  test("GIVEN permissions THEN they are exposed as a bigint", () => {
+  test("GIVEN permissions THEN they are exposed as a PermissionsBitField", () => {
     const role = new Role({
       id: "1",
       guild_id: "2",
@@ -228,7 +228,8 @@ describe("Role", () => {
       flags: 0,
     } as never);
 
-    expect(role.permissions).toBe(8n);
+    expect(role.permissions.bitField).toBe(8n);
+    expect(role.permissions.has("Administrator")).toBe(true);
     expect(`${role}`).toBe("<@&1>");
   });
 });
