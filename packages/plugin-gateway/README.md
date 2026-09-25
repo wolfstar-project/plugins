@@ -197,11 +197,13 @@ Mixin(MyTextChannel, [MyMixin]);
 ```
 
 > [!NOTE]
-> The RFC planned to build on
-> [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures).
-> It is only published as `dev` snapshots, requires Node.js 24.17, does not export its data symbols
-> (making subclasses impossible outside discord.js), and has no `Guild` nor `GuildMember` yet, so
-> this package ships a small `Structure` and `Mixin` modelled after it instead.
+> `Structure` extends
+> [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures)'
+> own base class. That package does not export the symbols keying a structure's data and its
+> patch/clone methods, but creates them with `Symbol.for`, so `kData`, `kPatch`, and `kClone` are the
+> very same symbols, re-exported for subclasses and mixins. It is only published as `dev` snapshots
+> requiring Node.js 24.17 (hence this package's `engines`), and has no `Guild` nor `GuildMember`
+> yet: the structures here are this package's own, following its conventions.
 
 ## Subpath exports
 

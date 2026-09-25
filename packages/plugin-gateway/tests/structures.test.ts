@@ -1,6 +1,9 @@
 import { ChannelType } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import {
+  AnnouncementChannel,
+  ForumChannel,
+  MediaChannel,
   BaseChannel,
   Channel,
   DMChannel,
@@ -86,6 +89,20 @@ describe("User", () => {
 });
 
 describe("Channel", () => {
+  test("GIVEN announcement, forum, and media channels THEN their slowmode is exposed", () => {
+    const channels = [
+      new AnnouncementChannel({
+        id: "1",
+        type: ChannelType.GuildAnnouncement,
+        rate_limit_per_user: 5,
+      } as never),
+      new ForumChannel({ id: "2", type: ChannelType.GuildForum, rate_limit_per_user: 5 } as never),
+      new MediaChannel({ id: "3", type: ChannelType.GuildMedia, rate_limit_per_user: 5 } as never),
+    ];
+
+    expect(channels.map((channel) => channel.rateLimitPerUser)).toEqual([5, 5, 5]);
+  });
+
   test("GIVEN a text channel THEN its mixins expose the guild channel fields", () => {
     const channel = new TextChannel({
       id: "1",

@@ -72,6 +72,6 @@
     "@wolfstar/http-framework": "^3.4.0 || ^5.0.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.17.0"
   }
 }
