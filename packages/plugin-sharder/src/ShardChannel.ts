@@ -1,10 +1,16 @@
+import type { Result } from "@sapphire/result";
 import { EventEmitter } from "node:events";
 import type { ShardManager } from "./ShardManager.js";
 import { ShardPing } from "./ShardPing.js";
 import { Op, ShardStatus, type Packet, type SystemCall } from "./messages/protocol.js";
 import type { ShardContext, ShardTransport } from "./strategies/ChannelStrategy.js";
-import { ShardSpawnError, ShardUnavailableError } from "./util/errors.js";
-import { IncomingRequests, OutgoingRequests, type RequestOptions } from "./util/requests.js";
+import { ShardSpawnError, ShardUnavailableError, type ShardError } from "./util/errors.js";
+import {
+  IncomingRequests,
+  OutgoingRequests,
+  toResult,
+  type RequestOptions,
+} from "./util/requests.js";
 
 /**
  * The events of a {@link ShardChannel}. The manager emits them too, prefixed with `shard` and with the channel first.
@@ -308,6 +314,23 @@ export class ShardChannel extends EventEmitter<ShardChannelEvents> {
     from: number | null = null,
   ): Promise<Reply> {
     return this.#request(body, options, { from }) as Promise<Reply>;
+  }
+
+  /**
+   * {@link ShardChannel.send}, resolving with a `Result` rather than rejecting.
+   */
+  public trySend(body: unknown, options?: RequestOptions): Promise<Result<void, ShardError>> {
+    return toResult(() => this.send(body, options));
+  }
+
+  /**
+   * {@link ShardChannel.request}, resolving with a `Result` rather than rejecting.
+   */
+  public tryRequest<Reply = unknown>(
+    body: unknown,
+    options?: RequestOptions,
+  ): Promise<Result<Reply, ShardError>> {
+    return toResult(() => this.request<Reply>(body, options));
   }
 
   /**

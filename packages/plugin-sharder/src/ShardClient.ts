@@ -1,3 +1,4 @@
+import type { Result } from "@sapphire/result";
 import { EventEmitter } from "node:events";
 import { isMainThread, parentPort, threadId, workerData } from "node:worker_threads";
 import {
@@ -21,11 +22,14 @@ import {
   type SystemCall,
 } from "./messages/protocol.js";
 import { ShardContextVariable, type ShardContext } from "./strategies/ChannelStrategy.js";
+import type { ShardError } from "./util/errors.js";
 import type { GatewayInformation } from "./util/gateway.js";
 import {
   IncomingRequests,
   OutgoingRequests,
   deserializeSettled,
+  settledToResults,
+  toResult,
   type BroadcastRequestOptions,
   type RequestHandler,
   type RequestOptions,
@@ -373,6 +377,46 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
       options.signal,
     );
     return options.partial ? deserializeSettled(reply as SerializedSettledResult[]) : reply;
+  }
+
+  /**
+   * {@link ShardClient.send}, resolving with a `Result` rather than rejecting.
+   */
+  public trySend(body: unknown, to?: ShardTarget): Promise<Result<void, ShardError>> {
+    return toResult(() => this.send(body, to));
+  }
+
+  /**
+   * {@link ShardClient.request}, resolving with a `Result` rather than rejecting.
+   */
+  public tryRequest<Reply = unknown>(
+    body: unknown,
+    options?: RequestOptions & { to?: number },
+  ): Promise<Result<Reply, ShardError>> {
+    return toResult(() => this.request<Reply>(body, options));
+  }
+
+  /**
+   * {@link ShardClient.broadcastRequest}, with one `Result` per shard, by shard ID. The broadcast itself failing
+   * (e.g. the manager not answering) is the outer `Err`.
+   */
+  public tryBroadcastRequest<Reply = unknown>(
+    body: unknown,
+    options?: RequestOptions,
+  ): Promise<Result<Result<Reply, ShardError>[], ShardError>> {
+    return toResult(async () =>
+      settledToResults(await this.broadcastRequest<Reply>(body, { ...options, partial: true })),
+    );
+  }
+
+  /**
+   * {@link ShardClient.control}, resolving with a `Result` rather than rejecting.
+   */
+  public tryControl(
+    request: ControlRequest,
+    options?: RequestOptions,
+  ): Promise<Result<void, ShardError>> {
+    return toResult(() => this.control(request, options));
   }
 
   /**

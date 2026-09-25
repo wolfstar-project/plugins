@@ -1,5 +1,6 @@
 /// <reference types="node" />
 
+export { Result, type Err, type Ok } from "@sapphire/result";
 export * from "./ShardChannel.js";
 export * from "./ShardClient.js";
 export * from "./ShardManager.js";

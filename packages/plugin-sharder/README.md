@@ -33,7 +33,7 @@ a shard runs any script using `ShardClient`, so it works with `@wolfstar/plugin-
 | `ShardManager`       | Spawns and supervises the shards, paces their identifies, carries their messages                   |
 | `ShardChannel`       | The manager's handle on one shard: status, pings, messages, requests, restarts                     |
 | `ShardClient`        | The shard's side: signals its status, messages and requests, answers requests                      |
-| `ShardManagerProxy`  | Runs shards on another machine for a manager using `NetworkStrategy`                               |
+| `ShardManagerProxy`  | Runs shards on another machine for one or several managers, and talks to other proxies             |
 | `ChannelStrategy`    | How shards are spawned: `"fork"` (default), `"cluster"`, `"worker"`, `"network"`, or your own      |
 | `MessageHandler`     | How packets are serialized: `"json"` (default), `"v8"`, `"raw"`, or your own                       |
 | `MessageTransformer` | How serialized packets are transformed, composable: `"gzip"`, `"brotli"`, or your own (encryption) |
@@ -145,6 +145,26 @@ const counts = await manager.broadcastRequest<CommandReply<typeof commands, "gui
 );
 ```
 
+### `Result<T, E>`
+
+Every operation that can fail has a `try*` twin resolving with a `Result` of
+[`@sapphire/result`](https://www.npmjs.com/package/@sapphire/result) (re-exported as `Result`)
+rather than rejecting, as suggested in the RFC thread: `trySend`, `tryRequest`, and
+`tryBroadcastRequest` on the manager, channels, and shards, and `tryControl` on shards. The error is
+a `ShardError`. `tryBroadcastRequest` resolves with one `Result` per shard. A request handler may
+return a `Result` as well: `Ok` is the reply, and `Err` the error the requester gets.
+
+```ts
+shard.setRequestHandler((id: string) =>
+  guilds.has(id) ? Result.ok(guilds.get(id)) : Result.err(new RangeError("Unknown guild")),
+);
+
+const guild = await manager.tryRequest(0, guildId);
+guild.match({ ok: (value) => console.log(value), err: (error) => console.error(error.message) });
+const counts = await manager.tryBroadcastRequest<number>({ type: "guildCount" });
+const total = counts.reduce((sum, count) => sum + count.unwrapOr(0), 0);
+```
+
 ### Lifecycle and supervision
 
 A shard signals its status, and the manager emits it:
@@ -234,13 +254,39 @@ const proxy = new ShardManagerProxy({
 await proxy.connect();
 ```
 
-Spawns go to the connected proxy with the lowest load, within its `capacity`, and wait when every
-proxy is full or none is connected. A proxy losing the manager keeps its shards (`managerLoss:
-"keep"`, the default, or `"exit"`) and reconnects, failing over to the next manager of its list;
-back within the manager's `reconnectGrace`, it keeps its shards, and past it they are spawned
-elsewhere and its stale ones killed. Proxies coming back are not rebalanced: they take the next
-spawns. Messages and requests between two shards of the same proxy never go through the manager.
-Proxies do not talk to each other: share state through Redis or a message broker.
+Spawns go to the connected proxy with the most room, as the proxies report it, and wait when every
+proxy is full or none is connected. A proxy losing a manager keeps its shards (`managerLoss:
+"keep"`, the default, or `"exit"`) and reconnects; back within the manager's `reconnectGrace`, it
+keeps its shards, and past it they are spawned elsewhere and its stale ones killed. Proxies coming
+back are not rebalanced: they take the next spawns.
+
+A proxy serves its managers in one of two modes:
+
+- `mode: "failover"` (the default): one manager at a time, the first reachable of `managers`,
+  failing over to the next ones when it loses it, e.g. a primary and a standby manager.
+- `mode: "all"`: every manager of `managers` at once, sharing its `capacity` between them, e.g.
+  managers each running part of the gateway shards (`shardList`). Each manager can have its own
+  `token` and `tls`, and gets its own `id` (`NetworkStrategy`'s `id` option), which keeps the
+  shards of different managers apart.
+
+Messages and requests between two shards of the same manager and the same proxy never go through
+the manager. With `peer`, proxies also talk to each other: each listens for peer connections, the
+manager tells every proxy which proxy runs which ready shard, and the messages and requests between
+shards of different proxies go from one proxy to the other directly. The first one to a new proxy
+goes through the manager while the peer connection opens; a packet for a shard that moved or is not
+ready is sent back and goes through the manager; a peer connection lost fails the requests waiting
+on it right away.
+
+```ts
+const proxy = new ShardManagerProxy({
+  managers: ["north.internal:7000", "south.internal:7000"],
+  mode: "all",
+  token: process.env.SHARDER_TOKEN!,
+  capacity: 16,
+  strategy: new ForkStrategy({ path: "./bot.js" }),
+  peer: { port: 7001, advertise: "den.internal", tls: { key, cert }, connectTls: { ca } },
+});
+```
 
 ### Serialization and transformers
 
@@ -260,40 +306,39 @@ const manager = new ShardManager({ messageHandler: "v8", transformers: ["gzip", 
 
 ## RFC alignment
 
-| Source         | Point                                                                         | Here                                                                                  |
-| -------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| RFC            | `ShardManager` with a strategy, by instance or name                           | `strategy` (instance or name) and `registerStrategy`                                  |
-| RFC            | Worker, Fork (default), Cluster, Network strategies                           | `WorkerStrategy`, `ForkStrategy`, `ClusterStrategy`, `NetworkStrategy`                |
-| RFC            | Manager configures the clients through the environment                        | `ShardContext` in `WOLFSTAR_SHARDER` (or worker data), `DISCORD_TOKEN`                |
-| RFC            | Lifecycle events, invalid messages printed when unhandled                     | `shardCreate` … `shardInvalidMessage`, `console.error` fallbacks                      |
-| RFC            | Missing pings restart the shard when unhandled                                | `shardUnresponsive`, restart without listeners                                        |
-| RFC            | Requests time out within the ping timeout, globally or per request            | `requestTimeout` (defaults to `ping.timeout`), `timeout` per request                  |
-| RFC            | `ShardClient` signals: Starting, Ready, Exit, Restarting                      | `ShardStatus` (plus #7204's `Disconnected` and `Reconnecting`)                        |
-| RFC            | `registerMessageHandler` / `registerMessageTransformer`                       | `ShardClient.register*` and the module-level registries                               |
-| RFC            | JSON and V8 message handlers                                                  | `JsonMessageHandler`, `V8MessageHandler` (plus #7204's `RawMessageHandler`)           |
-| RFC            | Composable transformers, reverse order when reading, Gzip and Brotli          | `MessageTransformer` with its channel context, `GzipTransformer`, `BrotliTransformer` |
-| RFC            | `ShardManagerProxy` over an encrypted network, local routing                  | `ShardManagerProxy`, TLS, messages between its shards routed locally                  |
-| RFC answers    | Raw data, no `eval`; opt-in replies with timeouts; async transformers         | Messages vs requests, `RequestOptions`, async `write`/`read`                          |
-| RFC answers    | Cancel requests, dequeue them, `AbortController` in shards                    | `signal`, dropped from the ready queue, `signal` in handlers                          |
-| RFC answers    | Partial results of aborted broadcasts                                         | `broadcastRequest(body, { partial: true })`                                           |
-| RFC answers    | Enqueue messages for shards not ready, with a ready-time hint                 | `waitForReady`, `spawn.readyHint` (or measured), early failure, `shardSlowStart`      |
-| RFC answers    | `error` signal when a shard fails before ready                                | `shardError` with `ShardSpawnError`                                                   |
-| RFC answers    | Configurable restart limits, alerts, Erlang supervisors                       | `supervisor` intensity, period, strategy; `shardGiveUp`                               |
-| RFC answers    | Manager death: configurable, default die                                      | `disconnect` event, exit without listeners; proxy `managerLoss`                       |
-| RFC answers    | Proxies: capacity, queue when full, failover managers, no P2P, no rebalancing | `capacity`, pending spawns, `managers` list, `reconnectGrace`                         |
-| RFC answers    | Optional built-in command layer                                               | `createCommandHandler`, `command`                                                     |
-| RFC answers    | Identify processes and threads for observability                              | `channel.pid`, `threadId`, `host`; worker threads named `shard <id>`                  |
-| #7204          | `totalShards`, `shardList`, `clusters` (CPU count), `"auto"`                  | Layout options                                                                        |
-| #7204          | Respawn budget that resets on ready                                           | `supervisor` with `period: 0`                                                         |
-| #7204          | Fetch `/gateway/bot` once in the manager and share it                         | `gatewayInformation`, `shard.fetchGatewayInformation()`                               |
-| #7204          | `fetchRecommendedShards` with `guildsPerShard` and `multipleOf`               | `fetchRecommendedShardCount`, `recommended`                                           |
-| #7204          | Ping with `delaySinceReceived`                                                | `ping.delaySinceReceived`                                                             |
-| #7204 / #8859  | Restart all shards, spawn delay after ready, spawn timeout then requeue       | `restartAll`, `spawn.delay`, `spawn.timeout`                                          |
-| #8859          | Manager-side "channel" to each shard                                          | `ShardChannel`, `manager.channels`                                                    |
-| #8859          | Start, close, restart single gateway shards, from the manager or shards       | `setShardHandler`, `startShard` & co., `shard.control()`                              |
-| #8859          | Strategies with `init` and `destroy`                                          | `ChannelStrategy.init` / `destroy`                                                    |
-| #7204 comments | Cross-process identify pacing, minimal-downtime restarts and resharding       | `identifyThrottler`, `restart(id, { rolling })`, `reshard()`                          |
-
-Settled against: `Result<T, E>` return types (the thread leaned towards plain promises), a
-`ShardManagerProxy` with several simultaneous managers (the proxy fails over between them
-instead), and peer-to-peer proxies.
+| Source         | Point                                                                   | Here                                                                                  |
+| -------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| RFC            | `ShardManager` with a strategy, by instance or name                     | `strategy` (instance or name) and `registerStrategy`                                  |
+| RFC            | Worker, Fork (default), Cluster, Network strategies                     | `WorkerStrategy`, `ForkStrategy`, `ClusterStrategy`, `NetworkStrategy`                |
+| RFC            | Manager configures the clients through the environment                  | `ShardContext` in `WOLFSTAR_SHARDER` (or worker data), `DISCORD_TOKEN`                |
+| RFC            | Lifecycle events, invalid messages printed when unhandled               | `shardCreate` … `shardInvalidMessage`, `console.error` fallbacks                      |
+| RFC            | Missing pings restart the shard when unhandled                          | `shardUnresponsive`, restart without listeners                                        |
+| RFC            | Requests time out within the ping timeout, globally or per request      | `requestTimeout` (defaults to `ping.timeout`), `timeout` per request                  |
+| RFC            | `ShardClient` signals: Starting, Ready, Exit, Restarting                | `ShardStatus` (plus #7204's `Disconnected` and `Reconnecting`)                        |
+| RFC            | `registerMessageHandler` / `registerMessageTransformer`                 | `ShardClient.register*` and the module-level registries                               |
+| RFC            | JSON and V8 message handlers                                            | `JsonMessageHandler`, `V8MessageHandler` (plus #7204's `RawMessageHandler`)           |
+| RFC            | Composable transformers, reverse order when reading, Gzip and Brotli    | `MessageTransformer` with its channel context, `GzipTransformer`, `BrotliTransformer` |
+| RFC            | `ShardManagerProxy` over an encrypted network, local routing            | `ShardManagerProxy`, TLS, messages between its shards routed locally                  |
+| RFC answers    | Raw data, no `eval`; opt-in replies with timeouts; async transformers   | Messages vs requests, `RequestOptions`, async `write`/`read`                          |
+| RFC answers    | Cancel requests, dequeue them, `AbortController` in shards              | `signal`, dropped from the ready queue, `signal` in handlers                          |
+| RFC answers    | Partial results of aborted broadcasts                                   | `broadcastRequest(body, { partial: true })`                                           |
+| RFC answers    | Enqueue messages for shards not ready, with a ready-time hint           | `waitForReady`, `spawn.readyHint` (or measured), early failure, `shardSlowStart`      |
+| RFC answers    | `error` signal when a shard fails before ready                          | `shardError` with `ShardSpawnError`                                                   |
+| RFC answers    | Configurable restart limits, alerts, Erlang supervisors                 | `supervisor` intensity, period, strategy; `shardGiveUp`                               |
+| RFC answers    | Manager death: configurable, default die                                | `disconnect` event, exit without listeners; proxy `managerLoss`                       |
+| RFC answers    | Proxies: capacity, queue when full, failover managers, no rebalancing   | `capacity` with `Load` reports, pending spawns, `managers` list, `reconnectGrace`     |
+| RFC answers    | `Result<T, E>` instead of `try`/`catch`                                 | `try*` methods, handlers returning a `Result`, `ShardError`                           |
+| RFC answers    | Proxies with several managers                                           | `mode: "failover"` or `mode: "all"`, per-manager `token`, `tls`, and `id`             |
+| RFC            | Proxies routing to shards they host, and to other proxies (P2P)         | Local routing, `peer` connections, the manager's directory of ready shards            |
+| RFC answers    | Optional built-in command layer                                         | `createCommandHandler`, `command`                                                     |
+| RFC answers    | Identify processes and threads for observability                        | `channel.pid`, `threadId`, `host`; worker threads named `shard <id>`                  |
+| #7204          | `totalShards`, `shardList`, `clusters` (CPU count), `"auto"`            | Layout options                                                                        |
+| #7204          | Respawn budget that resets on ready                                     | `supervisor` with `period: 0`                                                         |
+| #7204          | Fetch `/gateway/bot` once in the manager and share it                   | `gatewayInformation`, `shard.fetchGatewayInformation()`                               |
+| #7204          | `fetchRecommendedShards` with `guildsPerShard` and `multipleOf`         | `fetchRecommendedShardCount`, `recommended`                                           |
+| #7204          | Ping with `delaySinceReceived`                                          | `ping.delaySinceReceived`                                                             |
+| #7204 / #8859  | Restart all shards, spawn delay after ready, spawn timeout then requeue | `restartAll`, `spawn.delay`, `spawn.timeout`                                          |
+| #8859          | Manager-side "channel" to each shard                                    | `ShardChannel`, `manager.channels`                                                    |
+| #8859          | Start, close, restart single gateway shards, from the manager or shards | `setShardHandler`, `startShard` & co., `shard.control()`                              |
+| #8859          | Strategies with `init` and `destroy`                                    | `ChannelStrategy.init` / `destroy`                                                    |
+| #7204 comments | Cross-process identify pacing, minimal-downtime restarts and resharding | `identifyThrottler`, `restart(id, { rolling })`, `reshard()`                          |

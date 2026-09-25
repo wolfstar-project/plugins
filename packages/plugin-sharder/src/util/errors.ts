@@ -1,4 +1,14 @@
 /**
+ * What a sharder operation fails with: the `E` of the `try*` methods' `Result<T, E>`.
+ */
+export type ShardError =
+  | ShardRequestError
+  | ShardRequestTimeoutError
+  | ShardUnavailableError
+  | ShardSpawnError
+  | Error;
+
+/**
  * The handler of a request threw, or there was none: the error is the remote one, rebuilt.
  */
 export class ShardRequestError extends Error {

@@ -157,7 +157,7 @@ describe("NetworkStrategy", () => {
       expect(hello).toBe("hello 0 from 1");
       expect(forward).not.toHaveBeenCalled();
       expect(strategy.proxies).toEqual([
-        { name: "den", host: expect.any(String), capacity: 4, load: 2 },
+        { name: "den", host: expect.any(String), capacity: 4, available: 2, load: 2, peer: null },
       ]);
       expect(manager.channels[0]!.host).toBe("den");
       expect(manager.channels[0]!.pid).toBe(replies[0]!.pid);
@@ -235,6 +235,95 @@ describe("NetworkStrategy", () => {
       const after = await manager.broadcastRequest<Info>(null);
 
       expect(after.map(({ pid }) => pid)).not.toEqual(before.map(({ pid }) => pid));
+    },
+  );
+
+  test(
+    "GIVEN a proxy serving two managers at once THEN it shares its capacity",
+    { timeout: 30_000 },
+    async () => {
+      const managers = ["north", "south"].map((id) => {
+        const strategy = new NetworkStrategy({ port: 0, host: "127.0.0.1", token: "hunter2", id });
+        const manager = track(
+          new ShardManager({ strategy, shards: 2, spawn: { delay: 0, timeout: 20_000 } }),
+        );
+        return { strategy, manager };
+      });
+      await Promise.all(managers.map(({ strategy }) => strategy.init()));
+      const den = track(
+        new ShardManagerProxy({
+          managers: managers.map(({ strategy }) => `127.0.0.1:${strategy.port}`),
+          mode: "all",
+          token: "hunter2",
+          name: "den",
+          capacity: 4,
+          strategy: new ForkStrategy({ path: script, execArgv }),
+          reconnectDelay: 50,
+        }),
+      );
+      await den.connect();
+      await expect.poll(() => den.connectedManagers.length).toBe(2);
+
+      await Promise.all(managers.map(({ manager }) => manager.spawn()));
+      const replies = await Promise.all(
+        managers.map(({ manager }) => manager.broadcastRequest<Info>(null)),
+      );
+
+      expect(replies.map((infos) => infos.map(({ id }) => id))).toEqual([
+        [0, 1],
+        [0, 1],
+      ]);
+      expect(den.shards).toHaveLength(4);
+      await expect
+        .poll(() => managers.map(({ strategy }) => strategy.proxies[0]?.available))
+        .toEqual([0, 0]);
+    },
+  );
+
+  test(
+    "GIVEN proxies accepting peers THEN shards of different proxies talk directly",
+    { timeout: 30_000 },
+    async () => {
+      const strategy = new NetworkStrategy({ port: 0, host: "127.0.0.1", token: "hunter2" });
+      const manager = track(
+        new ShardManager({
+          strategy,
+          shards: 2,
+          spawn: { delay: 0, timeout: 20_000 },
+          requestTimeout: 5_000,
+        }),
+      );
+      await strategy.init();
+      const proxies = ["den", "lair"].map((name) =>
+        track(
+          new ShardManagerProxy({
+            managers: [`127.0.0.1:${strategy.port}`],
+            token: "hunter2",
+            name,
+            capacity: 1,
+            strategy: new ForkStrategy({ path: script, execArgv }),
+            reconnectDelay: 50,
+            peer: { port: 0, host: "127.0.0.1" },
+          }),
+        ),
+      );
+      for (const proxy of proxies) await proxy.connect();
+      await manager.spawn();
+      expect(new Set(manager.channels.map((channel) => channel.host))).toEqual(
+        new Set(["den", "lair"]),
+      );
+
+      // The first request opens the peer connection, and goes through the manager meanwhile.
+      expect(await manager.request(0, { type: "ask", to: 1 })).toBe("hello 0 from 1");
+      await expect.poll(() => proxies.every((proxy) => proxy.peers.length > 0)).toBe(true);
+      const forward = vi.spyOn(manager, "forward");
+      const route = vi.spyOn(manager, "route");
+
+      expect(await manager.request(0, { type: "ask", to: 1 })).toBe("hello 0 from 1");
+      expect(await manager.request(1, { type: "ask", to: 0 })).toBe("hello 1 from 0");
+      expect(forward).not.toHaveBeenCalled();
+      expect(route).not.toHaveBeenCalled();
+      expect(strategy.proxies.every((proxy) => proxy.peer !== null)).toBe(true);
     },
   );
 });

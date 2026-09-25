@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  Result,
   GzipTransformer,
   JsonMessageHandler,
   RawMessageHandler,
@@ -318,5 +319,38 @@ describe("gateway shards", () => {
     expect(ShardClient.context).toBeNull();
     expect(() => new ShardClient()).toThrow(/not spawned by a ShardManager/);
     expect(strategy.name).toBe("memory");
+  });
+});
+
+describe("Result", () => {
+  test("GIVEN try methods THEN they resolve with Ok and Err instead of throwing", async () => {
+    const { manager, strategy } = createManager((client) => {
+      client.setRequestHandler((body: number) =>
+        body < 0 ? Result.err(new RangeError("Negative howl")) : Result.ok(body * 2),
+      );
+      void client.ready();
+    });
+    await manager.spawn();
+
+    const doubled = await manager.tryRequest<number>(0, 21);
+    const negative = await manager.tryRequest<number>(0, -1);
+    const missing = await manager.tryRequest(7, null);
+    const all = await manager.tryBroadcastRequest<number>(2);
+    const fromShard = await strategy.clients[0]!.tryBroadcastRequest<number>(-1);
+
+    expect(doubled.unwrap()).toBe(42);
+    expect(negative.isErr()).toBe(true);
+    expect(negative.unwrapErr()).toMatchObject({
+      name: "ShardRequestError",
+      remoteName: "RangeError",
+    });
+    expect(missing.unwrapErr()).toMatchObject({ name: "ShardUnavailableError" });
+    expect(all.map((result) => result.unwrap())).toEqual([4, 4]);
+    expect(fromShard.unwrap().every((result) => result.isErr())).toBe(true);
+    expect((await manager.trySend(0, "awoo")).isOk()).toBe(true);
+    expect(
+      (await strategy.clients[0]!.tryControl({ action: "close", target: { shard: 9 } })).isErr(),
+    ).toBe(true);
+    await manager.destroy();
   });
 });

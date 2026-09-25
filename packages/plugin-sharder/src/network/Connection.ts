@@ -3,7 +3,7 @@ import { EventEmitter } from "node:events";
 import type { Socket } from "node:net";
 
 /**
- * The frames exchanged between a manager and its proxies.
+ * The frames exchanged between a manager and its proxies, and between proxies.
  *
  * @internal
  */
@@ -49,6 +49,30 @@ export const FrameType = {
    */
   BinaryData: 9,
   Heartbeat: 10,
+  /**
+   * Proxy → manager, JSON `{ available }`: how many more shards the proxy takes, across all its managers.
+   */
+  Load: 11,
+  /**
+   * Proxy → manager, JSON `{ spawnId, ready }`: whether a shard is ready, for the peer directory.
+   */
+  Status: 12,
+  /**
+   * Manager → proxy, JSON {@link DirectoryFrame}: which proxy runs which ready shard, for peer routing.
+   */
+  Directory: 13,
+  /**
+   * Proxy → proxy, JSON `{ token, name }`: opens a peer connection.
+   */
+  PeerHello: 20,
+  /**
+   * Proxy → proxy, empty: accepts a peer connection.
+   */
+  PeerWelcome: 21,
+  /**
+   * Proxy → proxy: a {@link PeerHeader} (length-prefixed JSON), then the packet as a shard encoded it.
+   */
+  PeerPacket: 22,
 } as const;
 
 /**
@@ -63,7 +87,20 @@ export interface HelloFrame {
   token: string;
   name: string;
   capacity: number;
+  available: number;
   running: number[];
+  /**
+   * Where other proxies reach this one, when it accepts peers.
+   */
+  peer: PeerAddress | null;
+}
+
+/**
+ * Where a proxy accepts peer connections.
+ */
+export interface PeerAddress {
+  host: string;
+  port: number;
 }
 
 /**
@@ -71,6 +108,42 @@ export interface HelloFrame {
  */
 export interface WelcomeFrame {
   kill: number[];
+  /**
+   * The ID of the manager: shards of different managers are never routed to each other.
+   */
+  managerId: string;
+}
+
+/**
+ * @internal
+ */
+export interface DirectoryFrame {
+  entries: { channel: number; proxy: string; host: string; port: number }[];
+}
+
+/**
+ * The routing header of a peer packet.
+ *
+ * @internal
+ */
+export interface PeerHeader {
+  /**
+   * The ID of the manager of both shards.
+   */
+  scope: string;
+  /**
+   * The channel of the shard the packet comes from.
+   */
+  origin: number;
+  /**
+   * The channel of the shard the packet goes to.
+   */
+  target: number;
+  binary: boolean;
+  /**
+   * Sent back because the target is not here or not ready: the sender relays it through the manager instead.
+   */
+  bounce?: boolean;
 }
 
 /**
@@ -145,6 +218,14 @@ export class Connection extends EventEmitter<ConnectionEvents> {
     return this.send(type, Buffer.from(JSON.stringify(value)));
   }
 
+  public sendPeer(header: PeerHeader, data: string | Uint8Array): Promise<void> {
+    const json = Buffer.from(JSON.stringify(header));
+    const length = Buffer.allocUnsafe(4);
+    length.writeUInt32BE(json.length, 0);
+    const body = typeof data === "string" ? Buffer.from(data) : data;
+    return this.send(FrameType.PeerPacket, Buffer.concat([length, json, body]));
+  }
+
   public sendData(spawnId: number, data: unknown): Promise<void> {
     const prefix = Buffer.allocUnsafe(4);
     prefix.writeUInt32BE(spawnId, 0);
@@ -202,6 +283,18 @@ export function readData(
     spawnId,
     data: type === FrameType.StringData ? body.toString() : new Uint8Array(body),
   };
+}
+
+/**
+ * Reads the header and the data of a peer packet.
+ *
+ * @internal
+ */
+export function readPeer(payload: Buffer): { header: PeerHeader; data: string | Uint8Array } {
+  const length = payload.readUInt32BE(0);
+  const header = JSON.parse(payload.subarray(4, 4 + length).toString()) as PeerHeader;
+  const body = payload.subarray(4 + length);
+  return { header, data: header.binary ? new Uint8Array(body) : body.toString() };
 }
 
 /**

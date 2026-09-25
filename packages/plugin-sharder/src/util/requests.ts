@@ -1,10 +1,11 @@
+import { Result } from "@sapphire/result";
 import {
   Op,
   serializeError,
   type Packet,
   type SerializedSettledResult,
 } from "../messages/protocol.js";
-import { ShardRequestError, ShardRequestTimeoutError } from "./errors.js";
+import { ShardRequestError, ShardRequestTimeoutError, type ShardError } from "./errors.js";
 
 /**
  * The options of a request.
@@ -34,7 +35,8 @@ export interface BroadcastRequestOptions extends RequestOptions {
 
 /**
  * Answers the requests of the other side. Its return value (or the value it resolves to) is the reply, and a throw is
- * rejected on the other side as a {@link ShardRequestError}.
+ * rejected on the other side as a {@link ShardRequestError}. It may also return a `Result`: `Ok` is the reply, `Err`
+ * the error.
  */
 export type RequestHandler<Context> = (
   body: any,
@@ -167,7 +169,11 @@ export class IncomingRequests {
     let reply: Packet;
     try {
       if (!handler) throw new Error("There is no request handler");
-      const body = await handler(packet.body, { ...context, signal: controller.signal });
+      let body = await handler(packet.body, { ...context, signal: controller.signal });
+      if (Result.isResult(body)) {
+        if (body.isErr()) throw body.unwrapErr();
+        body = body.unwrap();
+      }
       reply = { op: Op.Reply, nonce: packet.nonce, body };
     } catch (error) {
       reply = { op: Op.Reply, nonce: packet.nonce, error: serializeError(error) };
@@ -186,6 +192,32 @@ export class IncomingRequests {
   public abortAll(): void {
     for (const nonce of this.#controllers.keys()) this.abort(nonce);
   }
+}
+
+/**
+ * Turns an operation into a `Result`, for the `try*` methods.
+ *
+ * @internal
+ */
+export async function toResult<Value>(
+  operation: () => Promise<Value>,
+): Promise<Result<Value, ShardError>> {
+  return Result.fromAsync(operation) as Promise<Result<Value, ShardError>>;
+}
+
+/**
+ * Turns the outcomes of a partial broadcast into `Result`s.
+ *
+ * @internal
+ */
+export function settledToResults<Value>(
+  results: readonly PromiseSettledResult<Value>[],
+): Result<Value, ShardError>[] {
+  return results.map((result) =>
+    result.status === "fulfilled"
+      ? Result.ok<Value, ShardError>(result.value)
+      : Result.err<ShardError, Value>(result.reason as ShardError),
+  );
 }
 
 /**

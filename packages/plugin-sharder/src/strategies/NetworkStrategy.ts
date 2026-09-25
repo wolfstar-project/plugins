@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createServer as createNetServer, type Server, type Socket } from "node:net";
 import { createServer as createTlsServer, type TlsOptions } from "node:tls";
 import {
@@ -5,7 +6,9 @@ import {
   FrameType,
   readData,
   tokensMatch,
+  type DirectoryFrame,
   type HelloFrame,
+  type PeerAddress,
   type SpawnFrame,
   type WelcomeFrame,
 } from "../network/Connection.js";
@@ -30,6 +33,10 @@ export interface NetworkStrategyOptions {
    * The shared secret proxies authenticate with.
    */
   token: string;
+  /**
+   * The ID of the manager, which proxies serving several managers tell them apart by. Defaults to a random UUID.
+   */
+  id?: string;
   /**
    * The TLS options (`key`, `cert`, ...) to encrypt the connections, recommended. Left out, the connections are plain
    * TCP: only for trusted networks.
@@ -64,13 +71,21 @@ export interface ProxyInfo {
    */
   host: string | null;
   /**
-   * How many shards it runs at most.
+   * How many shards it runs at most, across all its managers.
    */
   capacity: number;
   /**
-   * How many shards it runs.
+   * How many more shards it takes, across all its managers.
+   */
+  available: number;
+  /**
+   * How many shards it runs for this manager.
    */
   load: number;
+  /**
+   * Where other proxies reach it, when it accepts peers.
+   */
+  peer: PeerAddress | null;
 }
 
 interface Spawn {
@@ -81,6 +96,7 @@ interface Spawn {
   proxy: Proxy | null;
   pid: number | null;
   threadId: number | null;
+  ready: boolean;
   exited: boolean;
   exit: Promise<void>;
   resolveExit(): void;
@@ -91,6 +107,8 @@ interface Proxy {
   name: string;
   host: string | null;
   capacity: number;
+  available: number;
+  peer: PeerAddress | null;
   connection: Connection | null;
   spawns: Set<Spawn>;
 }
@@ -100,23 +118,33 @@ interface Proxy {
  * network strategy.
  *
  * @remarks
- * Each spawn goes to the connected proxy with the lowest load, within its capacity; without room, it waits for a
- * proxy to connect, or for the spawn timeout. A proxy losing its connection has `reconnectGrace` to come back with its
- * shards, after which they are spawned elsewhere; its stale shards are killed when it comes back later. Proxies
- * coming back are not rebalanced: they take the next spawns.
+ * Each spawn goes to the connected proxy with the most room, as the proxies report it across all the managers they
+ * serve; without room, it waits for a proxy, or for the spawn timeout. A proxy losing its connection has
+ * `reconnectGrace` to come back with its shards, after which they are spawned elsewhere; its stale shards are killed
+ * when it comes back later. Proxies coming back are not rebalanced: they take the next spawns.
+ *
+ * The strategy keeps the proxies accepting peers informed of which proxy runs which ready shard, so they carry the
+ * messages between their shards directly.
  */
 export class NetworkStrategy implements ChannelStrategy {
   public readonly name = "network";
   public readonly options: NetworkStrategyOptions;
+
+  /**
+   * The ID of the manager, see {@link NetworkStrategyOptions.id}.
+   */
+  public readonly id: string;
 
   readonly #proxies = new Map<string, Proxy>();
   readonly #spawns = new Map<number, Spawn>();
   readonly #pending: Spawn[] = [];
   #server: Server | null = null;
   #nextSpawnId = 1;
+  #directoryQueued = false;
 
   public constructor(options: NetworkStrategyOptions) {
     this.options = options;
+    this.id = options.id ?? randomUUID();
   }
 
   /**
@@ -127,7 +155,9 @@ export class NetworkStrategy implements ChannelStrategy {
       name: proxy.name,
       host: proxy.host,
       capacity: proxy.capacity,
+      available: proxy.available,
       load: proxy.spawns.size,
+      peer: proxy.peer,
     }));
   }
 
@@ -194,6 +224,7 @@ export class NetworkStrategy implements ChannelStrategy {
       proxy: null,
       pid: null,
       threadId: null,
+      ready: false,
       exited: false,
       exit: new Promise((resolve) => {
         resolveExit = resolve;
@@ -238,9 +269,8 @@ export class NetworkStrategy implements ChannelStrategy {
   #place(spawn: Spawn): void {
     let best: Proxy | null = null;
     for (const proxy of this.#proxies.values()) {
-      if (!proxy.connection || proxy.spawns.size >= proxy.capacity) continue;
-      if (!best || proxy.spawns.size / proxy.capacity < best.spawns.size / best.capacity)
-        best = proxy;
+      if (!proxy.connection || proxy.available <= 0) continue;
+      if (!best || proxy.available / proxy.capacity > best.available / best.capacity) best = proxy;
     }
 
     if (!best) {
@@ -250,6 +280,8 @@ export class NetworkStrategy implements ChannelStrategy {
 
     spawn.proxy = best;
     best.spawns.add(spawn);
+    // Until the proxy reports its new load.
+    best.available--;
     const frame: SpawnFrame = { spawnId: spawn.id, context: spawn.context, env: spawn.env };
     void best.connection!.sendJson(FrameType.Spawn, frame).catch(() => undefined);
   }
@@ -273,6 +305,7 @@ export class NetworkStrategy implements ChannelStrategy {
     if (index !== -1) this.#pending.splice(index, 1);
     spawn.resolveExit();
     spawn.events.exit(code);
+    if (spawn.ready) this.#queueDirectory();
     this.#drain();
   }
 
@@ -325,11 +358,15 @@ export class NetworkStrategy implements ChannelStrategy {
       name: hello.name,
       host: null,
       capacity: hello.capacity,
+      available: hello.available,
+      peer: null,
       connection: null,
       spawns: new Set(),
     };
     proxy.connection = connection;
     proxy.capacity = hello.capacity;
+    proxy.available = hello.available;
+    proxy.peer = hello.peer;
     proxy.host = connection.socket.remoteAddress ?? null;
     this.#proxies.set(proxy.name, proxy);
 
@@ -346,8 +383,10 @@ export class NetworkStrategy implements ChannelStrategy {
 
     const welcome: WelcomeFrame = {
       kill: hello.running.filter((spawnId) => this.#spawns.get(spawnId)?.proxy !== proxy),
+      managerId: this.id,
     };
     void connection.sendJson(FrameType.Welcome, welcome).catch(() => undefined);
+    this.#queueDirectory();
     this.#drain();
     return proxy;
   }
@@ -362,11 +401,19 @@ export class NetworkStrategy implements ChannelStrategy {
 
     const body = JSON.parse(payload.toString()) as {
       spawnId: number;
+      available?: number;
+      ready?: boolean;
       code?: number | null;
       message?: string;
       pid?: number | null;
       threadId?: number | null;
     };
+    if (type === FrameType.Load) {
+      proxy.available = body.available ?? proxy.available;
+      this.#drain();
+      return;
+    }
+
     const spawn = this.#spawns.get(body.spawnId);
     if (spawn?.proxy !== proxy) return;
 
@@ -374,6 +421,10 @@ export class NetworkStrategy implements ChannelStrategy {
       case FrameType.Spawned:
         spawn.pid = body.pid ?? null;
         spawn.threadId = body.threadId ?? null;
+        break;
+      case FrameType.Status:
+        spawn.ready = body.ready ?? false;
+        this.#queueDirectory();
         break;
       case FrameType.Exit:
         this.#exit(spawn, body.code ?? null);
@@ -395,5 +446,40 @@ export class NetworkStrategy implements ChannelStrategy {
     }
 
     if (proxy.spawns.size === 0) this.#proxies.delete(proxy.name);
+    this.#queueDirectory();
+  }
+
+  // Coalesces the changes of a tick into one directory for every proxy.
+  #queueDirectory(): void {
+    if (this.#directoryQueued) return;
+    this.#directoryQueued = true;
+    queueMicrotask(() => {
+      this.#directoryQueued = false;
+      this.#sendDirectory();
+    });
+  }
+
+  #sendDirectory(): void {
+    // The latest ready spawn of each channel, on a connected proxy accepting peers.
+    const byChannel = new Map<number, Spawn>();
+    for (const spawn of this.#spawns.values()) {
+      if (!spawn.ready || !spawn.proxy?.connection || !spawn.proxy.peer) continue;
+      const current = byChannel.get(spawn.context.id);
+      if (!current || current.id < spawn.id) byChannel.set(spawn.context.id, spawn);
+    }
+
+    const directory: DirectoryFrame = {
+      entries: [...byChannel.values()].map((spawn) => ({
+        channel: spawn.context.id,
+        proxy: spawn.proxy!.name,
+        host: spawn.proxy!.peer!.host,
+        port: spawn.proxy!.peer!.port,
+      })),
+    };
+    for (const proxy of this.#proxies.values()) {
+      if (proxy.connection?.closed === false && proxy.peer) {
+        void proxy.connection.sendJson(FrameType.Directory, directory).catch(() => undefined);
+      }
+    }
   }
 }

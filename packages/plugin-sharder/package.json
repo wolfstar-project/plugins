@@ -49,6 +49,9 @@
     "test": "vitest run",
     "prepack": "pnpm build"
   },
+  "dependencies": {
+    "@sapphire/result": "^2.8.0"
+  },
   "engines": {
     "node": ">=20.0.0"
   }

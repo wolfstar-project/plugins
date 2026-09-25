@@ -1,3 +1,4 @@
+import type { Result } from "@sapphire/result";
 import { EventEmitter } from "node:events";
 import { availableParallelism } from "node:os";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -17,7 +18,7 @@ import {
 } from "./messages/protocol.js";
 import type { ChannelStrategy } from "./strategies/ChannelStrategy.js";
 import { resolveStrategy } from "./strategies/registry.js";
-import { ShardUnavailableError } from "./util/errors.js";
+import { ShardUnavailableError, type ShardError } from "./util/errors.js";
 import {
   GatewayInformationCache,
   fetchGatewayInformation,
@@ -29,6 +30,8 @@ import {
 import { IdentifyQueue } from "./util/IdentifyQueue.js";
 import {
   serializeSettled,
+  settledToResults,
+  toResult,
   type BroadcastRequestOptions,
   type RequestHandler,
   type RequestOptions,
@@ -478,6 +481,40 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
   public broadcastRequest(body: unknown, options: BroadcastRequestOptions = {}): Promise<unknown> {
     const requests = this.channels.map((channel) => channel.request(body, options));
     return options.partial ? Promise.allSettled(requests) : Promise.all(requests);
+  }
+
+  /**
+   * {@link ShardManager.send}, resolving with a `Result` rather than rejecting.
+   */
+  public trySend(
+    channelId: number,
+    body: unknown,
+    options?: RequestOptions,
+  ): Promise<Result<void, ShardError>> {
+    return toResult(() => this.send(channelId, body, options));
+  }
+
+  /**
+   * {@link ShardManager.request}, resolving with a `Result` rather than rejecting.
+   */
+  public tryRequest<Reply = unknown>(
+    channelId: number,
+    body: unknown,
+    options?: RequestOptions,
+  ): Promise<Result<Reply, ShardError>> {
+    return toResult(() => this.request<Reply>(channelId, body, options));
+  }
+
+  /**
+   * {@link ShardManager.broadcastRequest}, resolving with one `Result` per shard, by shard ID.
+   */
+  public async tryBroadcastRequest<Reply = unknown>(
+    body: unknown,
+    options?: RequestOptions,
+  ): Promise<Result<Reply, ShardError>[]> {
+    return settledToResults(
+      await this.broadcastRequest<Reply>(body, { ...options, partial: true }),
+    );
   }
 
   /**
