@@ -66,10 +66,10 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^3.4.0"
+    "@wolfstar/http-framework": "^5.1.0"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.4.0"
+    "@wolfstar/http-framework": "^3.4.0 || ^5.0.0"
   },
   "engines": {
     "node": ">=20.0.0"
