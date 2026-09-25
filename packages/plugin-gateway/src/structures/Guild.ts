@@ -15,6 +15,9 @@ import {
 } from "discord-api-types/v10";
 import type { AutoModerationRuleManager } from "../managers/AutoModerationRuleManager.js";
 import type { GuildBanManager } from "../managers/GuildBanManager.js";
+import type { GuildScheduledEventManager } from "../managers/GuildScheduledEventManager.js";
+import type { GuildSoundboardSoundManager } from "../managers/GuildSoundboardSoundManager.js";
+import type { StageInstanceManager } from "../managers/StageInstanceManager.js";
 import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
 import type { FetchedThreads } from "../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
@@ -293,6 +296,27 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public fetchWebhooks(): Promise<Webhook[]> {
     return getGatewayClient().webhooks.fetchGuild(this.id);
+  }
+
+  /**
+   * The scheduled events of the guild.
+   */
+  public get scheduledEvents(): GuildScheduledEventManager {
+    return getGatewayClient().guilds.scheduledEvents(this.id);
+  }
+
+  /**
+   * The live stages of the guild.
+   */
+  public get stageInstances(): StageInstanceManager {
+    return getGatewayClient().guilds.stageInstances(this.id);
+  }
+
+  /**
+   * The soundboard sounds of the guild.
+   */
+  public get soundboardSounds(): GuildSoundboardSoundManager {
+    return getGatewayClient().guilds.soundboardSounds(this.id);
   }
 
   /**

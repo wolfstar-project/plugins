@@ -9,6 +9,9 @@ import type {
   GatewayMessageDeleteDispatchData,
   GatewayMessageReactionRemoveAllDispatchData,
   ReactionType,
+  GatewayGuildScheduledEventUserAddDispatchData,
+  GatewayGuildScheduledEventUserRemoveDispatchData,
+  GatewayGuildSoundboardSoundDeleteDispatchData,
   GatewayThreadDeleteDispatchData,
   GatewayThreadListSync,
   GatewayThreadMembersUpdateDispatchData,
@@ -22,6 +25,9 @@ import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
 import type { Guild } from "../structures/Guild.js";
 import type { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
 import type { GuildBan } from "../structures/GuildBan.js";
+import type { GuildScheduledEvent } from "../structures/GuildScheduledEvent.js";
+import type { SoundboardSound } from "../structures/SoundboardSound.js";
+import type { StageInstance } from "../structures/StageInstance.js";
 import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { GuildInvite } from "../structures/GuildInvite.js";
 import type { GuildMember } from "../structures/GuildMember.js";
@@ -207,6 +213,43 @@ export interface GatewayEventMap {
   /**
    * Emitted when a user is banned. Bans from the gateway have no reason.
    */
+  guildScheduledEventCreate: [event: GuildScheduledEvent];
+  guildScheduledEventUpdate: [oldEvent: GuildScheduledEvent | null, newEvent: GuildScheduledEvent];
+  guildScheduledEventDelete: [event: GuildScheduledEvent];
+  /**
+   * Emitted when a user subscribes to a scheduled event, with the cached event and user when there are.
+   */
+  guildScheduledEventUserAdd: [
+    event: GuildScheduledEvent | null,
+    user: User | null,
+    data: GatewayGuildScheduledEventUserAddDispatchData,
+  ];
+  guildScheduledEventUserRemove: [
+    event: GuildScheduledEvent | null,
+    user: User | null,
+    data: GatewayGuildScheduledEventUserRemoveDispatchData,
+  ];
+  stageInstanceCreate: [stageInstance: StageInstance];
+  stageInstanceUpdate: [oldStageInstance: StageInstance | null, newStageInstance: StageInstance];
+  stageInstanceDelete: [stageInstance: StageInstance];
+  guildSoundboardSoundCreate: [sound: SoundboardSound];
+  guildSoundboardSoundUpdate: [oldSound: SoundboardSound | null, newSound: SoundboardSound];
+  /**
+   * Emitted when a soundboard sound is deleted, with the cached sound when there is one.
+   */
+  guildSoundboardSoundDelete: [
+    sound: SoundboardSound | null,
+    data: GatewayGuildSoundboardSoundDeleteDispatchData,
+  ];
+  /**
+   * Emitted when several soundboard sounds of a guild change at once.
+   */
+  guildSoundboardSoundsUpdate: [sounds: SoundboardSound[], guildId: string];
+  /**
+   * Emitted with the sounds of a guild, in answer to a request for them over the gateway.
+   */
+  soundboardSounds: [sounds: SoundboardSound[], guildId: string];
+
   guildBanAdd: [ban: GuildBan];
   /**
    * Emitted when a ban is lifted, with the cached ban (and its reason, if it was fetched) when there is one.

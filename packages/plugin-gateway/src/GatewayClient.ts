@@ -17,12 +17,14 @@ import {
   type RESTGetStickerPacksResult,
   type GatewayReadyDispatchData,
   type GatewayIntentBits,
+  type APISoundboardSound,
 } from "discord-api-types/v10";
 import { ChannelManager } from "./managers/ChannelManager.js";
 import { GuildManager } from "./managers/GuildManager.js";
 import { GuildMemberManager } from "./managers/GuildMemberManager.js";
 import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
+import { SoundboardSound } from "./structures/SoundboardSound.js";
 import { WebhookManager } from "./managers/WebhookManager.js";
 import { VoiceStateManager } from "./managers/VoiceStateManager.js";
 import { PresenceManager } from "./managers/PresenceManager.js";
@@ -248,6 +250,16 @@ export class GatewayClient extends Client {
    */
   public async idle(): Promise<void> {
     await this.#queue.idle();
+  }
+
+  /**
+   * Fetches Discord's default soundboard sounds, which every guild can play.
+   */
+  public async fetchDefaultSoundboardSounds(): Promise<SoundboardSound[]> {
+    const sounds = (await container.rest.get(
+      Routes.soundboardDefaultSounds(),
+    )) as APISoundboardSound[];
+    return sounds.map((sound) => new SoundboardSound(sound));
   }
 
   /**
