@@ -10,7 +10,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import type { InviteData } from "../structures/BaseInvite.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
 import { container } from "../util/container.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
  * The options to create an invite with.
@@ -56,6 +56,33 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
 
   public createStructure(data: CacheEntityTypes["invites"]): GuildInvite {
     return new GuildInvite(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["invites"]): string {
+    return this.resolveKey(data.code);
+  }
+
+  /**
+   * Adds an invite to the cache, and its inviter and target user to `client.users`.
+   *
+   * @internal
+   */
+  public override async _add(
+    data: CacheEntityTypes["invites"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<GuildInvite> {
+    if (data.inviter) await this.client.users._add(data.inviter, cache);
+    if (data.target_user) await this.client.users._add(data.target_user, cache);
+    return super._add(data, cache, options);
+  }
+
+  public override async hydrate(data: CacheEntityTypes["invites"]): Promise<GuildInvite> {
+    const { users } = this.client;
+    return new GuildInvite(data, {
+      inviter: data.inviter ? await users.resolveData(data.inviter) : undefined,
+      targetUser: data.target_user ? await users.resolveData(data.target_user) : undefined,
+    });
   }
 
   public resolveKey(code: string): string {
@@ -124,10 +151,8 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
     return this.toCached(invite);
   }
 
-  private async store(invite: APIInvite | APIExtendedInvite): Promise<GuildInvite> {
-    const raw = this.toCached(invite);
-    await this.cache?.set(this.resolveKey(invite.code), raw);
-    return this.createStructure(raw);
+  private store(invite: APIInvite | APIExtendedInvite): Promise<GuildInvite> {
+    return this._add(this.toCached(invite));
   }
 
   // The cache holds the `INVITE_CREATE` shape: REST invites keep their nested objects, plus the flat IDs it needs.

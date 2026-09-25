@@ -6,7 +6,7 @@ import {
   type GatewayInviteCreateDispatchData,
   type InviteTargetType,
 } from "discord-api-types/v10";
-import { kData, Structure } from "./Structure.js";
+import { kData, kPatch, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
 /**
@@ -22,6 +22,25 @@ export type InviteData = { code: string } & Partial<Omit<APIExtendedInvite, "cod
  * @typeParam Data The raw invite data this structure wraps.
  */
 export class BaseInvite<Data extends InviteData = InviteData> extends Structure<Data> {
+  #inviter: User | undefined;
+  #targetUser: User | undefined;
+
+  /**
+   * @param data The raw invite.
+   * @param relations The inviter and target user as resolved from the cache, by `client.guilds.invites()`.
+   */
+  public constructor(data: Data, relations: { inviter?: User; targetUser?: User } = {}) {
+    super(data);
+    this.#inviter = relations.inviter;
+    this.#targetUser = relations.targetUser;
+  }
+
+  public override [kPatch](data: Readonly<Partial<Data>>): this {
+    if (data.inviter) this.#inviter = undefined;
+    if (data.target_user) this.#targetUser = undefined;
+    return super[kPatch](data);
+  }
+
   public get code() {
     return this[kData].code;
   }
@@ -53,7 +72,7 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Structure<
    */
   public get inviter(): User | null {
     const { inviter } = this[kData];
-    return inviter ? new User(inviter) : null;
+    return this.#inviter ?? (inviter ? new User(inviter) : null);
   }
 
   public get inviterId(): string | null {
@@ -69,7 +88,7 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Structure<
 
   public get targetUser(): User | null {
     const { target_user: targetUser } = this[kData];
-    return targetUser ? new User(targetUser) : null;
+    return this.#targetUser ?? (targetUser ? new User(targetUser) : null);
   }
 
   public get targetApplication(): Partial<APIApplication> | null {

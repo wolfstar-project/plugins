@@ -87,6 +87,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     return createChannel(data);
   }
 
+  public keyOf(data: CacheEntityTypes["channels"]): string {
+    return data.id;
+  }
+
   public resolveKey(channelId: string): string {
     return channelId;
   }
@@ -104,13 +108,13 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
   }
 
   /**
-   * Stores a channel fetched from the API, writing threads to the thread cache.
+   * Writes a channel to the cache, threads to the thread cache.
    *
-   * @param args The ID of the channel.
+   * @param channelId The ID of the channel.
    * @param raw The raw channel.
    */
   protected override async storeRaw(
-    [channelId]: [channelId: string],
+    channelId: string,
     raw: CacheEntityTypes["channels"],
   ): Promise<void> {
     if (createChannel(raw).isThread()) {

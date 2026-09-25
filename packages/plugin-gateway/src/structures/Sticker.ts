@@ -11,6 +11,22 @@ import { User } from "./User.js";
  * A sticker: a standard one from a sticker pack, or a custom one of a guild.
  */
 export class Sticker extends Structure<APISticker> {
+  #user: User | undefined;
+
+  /**
+   * @param data The raw sticker.
+   * @param relations The uploader as resolved from the cache, by the guild's sticker manager.
+   */
+  public constructor(data: APISticker, relations: { user?: User } = {}) {
+    super(data);
+    this.#user = relations.user;
+  }
+
+  public override [kPatch](data: Readonly<Partial<APISticker>>): this {
+    if (data.user) this.#user = undefined;
+    return super[kPatch](data);
+  }
+
   public get id() {
     return this[kData].id;
   }
@@ -71,7 +87,7 @@ export class Sticker extends Structure<APISticker> {
    */
   public get user(): User | null {
     const { user } = this[kData];
-    return user ? new User(user) : null;
+    return this.#user ?? (user ? new User(user) : null);
   }
 
   public get createdTimestamp() {

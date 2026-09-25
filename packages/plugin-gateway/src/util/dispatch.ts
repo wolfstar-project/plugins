@@ -3,9 +3,9 @@ import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { ClientUser } from "../structures/ClientUser.js";
 import { kPatch } from "../structures/Structure.js";
-import { GuildEmoji } from "../structures/GuildEmoji.js";
+import type { GuildEmoji } from "../structures/GuildEmoji.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
-import { Sticker } from "../structures/Sticker.js";
+import type { Sticker } from "../structures/Sticker.js";
 import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
@@ -99,13 +99,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     // The cached entry has the collections stripped, prefer it over the (much larger) payload.
     build: async (client, data) => [
       (await cachedOrUndefined(client.guilds.get(data.id))) ??
-        client.guilds.createStructure(data as CacheEntityTypes["guilds"]),
+        (await client.guilds.hydrate(data as CacheEntityTypes["guilds"])),
     ],
   },
   [GatewayDispatchEvents.GuildUpdate]: {
     event: "guildUpdate",
     before: (client, data) => client.guilds.get(data.id),
-    build: (client, data, previous) => [previous ?? null, client.guilds.createStructure(data)],
+    build: async (client, data, previous) => [previous ?? null, await client.guilds.hydrate(data)],
   },
   [GatewayDispatchEvents.GuildDelete]: {
     event: "guildDelete",
@@ -115,16 +115,19 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.ChannelCreate]: {
     event: "channelCreate",
-    build: (client, data) => [client.channels.createStructure(data)],
+    build: async (client, data) => [await client.channels.hydrate(data)],
   },
   [GatewayDispatchEvents.ChannelUpdate]: {
     event: "channelUpdate",
     before: (client, data) => client.channels.get(data.id),
-    build: (client, data, previous) => [previous ?? null, client.channels.createStructure(data)],
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.channels.hydrate(data),
+    ],
   },
   [GatewayDispatchEvents.ChannelDelete]: {
     event: "channelDelete",
-    build: (client, data) => [client.channels.createStructure(data)],
+    build: async (client, data) => [await client.channels.hydrate(data)],
   },
 
   [GatewayDispatchEvents.ChannelPinsUpdate]: {
@@ -138,12 +141,12 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.ThreadCreate]: {
     event: "threadCreate",
-    build: (client, data) => [client.threads.createStructure(data)],
+    build: async (client, data) => [await client.threads.hydrate(data)],
   },
   [GatewayDispatchEvents.ThreadUpdate]: {
     event: "threadUpdate",
     before: (client, data) => client.threads.get(data.id),
-    build: (client, data, previous) => [previous ?? null, client.threads.createStructure(data)],
+    build: async (client, data, previous) => [previous ?? null, await client.threads.hydrate(data)],
   },
   [GatewayDispatchEvents.ThreadDelete]: {
     event: "threadDelete",
@@ -153,12 +156,15 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.MessageCreate]: {
     event: "messageCreate",
-    build: (client, data) => [client.messages.createStructure(data)],
+    build: async (client, data) => [await client.messages.hydrate(data)],
   },
   [GatewayDispatchEvents.MessageUpdate]: {
     event: "messageUpdate",
     before: (client, data) => client.messages.get(data.channel_id, data.id),
-    build: (client, data, previous) => [previous ?? null, client.messages.createStructure(data)],
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.messages.hydrate(data),
+    ],
   },
   [GatewayDispatchEvents.MessageDelete]: {
     event: "messageDelete",
@@ -178,7 +184,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.GuildMemberAdd]: {
     event: "guildMemberAdd",
-    build: (client, data) => [client.members.createStructure(data)],
+    build: async (client, data) => [await client.members.hydrate(data)],
   },
   [GatewayDispatchEvents.GuildMemberUpdate]: {
     event: "guildMemberUpdate",
@@ -187,7 +193,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data, previous) => [
       previous ?? null,
       (await cachedOrUndefined(client.members.get(data.guild_id, data.user.id))) ??
-        client.members.createStructure(data as CacheEntityTypes["members"]),
+        (await client.members.hydrate(data as CacheEntityTypes["members"])),
     ],
   },
   [GatewayDispatchEvents.GuildMemberRemove]: {
@@ -198,16 +204,16 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.GuildRoleCreate]: {
     event: "guildRoleCreate",
-    build: (client, data) => [
-      client.roles.createStructure({ ...data.role, guild_id: data.guild_id }),
+    build: async (client, data) => [
+      await client.roles.hydrate({ ...data.role, guild_id: data.guild_id }),
     ],
   },
   [GatewayDispatchEvents.GuildRoleUpdate]: {
     event: "guildRoleUpdate",
     before: (client, data) => client.roles.get(data.guild_id, data.role.id),
-    build: (client, data, previous) => [
+    build: async (client, data, previous) => [
       previous ?? null,
-      client.roles.createStructure({ ...data.role, guild_id: data.guild_id }),
+      await client.roles.hydrate({ ...data.role, guild_id: data.guild_id }),
     ],
   },
   [GatewayDispatchEvents.GuildRoleDelete]: {
@@ -218,7 +224,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.InviteCreate]: {
     event: "inviteCreate",
-    build: (_client, data) => [new GuildInvite(data)],
+    build: async (client, data) => [
+      data.guild_id
+        ? await client.guilds.invites(data.guild_id).hydrate(data)
+        : new GuildInvite(data),
+    ],
   },
   [GatewayDispatchEvents.InviteDelete]: {
     event: "inviteDelete",
@@ -239,14 +249,14 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.UserUpdate]: {
     event: "userUpdate",
     before: (client, data) => client.users.get(data.id),
-    build: (client, data, previous) => {
+    build: async (client, data, previous) => {
       // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
       if (client.user?.id === data.id) {
         client.user[kPatch](data);
         return [previous ?? null, client.user];
       }
 
-      return [previous ?? null, client.users.createStructure(data)];
+      return [previous ?? null, await client.users.hydrate(data)];
     },
   },
 };
@@ -262,20 +272,22 @@ export const MultiDispatchHandlers: {
 } = {
   [GatewayDispatchEvents.GuildEmojisUpdate]: {
     before: (client, data) => client.guilds.emojis(data.guild_id).listCached(),
-    emit: (client, data, previous: GuildEmoji[] | undefined) => {
+    emit: async (client, data, previous: GuildEmoji[] | undefined) => {
       if (!client.cache || !previous) return [];
-      const current = data.emojis.map(
-        (emoji) => new GuildEmoji({ ...emoji, guild_id: data.guild_id }),
+      const emojis = client.guilds.emojis(data.guild_id);
+      const current = await Promise.all(
+        data.emojis.map((emoji) => emojis.hydrate({ ...emoji, guild_id: data.guild_id })),
       );
       return diff(previous, current, "emojiCreate", "emojiUpdate", "emojiDelete");
     },
   },
   [GatewayDispatchEvents.GuildStickersUpdate]: {
     before: (client, data) => client.guilds.stickers(data.guild_id).listCached(),
-    emit: (client, data, previous: Sticker[] | undefined) => {
+    emit: async (client, data, previous: Sticker[] | undefined) => {
       if (!client.cache || !previous) return [];
-      const current = data.stickers.map(
-        (sticker) => new Sticker({ ...sticker, guild_id: data.guild_id }),
+      const stickers = client.guilds.stickers(data.guild_id);
+      const current = await Promise.all(
+        data.stickers.map((sticker) => stickers.hydrate({ ...sticker, guild_id: data.guild_id })),
       );
       return diff(previous, current, "stickerCreate", "stickerUpdate", "stickerDelete");
     },

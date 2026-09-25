@@ -12,7 +12,7 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { Message } from "../structures/Message.js";
 import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
-import { User } from "../structures/User.js";
+import { type User } from "../structures/User.js";
 import { container } from "../util/container.js";
 import {
   resolveMessageOptions,
@@ -20,7 +20,7 @@ import {
   type MessageEditOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 
 /**
@@ -75,6 +75,43 @@ export class MessageManager extends CachedManager<
 
   public createStructure(data: CacheEntityTypes["messages"]): Message {
     return new Message(data);
+  }
+
+  public keyOf(data: CacheEntityTypes["messages"]): string {
+    return this.resolveKey(data.channel_id, data.id);
+  }
+
+  /**
+   * Adds a message to the cache, its author to `client.users` (unless a webhook sent it), and its member to
+   * `client.members`.
+   *
+   * @internal
+   */
+  public override async _add(
+    data: CacheEntityTypes["messages"],
+    cache = true,
+    options?: AddOptions,
+  ): Promise<Message> {
+    const { author, member, guild_id: guildId } = data;
+    await this.client.users._add(author, cache && !data.webhook_id);
+    if (member && guildId) {
+      await this.client.members._add({ ...member, user: author, guild_id: guildId }, cache);
+    }
+
+    return super._add(data, cache, options);
+  }
+
+  public override async hydrate(data: CacheEntityTypes["messages"]): Promise<Message> {
+    const { author, member, guild_id: guildId } = data;
+    // A webhook is not a user: its author only holds for this message.
+    const resolvedAuthor = data.webhook_id
+      ? this.client.users.createStructure(author)
+      : await this.client.users.resolveData(author);
+    const resolvedMember =
+      member && guildId
+        ? await this.client.members.resolveData({ ...member, user: author, guild_id: guildId })
+        : null;
+    return new Message(data, { author: resolvedAuthor, member: resolvedMember });
   }
 
   public resolveKey(channelId: string, messageId: string): string {
@@ -336,8 +373,7 @@ export class MessageManager extends CachedManager<
       body,
       reason: options.reason,
     })) as APIThreadChannel;
-    await this.client.cache?.threads.set(thread.id, thread);
-    return this.client.threads.createStructure(thread);
+    return this.client.threads._add(thread);
   }
 
   /**
@@ -374,17 +410,15 @@ export class MessageManager extends CachedManager<
       Routes.pollAnswerVoters(channelId, messageId, answerId),
       { query },
     )) as RESTGetAPIPollAnswerVotersResult;
-    return users.map((user) => new User(user));
+    return Promise.all(users.map((user) => this.client.users._add(user)));
   }
 
   protected async fetchRaw(channelId: string, messageId: string) {
     return (await container.rest.get(Routes.channelMessage(channelId, messageId))) as APIMessage;
   }
 
-  private async store(message: APIMessage): Promise<Message> {
-    await this.cache?.set(this.resolveKey(message.channel_id, message.id), message);
-    await this.client.cache?.users.set(message.author.id, message.author);
-    return this.createStructure(message);
+  private store(message: APIMessage): Promise<Message> {
+    return this._add(message);
   }
 
   private async patchCached(
