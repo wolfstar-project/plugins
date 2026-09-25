@@ -418,6 +418,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     ]);
     const usersById = new Map(users.map((user) => [user.id, user]));
     const rules = this.autoModerationRules(guildId);
+    const integrations = this.integrations(guildId);
 
     return {
       entries: log.audit_log_entries.map(
@@ -436,7 +437,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
         log.threads.map((thread) => this.client.threads.hydrate(thread as APIThreadChannel)),
       ),
       integrations: log.integrations.map((integration) =>
-        this.integrations(guildId).createStructure({ ...integration, guild_id: guildId }),
+        integrations.createStructure({ ...integration, guild_id: guildId }),
       ),
       applicationCommands: log.application_commands,
       guildScheduledEvents: log.guild_scheduled_events,
