@@ -7,7 +7,8 @@ import { cdn } from "../util/cdn.js";
 import { getGatewayClient } from "../util/container.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../util/messages.js";
-import { computeGuildPermissions } from "../util/permissions.js";
+import { computeGuildPermissions, computePermissionsIn } from "../util/permissions.js";
+import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { PermissionsBitField } from "../util/PermissionsBitField.js";
 import type { DMChannel } from "./DMChannel.js";
 import type { Message } from "./Message.js";
@@ -257,6 +258,16 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
       memberRoleIds: this.roleIds,
       roles: roles.map((role) => role.toJSON()),
     });
+  }
+
+  /**
+   * Fetches the member's permissions in a channel: their guild permissions with the channel's overwrites applied.
+   * discord.js: `member.permissionsIn(channel)`.
+   *
+   * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   */
+  public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
+    return computePermissionsIn(channel, this);
   }
 
   /**

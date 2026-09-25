@@ -297,7 +297,28 @@ await (await client.users.fetch(userId)).send("Welcome!");
 `client.roles` creates, edits, moves and deletes roles, and fetches all of a guild's roles or their
 member counts. Permissions are `PermissionsBitField`s, computed like Discord does: owner and
 administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
-(`permissionsIn`) come with the channel phase.
+apply through `member.fetchPermissionsIn(channel)`, see below.
+
+### Channels and permissions
+
+Guild channels follow discord.js: `edit`, `setName`, `clone`, `delete`, and the setters of each
+type (`setTopic`, `setRateLimitPerUser`, `setBitrate`, `setUserLimit`, `setAvailableTags`, ...).
+`setParent` and `lockPermissions` copy the category's overwrites. `channel.permissionOverwrites`
+creates, edits (keeping the permissions you do not pass), and deletes overwrites, and
+`guild.channels` creates, lists, and moves channels:
+
+```ts
+const channel = await guild.channels.create({ name: "den", type: ChannelType.GuildText });
+await channel.permissionOverwrites.edit(guild.id, { SendMessages: false });
+await channel.permissionOverwrites.edit(roleId, { SendMessages: true });
+
+const permissions = await channel.fetchPermissionsFor(member); // discord.js: channel.permissionsFor(member)
+await member.fetchPermissionsIn(channel); // discord.js: member.permissionsIn(channel)
+```
+
+Permissions are computed like Discord does: guild permissions, then the `@everyone` overwrite, the
+roles' overwrites, and the member's. Threads use their parent's overwrites. The message
+`fetch*able()` checks use them too.
 
 ### Messages
 

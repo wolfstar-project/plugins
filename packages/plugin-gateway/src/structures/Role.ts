@@ -6,7 +6,8 @@ import type { RoleEditOptions } from "../managers/RoleManager.js";
 import { cdn } from "../util/cdn.js";
 import { getGatewayClient } from "../util/container.js";
 import { RoleFlagsBitField } from "../util/flags.js";
-import { compareRolePositions } from "../util/permissions.js";
+import type { AnyChannel } from "../managers/ChannelManager.js";
+import { compareRolePositions, computePermissionsIn } from "../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
@@ -102,6 +103,16 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
 
   public get permissions(): Readonly<PermissionsBitField> {
     return new PermissionsBitField(BigInt(this[kData].permissions)).freeze();
+  }
+
+  /**
+   * Fetches the role's permissions in a channel: its permissions and `@everyone`'s, with the channel's `@everyone` and
+   * role overwrites applied. discord.js: `role.permissionsIn(channel)`.
+   *
+   * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   */
+  public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
+    return computePermissionsIn(channel, this as Role);
   }
 
   public get hoist() {

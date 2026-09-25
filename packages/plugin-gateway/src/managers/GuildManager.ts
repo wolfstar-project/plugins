@@ -21,6 +21,7 @@ import { GuildPreview } from "../structures/GuildPreview.js";
 import { container } from "../util/container.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
+import { GuildChannelManager } from "./GuildChannelManager.js";
 import { GuildEmojiManager } from "./GuildEmojiManager.js";
 import { GuildInviteManager } from "./GuildInviteManager.js";
 import { GuildStickerManager } from "./GuildStickerManager.js";
@@ -51,6 +52,15 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 
   public resolveKey(guildId: string): string {
     return guildId;
+  }
+
+  /**
+   * Gets the manager of a guild's channels.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public channels(guildId: string): GuildChannelManager {
+    return new GuildChannelManager(this.client, guildId);
   }
 
   /**

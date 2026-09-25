@@ -7,6 +7,7 @@ export * from "./structures";
 export * from "./managers";
 
 export * from "./util/BitField.js";
+export * from "./util/channels.js";
 export type * from "./util/cache.js";
 export { getGatewayClient } from "./util/container.js";
 export * from "./util/decorators.js";

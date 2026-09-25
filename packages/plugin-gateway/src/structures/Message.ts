@@ -58,8 +58,7 @@ const NonSystemTypes: readonly MessageType[] = [
  *
  * @remarks
  * Relations discord.js reads synchronously from its cache are asynchronous here: `fetchChannel()`, `fetchGuild()`,
- * `fetchReference()`, and the `fetch*able()` permission checks. Those checks use guild-wide permissions: channel
- * overwrites come with the channel phase of #54.
+ * `fetchReference()`, and the `fetch*able()` permission checks, which apply the channel's overwrites.
  */
 export class Message extends Structure<CacheEntityTypes["messages"]> {
   declare public [kRelations]: MessageRelations;
@@ -527,10 +526,11 @@ export class Message extends Structure<CacheEntityTypes["messages"]> {
     return this.content;
   }
 
+  // The bot's permissions in the message's channel, overwrites included.
   private async hasPermission(permission: PermissionsString): Promise<boolean> {
     const { guildId } = this;
     if (!guildId) return false;
     const me = await getGatewayClient().members.fetchMe(guildId);
-    return (await me.fetchPermissions()).has(permission);
+    return (await me.fetchPermissionsIn(this.channelId)).has(permission);
   }
 }

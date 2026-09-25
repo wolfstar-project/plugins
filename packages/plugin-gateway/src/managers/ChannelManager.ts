@@ -1,5 +1,14 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { ChannelType, Routes, type APIChannel } from "discord-api-types/v10";
+import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
+import {
+  ChannelType,
+  GatewayDispatchEvents,
+  GatewayOpcodes,
+  Routes,
+  type APIChannel,
+  type APIOverwrite,
+  type GatewayDispatchPayload,
+} from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnnouncementChannel } from "../structures/AnnouncementChannel.js";
 import { AnnouncementThreadChannel } from "../structures/AnnouncementThreadChannel.js";
@@ -15,8 +24,10 @@ import { PublicThreadChannel } from "../structures/PublicThreadChannel.js";
 import { StageChannel } from "../structures/StageChannel.js";
 import { TextChannel } from "../structures/TextChannel.js";
 import { VoiceChannel } from "../structures/VoiceChannel.js";
+import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { container } from "../util/container.js";
 import { CachedManager } from "./CachedManager.js";
+import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
 
 /**
  * Any of the channel structures {@link ChannelManager} builds.
@@ -73,6 +84,15 @@ export function createChannel(
     default:
       return new BaseChannel(data, relations);
   }
+}
+
+// The raw fields of a guild channel the managers read, whichever its type.
+function overwriteHolder(channel: AnyChannel): {
+  guild_id?: string;
+  parent_id?: string | null;
+  permission_overwrites?: APIOverwrite[];
+} {
+  return channel.toJSON() as never;
 }
 
 // Guild channels carry their guild's ID, except inside a `GUILD_CREATE`, where the cache adds it.
@@ -135,6 +155,75 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     } else {
       await this.cache?.set(channelId, raw);
     }
+  }
+
+  /**
+   * Edits a channel.
+   *
+   * @param channelId The ID of the channel.
+   * @param options The fields to edit, and the reason for the audit log.
+   */
+  public async edit(channelId: string, options: GuildChannelEditOptions): Promise<AnyChannel> {
+    if (options.lockPermissions && options.permissionOverwrites) {
+      throw new TypeError("Pass either lockPermissions or permissionOverwrites, not both");
+    }
+
+    const body = toChannelBody(options);
+    if (options.lockPermissions) {
+      const parentId =
+        options.parent === undefined
+          ? (overwriteHolder(await this.fetch(channelId)).parent_id ?? null)
+          : options.parent && resolveId(options.parent);
+      if (parentId) {
+        body.permission_overwrites = overwriteHolder(
+          await this.fetch(parentId),
+        ).permission_overwrites;
+      }
+    }
+
+    const channel = (await container.rest.patch(Routes.channel(channelId), {
+      body,
+      reason: options.reason,
+    })) as APIChannel;
+    return this._add(channel);
+  }
+
+  /**
+   * Deletes a channel, or closes a direct message, and drops it from the cache with its messages.
+   *
+   * @param channelId The ID of the channel.
+   * @param reason The reason for the audit log.
+   */
+  public async delete(channelId: string, reason?: string): Promise<void> {
+    const channel = (await container.rest.delete(Routes.channel(channelId), {
+      reason,
+    })) as APIChannel;
+    if (!this.client.cache) return;
+
+    // The same cascade as the `CHANNEL_DELETE` (or `THREAD_DELETE`) that follows.
+    await applyGatewayDispatch(this.client.cache, {
+      op: GatewayOpcodes.Dispatch,
+      s: 0,
+      t: createChannel(channel).isThread()
+        ? GatewayDispatchEvents.ThreadDelete
+        : GatewayDispatchEvents.ChannelDelete,
+      d: channel,
+    } as GatewayDispatchPayload);
+  }
+
+  /**
+   * Gets the permission overwrites of a channel, cache first.
+   *
+   * @param channelId The ID of the channel.
+   */
+  public async permissionOverwrites(channelId: string): Promise<PermissionOverwriteManager> {
+    const data = overwriteHolder(await this.fetch(channelId));
+    return new PermissionOverwriteManager(
+      this.client,
+      channelId,
+      data.guild_id ?? null,
+      data.permission_overwrites ?? [],
+    );
   }
 
   protected async fetchRaw(channelId: string) {
