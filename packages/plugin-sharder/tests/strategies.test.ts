@@ -324,6 +324,16 @@ describe("NetworkStrategy", () => {
       expect(forward).not.toHaveBeenCalled();
       expect(route).not.toHaveBeenCalled();
       expect(strategy.proxies.every((proxy) => proxy.peer !== null)).toBe(true);
+
+      // A shard crashing with a request pending on another proxy: that proxy aborts the handler.
+      const aborted = new Promise((resolve) => {
+        manager.on("message", (body: { aborted?: number }) => {
+          if (body?.aborted !== undefined) resolve(body);
+        });
+      });
+      manager.on("shardError", () => undefined);
+      expect(await manager.request(0, { type: "askAndCrash", to: 1 })).toBeNull();
+      expect(await aborted).toEqual({ aborted: 0 });
     },
   );
 });

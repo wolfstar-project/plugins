@@ -544,8 +544,12 @@ export class ShardManagerProxy extends EventEmitter<ShardManagerProxyEvents> {
       }
     }
 
+    // Nobody waits for the replies of the stopped shard's requests to peers anymore: the peers abort them.
     for (const [requestKey, request] of this.#peerRequests) {
-      if (request.origin === shard) this.#peerRequests.delete(requestKey);
+      if (request.origin !== shard) continue;
+      this.#peerRequests.delete(requestKey);
+      const nonce = Number(requestKey.slice(requestKey.lastIndexOf(":") + 1));
+      void this.#abortPeerRequest(request, nonce);
     }
 
     void this.#report(shard.link, FrameType.Exit, { spawnId: shard.spawnId, code });
@@ -665,11 +669,14 @@ export class ShardManagerProxy extends EventEmitter<ShardManagerProxyEvents> {
   async #fromPeer(peer: Peer, header: PeerHeader, data: string | Uint8Array): Promise<void> {
     if (header.bounce) {
       // The peer could not deliver a packet of one of our shards: it goes through the manager after all.
+      // The request is sent again through the manager, whose reply the shard still waits for: only the peer route
+      // of this very request is gone, not the ones of the shard's other requests to this peer.
       const origin = this.#byChannel.get(channelKey(header.scope, header.origin));
       if (!origin) return;
-      for (const [key, request] of this.#peerRequests) {
-        if (request.origin === origin && request.peer === peer) this.#peerRequests.delete(key);
-      }
+      const packet = await this.#codec(origin.context)
+        .decode(data, { channelId: origin.context.id })
+        .catch(() => null);
+      if (packet?.op === Op.Request) this.#peerRequests.delete(`${origin.key}:${packet.nonce}`);
 
       await origin.link.connection?.sendData(origin.spawnId, data).catch(() => undefined);
       return;
@@ -719,6 +726,17 @@ export class ShardManagerProxy extends EventEmitter<ShardManagerProxyEvents> {
       default:
         break;
     }
+  }
+
+  async #abortPeerRequest(request: PeerRequest, nonce: number): Promise<void> {
+    const data = await this.#codec(request.origin.context).encode(
+      { op: Op.Abort, nonce },
+      { channelId: request.origin.context.id },
+    );
+    if (!isChannelData(data)) return;
+    await request.peer.connection
+      .sendPeer({ ...request.header, binary: typeof data !== "string" }, data)
+      .catch(() => undefined);
   }
 
   async #toEndpoint(endpoint: Endpoint, from: LocalShard, packet: Packet): Promise<void> {

@@ -86,7 +86,8 @@ export class OutgoingRequests {
     signal?: AbortSignal,
     owner?: unknown,
   ): Promise<unknown> {
-    signal?.throwIfAborted();
+    // Rejected rather than thrown, so every caller gets a promise, async or not.
+    if (signal?.aborted) return Promise.reject(signal.reason);
     this.#nonce += this.#step;
     const nonce = this.#nonce;
 

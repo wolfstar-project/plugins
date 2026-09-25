@@ -145,6 +145,30 @@ describe("messages and requests", () => {
     await manager.destroy();
   });
 
+  test("GIVEN an aborted signal THEN every request method rejects instead of throwing", async () => {
+    const { manager, strategy } = createManager(readyScript, { shards: 1 });
+    await manager.spawn();
+    const client = strategy.clients[0]!;
+    const signal = AbortSignal.abort(new Error("Too late"));
+
+    const requests = [
+      () => client.request(null, { signal }),
+      () => client.broadcastRequest(null, { signal }),
+      () => manager.request(0, null, { signal }),
+      () => manager.broadcastRequest(null, { signal }),
+    ];
+
+    for (const request of requests) {
+      let promise: Promise<unknown> | undefined;
+      expect(() => {
+        promise = request();
+      }).not.toThrow();
+      await expect(promise).rejects.toThrow("Too late");
+    }
+
+    await manager.destroy();
+  });
+
   test("GIVEN an abort while the shard is not ready THEN the request never leaves the queue", async () => {
     const requests: unknown[] = [];
     const { manager, strategy } = createManager(
