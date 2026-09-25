@@ -283,6 +283,31 @@ member counts. Permissions are `PermissionsBitField`s, computed like Discord doe
 administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
 (`permissionsIn`) come with the channel phase.
 
+### Messages
+
+`Message` follows discord.js: `attachments`, `embeds`, `mentions` (`MessageMentions`), `reactions`
+(`ReactionManager`), `poll` (`Poll`), `flags`, `cleanContent`, and the actions `reply`, `edit`,
+`delete`, `forward`, `pin`, `react`, `crosspost`, `startThread`, `suppressEmbeds`. Relations are
+fetched: `fetchChannel`, `fetchGuild`, `fetchReference`, and `fetchDeletable` & co. instead of
+discord.js's `deletable`. Text channels get `messages`, `send`, `sendTyping`, and `bulkDelete`:
+
+```ts
+const channel = await client.channels.fetch(channelId);
+if (channel instanceof TextChannel) {
+  await channel.sendTyping();
+  const message = await channel.send({
+    content: "Awoo",
+    poll: { question: { text: "Best pack?" }, answers },
+  });
+  await message.react("🐺");
+  const voters = await message.poll?.answers[0]?.fetchVoters();
+  await channel.bulkDelete(10, true);
+}
+
+const { items } = await client.messages.fetchPins(channelId);
+const users = await message.reactions.resolve("🐺")?.users.fetch();
+```
+
 ## Subpath exports
 
 Like `@discordjs/next`, the gateway and REST libraries are re-exported, so a bot does not need to
