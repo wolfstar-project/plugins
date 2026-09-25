@@ -140,7 +140,7 @@ describe("audit logs", () => {
     );
     expect(logs.entries[0]).toBeInstanceOf(GuildAuditLogsEntry);
     expect(logs.entries[0]!.executor?.username).toBe("wolf");
-    expect(logs.entries.map((value) => value.actionType)).toEqual(["Create", "Delete"]);
+    expect(logs.entries.map((value) => value.actionType)).toEqual(["Delete", "Delete"]);
     expect(logs.autoModerationRules[0]!.name).toBe("No howling");
     expect(await client.cache!.users.get(userId)).toBeDefined();
   });

@@ -12,7 +12,7 @@ export type AuditLogActionType = "Create" | "Delete" | "Update";
 const CreateActions = new Set<AuditLogEvent>([
   AuditLogEvent.ChannelCreate,
   AuditLogEvent.ChannelOverwriteCreate,
-  AuditLogEvent.MemberBanAdd,
+  AuditLogEvent.MemberBanRemove,
   AuditLogEvent.BotAdd,
   AuditLogEvent.RoleCreate,
   AuditLogEvent.InviteCreate,
@@ -26,7 +26,6 @@ const CreateActions = new Set<AuditLogEvent>([
   AuditLogEvent.ThreadCreate,
   AuditLogEvent.SoundboardSoundCreate,
   AuditLogEvent.AutoModerationRuleCreate,
-  AuditLogEvent.AutoModerationBlockMessage,
   AuditLogEvent.OnboardingPromptCreate,
 ]);
 
@@ -35,7 +34,7 @@ const DeleteActions = new Set<AuditLogEvent>([
   AuditLogEvent.ChannelOverwriteDelete,
   AuditLogEvent.MemberKick,
   AuditLogEvent.MemberPrune,
-  AuditLogEvent.MemberBanRemove,
+  AuditLogEvent.MemberBanAdd,
   AuditLogEvent.MemberDisconnect,
   AuditLogEvent.RoleDelete,
   AuditLogEvent.InviteDelete,
