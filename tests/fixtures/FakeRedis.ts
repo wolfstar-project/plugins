@@ -1,4 +1,4 @@
-import type { RedisClientLike, RedisTransactionLike } from "../../src/index.js";
+import type { RedisClientLike, RedisTransactionLike } from "@wolfstar/plugin-cache";
 
 function score(value: string | number): number {
   if (value === "+inf") return Infinity;

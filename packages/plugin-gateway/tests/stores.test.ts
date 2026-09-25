@@ -9,7 +9,7 @@ import {
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { FakeRedis } from "../../plugin-cache/tests/fixtures/FakeRedis.js";
+import { FakeRedis } from "../../../tests/fixtures/FakeRedis.js";
 import { GatewayClient, type GatewayEventMap, type GatewayEventName } from "../src/index.js";
 
 const user: APIUser = {

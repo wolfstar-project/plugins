@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { CacheValueError, createRedisCache, RedisEntityCache } from "../src/index.js";
-import { FakeRedis } from "./fixtures/FakeRedis.js";
+import { FakeRedis } from "../../../tests/fixtures/FakeRedis.js";
 
 describe("RedisEntityCache", () => {
   let redis: FakeRedis;
