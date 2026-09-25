@@ -39,3 +39,4 @@ export * from "./TextChannel.js";
 export * from "./Typing.js";
 export * from "./User.js";
 export * from "./VoiceChannel.js";
+export * from "./Webhook.js";

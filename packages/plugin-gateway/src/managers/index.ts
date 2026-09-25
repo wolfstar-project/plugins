@@ -16,3 +16,4 @@ export * from "./ReactionUserManager.js";
 export * from "./RoleManager.js";
 export * from "./ThreadManager.js";
 export * from "./UserManager.js";
+export * from "./WebhookManager.js";

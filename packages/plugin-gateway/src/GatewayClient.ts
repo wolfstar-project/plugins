@@ -23,12 +23,14 @@ import { GuildManager } from "./managers/GuildManager.js";
 import { GuildMemberManager } from "./managers/GuildMemberManager.js";
 import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
+import { WebhookManager } from "./managers/WebhookManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
 import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/BaseInvite.js";
 import type { ClientUser } from "./structures/ClientUser.js";
 import { createInvite } from "./structures/GroupDMInvite.js";
 import { Sticker } from "./structures/Sticker.js";
+import type { Webhook } from "./structures/Webhook.js";
 import { StickerPack } from "./structures/StickerPack.js";
 import {
   DispatchHandlers,
@@ -133,6 +135,7 @@ export class GatewayClient extends Client {
   public readonly messages: MessageManager;
   public readonly members: GuildMemberManager;
   public readonly roles: RoleManager;
+  public readonly webhooks: WebhookManager;
 
   /**
    * What happens to a dispatch whose cache read or write fails, see {@link GatewayClientOptions.cacheFailure}.
@@ -164,6 +167,7 @@ export class GatewayClient extends Client {
     this.messages = new MessageManager(this);
     this.members = new GuildMemberManager(this);
     this.roles = new RoleManager(this);
+    this.webhooks = new WebhookManager(this);
 
     this.gateway = new WebSocketManager({
       ...options.gateway,
@@ -235,6 +239,16 @@ export class GatewayClient extends Client {
    */
   public async idle(): Promise<void> {
     await this.#queue.idle();
+  }
+
+  /**
+   * Fetches a webhook. discord.js: `client.fetchWebhook(id, token)`.
+   *
+   * @param webhookId The ID of the webhook.
+   * @param token The webhook's token, to fetch it without the bot's authorization.
+   */
+  public fetchWebhook(webhookId: string, token?: string): Promise<Webhook> {
+    return this.webhooks.fetch(webhookId, token);
   }
 
   /**

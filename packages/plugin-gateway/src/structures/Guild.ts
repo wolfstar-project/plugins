@@ -20,6 +20,7 @@ import type { GuildInviteManager } from "../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../managers/GuildStickerManager.js";
 import { cdn } from "../util/cdn.js";
 import { getGatewayClient } from "../util/container.js";
+import type { Webhook } from "./Webhook.js";
 import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from "../util/flags.js";
 import { AnonymousGuild } from "./AnonymousGuild.js";
 import type { GuildInvite } from "./GuildInvite.js";
@@ -271,6 +272,13 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get stickers(): GuildStickerManager {
     return getGatewayClient().guilds.stickers(this.id);
+  }
+
+  /**
+   * Fetches the webhooks of the guild.
+   */
+  public fetchWebhooks(): Promise<Webhook[]> {
+    return getGatewayClient().webhooks.fetchGuild(this.id);
   }
 
   /**

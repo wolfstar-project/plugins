@@ -4,6 +4,7 @@ import { Mixin } from "./Mixin.js";
 import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
 import { ChannelParentMixin } from "./mixins/ChannelParentMixin.js";
 import { ChannelPermissionMixin } from "./mixins/ChannelPermissionMixin.js";
+import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
 import { TextChannelMixin } from "./mixins/TextChannelMixin.js";
@@ -17,7 +18,8 @@ export interface StageChannel
     ChannelParentMixin<ChannelType.GuildStageVoice>,
     ChannelPermissionMixin<ChannelType.GuildStageVoice>,
     ChannelSlowmodeMixin<ChannelType.GuildStageVoice>,
-    VoiceChannelMixin<ChannelType.GuildStageVoice> {}
+    VoiceChannelMixin<ChannelType.GuildStageVoice>,
+    ChannelWebhooksMixin<ChannelType.GuildStageVoice> {}
 
 /**
  * A guild stage channel.
@@ -32,4 +34,5 @@ Mixin(StageChannel, [
   ChannelPermissionMixin,
   ChannelSlowmodeMixin,
   VoiceChannelMixin,
+  ChannelWebhooksMixin,
 ]);
