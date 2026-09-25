@@ -21,11 +21,17 @@ import type { StageInstanceManager } from "../managers/StageInstanceManager.js";
 import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
 import type { FetchedThreads } from "../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
+import type { GuildIntegrationManager } from "../managers/GuildIntegrationManager.js";
 import type {
   GuildAuditLogs,
   GuildAuditLogsFetchOptions,
   GuildIncidentActionsOptions,
+  GuildOnboardingEditOptions,
+  GuildWelcomeScreenEditOptions,
+  GuildWidgetSettings,
+  GuildWidgetSettingsEditOptions,
 } from "../managers/GuildManager.js";
+import type { GuildTemplateCreateOptions } from "../managers/GuildTemplateManager.js";
 import type { GuildInviteManager } from "../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../managers/GuildStickerManager.js";
 import { cdn } from "../util/cdn.js";
@@ -35,7 +41,12 @@ import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from ".
 import { AnonymousGuild } from "./AnonymousGuild.js";
 import type { GuildInvite } from "./GuildInvite.js";
 import type { GuildMember } from "./GuildMember.js";
+import type { GuildOnboarding } from "./GuildOnboarding.js";
 import type { GuildPreview } from "./GuildPreview.js";
+import type { GuildTemplate } from "./GuildTemplate.js";
+import type { Integration } from "./Integration.js";
+import type { WelcomeScreen } from "./WelcomeScreen.js";
+import type { Widget } from "./Widget.js";
 import { kData, kPatch } from "./Structure.js";
 
 /**
@@ -317,6 +328,98 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get soundboardSounds(): GuildSoundboardSoundManager {
     return getGatewayClient().guilds.soundboardSounds(this.id);
+  }
+
+  /**
+   * The integrations of the guild.
+   */
+  public get integrations(): GuildIntegrationManager {
+    return getGatewayClient().guilds.integrations(this.id);
+  }
+
+  /**
+   * Fetches every integration of the guild.
+   */
+  public fetchIntegrations(): Promise<Integration[]> {
+    return this.integrations.fetchAll();
+  }
+
+  /**
+   * Fetches the templates of the guild.
+   */
+  public fetchTemplates(): Promise<GuildTemplate[]> {
+    return getGatewayClient().templates.list(this.id);
+  }
+
+  /**
+   * Creates a template of the guild.
+   *
+   * @param name The name of the template.
+   * @param description The description of the template.
+   */
+  public createTemplate(name: string, description?: string | null): Promise<GuildTemplate> {
+    const options: GuildTemplateCreateOptions = { name, description };
+    return getGatewayClient().templates.create(this.id, options);
+  }
+
+  /**
+   * Fetches the welcome screen of the guild.
+   */
+  public fetchWelcomeScreen(): Promise<WelcomeScreen> {
+    return getGatewayClient().guilds.fetchWelcomeScreen(this.id);
+  }
+
+  /**
+   * Edits the welcome screen of the guild.
+   *
+   * @param options The changes to apply.
+   */
+  public editWelcomeScreen(options: GuildWelcomeScreenEditOptions): Promise<WelcomeScreen> {
+    return getGatewayClient().guilds.editWelcomeScreen(this.id, options);
+  }
+
+  /**
+   * Fetches the public widget of the guild, which must be enabled.
+   */
+  public fetchWidget(): Promise<Widget> {
+    return getGatewayClient().fetchGuildWidget(this.id);
+  }
+
+  /**
+   * Fetches whether the widget of the guild is enabled, and its channel.
+   */
+  public fetchWidgetSettings(): Promise<GuildWidgetSettings> {
+    return getGatewayClient().guilds.fetchWidgetSettings(this.id);
+  }
+
+  /**
+   * Edits the widget settings of the guild, and patches {@link Guild.widgetEnabled} and
+   * {@link Guild.widgetChannelId} in place.
+   *
+   * @param options Whether to enable the widget, and its channel.
+   */
+  public async setWidgetSettings(options: GuildWidgetSettingsEditOptions): Promise<this> {
+    const settings = await getGatewayClient().guilds.editWidgetSettings(this.id, options);
+    return this[kPatch]({
+      widget_enabled: settings.enabled,
+      widget_channel_id: settings.channelId,
+    });
+  }
+
+  /**
+   * Fetches the onboarding of the guild.
+   */
+  public fetchOnboarding(): Promise<GuildOnboarding> {
+    return getGatewayClient().guilds.fetchOnboarding(this.id);
+  }
+
+  /**
+   * Edits the onboarding of the guild.
+   *
+   * @param options The changes to apply. The prompts replace every existing one.
+   */
+  public editOnboarding(options: GuildOnboardingEditOptions): Promise<GuildOnboarding> {
+    return getGatewayClient().guilds.editOnboarding(this.id, options);
   }
 
   /**

@@ -127,6 +127,10 @@ On top of the `Client` options:
 | `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                         |
 | `autoModerationRuleUpdate`                                | `oldRule \| null`, `newRule`                   |
 | `autoModerationActionExecution`                           | `execution`                                    |
+| `guildIntegrationsUpdate`                                 | `guild \| null`, `data`                        |
+| `integrationCreate`                                       | `integration`                                  |
+| `integrationUpdate`                                       | `oldIntegration \| null`, `newIntegration`     |
+| `integrationDelete`                                       | `integration \| null`, `data`                  |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -410,6 +414,25 @@ const event = await guild.scheduledEvents.create({
   entityMetadata: { location: "The den" },
 });
 await event.setStatus(GuildScheduledEventStatus.Active);
+```
+
+### Integrations, templates, welcome screen, widget, and onboarding
+
+`guild.integrations` lists and removes `Integration`s, cached from the `INTEGRATION_*` dispatches.
+`client.templates` manages `GuildTemplate`s (`guild.fetchTemplates()`, `guild.createTemplate()`,
+`client.fetchGuildTemplate(code)`, `template.sync()`, `template.createGuild()`). Guilds fetch and
+edit their `WelcomeScreen`, their widget settings (`setWidgetSettings` patches `widgetEnabled` and
+`widgetChannelId`), and their `GuildOnboarding`, whose new prompts and options get placeholder IDs
+like discord.js's. `client.fetchGuildWidget(guildId)` returns the public `Widget`. Apart from
+integrations, Discord sends none of these over the gateway, so they are not cached.
+
+```ts
+await guild.editWelcomeScreen({
+  enabled: true,
+  welcomeChannels: [{ channel: rulesId, description: "Read me", emoji: "🐺" }],
+});
+const widget = await client.fetchGuildWidget(guild.id);
+console.log(widget.presenceCount, widget.imageURL(GuildWidgetStyle.Banner2));
 ```
 
 ### Webhooks
