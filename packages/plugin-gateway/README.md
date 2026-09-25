@@ -111,6 +111,8 @@ On top of the `Client` options:
 | `stickerUpdate`                                           | `oldSticker`, `newSticker`                     |
 | `inviteCreate`                                            | `invite`                                       |
 | `inviteDelete`                                            | `invite \| null`, `data`                       |
+| `voiceStateUpdate`                                        | `oldState \| null`, `newState`                 |
+| `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`           |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -341,6 +343,24 @@ const post = await forum.threads.create({
   message: "Awoo",
   appliedTags: [tagId],
 });
+```
+
+### Voice states and presences
+
+`client.voiceStates` and `client.presences` read the voice states and presences the gateway sends
+(with the `GuildVoiceStates` and `GuildPresences` intents). `VoiceState` mutes, deafens, moves,
+and disconnects members, and handles stage channels (`setSuppressed`, `setRequestToSpeak`).
+`Presence` has the status and `Activity`s, with their `RichPresenceAssets` URLs. Members have
+`fetchVoiceState()` and `fetchPresence()` (discord.js: `member.voice`, `member.presence`).
+
+```ts
+client.on("voiceStateUpdate", (oldState, newState) => {
+  if (!oldState?.channelId && newState.channelId)
+    console.log(newState.member?.displayName, "joined");
+});
+
+const voice = await member.fetchVoiceState();
+await voice?.setChannel(afkChannelId, "idle");
 ```
 
 ### Webhooks

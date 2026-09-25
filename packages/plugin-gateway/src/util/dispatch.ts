@@ -337,6 +337,25 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "typingStart",
     build: (_client, data) => [new Typing(data)],
   },
+  [GatewayDispatchEvents.VoiceStateUpdate]: {
+    event: "voiceStateUpdate",
+    before: async (client, data) =>
+      data.guild_id ? client.voiceStates.get(data.guild_id, data.user_id) : undefined,
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.voiceStates.hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.PresenceUpdate]: {
+    event: "presenceUpdate",
+    before: (client, data) => client.presences.get(data.guild_id, data.user.id),
+    // The payload may be partial: prefer the cached entry, which it was merged into.
+    build: async (client, data, previous) => [
+      previous ?? null,
+      (await cachedOrUndefined(client.presences.get(data.guild_id, data.user.id))) ??
+        (await client.presences.hydrate(data)),
+    ],
+  },
   [GatewayDispatchEvents.VoiceServerUpdate]: {
     event: "voiceServerUpdate",
     build: (_client, data) => [data],
