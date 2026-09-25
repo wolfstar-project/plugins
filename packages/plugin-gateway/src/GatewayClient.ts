@@ -9,7 +9,12 @@ import { applyGatewayDispatch, type Cache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
+  Routes,
+  type APIInvite,
+  type APISticker,
+  type APIVoiceRegion,
   type GatewayDispatchPayload,
+  type RESTGetStickerPacksResult,
   type GatewayReadyDispatchData,
   type GatewayIntentBits,
 } from "discord-api-types/v10";
@@ -20,8 +25,17 @@ import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
 import { UserManager } from "./managers/UserManager.js";
+import type { BaseInvite } from "./structures/BaseInvite.js";
 import type { ClientUser } from "./structures/ClientUser.js";
-import { DispatchHandlers, type DispatchHandler } from "./util/dispatch.js";
+import { createInvite } from "./structures/GroupDMInvite.js";
+import { Sticker } from "./structures/Sticker.js";
+import { StickerPack } from "./structures/StickerPack.js";
+import {
+  DispatchHandlers,
+  MultiDispatchHandlers,
+  type DispatchHandler,
+  type MultiDispatchHandler,
+} from "./util/dispatch.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayEventMap, GatewayEventName } from "./util/events.js";
@@ -195,10 +209,79 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * Runs a cache write of the client's own (e.g. after leaving a guild) in order with the guild's dispatches.
+   *
+   * @param guildId The ID of the guild.
+   * @param task The cache write.
+   * @internal
+   */
+  public async runInGuildOrder<Value>(guildId: string, task: () => Promise<Value>): Promise<Value> {
+    let outcome: { value: Value } | { error: unknown } | undefined;
+    // Queued tasks must never reject: the outcome is carried out of the queue instead.
+    await this.#queue.enqueueGuild(guildId, async () => {
+      try {
+        outcome = { value: await task() };
+      } catch (error) {
+        outcome = { error };
+      }
+    });
+
+    if ("error" in outcome!) throw outcome.error;
+    return outcome!.value;
+  }
+
+  /**
    * Resolves once every dispatch received so far has been processed.
    */
   public async idle(): Promise<void> {
     await this.#queue.idle();
+  }
+
+  /**
+   * Fetches an invite by its code.
+   *
+   * @param code The code of the invite, or its URL.
+   * @param options Whether to include the approximate counts (default), and a scheduled event to attach.
+   */
+  public async fetchInvite(
+    code: string,
+    options: { withCounts?: boolean; guildScheduledEventId?: string } = {},
+  ): Promise<BaseInvite> {
+    const query = new URLSearchParams({ with_counts: String(options.withCounts ?? true) });
+    if (options.guildScheduledEventId) {
+      query.set("guild_scheduled_event_id", options.guildScheduledEventId);
+    }
+
+    // Accept `https://discord.gg/code` and `discord.com/invite/code` as well as the bare code.
+    const resolved = code.split("/").pop()!;
+    const invite = (await container.rest.get(Routes.invite(resolved), { query })) as APIInvite;
+    return createInvite(invite);
+  }
+
+  /**
+   * Fetches a sticker, standard or from a guild.
+   *
+   * @param stickerId The ID of the sticker.
+   */
+  public async fetchSticker(stickerId: string): Promise<Sticker> {
+    return new Sticker((await container.rest.get(Routes.sticker(stickerId))) as APISticker);
+  }
+
+  /**
+   * Fetches the packs of standard stickers.
+   */
+  public async fetchStickerPacks(): Promise<StickerPack[]> {
+    const { sticker_packs: packs } = (await container.rest.get(
+      Routes.stickerPacks(),
+    )) as RESTGetStickerPacksResult;
+    return packs.map((pack) => new StickerPack(pack));
+  }
+
+  /**
+   * Fetches the voice regions available to the bot.
+   */
+  public async fetchVoiceRegions(): Promise<APIVoiceRegion[]> {
+    return (await container.rest.get(Routes.voiceRegions())) as APIVoiceRegion[];
   }
 
   /**
@@ -225,6 +308,9 @@ export class GatewayClient extends Client {
     const handler = DispatchHandlers[payload.t] as
       | DispatchHandler<typeof payload.t, GatewayEventName>
       | undefined;
+    const multi = MultiDispatchHandlers[payload.t] as
+      | MultiDispatchHandler<typeof payload.t>
+      | undefined;
     // `READY` is never dropped: it sets `client.user` and `shardReady` from the payload alone, and a shard without it
     // looks dead to the bot. Reconciling the cache with it is best effort, see `reconcileGuilds`.
     const isReady = payload.t === GatewayDispatchEvents.Ready;
@@ -232,12 +318,18 @@ export class GatewayClient extends Client {
 
     let state: unknown;
     try {
-      state = await handler?.before?.(this, payload.d as never);
+      state = await (handler ?? multi)?.before?.(this, payload.d as never);
       if (this.cache) await applyGatewayDispatch(this.cache, payload);
     } catch (error) {
       if (this.cacheFailure === "skip" && !isReady) throw error;
       this.reportError(error, payload.t, shardId);
       state = undefined;
+    }
+
+    if (multi) {
+      for (const [event, ...args] of await multi.emit(this, payload.d as never, state)) {
+        this.emit(event, ...(args as GatewayEventMap[GatewayEventName]));
+      }
     }
 
     if (!handler) return;

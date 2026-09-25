@@ -4,6 +4,7 @@ import type {
   GatewayGuildDeleteDispatchData,
   GatewayGuildMemberRemoveDispatchData,
   GatewayGuildRoleDeleteDispatchData,
+  GatewayInviteDeleteDispatchData,
   GatewayMessageDeleteBulkDispatchData,
   GatewayMessageDeleteDispatchData,
   GatewayThreadDeleteDispatchData,
@@ -13,9 +14,12 @@ import type {
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
 import type { Guild } from "../structures/Guild.js";
+import type { GuildEmoji } from "../structures/GuildEmoji.js";
+import type { GuildInvite } from "../structures/GuildInvite.js";
 import type { GuildMember } from "../structures/GuildMember.js";
 import type { Message } from "../structures/Message.js";
 import type { Role } from "../structures/Role.js";
+import type { Sticker } from "../structures/Sticker.js";
 import type { Typing } from "../structures/Typing.js";
 import type { User } from "../structures/User.js";
 
@@ -87,6 +91,27 @@ export interface GatewayEventMap {
   guildRoleDelete: [role: Role | null, data: GatewayGuildRoleDeleteDispatchData];
 
   userUpdate: [oldUser: User | null, newUser: User];
+
+  /**
+   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without a cache, the emoji events
+   * are not emitted: listen to `raw` instead.
+   */
+  emojiCreate: [emoji: GuildEmoji];
+  emojiUpdate: [oldEmoji: GuildEmoji, newEmoji: GuildEmoji];
+  emojiDelete: [emoji: GuildEmoji];
+
+  /**
+   * Emitted for each sticker a `GUILD_STICKERS_UPDATE` adds, compared with the cache, like the emoji events.
+   */
+  stickerCreate: [sticker: Sticker];
+  stickerUpdate: [oldSticker: Sticker, newSticker: Sticker];
+  stickerDelete: [sticker: Sticker];
+
+  inviteCreate: [invite: GuildInvite];
+  /**
+   * Emitted when an invite is deleted or expires, with the cached invite if any.
+   */
+  inviteDelete: [invite: GuildInvite | null, data: GatewayInviteDeleteDispatchData];
 
   typingStart: [typing: Typing];
   /**
