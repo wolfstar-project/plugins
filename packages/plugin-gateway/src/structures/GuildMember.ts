@@ -11,7 +11,8 @@ import { computeGuildPermissions } from "../util/permissions.js";
 import type { PermissionsBitField } from "../util/PermissionsBitField.js";
 import type { DMChannel } from "./DMChannel.js";
 import type { Message } from "./Message.js";
-import { kData, kPatch, Structure } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, kPatch, kRelations, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
 function timestamp(value: string | null | undefined): number | null {
@@ -26,15 +27,17 @@ function timestamp(value: string | null | undefined): number | null {
  * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
-  #user: User | undefined;
+  declare public [kRelations]: { user?: User; guild?: Guild | null };
 
   /**
    * @param data The raw member.
-   * @param relations The member's user as resolved from the cache, by `client.members`.
+   * @param relations The member's user and guild as resolved from the cache, by `client.members`.
    */
-  public constructor(data: CacheEntityTypes["members"], relations: { user?: User } = {}) {
-    super(data);
-    this.#user = relations.user;
+  public constructor(
+    data: CacheEntityTypes["members"],
+    relations: { user?: User; guild?: Guild | null } = {},
+  ) {
+    super(data, relations);
   }
 
   /**
@@ -48,9 +51,24 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
     return this[kData].guild_id;
   }
 
+  /**
+   * The guild, from the cache. `null` when the guild is not cached, or when the member was not built by a manager: use
+   * `fetchGuild()` to always get it.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * Fetches the guild, cache first.
+   */
+  public fetchGuild(): Promise<Guild> {
+    return getGatewayClient().guilds.fetch(this.guildId);
+  }
+
   public override [kPatch](data: Readonly<Partial<CacheEntityTypes["members"]>>): this {
     // A payload carrying the user is fresher than the one resolved when the member was built.
-    if (data.user) this.#user = undefined;
+    if (data.user) this.dropRelations("user");
     return super[kPatch](data);
   }
 
@@ -60,7 +78,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    */
   public get user(): User | null {
     const { user } = this[kData];
-    return this.#user ?? (user ? new User(user) : null);
+    return this[kRelations].user ?? (user ? new User(user) : null);
   }
 
   public get nickname(): string | null {

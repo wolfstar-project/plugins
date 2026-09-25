@@ -4,6 +4,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AnnouncementChannel } from "../structures/AnnouncementChannel.js";
 import { AnnouncementThreadChannel } from "../structures/AnnouncementThreadChannel.js";
 import { BaseChannel } from "../structures/BaseChannel.js";
+import type { ChannelRelations } from "../structures/Channel.js";
 import { CategoryChannel } from "../structures/CategoryChannel.js";
 import { DMChannel } from "../structures/DMChannel.js";
 import { ForumChannel } from "../structures/ForumChannel.js";
@@ -40,35 +41,43 @@ export type AnyChannel =
  *
  * @param data The raw channel.
  */
-export function createChannel(data: CacheEntityTypes["channels"]): AnyChannel {
+export function createChannel(
+  data: CacheEntityTypes["channels"],
+  relations: ChannelRelations = {},
+): AnyChannel {
   switch (data.type) {
     case ChannelType.AnnouncementThread:
-      return new AnnouncementThreadChannel(data);
+      return new AnnouncementThreadChannel(data, relations);
     case ChannelType.DM:
-      return new DMChannel(data);
+      return new DMChannel(data, relations);
     case ChannelType.GroupDM:
-      return new GroupDMChannel(data);
+      return new GroupDMChannel(data, relations);
     case ChannelType.GuildAnnouncement:
-      return new AnnouncementChannel(data);
+      return new AnnouncementChannel(data, relations);
     case ChannelType.GuildCategory:
-      return new CategoryChannel(data);
+      return new CategoryChannel(data, relations);
     case ChannelType.GuildForum:
-      return new ForumChannel(data);
+      return new ForumChannel(data, relations);
     case ChannelType.GuildMedia:
-      return new MediaChannel(data);
+      return new MediaChannel(data, relations);
     case ChannelType.GuildStageVoice:
-      return new StageChannel(data);
+      return new StageChannel(data, relations);
     case ChannelType.GuildText:
-      return new TextChannel(data);
+      return new TextChannel(data, relations);
     case ChannelType.GuildVoice:
-      return new VoiceChannel(data);
+      return new VoiceChannel(data, relations);
     case ChannelType.PrivateThread:
-      return new PrivateThreadChannel(data);
+      return new PrivateThreadChannel(data, relations);
     case ChannelType.PublicThread:
-      return new PublicThreadChannel(data);
+      return new PublicThreadChannel(data, relations);
     default:
-      return new BaseChannel(data);
+      return new BaseChannel(data, relations);
   }
+}
+
+// Guild channels carry their guild's ID, except inside a `GUILD_CREATE`, where the cache adds it.
+function channelGuildId(data: CacheEntityTypes["channels"]): string | undefined {
+  return "guild_id" in data ? (data.guild_id ?? undefined) : undefined;
 }
 
 /**
@@ -89,6 +98,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
 
   public keyOf(data: CacheEntityTypes["channels"]): string {
     return data.id;
+  }
+
+  public override async hydrate(data: CacheEntityTypes["channels"]): Promise<AnyChannel> {
+    return createChannel(data, { guild: await this.cachedGuild(channelGuildId(data)) });
   }
 
   public resolveKey(channelId: string): string {

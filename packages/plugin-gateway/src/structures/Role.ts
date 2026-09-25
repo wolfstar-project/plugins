@@ -8,7 +8,8 @@ import { getGatewayClient } from "../util/container.js";
 import { RoleFlagsBitField } from "../util/flags.js";
 import { compareRolePositions } from "../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
-import { kData, kPatch, snowflakeTimestamp, Structure } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
 
 /**
  * The colors of a role: `primaryColor` alone for a solid color, with `secondaryColor` for a gradient, and with
@@ -27,6 +28,8 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   CacheEntityTypes["roles"],
   Omitted
 > {
+  declare public [kRelations]: { guild?: Guild | null };
+
   /**
    * The template used for removing data from the raw data stored for each role
    */
@@ -34,9 +37,13 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
 
   /**
    * @param data - The raw data received from the API for the role
+   * @param relations - The guild as resolved from the cache, by `client.roles`
    */
-  public constructor(data: Partialize<CacheEntityTypes["roles"], Omitted>) {
-    super(data);
+  public constructor(
+    data: Partialize<CacheEntityTypes["roles"], Omitted>,
+    relations: { guild?: Guild | null } = {},
+  ) {
+    super(data, relations);
   }
 
   public get id() {
@@ -45,6 +52,21 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
 
   public get guildId() {
     return this[kData].guild_id;
+  }
+
+  /**
+   * The guild, from the cache. `null` when the guild is not cached, or when the role was not built by a manager: use
+   * `fetchGuild()` to always get it.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * Fetches the guild, cache first.
+   */
+  public fetchGuild(): Promise<Guild> {
+    return getGatewayClient().guilds.fetch(this.guildId);
   }
 
   public get name() {

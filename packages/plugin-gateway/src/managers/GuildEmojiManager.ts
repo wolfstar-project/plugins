@@ -76,8 +76,11 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
   }
 
   public override async hydrate(data: CacheEntityTypes["emojis"]): Promise<GuildEmoji> {
-    const author = data.user ? await this.client.users.resolveData(data.user) : undefined;
-    return new GuildEmoji(data, { author });
+    const [author, guild] = await Promise.all([
+      data.user ? this.client.users.resolveData(data.user) : undefined,
+      this.cachedGuild(data.guild_id),
+    ]);
+    return new GuildEmoji(data, { author, guild });
   }
 
   public resolveKey(emojiId: string): string {

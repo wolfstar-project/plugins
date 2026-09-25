@@ -79,10 +79,12 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
 
   public override async hydrate(data: CacheEntityTypes["invites"]): Promise<GuildInvite> {
     const { users } = this.client;
-    return new GuildInvite(data, {
-      inviter: data.inviter ? await users.resolveData(data.inviter) : undefined,
-      targetUser: data.target_user ? await users.resolveData(data.target_user) : undefined,
-    });
+    const [inviter, targetUser, guild] = await Promise.all([
+      data.inviter ? users.resolveData(data.inviter) : undefined,
+      data.target_user ? users.resolveData(data.target_user) : undefined,
+      this.cachedGuild(this.guildId),
+    ]);
+    return new GuildInvite(data, { inviter, targetUser, guild });
   }
 
   public resolveKey(code: string): string {

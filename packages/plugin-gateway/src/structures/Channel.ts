@@ -1,5 +1,6 @@
 import { ChannelType, type APIChannel, type Snowflake } from "discord-api-types/v10";
-import { kData, snowflakeTimestamp, Structure } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, type kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
 
 /**
  * The raw data of a channel of type `Type`. Channels sent within a guild payload carry their `guild_id` too.
@@ -8,6 +9,13 @@ export type ChannelDataType<Type extends ChannelType = ChannelType> = Extract<
   APIChannel,
   { type: Type }
 > & { guild_id?: Snowflake };
+
+/**
+ * The relations of a channel, resolved from the cache by `client.channels` and `client.threads`.
+ */
+export interface ChannelRelations {
+  guild?: Guild | null;
+}
 
 const ThreadTypes: readonly ChannelType[] = [
   ChannelType.AnnouncementThread,
@@ -27,6 +35,16 @@ const ThreadTypes: readonly ChannelType[] = [
 export class Channel<Type extends ChannelType = ChannelType> extends Structure<
   ChannelDataType<Type>
 > {
+  declare public [kRelations]: ChannelRelations;
+
+  /**
+   * @param data The raw channel.
+   * @param relations The guild as resolved from the cache, by `client.channels` or `client.threads`.
+   */
+  public constructor(data: ChannelDataType<Type>, relations: ChannelRelations = {}) {
+    super(data, relations);
+  }
+
   public get id(): Snowflake {
     return this[kData].id;
   }

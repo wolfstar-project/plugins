@@ -1,5 +1,6 @@
 import type { CacheEntityName, CacheEntityTypes, EntityCache } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import type { Guild } from "../structures/Guild.js";
 import type { Structure } from "../structures/Structure.js";
 
 /**
@@ -131,6 +132,16 @@ export abstract class CachedManager<
    */
   public async resolveData(data: CacheEntityTypes[Name]): Promise<Value> {
     return (await this.getByKey(this.keyOf(data))) ?? this.hydrate(data);
+  }
+
+  /**
+   * Gets a guild from the cache, to resolve the `guild` of a structure.
+   *
+   * @param guildId The ID of the guild, if the structure belongs to one.
+   * @returns The guild, or `null` when there is no ID or the guild is not cached.
+   */
+  protected async cachedGuild(guildId: string | null | undefined): Promise<Guild | null> {
+    return guildId ? ((await this.client.guilds.get(guildId)) ?? null) : null;
   }
 
   /**

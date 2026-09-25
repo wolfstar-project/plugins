@@ -4,26 +4,26 @@ import type { GuildStickerEditOptions } from "../managers/GuildStickerManager.js
 import { cdn } from "../util/cdn.js";
 import { getGatewayClient } from "../util/container.js";
 import type { StickerPack } from "./StickerPack.js";
-import { kData, kPatch, snowflakeTimestamp, Structure } from "./Structure.js";
+import type { Guild } from "./Guild.js";
+import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
 /**
  * A sticker: a standard one from a sticker pack, or a custom one of a guild.
  */
 export class Sticker extends Structure<APISticker> {
-  #user: User | undefined;
+  declare public [kRelations]: { user?: User; guild?: Guild | null };
 
   /**
    * @param data The raw sticker.
-   * @param relations The uploader as resolved from the cache, by the guild's sticker manager.
+   * @param relations The uploader and guild as resolved from the cache, by the guild's sticker manager.
    */
-  public constructor(data: APISticker, relations: { user?: User } = {}) {
-    super(data);
-    this.#user = relations.user;
+  public constructor(data: APISticker, relations: { user?: User; guild?: Guild | null } = {}) {
+    super(data, relations);
   }
 
   public override [kPatch](data: Readonly<Partial<APISticker>>): this {
-    if (data.user) this.#user = undefined;
+    if (data.user) this.dropRelations("user");
     return super[kPatch](data);
   }
 
@@ -69,6 +69,22 @@ export class Sticker extends Structure<APISticker> {
   }
 
   /**
+   * The guild, from the cache. `null` outside of guilds, when the guild is not cached, or when the sticker was not built by
+   * a manager: use `fetchGuild()` to always get it.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * Fetches the guild, cache first. `null` outside of guilds.
+   */
+  public async fetchGuild(): Promise<Guild | null> {
+    const { guildId } = this;
+    return guildId ? getGatewayClient().guilds.fetch(guildId) : null;
+  }
+
+  /**
    * The ID of the pack of a standard sticker.
    */
   public get packId(): string | null {
@@ -87,7 +103,7 @@ export class Sticker extends Structure<APISticker> {
    */
   public get user(): User | null {
     const { user } = this[kData];
-    return this.#user ?? (user ? new User(user) : null);
+    return this[kRelations].user ?? (user ? new User(user) : null);
   }
 
   public get createdTimestamp() {

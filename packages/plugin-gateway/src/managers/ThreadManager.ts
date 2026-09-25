@@ -32,6 +32,12 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     return data.id;
   }
 
+  public override async hydrate(data: CacheEntityTypes["threads"]): Promise<AnyThreadChannel> {
+    return createChannel(data, {
+      guild: await this.cachedGuild(data.guild_id),
+    }) as AnyThreadChannel;
+  }
+
   public resolveKey(threadId: string): string {
     return threadId;
   }
