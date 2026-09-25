@@ -13,10 +13,16 @@ import {
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
 } from "discord-api-types/v10";
+import type { AutoModerationRuleManager } from "../managers/AutoModerationRuleManager.js";
+import type { GuildBanManager } from "../managers/GuildBanManager.js";
 import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
 import type { FetchedThreads } from "../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
-import type { GuildIncidentActionsOptions } from "../managers/GuildManager.js";
+import type {
+  GuildAuditLogs,
+  GuildAuditLogsFetchOptions,
+  GuildIncidentActionsOptions,
+} from "../managers/GuildManager.js";
 import type { GuildInviteManager } from "../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../managers/GuildStickerManager.js";
 import { cdn } from "../util/cdn.js";
@@ -287,6 +293,29 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public fetchWebhooks(): Promise<Webhook[]> {
     return getGatewayClient().webhooks.fetchGuild(this.id);
+  }
+
+  /**
+   * The bans of the guild.
+   */
+  public get bans(): GuildBanManager {
+    return getGatewayClient().guilds.bans(this.id);
+  }
+
+  /**
+   * The auto moderation rules of the guild.
+   */
+  public get autoModerationRules(): AutoModerationRuleManager {
+    return getGatewayClient().guilds.autoModerationRules(this.id);
+  }
+
+  /**
+   * Fetches a page of the guild's audit log.
+   *
+   * @param options Which user and action to filter by, and the page.
+   */
+  public fetchAuditLogs(options?: GuildAuditLogsFetchOptions): Promise<GuildAuditLogs> {
+    return getGatewayClient().guilds.fetchAuditLogs(this.id, options);
   }
 
   /**

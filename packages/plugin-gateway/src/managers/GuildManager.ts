@@ -12,16 +12,30 @@ import {
   type RESTPatchAPIGuildJSONBody,
   type RESTPostAPIGuildsJSONBody,
   type RESTPutAPIGuildIncidentActionsJSONBody,
+  type APIGuildIntegration,
+  type APIApplicationCommand,
+  type APIGuildScheduledEvent,
+  type APIThreadChannel,
+  type AuditLogEvent,
+  type RESTGetAPIAuditLogResult,
 } from "discord-api-types/v10";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnonymousGuild } from "../structures/AnonymousGuild.js";
 import { Guild, type GuildEditOptions } from "../structures/Guild.js";
 import { GuildPreview } from "../structures/GuildPreview.js";
+import { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
+import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
+import type { User } from "../structures/User.js";
+import { Webhook } from "../structures/Webhook.js";
+import { resolveId, type IdResolvable } from "../util/channels.js";
 import { container } from "../util/container.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
+import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
+import { GuildBanManager } from "./GuildBanManager.js";
 import { GuildChannelManager } from "./GuildChannelManager.js";
+import type { AnyThreadChannel } from "./ThreadManager.js";
 import { GuildEmojiManager } from "./GuildEmojiManager.js";
 import { GuildInviteManager } from "./GuildInviteManager.js";
 import { GuildStickerManager } from "./GuildStickerManager.js";
@@ -32,6 +46,43 @@ import { GuildStickerManager } from "./GuildStickerManager.js";
 export interface GuildIncidentActionsOptions {
   invitesDisabledUntil?: Date | number | null;
   dmsDisabledUntil?: Date | number | null;
+}
+
+/**
+ * The options to fetch a page of a guild's audit log with.
+ */
+export interface GuildAuditLogsFetchOptions {
+  /**
+   * Only the entries of this user's actions.
+   */
+  user?: IdResolvable;
+  /**
+   * Only the entries of this action.
+   */
+  type?: AuditLogEvent;
+  /**
+   * The entry (or ID) to fetch entries before.
+   */
+  before?: IdResolvable;
+  after?: IdResolvable;
+  /**
+   * How many entries to fetch, up to 100.
+   */
+  limit?: number;
+}
+
+/**
+ * A page of a guild's audit log, with the entities its entries refer to.
+ */
+export interface GuildAuditLogs {
+  entries: GuildAuditLogsEntry[];
+  users: User[];
+  webhooks: Webhook[];
+  autoModerationRules: AutoModerationRule[];
+  threads: AnyThreadChannel[];
+  integrations: APIGuildIntegration[];
+  applicationCommands: APIApplicationCommand[];
+  guildScheduledEvents: APIGuildScheduledEvent[];
 }
 
 /**
@@ -52,6 +103,73 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 
   public resolveKey(guildId: string): string {
     return guildId;
+  }
+
+  /**
+   * Gets the manager of a guild's bans.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public bans(guildId: string): GuildBanManager {
+    return new GuildBanManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's auto moderation rules.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public autoModerationRules(guildId: string): AutoModerationRuleManager {
+    return new AutoModerationRuleManager(this.client, guildId);
+  }
+
+  /**
+   * Fetches a page of a guild's audit log, newest first, and caches its users.
+   *
+   * @param guildId The ID of the guild.
+   * @param options Which user and action to filter by, and the page.
+   */
+  public async fetchAuditLogs(
+    guildId: string,
+    options: GuildAuditLogsFetchOptions = {},
+  ): Promise<GuildAuditLogs> {
+    const query = new URLSearchParams();
+    if (options.user) query.set("user_id", resolveId(options.user));
+    if (options.type !== undefined) query.set("action_type", String(options.type));
+    if (options.before) query.set("before", resolveId(options.before));
+    if (options.after) query.set("after", resolveId(options.after));
+    if (options.limit) query.set("limit", String(options.limit));
+
+    const log = (await container.rest.get(Routes.guildAuditLog(guildId), {
+      query,
+    })) as RESTGetAPIAuditLogResult;
+    const [users, guild] = await Promise.all([
+      Promise.all(log.users.map((user) => this.client.users._add(user))),
+      this.cachedGuild(guildId),
+    ]);
+    const usersById = new Map(users.map((user) => [user.id, user]));
+    const rules = this.autoModerationRules(guildId);
+
+    return {
+      entries: log.audit_log_entries.map(
+        (entry) =>
+          new GuildAuditLogsEntry(
+            { ...entry, guild_id: guildId },
+            { executor: (entry.user_id && usersById.get(entry.user_id)) || null, guild },
+          ),
+      ),
+      users,
+      webhooks: log.webhooks.map((webhook) => new Webhook(webhook)),
+      autoModerationRules: await Promise.all(
+        log.auto_moderation_rules.map((rule) => rules.hydrate(rule)),
+      ),
+      threads: await Promise.all(
+        log.threads.map((thread) => this.client.threads.hydrate(thread as APIThreadChannel)),
+      ),
+      integrations: log.integrations,
+      applicationCommands: log.application_commands,
+      guildScheduledEvents: log.guild_scheduled_events,
+    };
   }
 
   /**
