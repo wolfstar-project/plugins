@@ -1,6 +1,7 @@
 export * from "./CachedManager.js";
 export * from "./ChannelManager.js";
 export * from "./ChannelMessageManager.js";
+export * from "./ChannelThreadManager.js";
 export * from "./GuildChannelManager.js";
 export * from "./GuildEmojiManager.js";
 export * from "./GuildEmojiRoleManager.js";
@@ -14,6 +15,8 @@ export * from "./PermissionOverwriteManager.js";
 export * from "./ReactionManager.js";
 export * from "./ReactionUserManager.js";
 export * from "./RoleManager.js";
+export * from "./ThreadChannelMemberManager.js";
 export * from "./ThreadManager.js";
+export * from "./ThreadMemberManager.js";
 export * from "./UserManager.js";
 export * from "./WebhookManager.js";

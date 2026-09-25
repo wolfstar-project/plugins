@@ -5,6 +5,7 @@ import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
 import { ChannelParentMixin } from "./mixins/ChannelParentMixin.js";
 import { ChannelPermissionMixin } from "./mixins/ChannelPermissionMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
+import { ChannelThreadsMixin } from "./mixins/ChannelThreadsMixin.js";
 import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelTopicMixin } from "./mixins/ChannelTopicMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
@@ -19,7 +20,8 @@ export interface MediaChannel
     ChannelSlowmodeMixin<ChannelType.GuildMedia>,
     ChannelTopicMixin<ChannelType.GuildMedia>,
     ThreadOnlyChannelMixin<ChannelType.GuildMedia>,
-    ChannelWebhooksMixin<ChannelType.GuildMedia> {}
+    ChannelWebhooksMixin<ChannelType.GuildMedia>,
+    ChannelThreadsMixin<ChannelType.GuildMedia> {}
 
 /**
  * A guild media channel.
@@ -35,4 +37,5 @@ Mixin(MediaChannel, [
   ChannelTopicMixin,
   ThreadOnlyChannelMixin,
   ChannelWebhooksMixin,
+  ChannelThreadsMixin,
 ]);

@@ -131,6 +131,26 @@ export interface GuildChannelEditOptions {
   defaultSortOrder?: SortOrderType | null;
   defaultForumLayout?: ForumLayoutType;
   flags?: ChannelFlags;
+  /**
+   * Whether a thread is archived.
+   */
+  archived?: boolean;
+  /**
+   * Whether a thread is locked: only moderators can unarchive it.
+   */
+  locked?: boolean;
+  /**
+   * Whether non-moderators can add members to a private thread.
+   */
+  invitable?: boolean;
+  /**
+   * The minutes of inactivity after which a thread is archived.
+   */
+  autoArchiveDuration?: ThreadAutoArchiveDuration;
+  /**
+   * The IDs of the tags of a thread of a forum or media channel.
+   */
+  appliedTags?: readonly string[];
   reason?: string;
 }
 
@@ -165,6 +185,12 @@ export function toChannelBody(
     default_sort_order: options.defaultSortOrder,
     default_forum_layout: options.defaultForumLayout,
     flags: "flags" in options ? options.flags : undefined,
+    archived: "archived" in options ? options.archived : undefined,
+    locked: "locked" in options ? options.locked : undefined,
+    invitable: "invitable" in options ? options.invitable : undefined,
+    auto_archive_duration:
+      "autoArchiveDuration" in options ? options.autoArchiveDuration : undefined,
+    applied_tags: "appliedTags" in options ? options.appliedTags : undefined,
   };
   for (const key of Object.keys(body)) if (body[key] === undefined) delete body[key];
   return body as RESTPatchAPIChannelJSONBody;
@@ -175,7 +201,14 @@ export function toChannelBody(
  */
 export interface GuildChannelCreateOptions extends Omit<
   GuildChannelEditOptions,
-  "type" | "lockPermissions" | "flags"
+  | "type"
+  | "lockPermissions"
+  | "flags"
+  | "archived"
+  | "locked"
+  | "invitable"
+  | "autoArchiveDuration"
+  | "appliedTags"
 > {
   name: string;
   type?: ChannelType;

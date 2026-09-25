@@ -25,6 +25,7 @@ import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
 import { WebhookManager } from "./managers/WebhookManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
+import { ThreadMemberManager } from "./managers/ThreadMemberManager.js";
 import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/BaseInvite.js";
 import type { ClientUser } from "./structures/ClientUser.js";
@@ -132,6 +133,7 @@ export class GatewayClient extends Client {
   public readonly guilds: GuildManager;
   public readonly channels: ChannelManager;
   public readonly threads: ThreadManager;
+  public readonly threadMembers: ThreadMemberManager;
   public readonly messages: MessageManager;
   public readonly members: GuildMemberManager;
   public readonly roles: RoleManager;
@@ -164,6 +166,7 @@ export class GatewayClient extends Client {
     this.guilds = new GuildManager(this);
     this.channels = new ChannelManager(this);
     this.threads = new ThreadManager(this);
+    this.threadMembers = new ThreadMemberManager(this);
     this.messages = new MessageManager(this);
     this.members = new GuildMemberManager(this);
     this.roles = new RoleManager(this);

@@ -89,6 +89,9 @@ On top of the `Client` options:
 | `channelCreate` / `channelDelete`                         | `channel`                                      |
 | `channelUpdate`                                           | `oldChannel \| null`, `newChannel`             |
 | `threadCreate` / `threadUpdate` / `threadDelete`          | same shapes as channels                        |
+| `threadListSync`                                          | `threads`, `members`, `data`                   |
+| `threadMemberUpdate`                                      | `oldMember \| null`, `newMember`               |
+| `threadMembersUpdate`                                     | `added`, `removed`, `thread \| null`, `data`   |
 | `messageCreate`                                           | `message`                                      |
 | `messageUpdate`                                           | `oldMessage \| null`, `newMessage`             |
 | `messageDelete`                                           | `message \| null`, `data`                      |
@@ -319,6 +322,26 @@ await member.fetchPermissionsIn(channel); // discord.js: member.permissionsIn(ch
 Permissions are computed like Discord does: guild permissions, then the `@everyone` overwrite, the
 roles' overwrites, and the member's. Threads use their parent's overwrites. The message
 `fetch*able()` checks use them too.
+
+### Threads
+
+Text, announcement, forum, and media channels have `threads`: `create` (a post with `message` in
+forums), `fetchActive`, and `fetchArchived`. Threads have `setArchived`, `setLocked`,
+`setInvitable`, `setAutoArchiveDuration`, `setAppliedTags`, `join`, `leave`,
+`fetchStarterMessage`, `fetchOwner`, and `members`, backed by `client.threadMembers` and its
+`ThreadMember`s. `threadListSync`, `threadMemberUpdate`, and `threadMembersUpdate` are emitted.
+
+```ts
+const thread = await channel.threads.create({ name: "hunt", type: ChannelType.PrivateThread });
+await thread.members.add(userId);
+await thread.setArchived(true);
+
+const post = await forum.threads.create({
+  name: "Pack news",
+  message: "Awoo",
+  appliedTags: [tagId],
+});
+```
 
 ### Webhooks
 

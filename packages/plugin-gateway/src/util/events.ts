@@ -10,6 +10,8 @@ import type {
   GatewayMessageReactionRemoveAllDispatchData,
   ReactionType,
   GatewayThreadDeleteDispatchData,
+  GatewayThreadListSync,
+  GatewayThreadMembersUpdateDispatchData,
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
@@ -24,6 +26,7 @@ import type { MessageReaction } from "../structures/MessageReaction.js";
 import type { PollAnswer } from "../structures/PollAnswer.js";
 import type { Role } from "../structures/Role.js";
 import type { Sticker } from "../structures/Sticker.js";
+import type { ThreadMember } from "../structures/ThreadMember.js";
 import type { Typing } from "../structures/Typing.js";
 import type { User } from "../structures/User.js";
 
@@ -95,6 +98,27 @@ export interface GatewayEventMap {
   threadCreate: [thread: AnyThreadChannel];
   threadUpdate: [oldThread: AnyThreadChannel | null, newThread: AnyThreadChannel];
   threadDelete: [thread: AnyThreadChannel | null, data: GatewayThreadDeleteDispatchData];
+  /**
+   * Emitted when the bot gains access to a channel's threads, with the active ones and the bot's membership of each.
+   */
+  threadListSync: [
+    threads: AnyThreadChannel[],
+    members: ThreadMember[],
+    data: GatewayThreadListSync,
+  ];
+  /**
+   * Emitted when the bot's own thread member changes, e.g. its notification settings.
+   */
+  threadMemberUpdate: [oldMember: ThreadMember | null, newMember: ThreadMember];
+  /**
+   * Emitted when members are added to or removed from a thread. The removed members are the ones the cache held.
+   */
+  threadMembersUpdate: [
+    added: ThreadMember[],
+    removed: ThreadMember[],
+    thread: AnyThreadChannel | null,
+    data: GatewayThreadMembersUpdateDispatchData,
+  ];
 
   messageCreate: [message: Message];
   messageUpdate: [oldMessage: Message | null, newMessage: Message];

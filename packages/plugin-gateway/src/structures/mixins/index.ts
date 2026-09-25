@@ -4,6 +4,7 @@ export * from "./ChannelOwnerMixin.js";
 export * from "./ChannelParentMixin.js";
 export * from "./ChannelPermissionMixin.js";
 export * from "./ChannelSlowmodeMixin.js";
+export * from "./ChannelThreadsMixin.js";
 export * from "./ChannelTopicMixin.js";
 export * from "./ChannelWebhooksMixin.js";
 export * from "./DMChannelMixin.js";

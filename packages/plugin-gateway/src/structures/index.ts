@@ -36,6 +36,7 @@ export * from "./Sticker.js";
 export * from "./StickerPack.js";
 export * from "./Structure.js";
 export * from "./TextChannel.js";
+export * from "./ThreadMember.js";
 export * from "./Typing.js";
 export * from "./User.js";
 export * from "./VoiceChannel.js";

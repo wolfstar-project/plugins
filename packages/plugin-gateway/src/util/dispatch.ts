@@ -13,6 +13,7 @@ import { GuildInvite } from "../structures/GuildInvite.js";
 import type { Sticker } from "../structures/Sticker.js";
 import { MessageReaction } from "../structures/MessageReaction.js";
 import { PollAnswer } from "../structures/PollAnswer.js";
+import type { ThreadMember } from "../structures/ThreadMember.js";
 import { Typing } from "../structures/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
@@ -159,6 +160,49 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "threadDelete",
     before: (client, data) => client.threads.get(data.id),
     build: (_client, data, previous) => [previous ?? null, data],
+  },
+
+  [GatewayDispatchEvents.ThreadListSync]: {
+    event: "threadListSync",
+    build: async (client, data) => [
+      await Promise.all(data.threads.map((thread) => client.threads.hydrate(thread as never))),
+      await Promise.all(
+        data.members.map((member) =>
+          client.threadMembers.hydrate({ ...member, guild_id: data.guild_id }),
+        ),
+      ),
+      data,
+    ],
+  },
+  [GatewayDispatchEvents.ThreadMemberUpdate]: {
+    event: "threadMemberUpdate",
+    before: (client, data) =>
+      data.id && data.user_id
+        ? client.threadMembers.get(data.id, data.user_id)
+        : Promise.resolve(undefined),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.threadMembers.hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.ThreadMembersUpdate]: {
+    event: "threadMembersUpdate",
+    before: async (client, data) => {
+      const removed = await Promise.all(
+        (data.removed_member_ids ?? []).map((userId) => client.threadMembers.get(data.id, userId)),
+      );
+      return removed.filter((member) => member !== undefined);
+    },
+    build: async (client, data, previous: ThreadMember[] | undefined) => [
+      await Promise.all(
+        (data.added_members ?? []).map((member) =>
+          client.threadMembers.hydrate({ ...member, id: data.id, guild_id: data.guild_id }),
+        ),
+      ),
+      previous ?? [],
+      (await cachedOrUndefined(client.threads.get(data.id))) ?? null,
+      data,
+    ],
   },
 
   [GatewayDispatchEvents.MessageCreate]: {
