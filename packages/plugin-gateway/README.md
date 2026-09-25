@@ -487,6 +487,8 @@ depend on them directly:
 
 ## Limitations
 
-- Sharding is single-process by default. `@discordjs/ws`'s `WorkerShardingStrategy` can be set
-  through `gateway.buildStrategy`, but multi-process setups are not covered yet.
+- A `GatewayClient` connects its gateway shards from a single process (`@discordjs/ws`'s
+  `WorkerShardingStrategy` can be set through `gateway.buildStrategy`). To spread them across
+  processes, use [`@wolfstar/plugin-sharder`](../plugin-sharder) and spread
+  `shardClient.gatewayOptions` into the client's options.
 - Interaction payloads keep being handled as today, they do not read through `client.users` & co.
