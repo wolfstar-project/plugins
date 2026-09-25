@@ -18,6 +18,11 @@ packages:plugin-i18next:
       - any-glob-to-any-file:
           - packages/plugin-i18next/*
           - packages/plugin-i18next/**/*
+packages:plugin-sharder:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/plugin-sharder/*
+          - packages/plugin-sharder/**/*
 packages:plugin-logger:
   - changed-files:
       - any-glob-to-any-file:

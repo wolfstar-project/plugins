@@ -24,6 +24,9 @@
 - name: packages:plugin-gateway
   color: "1d76db"
   description: Changes in plugin-gateway
+- name: packages:plugin-sharder
+  color: "1d76db"
+  description: Changes in plugin-sharder
 - name: packages:plugin-logger
   color: "1d76db"
   description: Changes in plugin-logger
