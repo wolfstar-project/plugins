@@ -241,3 +241,134 @@ describe("applyGatewayDispatch", () => {
     expect(cache.messages.getSize()).toBe(0);
   });
 });
+
+describe("reactions and poll votes", () => {
+  const key = messageKey("20", "30");
+  const wolf = { id: null, name: "🐺" };
+
+  async function cacheWithMessage(extra: Record<string, unknown> = {}) {
+    const cache = createInMemoryCache();
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageCreate, { ...message("30", "20"), ...extra }),
+    );
+    return cache;
+  }
+
+  function reaction(t: GatewayDispatchEvents, userId: string, extra: Record<string, unknown> = {}) {
+    return dispatch(t, {
+      user_id: userId,
+      channel_id: "20",
+      message_id: "30",
+      emoji: wolf,
+      burst: false,
+      type: 0,
+      ...extra,
+    });
+  }
+
+  test("GIVEN reactions added and removed THEN the counts and me flag follow", async () => {
+    const cache = await cacheWithMessage();
+    const context = { clientUserId: "99" };
+
+    await applyGatewayDispatch(
+      cache,
+      reaction(GatewayDispatchEvents.MessageReactionAdd, "99"),
+      context,
+    );
+    await applyGatewayDispatch(
+      cache,
+      reaction(GatewayDispatchEvents.MessageReactionAdd, "5"),
+      context,
+    );
+    expect((await cache.messages.get(key))?.reactions).toEqual([
+      {
+        emoji: wolf,
+        count: 2,
+        count_details: { normal: 2, burst: 0 },
+        me: true,
+        me_burst: false,
+        burst_colors: [],
+      },
+    ]);
+
+    await applyGatewayDispatch(
+      cache,
+      reaction(GatewayDispatchEvents.MessageReactionRemove, "99"),
+      context,
+    );
+    expect((await cache.messages.get(key))?.reactions?.[0]).toMatchObject({ count: 1, me: false });
+
+    await applyGatewayDispatch(
+      cache,
+      reaction(GatewayDispatchEvents.MessageReactionRemove, "5"),
+      context,
+    );
+    expect((await cache.messages.get(key))?.reactions).toEqual([]);
+  });
+
+  test("GIVEN a REMOVE_EMOJI or REMOVE_ALL THEN the reactions are dropped", async () => {
+    const cache = await cacheWithMessage();
+    await applyGatewayDispatch(cache, reaction(GatewayDispatchEvents.MessageReactionAdd, "5"));
+    await applyGatewayDispatch(
+      cache,
+      reaction(GatewayDispatchEvents.MessageReactionAdd, "5", { emoji: { id: "7", name: "howl" } }),
+    );
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageReactionRemoveEmoji, {
+        channel_id: "20",
+        message_id: "30",
+        emoji: wolf,
+      }),
+    );
+    expect((await cache.messages.get(key))?.reactions?.map((r) => r.emoji.id)).toEqual(["7"]);
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.MessageReactionRemoveAll, {
+        channel_id: "20",
+        message_id: "30",
+      }),
+    );
+    expect((await cache.messages.get(key))?.reactions).toEqual([]);
+  });
+
+  test("GIVEN a reaction on an uncached message THEN nothing is written", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(cache, reaction(GatewayDispatchEvents.MessageReactionAdd, "5"));
+
+    expect(await cache.messages.get(key)).toBeUndefined();
+  });
+
+  test("GIVEN poll votes THEN the answer counts follow", async () => {
+    const cache = await cacheWithMessage({
+      poll: {
+        question: { text: "Best pack?" },
+        answers: [{ answer_id: 1, poll_media: { text: "Ours" } }],
+        expiry: null,
+        allow_multiselect: false,
+        layout_type: 1,
+      },
+    });
+    const vote = (t: GatewayDispatchEvents, userId: string) =>
+      dispatch(t, { user_id: userId, channel_id: "20", message_id: "30", answer_id: 1 });
+
+    await applyGatewayDispatch(cache, vote(GatewayDispatchEvents.MessagePollVoteAdd, "99"), {
+      clientUserId: "99",
+    });
+    await applyGatewayDispatch(cache, vote(GatewayDispatchEvents.MessagePollVoteAdd, "5"));
+    expect((await cache.messages.get(key))?.poll?.results?.answer_counts).toEqual([
+      { id: 1, count: 2, me_voted: true },
+    ]);
+
+    await applyGatewayDispatch(cache, vote(GatewayDispatchEvents.MessagePollVoteRemove, "99"), {
+      clientUserId: "99",
+    });
+    expect((await cache.messages.get(key))?.poll?.results?.answer_counts).toEqual([
+      { id: 1, count: 1, me_voted: false },
+    ]);
+  });
+});

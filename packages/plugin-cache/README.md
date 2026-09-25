@@ -67,6 +67,16 @@ const guild = await cache.guilds.get(guildId);
 messages, a `GUILD_DELETE` drops every entity of that guild, and so on. It only relies on the
 `Cache` interface, so custom stores get them for free.
 
+Reactions and poll votes update the cached message: counts, `me`, and `me_voted`. Their dispatches
+only carry the voter's ID, so pass the bot's user ID for the `me` flags:
+
+```ts
+await applyGatewayDispatch(cache, payload, { clientUserId: botId });
+```
+
+A reaction or vote on a message the cache does not hold is ignored, since there is nothing to count
+it into.
+
 ### Redis
 
 `createRedisCache` takes any client exposing the handful of commands it needs (`RedisClientLike`),

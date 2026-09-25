@@ -1,6 +1,7 @@
 import { GatewayDispatchEvents } from "discord-api-types/v10";
 import type {
   APIEmoji,
+  APIMessage,
   APIGuildMember,
   APIRole,
   APISoundboardSound,
@@ -33,6 +34,7 @@ import {
   threadMemberKey,
   voiceStateKey,
 } from "./keys.js";
+import { addReaction, countPollVote, removeReaction, removeReactionEmoji } from "./reactions.js";
 import type { Cache, CacheEntityName, EntityCache } from "./types.js";
 
 // A record rather than an array so the compiler enforces that every entity cache is listed.
@@ -79,9 +81,27 @@ export type CacheOperation =
       /** Whether to shallow-merge `raw` onto the existing value, used for partial updates. */
       merge?: boolean;
     }
+  | {
+      type: "update";
+      store: CacheEntityName;
+      key: string;
+      /** Computes the new value from the cached one. Nothing is written when the key is not cached. */
+      update: (value: unknown) => unknown;
+    }
   | { type: "delete"; store: CacheEntityName; key: string }
   | { type: "deletePrefix"; store: CacheEntityName; prefix: string }
   | { type: "deleteWhere"; store: CacheEntityName; predicate: (value: unknown) => boolean };
+
+/**
+ * What {@link createCacheOperations} needs to know besides the dispatch.
+ */
+export interface CacheOperationContext {
+  /**
+   * The bot's user ID. Reactions and poll votes only carry the voter's ID, so without it the cached `me` and
+   * `me_voted` flags are never set.
+   */
+  clientUserId?: string;
+}
 
 /**
  * Translates a gateway dispatch into the list of {@link CacheOperation}s it implies, including the cascades (e.g.
@@ -92,8 +112,13 @@ export type CacheOperation =
  * `INTERACTION_CREATE` is intentionally ignored: interactions are short-lived and never cached.
  *
  * @param payload The gateway dispatch payload.
+ * @param context The bot's user ID, for the `me` flags of reactions and poll votes.
  */
-export function createCacheOperations(payload: GatewayDispatchPayload): CacheOperation[] {
+export function createCacheOperations(
+  payload: GatewayDispatchPayload,
+  context: CacheOperationContext = {},
+): CacheOperation[] {
+  const { clientUserId } = context;
   const operations: CacheOperation[] = [];
 
   switch (payload.t) {
@@ -452,6 +477,71 @@ export function createCacheOperations(payload: GatewayDispatchPayload): CacheOpe
       break;
     }
 
+    case GatewayDispatchEvents.MessageReactionAdd: {
+      const data = payload.d;
+      operations.push(
+        updateMessage(data.channel_id, data.message_id, (message) =>
+          addReaction(message, data, clientUserId),
+        ),
+      );
+      // Guild reactions carry the reacting member, like messages carry their author.
+      const user = data.member?.user;
+      if (user && data.guild_id) {
+        operations.push({ type: "upsert", store: "users", key: user.id, raw: user });
+        operations.push({
+          type: "upsert",
+          store: "members",
+          key: memberKey(data.guild_id, user.id),
+          raw: withGuildId(data.member!, data.guild_id),
+          merge: true,
+        });
+      }
+      break;
+    }
+
+    case GatewayDispatchEvents.MessageReactionRemove: {
+      const data = payload.d;
+      operations.push(
+        updateMessage(data.channel_id, data.message_id, (message) =>
+          removeReaction(message, data, clientUserId),
+        ),
+      );
+      break;
+    }
+
+    case GatewayDispatchEvents.MessageReactionRemoveAll: {
+      const data = payload.d;
+      operations.push(
+        updateMessage(data.channel_id, data.message_id, (message) => ({
+          ...message,
+          reactions: [],
+        })),
+      );
+      break;
+    }
+
+    case GatewayDispatchEvents.MessageReactionRemoveEmoji: {
+      const data = payload.d;
+      operations.push(
+        updateMessage(data.channel_id, data.message_id, (message) =>
+          removeReactionEmoji(message, data.emoji),
+        ),
+      );
+      break;
+    }
+
+    case GatewayDispatchEvents.MessagePollVoteAdd:
+    case GatewayDispatchEvents.MessagePollVoteRemove: {
+      const data = payload.d;
+      const delta = payload.t === GatewayDispatchEvents.MessagePollVoteAdd ? 1 : -1;
+      operations.push(
+        updateMessage(data.channel_id, data.message_id, (message) =>
+          countPollVote(message, data, delta, clientUserId),
+        ),
+      );
+      break;
+    }
+
     case GatewayDispatchEvents.PresenceUpdate: {
       const data = payload.d;
       operations.push({
@@ -636,6 +726,11 @@ export async function applyCacheOperations(
         await store.set(operation.key, value);
         break;
       }
+      case "update": {
+        const existing = await store.get(operation.key);
+        if (existing !== undefined) await store.set(operation.key, operation.update(existing));
+        break;
+      }
       case "delete":
         await store.delete(operation.key);
         break;
@@ -658,9 +753,14 @@ export async function applyCacheOperations(
  *
  * @param cache The cache to mutate.
  * @param payload The gateway dispatch payload.
+ * @param context The bot's user ID, for the `me` flags of reactions and poll votes.
  */
-export function applyGatewayDispatch(cache: Cache, payload: GatewayDispatchPayload): Promise<void> {
-  return applyCacheOperations(cache, createCacheOperations(payload));
+export function applyGatewayDispatch(
+  cache: Cache,
+  payload: GatewayDispatchPayload,
+  context?: CacheOperationContext,
+): Promise<void> {
+  return applyCacheOperations(cache, createCacheOperations(payload, context));
 }
 
 /**
@@ -950,6 +1050,20 @@ function deleteGuildScopedResources(operations: CacheOperation[], guildId: Snowf
       predicate: (value) => isObject(value) && value.guild_id === guildId,
     });
   }
+}
+
+// An `update` of a cached message; a message the cache does not hold stays uncached.
+function updateMessage(
+  channelId: Snowflake,
+  messageId: Snowflake,
+  update: (message: APIMessage) => APIMessage,
+): CacheOperation {
+  return {
+    type: "update",
+    store: "messages",
+    key: messageKey(channelId, messageId),
+    update: (value) => update(value as APIMessage),
+  };
 }
 
 function withGuildId<Value extends object>(

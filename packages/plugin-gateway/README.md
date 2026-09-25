@@ -93,6 +93,10 @@ On top of the `Client` options:
 | `messageUpdate`                                           | `oldMessage \| null`, `newMessage`             |
 | `messageDelete`                                           | `message \| null`, `data`                      |
 | `messageDeleteBulk`                                       | `messages`, `data`                             |
+| `messageReactionAdd` / `messageReactionRemove`            | `reaction`, `user \| null`, `details`          |
+| `messageReactionRemoveAll`                                | `message \| null`, `reactions`, `data`         |
+| `messageReactionRemoveEmoji`                              | `reaction`                                     |
+| `messagePollVoteAdd` / `messagePollVoteRemove`            | `answer`, `userId`                             |
 | `guildMemberAdd`                                          | `member`                                       |
 | `guildMemberUpdate`                                       | `oldMember \| null`, `newMember`               |
 | `guildMemberRemove`                                       | `member \| null`, `data`                       |

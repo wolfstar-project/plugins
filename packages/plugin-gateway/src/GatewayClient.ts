@@ -319,7 +319,9 @@ export class GatewayClient extends Client {
     let state: unknown;
     try {
       state = await (handler ?? multi)?.before?.(this, payload.d as never);
-      if (this.cache) await applyGatewayDispatch(this.cache, payload);
+      if (this.cache) {
+        await applyGatewayDispatch(this.cache, payload, { clientUserId: this.user?.id ?? this.id });
+      }
     } catch (error) {
       if (this.cacheFailure === "skip" && !isReady) throw error;
       this.reportError(error, payload.t, shardId);
