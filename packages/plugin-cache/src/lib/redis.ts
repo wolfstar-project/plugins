@@ -25,6 +25,41 @@ export interface RedisClientLike {
   zrange(key: string, start: string, stop: string): Promise<string[]>;
   zcard(key: string): Promise<number>;
   zremrangebyscore(key: string, min: number | string, max: number | string): Promise<number>;
+  multi(): RedisTransactionLike;
+}
+
+/**
+ * The subset of an [`ioredis`](https://github.com/redis/ioredis) `MULTI` transaction the Redis cache relies on: every
+ * queued command returns the transaction, and `exec` runs them atomically.
+ */
+export interface RedisTransactionLike {
+  set(key: string, value: string): RedisTransactionLike;
+  set(key: string, value: string, mode: "PX", milliseconds: number): RedisTransactionLike;
+  del(...keys: string[]): RedisTransactionLike;
+  zadd(key: string, ...scoreMembers: (string | number)[]): RedisTransactionLike;
+  zrem(key: string, ...members: string[]): RedisTransactionLike;
+  zremrangebyscore(key: string, min: number | string, max: number | string): RedisTransactionLike;
+  exec(): Promise<[error: Error | null, result: unknown][] | null>;
+}
+
+/**
+ * Thrown when a value stored in Redis cannot be read back: invalid JSON, or compressed bytes that fail to decompress.
+ *
+ * @remarks
+ * A missing value is not an error, `get` resolves to `undefined` for it. Redis connection errors are not wrapped
+ * either, they propagate as the client throws them.
+ */
+export class CacheValueError extends Error {
+  /**
+   * The Redis key holding the unreadable value.
+   */
+  public readonly key: string;
+
+  public constructor(key: string, cause: unknown) {
+    super(`Cannot read the cached value at "${key}"`, { cause });
+    this.name = "CacheValueError";
+    this.key = key;
+  }
 }
 
 /**
@@ -87,20 +122,28 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   }
 
   public async get(key: string): Promise<Raw | undefined> {
-    const value = await this.#redis.get(this.valueKey(key));
-    return value === null ? undefined : this.deserialize(value);
+    const valueKey = this.valueKey(key);
+    const value = await this.#redis.get(valueKey);
+    return value === null ? undefined : this.deserialize(valueKey, value);
   }
 
   public async set(key: string, value: Raw): Promise<void> {
     const serialized = await this.serialize(value);
+    // The value and its index entry are written in one transaction, so neither can exist without the other.
+    const transaction = this.#redis.multi();
     if (this.ttl === undefined) {
-      await this.#redis.set(this.valueKey(key), serialized);
-      await this.#redis.zadd(this.indexKey, "+inf", key);
+      transaction.set(this.valueKey(key), serialized).zadd(this.indexKey, "+inf", key);
     } else {
+      const now = Date.now();
       const milliseconds = Math.round(this.ttl * 1000);
-      await this.#redis.set(this.valueKey(key), serialized, "PX", milliseconds);
-      await this.#redis.zadd(this.indexKey, Date.now() + milliseconds, key);
+      transaction
+        .set(this.valueKey(key), serialized, "PX", milliseconds)
+        .zadd(this.indexKey, now + milliseconds, key)
+        // Pruning on every write keeps the index bounded even when nothing ever enumerates it.
+        .zremrangebyscore(this.indexKey, "-inf", now);
     }
+
+    await execute(transaction);
   }
 
   public async has(key: string): Promise<boolean> {
@@ -108,9 +151,10 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   }
 
   public async delete(key: string): Promise<boolean> {
-    const deleted = await this.#redis.del(this.valueKey(key));
-    await this.#redis.zrem(this.indexKey, key);
-    return deleted > 0;
+    const [deleted] = await execute(
+      this.#redis.multi().del(this.valueKey(key)).zrem(this.indexKey, key),
+    );
+    return (deleted as number) > 0;
   }
 
   public async clear(): Promise<void> {
@@ -141,7 +185,10 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
     const entries: [key: string, value: Raw][] = [];
     for (const [index, value] of values.entries()) {
       // The value may have been evicted by Redis between both reads.
-      if (value !== null) entries.push([keys[index]!, await this.deserialize(value)]);
+      if (value !== null) {
+        const key = keys[index]!;
+        entries.push([key, await this.deserialize(this.valueKey(key), value)]);
+      }
     }
 
     return entries;
@@ -178,17 +225,34 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
     return `${CompressionMarkers[this.compression]}${compressed.toString("base64")}`;
   }
 
-  private async deserialize(value: string): Promise<Raw> {
-    if (value.startsWith(CompressionMarkers.gzip)) {
-      return JSON.parse((await gunzipAsync(decode(value))).toString("utf8")) as Raw;
-    }
+  private async deserialize(valueKey: string, value: string): Promise<Raw> {
+    try {
+      if (value.startsWith(CompressionMarkers.gzip)) {
+        return JSON.parse((await gunzipAsync(decode(value))).toString("utf8")) as Raw;
+      }
 
-    if (value.startsWith(CompressionMarkers.brotli)) {
-      return JSON.parse((await brotliDecompressAsync(decode(value))).toString("utf8")) as Raw;
-    }
+      if (value.startsWith(CompressionMarkers.brotli)) {
+        return JSON.parse((await brotliDecompressAsync(decode(value))).toString("utf8")) as Raw;
+      }
 
-    return JSON.parse(value) as Raw;
+      return JSON.parse(value) as Raw;
+    } catch (error) {
+      throw new CacheValueError(valueKey, error);
+    }
   }
+}
+
+/**
+ * Runs a transaction, throwing the first command error, and resolves to the command results.
+ */
+async function execute(transaction: RedisTransactionLike): Promise<unknown[]> {
+  const results = await transaction.exec();
+  if (results === null) throw new Error("The Redis transaction was aborted");
+
+  return results.map(([error, result]) => {
+    if (error) throw error;
+    return result;
+  });
 }
 
 function decode(value: string): Buffer {
