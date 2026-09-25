@@ -48,7 +48,12 @@ export interface CacheEntityTypes {
   channels: APIChannel & { guild_id?: Snowflake };
   emojis: APIEmoji & { guild_id: Snowflake };
   entitlements: APIEntitlement;
-  guilds: APIGuild & Partial<Omit<GatewayGuildCreateDispatchData, keyof APIGuild>>;
+  /**
+   * A guild without its collections (`roles`, `emojis`, `stickers`, `channels`, `members`, ...): they are stored in
+   * their own entity caches, which stay up to date as the guild changes.
+   */
+  guilds: Omit<APIGuild, "emojis" | "roles" | "stickers"> &
+    Partial<Omit<GatewayGuildCreateDispatchData, keyof APIGuild>>;
   integrations: GatewayIntegrationCreateDispatchData | GatewayIntegrationUpdateDispatchData;
   invites: GatewayInviteCreateDispatchData;
   members: APIGuildMember & { guild_id: Snowflake };

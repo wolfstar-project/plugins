@@ -198,8 +198,12 @@ export function createCacheOperations(payload: GatewayDispatchPayload): CacheOpe
     }
 
     case GatewayDispatchEvents.GuildUpdate: {
-      const data = payload.d;
+      // Like `GUILD_CREATE`, the roles and emojis go to their own entity caches rather than the guild entry.
+      const { roles, emojis, stickers, ...data } = payload.d;
       operations.push({ type: "upsert", store: "guilds", key: data.id, raw: data, merge: true });
+      for (const role of roles ?? []) hydrateRole(operations, data.id, role);
+      for (const emoji of emojis ?? []) hydrateEmoji(operations, data.id, emoji);
+      for (const sticker of stickers ?? []) hydrateSticker(operations, data.id, sticker);
       break;
     }
 
@@ -534,7 +538,8 @@ export function createCacheOperations(payload: GatewayDispatchPayload): CacheOpe
           type: "upsert",
           store: "threadMembers",
           key: threadMemberKey(data.id, member.user_id),
-          raw: member,
+          // Thread members carry no guild ID of their own: without it, `GUILD_DELETE` could not sweep them.
+          raw: data.guild_id ? withGuildId(member, data.guild_id) : member,
           merge: true,
         });
       }
@@ -685,6 +690,9 @@ function hydrateGuildCreate(
     stage_instances: stageInstances,
     guild_scheduled_events: scheduledEvents,
     soundboard_sounds: soundboardSounds,
+    roles,
+    emojis,
+    stickers,
     ...rest
   } = guild;
   // Collections are stored in their own entity caches, keeping the guild entry small.
@@ -727,9 +735,9 @@ function hydrateGuildCreate(
     });
   }
 
-  for (const role of guild.roles ?? []) hydrateRole(operations, guild.id, role);
-  for (const emoji of guild.emojis ?? []) hydrateEmoji(operations, guild.id, emoji);
-  for (const sticker of guild.stickers ?? []) hydrateSticker(operations, guild.id, sticker);
+  for (const role of roles ?? []) hydrateRole(operations, guild.id, role);
+  for (const emoji of emojis ?? []) hydrateEmoji(operations, guild.id, emoji);
+  for (const sticker of stickers ?? []) hydrateSticker(operations, guild.id, sticker);
 
   for (const voiceState of voiceStates ?? []) {
     if (!voiceState.channel_id) continue;
@@ -796,7 +804,13 @@ function hydrateSoundboardSounds(
 
 function hydrateThreadListSync(operations: CacheOperation[], data: GatewayThreadListSync): void {
   for (const thread of data.threads) {
-    operations.push({ type: "upsert", store: "threads", key: thread.id, raw: thread, merge: true });
+    operations.push({
+      type: "upsert",
+      store: "threads",
+      key: thread.id,
+      raw: withGuildId(thread, data.guild_id),
+      merge: true,
+    });
   }
 
   for (const member of data.members) {

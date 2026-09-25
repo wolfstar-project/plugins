@@ -13,6 +13,7 @@ import {
   memberKey,
   messageKey,
   roleKey,
+  threadMemberKey,
 } from "../src/index.js";
 
 const user: APIUser = {
@@ -85,6 +86,51 @@ describe("createCacheOperations", () => {
 });
 
 describe("applyGatewayDispatch", () => {
+  test("GIVEN a GUILD_UPDATE THEN its roles go to the roles cache, not the guild entry", async () => {
+    const cache = createInMemoryCache();
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild("10")));
+    const {
+      channels: _channels,
+      members: _members,
+      ...update
+    } = guild("10") as Record<string, unknown>;
+    const roles = [{ ...(update.roles as object[])[0]!, name: "Alpha" }];
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.GuildUpdate, { ...update, name: "Den", roles }),
+    );
+
+    expect(cache.guilds.get("10")).toMatchObject({ name: "Den" });
+    expect(cache.guilds.get("10")).not.toHaveProperty("roles");
+    expect(cache.roles.get(roleKey("10", "100"))).toMatchObject({ name: "Alpha", guild_id: "10" });
+  });
+
+  test("GIVEN threads created and synced THEN they and their members carry the guild ID", async () => {
+    const cache = createInMemoryCache();
+    const thread = { id: "30", type: 11, guild_id: "10", parent_id: "20", name: "den" };
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ThreadCreate, {
+        ...thread,
+        newly_created: true,
+        member: { id: "30", user_id: "1", join_timestamp: "2026-01-01T00:00:00.000Z", flags: 0 },
+      }),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ThreadListSync, {
+        guild_id: "10",
+        threads: [{ id: "31", type: 11, parent_id: "20", name: "lair" }],
+        members: [],
+      }),
+    );
+
+    expect(cache.threadMembers.get(threadMemberKey("30", "1"))).toMatchObject({ guild_id: "10" });
+    expect(cache.threads.get("31")).toMatchObject({ guild_id: "10" });
+  });
+
   test("GIVEN a GUILD_CREATE THEN its collections are split into their own entity caches", async () => {
     const cache = createInMemoryCache();
 
@@ -94,6 +140,9 @@ describe("applyGatewayDispatch", () => {
     expect(stored.name).toBe("Pack");
     expect(stored).not.toHaveProperty("channels");
     expect(stored).not.toHaveProperty("members");
+    expect(stored).not.toHaveProperty("roles");
+    expect(stored).not.toHaveProperty("emojis");
+    expect(stored).not.toHaveProperty("stickers");
     expect(cache.channels.get("20")).toMatchObject({ name: "general", guild_id: "10" });
     expect(cache.members.get(memberKey("10", "1"))).toMatchObject({ guild_id: "10" });
     expect(cache.roles.get(roleKey("10", "100"))).toMatchObject({
