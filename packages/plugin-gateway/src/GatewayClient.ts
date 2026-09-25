@@ -18,6 +18,7 @@ import {
   type GatewayReadyDispatchData,
   type GatewayIntentBits,
   type APISoundboardSound,
+  type APIGuildWidget,
 } from "discord-api-types/v10";
 import { ChannelManager } from "./managers/ChannelManager.js";
 import { GuildManager } from "./managers/GuildManager.js";
@@ -26,6 +27,7 @@ import { MessageManager } from "./managers/MessageManager.js";
 import { RoleManager } from "./managers/RoleManager.js";
 import { SoundboardSound } from "./structures/SoundboardSound.js";
 import { WebhookManager } from "./managers/WebhookManager.js";
+import { GuildTemplateManager } from "./managers/GuildTemplateManager.js";
 import { VoiceStateManager } from "./managers/VoiceStateManager.js";
 import { PresenceManager } from "./managers/PresenceManager.js";
 import { ThreadManager } from "./managers/ThreadManager.js";
@@ -36,6 +38,8 @@ import type { ClientUser } from "./structures/ClientUser.js";
 import { createInvite } from "./structures/GroupDMInvite.js";
 import { Sticker } from "./structures/Sticker.js";
 import type { Webhook } from "./structures/Webhook.js";
+import type { GuildTemplate } from "./structures/GuildTemplate.js";
+import { Widget } from "./structures/Widget.js";
 import { StickerPack } from "./structures/StickerPack.js";
 import {
   DispatchHandlers,
@@ -142,6 +146,7 @@ export class GatewayClient extends Client {
   public readonly members: GuildMemberManager;
   public readonly roles: RoleManager;
   public readonly webhooks: WebhookManager;
+  public readonly templates: GuildTemplateManager;
   public readonly voiceStates: VoiceStateManager;
   public readonly presences: PresenceManager;
 
@@ -177,6 +182,7 @@ export class GatewayClient extends Client {
     this.members = new GuildMemberManager(this);
     this.roles = new RoleManager(this);
     this.webhooks = new WebhookManager(this);
+    this.templates = new GuildTemplateManager(this);
     this.voiceStates = new VoiceStateManager(this);
     this.presences = new PresenceManager(this);
 
@@ -270,6 +276,26 @@ export class GatewayClient extends Client {
    */
   public fetchWebhook(webhookId: string, token?: string): Promise<Webhook> {
     return this.webhooks.fetch(webhookId, token);
+  }
+
+  /**
+   * Fetches a guild template by its code. discord.js: `client.fetchGuildTemplate(code)`.
+   *
+   * @param code The code of the template, or its URL.
+   */
+  public fetchGuildTemplate(code: string): Promise<GuildTemplate> {
+    return this.templates.fetch(code);
+  }
+
+  /**
+   * Fetches the public widget of a guild, which must be enabled. Needs no membership of the guild.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public async fetchGuildWidget(guildId: string): Promise<Widget> {
+    return new Widget(
+      (await container.rest.get(Routes.guildWidgetJSON(guildId))) as APIGuildWidget,
+    );
   }
 
   /**

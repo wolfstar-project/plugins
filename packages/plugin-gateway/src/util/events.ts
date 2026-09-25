@@ -2,6 +2,8 @@ import type {
   GatewayChannelPinsUpdateDispatchData,
   GatewayDispatchPayload,
   GatewayGuildDeleteDispatchData,
+  GatewayGuildIntegrationsUpdateDispatchData,
+  GatewayIntegrationDeleteDispatchData,
   GatewayGuildMemberRemoveDispatchData,
   GatewayGuildRoleDeleteDispatchData,
   GatewayInviteDeleteDispatchData,
@@ -26,6 +28,7 @@ import type { Guild } from "../structures/Guild.js";
 import type { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
 import type { GuildBan } from "../structures/GuildBan.js";
 import type { GuildScheduledEvent } from "../structures/GuildScheduledEvent.js";
+import type { Integration } from "../structures/Integration.js";
 import type { SoundboardSound } from "../structures/SoundboardSound.js";
 import type { StageInstance } from "../structures/StageInstance.js";
 import type { GuildEmoji } from "../structures/GuildEmoji.js";
@@ -266,6 +269,13 @@ export interface GatewayEventMap {
    * Emitted when auto moderation takes an action. Needs the `AutoModerationExecution` intent.
    */
   autoModerationActionExecution: [execution: AutoModerationActionExecution];
+  /**
+   * Emitted when an integration of a guild is created, updated, or deleted.
+   */
+  guildIntegrationsUpdate: [guild: Guild | null, data: GatewayGuildIntegrationsUpdateDispatchData];
+  integrationCreate: [integration: Integration];
+  integrationUpdate: [oldIntegration: Integration | null, newIntegration: Integration];
+  integrationDelete: [integration: Integration | null, data: GatewayIntegrationDeleteDispatchData];
   /**
    * Emitted when a member joins, leaves, or moves between voice channels, or changes their voice settings.
    */

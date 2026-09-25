@@ -12,12 +12,19 @@ import {
   type RESTPatchAPIGuildJSONBody,
   type RESTPostAPIGuildsJSONBody,
   type RESTPutAPIGuildIncidentActionsJSONBody,
-  type APIGuildIntegration,
   type APIApplicationCommand,
   type APIGuildScheduledEvent,
   type APIThreadChannel,
   type AuditLogEvent,
+  type GuildOnboardingMode,
+  type GuildOnboardingPromptType,
+  type APIGuildOnboarding,
+  type APIGuildWelcomeScreen,
+  type APIGuildWidgetSettings,
   type RESTGetAPIAuditLogResult,
+  type RESTPatchAPIGuildWelcomeScreenJSONBody,
+  type RESTPatchAPIGuildWidgetSettingsJSONBody,
+  type RESTPutAPIGuildOnboardingJSONBody,
 } from "discord-api-types/v10";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
@@ -25,6 +32,10 @@ import { AnonymousGuild } from "../structures/AnonymousGuild.js";
 import { Guild, type GuildEditOptions } from "../structures/Guild.js";
 import { GuildPreview } from "../structures/GuildPreview.js";
 import { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
+import { GuildOnboarding } from "../structures/GuildOnboarding.js";
+import type { Integration } from "../structures/Integration.js";
+import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
+import { WelcomeScreen } from "../structures/WelcomeScreen.js";
 import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
 import type { User } from "../structures/User.js";
 import { Webhook } from "../structures/Webhook.js";
@@ -35,6 +46,7 @@ import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
 import { GuildBanManager } from "./GuildBanManager.js";
 import { GuildChannelManager } from "./GuildChannelManager.js";
+import { GuildIntegrationManager } from "./GuildIntegrationManager.js";
 import { GuildScheduledEventManager } from "./GuildScheduledEventManager.js";
 import { GuildSoundboardSoundManager } from "./GuildSoundboardSoundManager.js";
 import { StageInstanceManager } from "./StageInstanceManager.js";
@@ -83,9 +95,87 @@ export interface GuildAuditLogs {
   webhooks: Webhook[];
   autoModerationRules: AutoModerationRule[];
   threads: AnyThreadChannel[];
-  integrations: APIGuildIntegration[];
+  /**
+   * The integrations the entries refer to, partial: an ID, a name, a type, and an account.
+   */
+  integrations: Integration[];
   applicationCommands: APIApplicationCommand[];
   guildScheduledEvents: APIGuildScheduledEvent[];
+}
+
+/**
+ * A channel to suggest in a welcome screen.
+ */
+export interface WelcomeChannelData {
+  channel: IdResolvable;
+  description: string;
+  emoji?: EmojiIdentifierResolvable | null;
+}
+
+/**
+ * The options to edit a welcome screen with.
+ */
+export interface GuildWelcomeScreenEditOptions {
+  enabled?: boolean;
+  description?: string | null;
+  welcomeChannels?: readonly WelcomeChannelData[];
+  reason?: string;
+}
+
+/**
+ * The widget settings of a guild.
+ */
+export interface GuildWidgetSettings {
+  enabled: boolean;
+  /**
+   * The channel the widget's invite leads to.
+   */
+  channelId: string | null;
+}
+
+/**
+ * The options to edit the widget settings of a guild with.
+ */
+export interface GuildWidgetSettingsEditOptions {
+  enabled?: boolean;
+  channel?: IdResolvable | null;
+  reason?: string;
+}
+
+/**
+ * An answer of an onboarding prompt. Without an ID, it is a new one.
+ */
+export interface GuildOnboardingPromptOptionData {
+  id?: string;
+  title: string;
+  description?: string | null;
+  channels?: readonly IdResolvable[];
+  roles?: readonly IdResolvable[];
+  emoji?: EmojiIdentifierResolvable | null;
+}
+
+/**
+ * A question of an onboarding. Without an ID, it is a new one.
+ */
+export interface GuildOnboardingPromptData {
+  id?: string;
+  title: string;
+  options: readonly GuildOnboardingPromptOptionData[];
+  type?: GuildOnboardingPromptType;
+  singleSelect?: boolean;
+  required?: boolean;
+  inOnboarding?: boolean;
+}
+
+/**
+ * The options to edit an onboarding with. The prompts replace every existing one.
+ */
+export interface GuildOnboardingEditOptions {
+  prompts?: readonly GuildOnboardingPromptData[];
+  defaultChannels?: readonly IdResolvable[];
+  enabled?: boolean;
+  mode?: GuildOnboardingMode;
+  reason?: string;
 }
 
 /**
@@ -133,6 +223,155 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public soundboardSounds(guildId: string): GuildSoundboardSoundManager {
     return new GuildSoundboardSoundManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's integrations.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public integrations(guildId: string): GuildIntegrationManager {
+    return new GuildIntegrationManager(this.client, guildId);
+  }
+
+  /**
+   * Fetches the welcome screen of a guild.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public async fetchWelcomeScreen(guildId: string): Promise<WelcomeScreen> {
+    const screen = (await container.rest.get(
+      Routes.guildWelcomeScreen(guildId),
+    )) as APIGuildWelcomeScreen;
+    return this.welcomeScreen(guildId, screen);
+  }
+
+  /**
+   * Edits the welcome screen of a guild.
+   *
+   * @param guildId The ID of the guild.
+   * @param options The changes to apply.
+   */
+  public async editWelcomeScreen(
+    guildId: string,
+    options: GuildWelcomeScreenEditOptions,
+  ): Promise<WelcomeScreen> {
+    const body: RESTPatchAPIGuildWelcomeScreenJSONBody = {
+      enabled: options.enabled,
+      description: options.description,
+      welcome_channels: options.welcomeChannels?.map((channel) => {
+        const emoji = channel.emoji ? ReactionEmoji.resolvePartial(channel.emoji) : null;
+        return {
+          channel_id: resolveId(channel.channel),
+          description: channel.description,
+          emoji_id: emoji?.id ?? null,
+          emoji_name: emoji?.name ?? null,
+        };
+      }),
+    };
+    const screen = (await container.rest.patch(Routes.guildWelcomeScreen(guildId), {
+      body,
+      reason: options.reason,
+    })) as APIGuildWelcomeScreen;
+    return this.welcomeScreen(guildId, screen);
+  }
+
+  /**
+   * Fetches whether the widget of a guild is enabled, and its channel.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public async fetchWidgetSettings(guildId: string): Promise<GuildWidgetSettings> {
+    const settings = (await container.rest.get(
+      Routes.guildWidgetSettings(guildId),
+    )) as APIGuildWidgetSettings;
+    return { enabled: settings.enabled, channelId: settings.channel_id };
+  }
+
+  /**
+   * Edits the widget settings of a guild, and patches the cached guild.
+   *
+   * @param guildId The ID of the guild.
+   * @param options Whether to enable the widget, and its channel.
+   */
+  public async editWidgetSettings(
+    guildId: string,
+    options: GuildWidgetSettingsEditOptions,
+  ): Promise<GuildWidgetSettings> {
+    const body: RESTPatchAPIGuildWidgetSettingsJSONBody = {
+      enabled: options.enabled,
+      channel_id:
+        options.channel === undefined ? undefined : options.channel && resolveId(options.channel),
+    };
+    const settings = (await container.rest.patch(Routes.guildWidgetSettings(guildId), {
+      body,
+      reason: options.reason,
+    })) as APIGuildWidgetSettings;
+    const cached = await this.cache?.get(guildId);
+    if (cached) {
+      await this.cache!.set(guildId, {
+        ...cached,
+        widget_enabled: settings.enabled,
+        widget_channel_id: settings.channel_id,
+      });
+    }
+
+    return { enabled: settings.enabled, channelId: settings.channel_id };
+  }
+
+  /**
+   * Fetches the onboarding of a guild.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public async fetchOnboarding(guildId: string): Promise<GuildOnboarding> {
+    const onboarding = (await container.rest.get(
+      Routes.guildOnboarding(guildId),
+    )) as APIGuildOnboarding;
+    return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
+  }
+
+  /**
+   * Edits the onboarding of a guild.
+   *
+   * @param guildId The ID of the guild.
+   * @param options The changes to apply. The prompts replace every existing one.
+   */
+  public async editOnboarding(
+    guildId: string,
+    options: GuildOnboardingEditOptions,
+  ): Promise<GuildOnboarding> {
+    const body: RESTPutAPIGuildOnboardingJSONBody = {
+      prompts: options.prompts?.map((prompt) => ({
+        id: prompt.id ?? placeholderId(),
+        title: prompt.title,
+        type: prompt.type,
+        single_select: prompt.singleSelect,
+        required: prompt.required,
+        in_onboarding: prompt.inOnboarding,
+        options: prompt.options.map((option) => {
+          const emoji = option.emoji ? ReactionEmoji.resolvePartial(option.emoji) : null;
+          return {
+            id: option.id ?? placeholderId(),
+            title: option.title,
+            description: option.description,
+            channel_ids: option.channels?.map(resolveId),
+            role_ids: option.roles?.map(resolveId),
+            emoji_id: emoji?.id,
+            emoji_name: emoji?.name,
+            emoji_animated: emoji?.animated,
+          };
+        }),
+      })),
+      default_channel_ids: options.defaultChannels?.map(resolveId),
+      enabled: options.enabled,
+      mode: options.mode,
+    };
+    const onboarding = (await container.rest.put(Routes.guildOnboarding(guildId), {
+      body,
+      reason: options.reason,
+    })) as APIGuildOnboarding;
+    return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
   }
 
   /**
@@ -196,7 +435,9 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       threads: await Promise.all(
         log.threads.map((thread) => this.client.threads.hydrate(thread as APIThreadChannel)),
       ),
-      integrations: log.integrations,
+      integrations: log.integrations.map((integration) =>
+        this.integrations(guildId).createStructure({ ...integration, guild_id: guildId }),
+      ),
       applicationCommands: log.application_commands,
       guildScheduledEvents: log.guild_scheduled_events,
     };
@@ -388,6 +629,16 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     return this._add(guild);
   }
 
+  private async welcomeScreen(
+    guildId: string,
+    screen: APIGuildWelcomeScreen,
+  ): Promise<WelcomeScreen> {
+    return new WelcomeScreen(
+      { ...screen, guild_id: guildId },
+      { guild: await this.cachedGuild(guildId) },
+    );
+  }
+
   // The same cascade as a `GUILD_DELETE`, so no channel, member, or role of the guild outlives it. It is queued with
   // the guild's dispatches, so it never interleaves with one still being written.
   private async forget(guildId: string): Promise<void> {
@@ -402,6 +653,13 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       }),
     );
   }
+}
+
+// Discord requires an ID on every prompt and option, and takes any snowflake for the new ones.
+let placeholderSequence = 0;
+function placeholderId(): string {
+  placeholderSequence = (placeholderSequence + 1) % 4096;
+  return String(((BigInt(Date.now()) - 1_420_070_400_000n) << 22n) | BigInt(placeholderSequence));
 }
 
 function toISO(value: Date | number | null | undefined): string | null | undefined {

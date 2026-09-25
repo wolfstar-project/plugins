@@ -44,4 +44,28 @@ export class ReactionEmoji extends Emoji<APIPartialEmoji> {
     if (name) return encodeURIComponent(name);
     throw new TypeError("Cannot resolve an emoji without an ID nor a name");
   }
+
+  /**
+   * Resolves anything {@link EmojiIdentifierResolvable} to the ID and name pair of welcome screens and onboarding.
+   *
+   * @param emoji The emoji to resolve.
+   */
+  public static resolvePartial(emoji: EmojiIdentifierResolvable): {
+    id: string | null;
+    name: string | null;
+    animated: boolean;
+  } {
+    if (typeof emoji !== "string") {
+      return { id: emoji.id ?? null, name: emoji.name ?? null, animated: emoji.animated ?? false };
+    }
+
+    if (/^\d{17,20}$/.test(emoji)) return { id: emoji, name: null, animated: false };
+    const custom = FormattingPatterns.Emoji.exec(emoji) ?? CustomEmojiPattern.exec(emoji);
+    if (custom?.groups) {
+      const { animated, name, id } = custom.groups;
+      return { id: id!, name: name!, animated: Boolean(animated) };
+    }
+
+    return { id: null, name: emoji, animated: false };
+  }
 }

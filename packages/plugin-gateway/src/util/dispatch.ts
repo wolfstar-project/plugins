@@ -499,6 +499,31 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
     ],
   },
+  [GatewayDispatchEvents.GuildIntegrationsUpdate]: {
+    event: "guildIntegrationsUpdate",
+    build: async (client, data) => [
+      (await cachedOrUndefined(client.guilds.get(data.guild_id))) ?? null,
+      data,
+    ],
+  },
+  [GatewayDispatchEvents.IntegrationCreate]: {
+    event: "integrationCreate",
+    build: async (client, data) => [await client.guilds.integrations(data.guild_id).hydrate(data)],
+  },
+  [GatewayDispatchEvents.IntegrationUpdate]: {
+    event: "integrationUpdate",
+    before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.guilds.integrations(data.guild_id).hydrate(data),
+    ],
+  },
+  [GatewayDispatchEvents.IntegrationDelete]: {
+    event: "integrationDelete",
+    before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
+    build: (_client, data, previous) => [previous ?? null, data],
+  },
+
   [GatewayDispatchEvents.AutoModerationActionExecution]: {
     event: "autoModerationActionExecution",
     build: async (client, data) => {
