@@ -28,14 +28,38 @@ export class ShardRequestTimeoutError extends Error {
 }
 
 /**
- * A shard stopped, or never became ready, before a message could reach it.
+ * A shard stopped, is not ready in time, or does not exist.
  */
 export class ShardUnavailableError extends Error {
-  public readonly shardId: number;
+  public readonly channelId: number;
 
-  public constructor(shardId: number, reason: string) {
-    super(`Shard ${shardId} is unavailable: ${reason}`);
+  public constructor(channelId: number, reason: string) {
+    super(`Shard ${channelId} is unavailable: ${reason}`);
     this.name = "ShardUnavailableError";
-    this.shardId = shardId;
+    this.channelId = channelId;
+  }
+}
+
+/**
+ * A shard failed before it was ready: its process exited, or its worker could not start. The sharder RFC's `error`
+ * signal.
+ */
+export class ShardSpawnError extends Error {
+  public readonly channelId: number;
+  /**
+   * The exit code, when the shard exited.
+   */
+  public readonly code: number | null;
+
+  public constructor(channelId: number, code: number | null, cause?: unknown) {
+    super(
+      cause instanceof Error
+        ? `Shard ${channelId} failed to start: ${cause.message}`
+        : `Shard ${channelId} exited with code ${code} before it was ready`,
+      { cause },
+    );
+    this.name = "ShardSpawnError";
+    this.channelId = channelId;
+    this.code = code;
   }
 }

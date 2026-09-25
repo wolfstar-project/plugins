@@ -1,4 +1,9 @@
-import { Op, serializeError, type Packet, type ShardTarget } from "../messages/protocol.js";
+import {
+  Op,
+  serializeError,
+  type Packet,
+  type SerializedSettledResult,
+} from "../messages/protocol.js";
 import { ShardRequestError, ShardRequestTimeoutError } from "./errors.js";
 
 /**
@@ -10,9 +15,21 @@ export interface RequestOptions {
    */
   timeout?: number;
   /**
-   * Aborts the request, which also tells the other side to abort its handler.
+   * Aborts the request: dropped from the queue if it waits for a shard to be ready, and aborted on the other side
+   * otherwise, whose handler gets an aborted `signal`.
    */
   signal?: AbortSignal;
+}
+
+/**
+ * The options of a broadcast request.
+ */
+export interface BroadcastRequestOptions extends RequestOptions {
+  /**
+   * Whether to resolve with the outcome of every shard, like `Promise.allSettled`, rather than rejecting on the first
+   * failure: the replies that came before a timeout or an abort are kept.
+   */
+  partial?: boolean;
 }
 
 /**
@@ -25,8 +42,11 @@ export type RequestHandler<Context> = (
 ) => unknown;
 
 type Send = (packet: Packet) => Promise<void>;
+type RequestPacket = Extract<Packet, { op: typeof Op.Request }>;
+type RequestFields = Omit<RequestPacket, "op" | "nonce" | "timeout">;
 
 interface Pending {
+  owner: unknown;
   resolve(value: unknown): void;
   reject(error: unknown): void;
 }
@@ -38,20 +58,35 @@ interface Pending {
  */
 export class OutgoingRequests {
   readonly #pending = new Map<number, Pending>();
+  readonly #step: 1 | -1;
   #nonce = 0;
 
-  public get size(): number {
-    return this.#pending.size;
+  /**
+   * @param negative Whether to count nonces down from -1, so two senders on one channel never collide.
+   */
+  public constructor(negative = false) {
+    this.#step = negative ? -1 : 1;
   }
 
+  /**
+   * Sends a request.
+   *
+   * @param send Writes the request.
+   * @param fields The request.
+   * @param timeout How long to wait for the reply.
+   * @param signal Aborts the request.
+   * @param owner What the request was sent to, to reject it with {@link OutgoingRequests.rejectOwner}.
+   */
   public request(
     send: Send,
-    fields: { body: unknown; to?: ShardTarget; from?: number | null },
+    fields: RequestFields,
     timeout: number,
     signal?: AbortSignal,
+    owner?: unknown,
   ): Promise<unknown> {
     signal?.throwIfAborted();
-    const nonce = ++this.#nonce;
+    this.#nonce += this.#step;
+    const nonce = this.#nonce;
 
     return new Promise((resolve, reject) => {
       const abort = (error: unknown) => {
@@ -71,6 +106,7 @@ export class OutgoingRequests {
       };
 
       this.#pending.set(nonce, {
+        owner,
         resolve: (value) => {
           settle();
           resolve(value);
@@ -87,13 +123,23 @@ export class OutgoingRequests {
     });
   }
 
-  public settle(packet: Extract<Packet, { op: typeof Op.Reply }>): void {
+  /**
+   * Settles the request a reply answers. Returns whether it answered one of these requests.
+   */
+  public settle(packet: Extract<Packet, { op: typeof Op.Reply }>): boolean {
     const pending = this.#pending.get(packet.nonce);
-    if (!pending) return;
+    if (!pending) return false;
 
     if (packet.error)
       pending.reject(new ShardRequestError(packet.error.name, packet.error.message));
     else pending.resolve(packet.body);
+    return true;
+  }
+
+  public rejectOwner(owner: unknown, error: unknown): void {
+    for (const pending of this.#pending.values()) {
+      if (pending.owner === owner) pending.reject(error);
+    }
   }
 
   public rejectAll(error: unknown): void {
@@ -111,7 +157,7 @@ export class IncomingRequests {
 
   public async handle<Context>(
     send: Send,
-    packet: Extract<Packet, { op: typeof Op.Request }>,
+    packet: RequestPacket,
     handler: RequestHandler<Context> | null,
     context: Context,
   ): Promise<void> {
@@ -140,4 +186,37 @@ export class IncomingRequests {
   public abortAll(): void {
     for (const nonce of this.#controllers.keys()) this.abort(nonce);
   }
+}
+
+/**
+ * Serializes the outcomes of a partial broadcast.
+ *
+ * @internal
+ */
+export function serializeSettled(
+  results: readonly PromiseSettledResult<unknown>[],
+): SerializedSettledResult[] {
+  return results.map((result) =>
+    result.status === "fulfilled"
+      ? { status: "fulfilled", value: result.value }
+      : { status: "rejected", reason: serializeError(result.reason) },
+  );
+}
+
+/**
+ * Rebuilds the outcomes of a partial broadcast.
+ *
+ * @internal
+ */
+export function deserializeSettled<Reply>(
+  results: readonly SerializedSettledResult[],
+): PromiseSettledResult<Reply>[] {
+  return results.map((result) =>
+    result.status === "fulfilled"
+      ? { status: "fulfilled", value: result.value as Reply }
+      : {
+          status: "rejected",
+          reason: new ShardRequestError(result.reason.name, result.reason.message),
+        },
+  );
 }

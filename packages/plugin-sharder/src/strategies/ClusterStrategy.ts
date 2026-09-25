@@ -1,6 +1,11 @@
 import cluster, { type Worker as ClusterWorker } from "node:cluster";
 import { fileURLToPath } from "node:url";
-import { ShardContextVariable, encodeContext, type ShardContext } from "./ChannelStrategy.js";
+import {
+  ShardContextVariable,
+  encodeContext,
+  type ShardContext,
+  type SpawnOptions,
+} from "./ChannelStrategy.js";
 import { ProcessStrategy, type ProcessStrategyOptions } from "./ProcessStrategy.js";
 
 /**
@@ -19,6 +24,7 @@ export interface ClusterStrategyOptions extends ProcessStrategyOptions {
  * on, and the primary balances the connections between them.
  */
 export class ClusterStrategy extends ProcessStrategy {
+  public readonly name = "cluster";
   public readonly options: ClusterStrategyOptions;
 
   public constructor(options: ClusterStrategyOptions = {}) {
@@ -26,7 +32,7 @@ export class ClusterStrategy extends ProcessStrategy {
     this.options = options;
   }
 
-  protected createProcess(context: ShardContext): ClusterWorker {
+  protected createProcess(context: ShardContext, options: SpawnOptions): ClusterWorker {
     const { path, args, execArgv, env } = this.options;
     cluster.setupPrimary({
       exec: path instanceof URL ? fileURLToPath(path) : path,
@@ -34,6 +40,6 @@ export class ClusterStrategy extends ProcessStrategy {
       execArgv: execArgv ? [...execArgv] : undefined,
       serialization: "advanced",
     });
-    return cluster.fork({ ...env, [ShardContextVariable]: encodeContext(context) });
+    return cluster.fork({ ...env, ...options.env, [ShardContextVariable]: encodeContext(context) });
   }
 }

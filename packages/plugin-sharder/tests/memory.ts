@@ -1,4 +1,3 @@
-import type { ChannelData } from "../src/messages/MessageHandler.js";
 import {
   ShardClient,
   type ChannelStrategy,
@@ -7,21 +6,28 @@ import {
   type ShardContext,
   type ShardTransport,
   type ShardTransportEvents,
+  type SpawnOptions,
 } from "../src/index.js";
 
 /**
- * What a test shard runs, with the number of times its shard was spawned before.
+ * What a test shard runs, with the number of times its channel was spawned before.
  */
 export type ShardScript = (client: ShardClient, spawns: number) => void;
+
+interface Running {
+  exit(code: number | null): void;
+  muted: boolean;
+}
 
 /**
  * Runs every shard in the test's own thread, over an in-memory channel.
  */
 export class MemoryStrategy implements ChannelStrategy {
-  public readonly transport = "worker";
+  public readonly name = "memory";
   public readonly clients: ShardClient[] = [];
+  public readonly spawned: { context: ShardContext; options: SpawnOptions }[] = [];
   readonly #spawns = new Map<number, number>();
-  readonly #exits = new Map<number, (code: number | null) => void>();
+  readonly #running = new Map<number, Running>();
   readonly #script: ShardScript;
   readonly #options: Omit<ShardClientOptions, "context" | "transport">;
 
@@ -35,35 +41,55 @@ export class MemoryStrategy implements ChannelStrategy {
 
   /**
    * Stops a shard without it signalling anything, like a crash.
-   *
-   * @param id The ID of the shard.
-   * @param code The exit code.
    */
   public crash(id: number, code: number): void {
-    this.#exits.get(id)?.(code);
+    this.#running.get(id)?.exit(code);
   }
 
-  public spawn(context: ShardContext, events: ShardTransportEvents): ShardTransport {
+  /**
+   * Drops everything a shard sends, like a frozen process.
+   */
+  public mute(id: number): void {
+    const running = this.#running.get(id);
+    if (running) running.muted = true;
+  }
+
+  /**
+   * The last client spawned for a channel.
+   */
+  public client(id: number): ShardClient {
+    return this.clients.findLast((client) => client.id === id)!;
+  }
+
+  public spawn(
+    context: ShardContext,
+    events: ShardTransportEvents,
+    options: SpawnOptions,
+  ): ShardTransport {
     let alive = true;
-    let deliver: ((data: ChannelData) => void) | null = null;
-    const exit = (code: number | null) => {
-      if (!alive) return;
-      alive = false;
-      events.exit(code);
+    let deliver: ((data: unknown) => void) | null = null;
+    const running: Running = {
+      muted: false,
+      exit: (code) => {
+        if (!alive) return;
+        alive = false;
+        events.exit(code);
+      },
     };
 
     const transport: ClientTransport = {
       send: async (data) => {
-        if (alive) queueMicrotask(() => alive && events.message(data));
+        if (alive && !running.muted) queueMicrotask(() => alive && events.message(data));
       },
       onMessage: (listener) => {
         deliver = listener;
       },
       onDisconnect: () => undefined,
-      exit,
+      exit: running.exit,
     };
 
-    this.#exits.set(context.id, exit);
+    this.#running.set(context.id, running);
+    this.spawned.push({ context, options });
     const spawns = this.#spawns.get(context.id) ?? 0;
     this.#spawns.set(context.id, spawns + 1);
     setImmediate(() => {
@@ -74,10 +100,11 @@ export class MemoryStrategy implements ChannelStrategy {
     });
 
     return {
+      pid: 1,
       send: async (data) => {
         if (alive) queueMicrotask(() => alive && deliver?.(data));
       },
-      kill: async () => exit(null),
+      kill: async () => running.exit(null),
     };
   }
 }

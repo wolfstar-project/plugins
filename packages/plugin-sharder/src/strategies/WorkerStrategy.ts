@@ -1,5 +1,4 @@
 import { Worker, type WorkerOptions } from "node:worker_threads";
-import type { ChannelData } from "../messages/MessageHandler.js";
 import {
   ShardContextVariable,
   encodeContext,
@@ -7,6 +6,7 @@ import {
   type ShardContext,
   type ShardTransport,
   type ShardTransportEvents,
+  type SpawnOptions,
 } from "./ChannelStrategy.js";
 
 /**
@@ -28,20 +28,28 @@ export interface WorkerStrategyOptions {
  * process: a crash of the process stops them all.
  */
 export class WorkerStrategy implements ChannelStrategy {
-  public readonly transport = "worker";
+  public readonly name = "worker";
   public readonly options: WorkerStrategyOptions;
 
   public constructor(options: WorkerStrategyOptions) {
     this.options = options;
   }
 
-  public spawn(context: ShardContext, events: ShardTransportEvents): ShardTransport {
+  public spawn(
+    context: ShardContext,
+    events: ShardTransportEvents,
+    options: SpawnOptions,
+  ): ShardTransport {
     const worker = new Worker(this.options.path, {
+      name: `shard ${context.id}`,
       ...this.options.worker,
-      workerData: { [ShardContextVariable]: encodeContext(context) },
+      env: { ...process.env, ...options.env },
+      workerData: {
+        [ShardContextVariable]: encodeContext({ ...context, transport: "worker" }),
+      },
     });
 
-    worker.on("message", (data: ChannelData) => events.message(data));
+    worker.on("message", (data: unknown) => events.message(data));
     worker.on("error", (error) => events.error(error));
     const exit = new Promise<void>((resolve) => {
       worker.once("exit", (code) => {
@@ -51,6 +59,8 @@ export class WorkerStrategy implements ChannelStrategy {
     });
 
     return {
+      pid: process.pid,
+      threadId: worker.threadId,
       send: async (data) => {
         // oxlint-disable-next-line unicorn/require-post-message-target-origin -- a worker thread, not a window
         worker.postMessage(data);

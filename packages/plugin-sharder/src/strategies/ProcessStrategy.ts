@@ -1,11 +1,11 @@
 import type { ChildProcess } from "node:child_process";
 import type { Worker as ClusterWorker } from "node:cluster";
-import type { ChannelData } from "../messages/MessageHandler.js";
 import type {
   ChannelStrategy,
   ShardContext,
   ShardTransport,
   ShardTransportEvents,
+  SpawnOptions,
 } from "./ChannelStrategy.js";
 
 /**
@@ -26,21 +26,23 @@ export interface ProcessStrategyOptions {
   env?: NodeJS.ProcessEnv;
 }
 
-type IpcChild = ChildProcess | ClusterWorker;
-
 /**
  * The base of {@link ForkStrategy} and {@link ClusterStrategy}: a shard is a process with an IPC channel, using the
- * `advanced` serialization so binary data survives it.
+ * `advanced` serialization so binary data (and {@link RawMessageHandler}'s values) survive it.
  */
 export abstract class ProcessStrategy implements ChannelStrategy {
-  public readonly transport = "process";
+  public abstract readonly name: string;
 
-  public spawn(context: ShardContext, events: ShardTransportEvents): ShardTransport {
-    const child = this.createProcess(context);
+  public spawn(
+    context: ShardContext,
+    events: ShardTransportEvents,
+    options: SpawnOptions,
+  ): ShardTransport {
+    const child = this.createProcess({ ...context, transport: "process" }, options);
     // A cluster worker wraps its child process.
     const process: ChildProcess = "process" in child ? child.process : child;
 
-    process.on("message", (data: ChannelData) => events.message(data));
+    process.on("message", (data: unknown) => events.message(data));
     process.on("error", (error: unknown) => events.error(error));
     let exited = false;
     const exit = new Promise<void>((resolve) => {
@@ -52,6 +54,7 @@ export abstract class ProcessStrategy implements ChannelStrategy {
     });
 
     return {
+      pid: process.pid ?? null,
       send: (data) =>
         new Promise((resolve, reject) => {
           if (!process.connected) {
@@ -59,7 +62,9 @@ export abstract class ProcessStrategy implements ChannelStrategy {
             return;
           }
 
-          process.send(data, undefined, undefined, (error) => (error ? reject(error) : resolve()));
+          process.send(data as never, undefined, undefined, (error) =>
+            error ? reject(error) : resolve(),
+          );
         }),
       kill: async () => {
         if (!exited) process.kill();
@@ -68,5 +73,8 @@ export abstract class ProcessStrategy implements ChannelStrategy {
     };
   }
 
-  protected abstract createProcess(context: ShardContext): IpcChild;
+  protected abstract createProcess(
+    context: ShardContext,
+    options: SpawnOptions,
+  ): ChildProcess | ClusterWorker;
 }

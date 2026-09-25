@@ -1,8 +1,8 @@
 import type { ChannelData, MessageHandler } from "./MessageHandler.js";
-import type { MessageTransformer } from "./MessageTransformer.js";
+import type { MessageTransformer, TransformerContext } from "./MessageTransformer.js";
 
 /**
- * The lifecycle status a shard signals to its manager.
+ * The lifecycle status of a shard, as it signals it to its manager.
  */
 export const ShardStatus = {
   /**
@@ -17,6 +17,14 @@ export const ShardStatus = {
    * Fully operative.
    */
   Ready: "Ready",
+  /**
+   * Running, but disconnected from what it serves, e.g. the gateway.
+   */
+  Disconnected: "Disconnected",
+  /**
+   * Running, and reconnecting to what it serves.
+   */
+  Reconnecting: "Reconnecting",
   /**
    * Shutting down, not to be restarted.
    */
@@ -58,6 +66,34 @@ export type Op = (typeof Op)[keyof typeof Op];
 const Ops = new Set<number>(Object.values(Op));
 
 /**
+ * The requests the sharder itself sends, rather than the application.
+ *
+ * - `identify` (shard → manager): waits for the turn of a gateway shard to identify. Body: the gateway shard ID.
+ * - `gatewayInformation` (shard → manager): the manager's cached `GET /gateway/bot`.
+ * - `control` (shard → manager): starts, closes, or restarts shards or gateway shards. Body: {@link ControlRequest}.
+ * - `startShard` / `closeShard` (manager → shard): starts or closes a gateway shard. Body: the gateway shard ID.
+ *
+ * @internal
+ */
+export type SystemCall =
+  | "identify"
+  | "gatewayInformation"
+  | "control"
+  | "startShard"
+  | "closeShard";
+
+/**
+ * What a shard asks its manager to start, close, or restart.
+ */
+export interface ControlRequest {
+  action: "start" | "close" | "restart";
+  /**
+   * A shard (`{ channel }`, or `"all"`), or a gateway shard (`{ shard }`).
+   */
+  target: { channel: ShardTarget } | { shard: number };
+}
+
+/**
  * The error of a failed request, as sent over the channel.
  *
  * @internal
@@ -66,6 +102,15 @@ export interface SerializedError {
   name: string;
   message: string;
 }
+
+/**
+ * The outcome of one request of a partial broadcast, as sent over the channel.
+ *
+ * @internal
+ */
+export type SerializedSettledResult =
+  | { status: "fulfilled"; value: unknown }
+  | { status: "rejected"; reason: SerializedError };
 
 /**
  * The packets exchanged between the manager and its shards, before serialization.
@@ -84,6 +129,11 @@ export type Packet =
       to?: ShardTarget;
       from?: number | null;
       timeout?: number;
+      /**
+       * For broadcasts: reply with every outcome rather than rejecting on the first failure.
+       */
+      partial?: boolean;
+      system?: SystemCall;
     }
   | { op: typeof Op.Reply; nonce: number; body?: unknown; error?: SerializedError }
   | { op: typeof Op.Abort; nonce: number }
@@ -96,29 +146,37 @@ export type Packet =
  * @internal
  */
 export class PacketCodec {
-  private readonly handler: MessageHandler;
-  private readonly transformers: readonly MessageTransformer[];
+  public readonly handler: MessageHandler;
+  public readonly transformers: readonly MessageTransformer[];
 
   public constructor(handler: MessageHandler, transformers: readonly MessageTransformer[]) {
     this.handler = handler;
     this.transformers = transformers;
   }
 
-  public async encode(packet: Packet): Promise<ChannelData> {
+  public async encode(packet: Packet, context: TransformerContext): Promise<unknown> {
     let data = this.handler.serialize(packet);
-    for (const transformer of this.transformers) data = await transformer.write(data);
+    for (const transformer of this.transformers) {
+      data = await transformer.write(assertChannelData(data), context);
+    }
+
     return data;
   }
 
-  public async decode(data: ChannelData): Promise<Packet> {
+  public async decode(data: unknown, context: TransformerContext): Promise<Packet> {
     for (let index = this.transformers.length - 1; index >= 0; --index) {
-      data = await this.transformers[index]!.read(data);
+      data = await this.transformers[index]!.read(assertChannelData(data), context);
     }
 
     const packet = this.handler.deserialize(data);
     if (!isPacket(packet)) throw new TypeError("The message is not a sharder packet");
     return packet;
   }
+}
+
+function assertChannelData(data: unknown): ChannelData {
+  if (typeof data === "string" || data instanceof Uint8Array) return data;
+  throw new TypeError("Transformers need a message handler serializing to strings or bytes");
 }
 
 function isPacket(value: unknown): value is Packet {
