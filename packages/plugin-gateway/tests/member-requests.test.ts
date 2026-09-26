@@ -126,6 +126,18 @@ describe("GuildMemberManager#request", () => {
     });
   });
 
+  test("GIVEN an empty userIds THEN every member is requested", async () => {
+    const { client, send } = createClient();
+
+    void client.members.request(guildId, { userIds: [], nonce: "empty" }).catch(() => {});
+    await sent(send);
+
+    expect(send).toHaveBeenCalledWith(0, {
+      op: GatewayOpcodes.RequestGuildMembers,
+      d: { guild_id: guildId, query: "", limit: 0, presences: undefined, nonce: "empty" },
+    });
+  });
+
   test("GIVEN invalid options THEN it throws without sending", async () => {
     const { client, send } = createClient();
     const ids = Array.from({ length: 101 }, (_, index) => String(index));

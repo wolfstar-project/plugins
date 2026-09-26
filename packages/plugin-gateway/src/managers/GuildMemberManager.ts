@@ -128,7 +128,8 @@ export interface GuildMembersRequestOptions {
   limit?: number;
   /**
    * The IDs of the users to request, up to 100. Exclusive with `query`. The ones that are not members are left out of
-   * the result, and listed in the `not_found` of the `guildMembersChunk` data.
+   * the result, and listed in the `not_found` of the `guildMembersChunk` data. An empty array is ignored, like omitting
+   * it.
    */
   userIds?: readonly string[];
   /**
@@ -270,7 +271,9 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: GuildMembersRequestOptions = {},
   ): Promise<GuildMember[]> {
-    const { query, userIds, limit = 0, presences, time = 120_000 } = options;
+    const { query, limit = 0, presences, time = 120_000 } = options;
+    // An empty list of IDs (e.g. built dynamically) requests nothing, so it falls back to the default like no list at all.
+    const userIds = options.userIds?.length ? options.userIds : undefined;
     const nonce = options.nonce ?? randomBytes(16).toString("hex");
     if (query !== undefined && userIds !== undefined) {
       throw new TypeError("Cannot request members by both query and userIds");
