@@ -103,6 +103,7 @@ const cache = createRedisCache({
 | `compression`          | `"none"`           | `"gzip"`, `"brotli"`, or `"none"`.                                    |
 | `compressionThreshold` | `1024`             | Minimum serialized size, in bytes, for a value to be compressed.      |
 | `ttl`                  | `{}`               | Time-to-live in seconds, per entity cache. Omitted ones never expire. |
+| `indexGuilds`          | `true`             | Index guild-scoped entity caches by guild, see below.                 |
 
 Compressed values are tagged, so turning compression on or off never breaks reading the values
 already stored. Each entity cache keeps a sorted set index (`<prefix>:<entity>:@index`) used by
@@ -110,6 +111,15 @@ already stored. Each entity cache keeps a sorted set index (`<prefix>:<entity>:@
 one `MULTI` transaction, and with a `ttl` every write also prunes the expired index entries, so the
 index stays bounded even when nothing enumerates it. The client must therefore support `multi()`,
 which `ioredis` does.
+
+With `indexGuilds`, the entity caches holding guild data (channels, messages, members, roles, ...)
+also keep one sorted set per guild (`<prefix>:<entity>:@guild:<guildId>`). A `GUILD_DELETE` then
+reads the guild's keys from it instead of scanning every entry of every entity cache, which on a
+large cache means reading and decompressing every stored message. The price is one more index write
+per write, and a read before each delete. Entries written while the option was off are not indexed,
+so turning it on for a populated cache leaves them behind on `GUILD_DELETE` until they expire or the
+cache is cleared. When the transaction exposes `pexpire` (`ioredis` does), the guild indexes of an
+entity cache with a `ttl` expire with their entries.
 
 #### Errors
 
@@ -131,11 +141,15 @@ interface EntityCache<Raw> {
   keys(): Awaitable<string[]>;
   values(): Awaitable<Raw[]>;
   entries(): Awaitable<[key: string, value: Raw][]>;
+  // Optional: `null` when the store does not index its entries by guild.
+  deleteGuild?(guildId: string): Awaitable<number | null>;
 }
 ```
 
 `keys`, `values`, and `entries` return snapshots rather than live iterators, which keeps the
-semantics identical between synchronous and asynchronous stores.
+semantics identical between synchronous and asynchronous stores. A store implementing `deleteGuild`
+lets `applyGatewayDispatch` skip the scans of a `GUILD_DELETE`; without it, or when it resolves to
+`null`, the scans run as before.
 
 ### Keys
 
