@@ -106,10 +106,11 @@ describe("GatewayClient", () => {
     vi.restoreAllMocks();
   });
 
-  test("GIVEN the client THEN it registers itself as container.client", () => {
+  test("GIVEN the client THEN it registers itself as container.client and container.gatewayClient", () => {
     const client = createClient();
 
     expect(container.client).toBe(client);
+    expect(container.gatewayClient).toBe(client);
     expect(client.core.gateway).toBe(client.gateway);
     expect(client.core.rest).toBe(container.rest);
   });
