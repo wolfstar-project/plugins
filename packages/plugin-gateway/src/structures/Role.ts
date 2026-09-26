@@ -21,6 +21,7 @@ export interface RoleColors {
   secondaryColor: number | null;
   tertiaryColor: number | null;
 }
+const kOptimizedPermissions: unique symbol = Symbol("role.permissions");
 
 /**
  * A Discord guild role.
@@ -30,6 +31,11 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   Omitted
 > {
   declare public [kRelations]: { guild?: Guild | null };
+  declare protected [kOptimizedPermissions]: bigint;
+
+  protected override optimizeData(data: Partial<CacheEntityTypes["roles"]>): void {
+    if (data.permissions !== undefined) this[kOptimizedPermissions] = BigInt(data.permissions);
+  }
 
   /**
    * The template used for removing data from the raw data stored for each role
@@ -102,7 +108,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   public get permissions(): Readonly<PermissionsBitField> {
-    return new PermissionsBitField(BigInt(this[kData].permissions)).freeze();
+    return new PermissionsBitField(this[kOptimizedPermissions] ?? 0n).freeze();
   }
 
   /**

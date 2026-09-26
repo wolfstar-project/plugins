@@ -4,7 +4,7 @@
 
 # @wolfstar/plugin-gateway
 
-**Discord gateway support for `@wolfstar/http-framework`.**
+**Gateway events, Discord structures, and API managers for `@wolfstar/http-framework`.**
 
 [![version](https://npmx.dev/api/registry/badge/version/@wolfstar/plugin-gateway)](https://npmx.dev/package/@wolfstar/plugin-gateway)
 [![downloads](https://npmx.dev/api/registry/badge/downloads/@wolfstar/plugin-gateway)](https://npmx.dev/package/@wolfstar/plugin-gateway)
@@ -14,18 +14,18 @@
 
 ## Description
 
-[`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) only speaks to
-Discord through the interactions endpoint. This package adds the other half, specified in
-[wolfstar-project/plugins#54](https://github.com/wolfstar-project/plugins/issues/54): a
-`GatewayClient` that **extends** the framework's `Client`, so commands, interaction handlers,
-listeners, `load()`, and `listen()` keep working unchanged, and adds on top:
+`@wolfstar/plugin-gateway` extends the
+[`@wolfstar/http-framework`](https://www.npmjs.com/package/@wolfstar/http-framework) client with
+Discord gateway events and API access. `GatewayClient.start()` loads the framework's pieces, starts
+its HTTP interaction endpoint, and connects the gateway shards in one call. Commands and HTTP
+interactions continue to use the framework's existing client.
 
-- a gateway connection, through [`@discordjs/ws`](https://www.npmjs.com/package/@discordjs/ws)
-  (resumes, reconnects, identify rate limits, and sharding included);
-- events carrying **structures** (`Message`, `User`, `Guild`, ...) rather than raw payloads;
-- managers (`client.users`, `client.guilds`, ...) reading from an optional
-  [`@wolfstar/plugin-cache`](../plugin-cache) cache, and falling back to the REST API;
-- `EventGatewayListener`, to handle gateway events from the `listeners` directory.
+The gateway connection uses [`@discordjs/ws`](https://www.npmjs.com/package/@discordjs/ws) for
+sharding, reconnects, and session resumes. Actions turn dispatches into events containing structures
+such as `Message`, `User`, and `Guild`; `EventGatewayListener` lets pieces in the `listeners`
+directory handle those events. Managers such as `client.users` and `client.guilds` read from an
+optional [`@wolfstar/plugin-cache`](../plugin-cache) cache and fetch missing data through
+`@discordjs/core`. The same core API is available as `client.core.api`.
 
 > [!NOTE]
 > A gateway connection is long-lived: a `GatewayClient` needs a persistent process, unlike a bot
@@ -55,9 +55,7 @@ client.on("messageCreate", async (message) => {
   console.log(`${message.author.username} in ${guild?.name ?? "a DM"}: ${message.content}`);
 });
 
-await client.load(); // commands, interaction handlers, and listeners, as usual
-await client.connect(); // the gateway
-await client.listen({ port: 8080 }); // the interactions endpoint, as usual
+await client.start({ listen: { port: 8080 } }); // loads pieces, starts HTTP, connects the gateway
 ```
 
 ### Options
@@ -136,9 +134,14 @@ The previous state of update events and the entity of delete events come from th
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
 which always identifies the deleted entity.
 
-The mapping lives in a single declarative table, `DispatchHandlers`. Dispatches it does not cover
-are still written to the cache and emitted as `raw`. `INTERACTION_CREATE` is never processed:
-interactions are served by the HTTP endpoint.
+`client.actions` holds an `Action` for each handled gateway dispatch. Each action captures the
+previous state, then builds and emits events after the cache has been updated. The built-in actions
+use the `DispatchHandlers` and `MultiDispatchHandlers` tables. Dispatches they do not cover are
+still written to the cache and emitted as `raw`. `INTERACTION_CREATE` is handled by the HTTP endpoint.
+
+REST operations use `client.core.api` from `@discordjs/core`. A few endpoints without a matching
+core method (cursor-based message pins, guild creation from a template, and thread member queries
+with extra parameters) use the same core client's underlying REST transport.
 
 Dispatches of the same guild (or direct message channel) are processed in order, so an
 asynchronous cache never reorders them, while different guilds proceed concurrently: a slow guild
@@ -201,6 +204,10 @@ With `once: true`, the listener unloads itself after its first run.
 
 The cache only holds raw API data, managers build the structures:
 
+Unlike the structure cache in `discordjs/next`, each cache read here builds a fresh structure. This
+keeps the same behavior with in-memory and Redis stores and preserves the previous state of update
+events.
+
 | Manager           | `get` / `fetch` / `refresh` arguments |
 | ----------------- | ------------------------------------- |
 | `client.users`    | `userId`                              |
@@ -240,6 +247,10 @@ Channels get one class per type (`TextChannel`, `VoiceChannel`, `ForumChannel`,
 (`GuildChannelMixin`, `ChannelTopicMixin`, `ThreadChannelMixin`, ...), following
 `@discordjs/structures` and the layout of discord.js's `@discordjs/next` prototype.
 `ChannelManager` picks the class matching the channel type, `BaseChannel` covers the unknown ones.
+Channel mixins can supply a `DataTemplate`, an `optimizeData` hook, and an `enrichToJSON` hook.
+Construction and patches optimize timestamps across channels, messages, members, invites, events,
+templates, and voice states, as well as role and overwrite permission bits. `toJSON()` retains the
+original API fields.
 
 ```ts
 client.on("channelCreate", (channel) => {
@@ -248,7 +259,7 @@ client.on("channelCreate", (channel) => {
 ```
 
 Structures never hold a reference to the client. Every channel has `fetch()` and `delete()`
-(from `BaseChannelMixin`), which go through the framework's REST client.
+(from `BaseChannelMixin`), which use `@discordjs/core` for API calls.
 
 `Structure`, `Mixin`, and the `kData`, `kPatch`, and `kClone` symbols are exported, so structures
 can be subclassed and new mixins written:

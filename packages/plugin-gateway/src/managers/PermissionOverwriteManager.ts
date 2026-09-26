@@ -1,4 +1,4 @@
-import { OverwriteType, Routes, type APIOverwrite } from "discord-api-types/v10";
+import { OverwriteType, type APIOverwrite } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { PermissionOverwrites } from "../structures/PermissionOverwrites.js";
 import {
@@ -8,7 +8,6 @@ import {
   type OverwriteData,
   type PermissionOverwriteOptions,
 } from "../util/channels.js";
-import { container } from "../util/container.js";
 
 /**
  * The options of {@link PermissionOverwriteManager.create} and {@link PermissionOverwriteManager.edit}.
@@ -111,7 +110,7 @@ export class PermissionOverwriteManager {
    */
   public async delete(target: IdResolvable, reason?: string): Promise<void> {
     const id = resolveId(target);
-    await container.rest.delete(Routes.channelPermission(this.channelId, id), { reason });
+    await this.client.core.api.channels.deletePermissionOverwrite(this.channelId, id, { reason });
     await this.patchCached((overwrites) => overwrites.filter((overwrite) => overwrite.id !== id));
   }
 
@@ -130,10 +129,18 @@ export class PermissionOverwriteManager {
     });
 
     const overwrite: APIOverwrite = { id, type, allow: String(allow), deny: String(deny) };
-    await container.rest.put(Routes.channelPermission(this.channelId, id), {
-      body: { type, allow: overwrite.allow, deny: overwrite.deny },
-      reason: editOptions.reason,
-    });
+    await this.client.core.api.channels.editPermissionOverwrite(
+      this.channelId,
+      id,
+      {
+        type,
+        allow: overwrite.allow,
+        deny: overwrite.deny,
+      },
+      {
+        reason: editOptions.reason,
+      },
+    );
     await this.patchCached((overwrites) => [
       ...overwrites.filter((current) => current.id !== id),
       overwrite,

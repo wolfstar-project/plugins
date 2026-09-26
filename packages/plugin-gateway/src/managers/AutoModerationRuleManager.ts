@@ -1,8 +1,6 @@
 import { autoModerationRuleKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APIAutoModerationAction,
-  type APIAutoModerationRule,
   type APIAutoModerationRuleTriggerMetadata,
   type AutoModerationRuleEventType,
   type AutoModerationRuleTriggerType,
@@ -12,7 +10,6 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationRule } from "../structures/AutoModerationRule.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -79,9 +76,7 @@ export class AutoModerationRuleManager extends CachedManager<
    * Fetches every rule of the guild, and caches them.
    */
   public async fetchAll(): Promise<AutoModerationRule[]> {
-    const rules = (await container.rest.get(
-      Routes.guildAutoModerationRules(this.guildId),
-    )) as APIAutoModerationRule[];
+    const rules = await this.client.core.api.guilds.getAutoModerationRules(this.guildId);
     return Promise.all(rules.map((rule) => this._add(rule)));
   }
 
@@ -98,10 +93,9 @@ export class AutoModerationRuleManager extends CachedManager<
       trigger_type: options.triggerType,
       actions: [...options.actions],
     };
-    const rule = (await container.rest.post(Routes.guildAutoModerationRules(this.guildId), {
-      body,
+    const rule = await this.client.core.api.guilds.createAutoModerationRule(this.guildId, body, {
       reason: options.reason,
-    })) as APIAutoModerationRule;
+    });
     return this._add(rule);
   }
 
@@ -115,10 +109,14 @@ export class AutoModerationRuleManager extends CachedManager<
     ruleId: string,
     options: AutoModerationRuleEditOptions,
   ): Promise<AutoModerationRule> {
-    const rule = (await container.rest.patch(Routes.guildAutoModerationRule(this.guildId, ruleId), {
-      body: toRuleBody(options),
-      reason: options.reason,
-    })) as APIAutoModerationRule;
+    const rule = await this.client.core.api.guilds.editAutoModerationRule(
+      this.guildId,
+      ruleId,
+      toRuleBody(options),
+      {
+        reason: options.reason,
+      },
+    );
     return this._add(rule);
   }
 
@@ -129,14 +127,12 @@ export class AutoModerationRuleManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(ruleId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildAutoModerationRule(this.guildId, ruleId), { reason });
+    await this.client.core.api.guilds.deleteAutoModerationRule(this.guildId, ruleId, { reason });
     await this.cache?.delete(this.resolveKey(ruleId));
   }
 
   protected async fetchRaw(ruleId: string) {
-    return (await container.rest.get(
-      Routes.guildAutoModerationRule(this.guildId, ruleId),
-    )) as APIAutoModerationRule;
+    return this.client.core.api.guilds.getAutoModerationRule(this.guildId, ruleId);
   }
 }
 

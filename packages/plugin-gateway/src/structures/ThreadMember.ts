@@ -19,6 +19,10 @@ export interface ThreadMemberRelations {
 export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
   declare public [kRelations]: ThreadMemberRelations;
 
+  protected override optimizeData(data: Partial<CacheEntityTypes["threadMembers"]>): void {
+    this.optimizeTimestamp("join_timestamp", data.join_timestamp);
+  }
+
   /**
    * @param data The raw thread member.
    * @param relations The guild member as resolved from the cache, by `client.threadMembers`.
@@ -47,7 +51,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
   }
 
   public get joinedTimestamp(): number {
-    return Date.parse(this[kData].join_timestamp);
+    return this.optimizedTimestamp("join_timestamp")!;
   }
 
   public get joinedAt(): Date {

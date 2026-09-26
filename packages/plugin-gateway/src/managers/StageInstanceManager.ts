@@ -1,7 +1,5 @@
 import { stageInstanceKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
-  type APIStageInstance,
   type RESTPatchAPIStageInstanceJSONBody,
   type RESTPostAPIStageInstanceJSONBody,
   type StageInstancePrivacyLevel,
@@ -9,7 +7,6 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { StageInstance } from "../structures/StageInstance.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -89,10 +86,9 @@ export class StageInstanceManager extends CachedManager<
       guild_scheduled_event_id:
         options.guildScheduledEvent && resolveId(options.guildScheduledEvent),
     };
-    const instance = (await container.rest.post(Routes.stageInstances(), {
-      body,
+    const instance = await this.client.core.api.stageInstances.create(body, {
       reason: options.reason,
-    })) as APIStageInstance;
+    });
     return this._add(instance);
   }
 
@@ -107,10 +103,9 @@ export class StageInstanceManager extends CachedManager<
       topic: options.topic,
       privacy_level: options.privacyLevel,
     };
-    const instance = (await container.rest.patch(Routes.stageInstance(channelId), {
-      body,
+    const instance = await this.client.core.api.stageInstances.edit(channelId, body, {
       reason: options.reason,
-    })) as APIStageInstance;
+    });
     return this._add(instance);
   }
 
@@ -121,11 +116,11 @@ export class StageInstanceManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(channelId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.stageInstance(channelId), { reason });
+    await this.client.core.api.stageInstances.delete(channelId, { reason });
     await this.cache?.delete(this.resolveKey(channelId));
   }
 
   protected async fetchRaw(channelId: string) {
-    return (await container.rest.get(Routes.stageInstance(channelId))) as APIStageInstance;
+    return this.client.core.api.stageInstances.get(channelId);
   }
 }

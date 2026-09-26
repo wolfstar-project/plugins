@@ -3,9 +3,7 @@ import {
   MessageReferenceType,
   Routes,
   type APIMessage,
-  type APIThreadChannel,
   type RESTGetAPIChannelMessagesPinsResult,
-  type RESTGetAPIPollAnswerVotersResult,
   type RESTPostAPIChannelMessagesThreadsJSONBody,
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
@@ -13,7 +11,6 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Message } from "../structures/Message.js";
 import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
 import { type User } from "../structures/User.js";
-import { container } from "../util/container.js";
 import {
   resolveMessageOptions,
   type MessageCreateOptions,
@@ -133,15 +130,12 @@ export class MessageManager extends CachedManager<
    * @param options How many messages, and around which one.
    */
   public async list(channelId: string, options: MessageListOptions = {}): Promise<Message[]> {
-    const query = new URLSearchParams({ limit: String(options.limit ?? 50) });
-    for (const key of ["before", "after", "around"] as const) {
-      const value = options[key];
-      if (value) query.set(key, value);
-    }
-
-    const messages = (await container.rest.get(Routes.channelMessages(channelId), {
-      query,
-    })) as APIMessage[];
+    const messages = await this.client.core.api.channels.getMessages(channelId, {
+      limit: options.limit ?? 50,
+      before: options.before,
+      after: options.after,
+      around: options.around,
+    });
     return Promise.all(messages.map((message) => this.store(message)));
   }
 
@@ -156,10 +150,10 @@ export class MessageManager extends CachedManager<
     options: MessagePayloadResolvable<MessageCreateOptions>,
   ): Promise<Message> {
     const { body, files } = resolveMessageOptions(options);
-    const message = (await container.rest.post(Routes.channelMessages(channelId), {
-      body,
+    const message = await this.client.core.api.channels.createMessage(channelId, {
+      ...body,
       files,
-    })) as APIMessage;
+    });
     return this.store(message);
   }
 
@@ -193,10 +187,10 @@ export class MessageManager extends CachedManager<
     options: MessagePayloadResolvable<MessageEditOptions>,
   ): Promise<Message> {
     const { body, files } = resolveMessageOptions(options);
-    const message = (await container.rest.patch(Routes.channelMessage(channelId, messageId), {
-      body,
+    const message = await this.client.core.api.channels.editMessage(channelId, messageId, {
+      ...body,
       files,
-    })) as APIMessage;
+    });
     return this.store(message);
   }
 
@@ -208,7 +202,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log, when deleting someone else's message.
    */
   public async delete(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.channelMessage(channelId, messageId), { reason });
+    await this.client.core.api.channels.deleteMessage(channelId, messageId, { reason });
     await this.cache?.delete(this.resolveKey(channelId, messageId));
   }
 
@@ -239,9 +233,7 @@ export class MessageManager extends CachedManager<
     if (ids.length === 1) {
       await this.delete(channelId, ids[0]!);
     } else {
-      await container.rest.post(Routes.channelBulkDelete(channelId), {
-        body: { messages: ids },
-      });
+      await this.client.core.api.channels.bulkDeleteMessages(channelId, ids);
       await Promise.all(ids.map((id) => this.cache?.delete(this.resolveKey(channelId, id))));
     }
 
@@ -262,7 +254,7 @@ export class MessageManager extends CachedManager<
     if (options.limit) query.set("limit", String(options.limit));
     if (options.before !== undefined) query.set("before", new Date(options.before).toISOString());
 
-    const result = (await container.rest.get(Routes.channelMessagesPins(channelId), {
+    const result = (await this.client.core.api.rest.get(Routes.channelMessagesPins(channelId), {
       query,
     })) as RESTGetAPIChannelMessagesPinsResult;
     const items = await Promise.all(
@@ -282,7 +274,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async pin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await container.rest.put(Routes.channelMessagesPin(channelId, messageId), { reason });
+    await this.client.core.api.channels.pinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: true });
   }
 
@@ -294,7 +286,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unpin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.channelMessagesPin(channelId, messageId), { reason });
+    await this.client.core.api.channels.unpinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: false });
   }
 
@@ -305,9 +297,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async crosspost(channelId: string, messageId: string): Promise<Message> {
-    const message = (await container.rest.post(
-      Routes.channelMessageCrosspost(channelId, messageId),
-    )) as APIMessage;
+    const message = await this.client.core.api.channels.crosspostMessage(channelId, messageId);
     return this.store(message);
   }
 
@@ -323,12 +313,10 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await container.rest.put(
-      Routes.channelMessageOwnReaction(
-        channelId,
-        messageId,
-        ReactionEmoji.resolveIdentifier(emoji),
-      ),
+    await this.client.core.api.channels.addMessageReaction(
+      channelId,
+      messageId,
+      ReactionEmoji.resolveIdentifier(emoji),
     );
   }
 
@@ -344,8 +332,10 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await container.rest.delete(
-      Routes.channelMessageReaction(channelId, messageId, ReactionEmoji.resolveIdentifier(emoji)),
+    await this.client.core.api.channels.deleteAllMessageReactionsForEmoji(
+      channelId,
+      messageId,
+      ReactionEmoji.resolveIdentifier(emoji),
     );
   }
 
@@ -356,7 +346,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async removeAllReactions(channelId: string, messageId: string): Promise<void> {
-    await container.rest.delete(Routes.channelMessageAllReactions(channelId, messageId));
+    await this.client.core.api.channels.deleteAllMessageReactions(channelId, messageId);
     await this.patchCached(channelId, messageId, { reactions: [] });
   }
 
@@ -377,10 +367,9 @@ export class MessageManager extends CachedManager<
       auto_archive_duration: options.autoArchiveDuration,
       rate_limit_per_user: options.rateLimitPerUser,
     };
-    const thread = (await container.rest.post(Routes.threads(channelId, messageId), {
-      body,
+    const thread = await this.client.core.api.channels.createThread(channelId, body, messageId, {
       reason: options.reason,
-    })) as APIThreadChannel;
+    });
     return this.client.threads._add(thread);
   }
 
@@ -391,9 +380,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message holding the poll.
    */
   public async endPoll(channelId: string, messageId: string): Promise<Message> {
-    const message = (await container.rest.post(
-      Routes.expirePoll(channelId, messageId),
-    )) as APIMessage;
+    const message = await this.client.core.api.poll.expirePoll(channelId, messageId);
     return this.store(message);
   }
 
@@ -411,18 +398,17 @@ export class MessageManager extends CachedManager<
     answerId: number,
     options: { limit?: number; after?: string } = {},
   ): Promise<User[]> {
-    const query = new URLSearchParams();
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.after) query.set("after", options.after);
-    const { users } = (await container.rest.get(
-      Routes.pollAnswerVoters(channelId, messageId, answerId),
-      { query },
-    )) as RESTGetAPIPollAnswerVotersResult;
+    const { users } = await this.client.core.api.poll.getAnswerVoters(
+      channelId,
+      messageId,
+      answerId,
+      options,
+    );
     return Promise.all(users.map((user) => this.client.users._add(user)));
   }
 
   protected async fetchRaw(channelId: string, messageId: string) {
-    return (await container.rest.get(Routes.channelMessage(channelId, messageId))) as APIMessage;
+    return this.client.core.api.channels.getMessage(channelId, messageId);
   }
 
   private store(message: APIMessage): Promise<Message> {

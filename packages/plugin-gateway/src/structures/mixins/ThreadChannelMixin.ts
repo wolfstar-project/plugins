@@ -1,5 +1,5 @@
 import type { ChannelType } from "discord-api-types/v10";
-import type { Channel } from "../Channel.js";
+import type { Channel, ChannelDataType } from "../Channel.js";
 import type { ThreadAutoArchiveDuration } from "discord-api-types/v10";
 import { ThreadChannelMemberManager } from "../../managers/ThreadChannelMemberManager.js";
 import { getGatewayClient } from "../../util/container.js";
@@ -16,6 +16,9 @@ type Data = {
   message_count?: number;
   member_count?: number;
 };
+const kArchiveTimestamp: unique symbol = Symbol.for(
+  "wolfstar.structures.archiveTimestamp",
+) as never;
 
 export interface ThreadChannelMixin<Type extends ChannelType = ChannelType> extends Channel<Type> {}
 
@@ -23,6 +26,17 @@ export interface ThreadChannelMixin<Type extends ChannelType = ChannelType> exte
  * Adds the metadata of threads.
  */
 export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
+  declare protected [kArchiveTimestamp]: number | null | undefined;
+
+  public static optimizeData(this: Channel, data: Partial<ChannelDataType>): void {
+    const metadata = (data as Data).thread_metadata;
+    if (metadata !== undefined) {
+      (this as ThreadChannelMixin)[kArchiveTimestamp] = metadata.archive_timestamp
+        ? Date.parse(metadata.archive_timestamp)
+        : null;
+    }
+  }
+
   public get archived(): boolean {
     return (this[kData] as Data).thread_metadata?.archived ?? false;
   }
@@ -32,8 +46,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   public get archiveTimestamp(): number | null {
-    const archiveTimestamp = (this[kData] as Data).thread_metadata?.archive_timestamp;
-    return archiveTimestamp ? Date.parse(archiveTimestamp) : null;
+    return this[kArchiveTimestamp] ?? null;
   }
 
   /**

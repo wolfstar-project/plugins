@@ -2,13 +2,11 @@ import {
   ActivityType,
   GatewayOpcodes,
   PresenceUpdateStatus,
-  Routes,
-  type APIUser,
   type GatewayActivityUpdateData,
   type GatewayPresenceUpdateData,
   type RESTPatchAPICurrentUserJSONBody,
 } from "discord-api-types/v10";
-import { container, getGatewayClient } from "../util/container.js";
+import { getGatewayClient } from "../util/container.js";
 import { kData, kPatch } from "./Structure.js";
 import { User } from "./User.js";
 
@@ -84,7 +82,7 @@ export class ClientUser extends User {
    */
   public async edit(options: ClientUserEditOptions): Promise<this> {
     const body: RESTPatchAPICurrentUserJSONBody = options;
-    const user = (await container.rest.patch(Routes.user("@me"), { body })) as APIUser;
+    const user = await getGatewayClient().core.api.users.edit(body);
     await getGatewayClient().users._add(user);
     return this[kPatch](user);
   }

@@ -21,6 +21,11 @@ export interface GuildTemplateRelations {
 export class GuildTemplate extends Structure<APITemplate> {
   declare public [kRelations]: GuildTemplateRelations;
 
+  protected override optimizeData(data: Partial<APITemplate>): void {
+    this.optimizeTimestamp("created_at", data.created_at);
+    this.optimizeTimestamp("updated_at", data.updated_at);
+  }
+
   /**
    * @param data The raw template.
    * @param relations The source guild, as resolved from the cache.
@@ -54,7 +59,7 @@ export class GuildTemplate extends Structure<APITemplate> {
   }
 
   public get createdTimestamp() {
-    return Date.parse(this[kData].created_at);
+    return this.optimizedTimestamp("created_at")!;
   }
 
   public get createdAt() {
@@ -65,7 +70,7 @@ export class GuildTemplate extends Structure<APITemplate> {
    * When the template was last synced with its guild.
    */
   public get updatedTimestamp() {
-    return Date.parse(this[kData].updated_at);
+    return this.optimizedTimestamp("updated_at")!;
   }
 
   public get updatedAt() {

@@ -4,21 +4,16 @@ import {
   type OptionalWebSocketManagerOptions,
   type ShardRange,
 } from "@discordjs/ws";
+import { Client as DiscordCoreClient } from "@discordjs/core";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
 import { applyGatewayDispatch, type Cache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
-  Routes,
-  type APIInvite,
-  type APISticker,
   type APIVoiceRegion,
   type GatewayDispatchPayload,
-  type RESTGetStickerPacksResult,
   type GatewayReadyDispatchData,
   type GatewayIntentBits,
-  type APISoundboardSound,
-  type APIGuildWidget,
 } from "discord-api-types/v10";
 import { ChannelManager } from "./managers/ChannelManager.js";
 import { GuildManager } from "./managers/GuildManager.js";
@@ -41,15 +36,9 @@ import type { Webhook } from "./structures/Webhook.js";
 import type { GuildTemplate } from "./structures/GuildTemplate.js";
 import { Widget } from "./structures/Widget.js";
 import { StickerPack } from "./structures/StickerPack.js";
-import {
-  DispatchHandlers,
-  MultiDispatchHandlers,
-  type DispatchHandler,
-  type MultiDispatchHandler,
-} from "./util/dispatch.js";
+import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
-import type { GatewayEventMap, GatewayEventName } from "./util/events.js";
 
 export interface GatewayClientOptions extends ClientOptions {
   /**
@@ -99,6 +88,14 @@ export interface GatewayClientOptions extends ClientOptions {
   dispatchTimeout?: number | null;
 }
 
+/** Options for loading pieces and starting both transports. */
+export interface GatewayClientStartOptions {
+  /** HTTP interaction server options. */
+  listen: Client.ServerListenOptions;
+  /** Piece loading options. */
+  load?: Client.PieceLoadOptions;
+}
+
 /**
  * A {@link Client} that, on top of serving HTTP interactions, connects to the Discord gateway, writes every dispatch
  * into an optional {@link Cache}, and emits {@link GatewayEventMap} events carrying structures.
@@ -116,9 +113,7 @@ export interface GatewayClientOptions extends ClientOptions {
  *
  * client.on('messageCreate', (message) => console.log(`${message.author.username}: ${message.content}`));
  *
- * await client.load();
- * await client.connect();
- * await client.listen({ port: 8080 });
+ * await client.start({ listen: { port: 8080 } });
  * ```
  */
 export class GatewayClient extends Client {
@@ -131,6 +126,12 @@ export class GatewayClient extends Client {
    * The underlying `@discordjs/ws` manager, handling the shards' connections, resumes, and identify rate limits.
    */
   public readonly gateway: WebSocketManager;
+
+  /** The discord.js core client, sharing this client's REST and gateway transports. */
+  public readonly core: DiscordCoreClient;
+
+  /** The actions that turn gateway dispatches into public client events. */
+  public readonly actions: ActionsManager;
 
   /**
    * The bot user, set once the first shard receives `READY`.
@@ -195,6 +196,8 @@ export class GatewayClient extends Client {
       shardCount: options.shardCount ?? null,
       shardIds: options.shardIds ?? null,
     });
+    this.core = new DiscordCoreClient({ gateway: this.gateway, rest: container.rest });
+    this.actions = new ActionsManager(this);
 
     this.gateway.on(WebSocketShardEvents.Dispatch, (payload, shardId) => {
       const partition = dispatchPartition(payload);
@@ -219,6 +222,13 @@ export class GatewayClient extends Client {
    */
   public async connect(): Promise<void> {
     await this.gateway.connect();
+  }
+
+  /** Loads pieces, starts the interaction endpoint, then connects gateway shards. */
+  public async start({ listen, load }: GatewayClientStartOptions): Promise<void> {
+    await this.load(load);
+    await this.listen(listen);
+    await this.connect();
   }
 
   /**
@@ -262,9 +272,7 @@ export class GatewayClient extends Client {
    * Fetches Discord's default soundboard sounds, which every guild can play.
    */
   public async fetchDefaultSoundboardSounds(): Promise<SoundboardSound[]> {
-    const sounds = (await container.rest.get(
-      Routes.soundboardDefaultSounds(),
-    )) as APISoundboardSound[];
+    const sounds = await this.core.api.soundboardSounds.getSoundboardDefaultSounds();
     return sounds.map((sound) => new SoundboardSound(sound));
   }
 
@@ -293,9 +301,7 @@ export class GatewayClient extends Client {
    * @param guildId The ID of the guild.
    */
   public async fetchGuildWidget(guildId: string): Promise<Widget> {
-    return new Widget(
-      (await container.rest.get(Routes.guildWidgetJSON(guildId))) as APIGuildWidget,
-    );
+    return new Widget(await this.core.api.guilds.getWidget(guildId));
   }
 
   /**
@@ -308,14 +314,12 @@ export class GatewayClient extends Client {
     code: string,
     options: { withCounts?: boolean; guildScheduledEventId?: string } = {},
   ): Promise<BaseInvite> {
-    const query = new URLSearchParams({ with_counts: String(options.withCounts ?? true) });
-    if (options.guildScheduledEventId) {
-      query.set("guild_scheduled_event_id", options.guildScheduledEventId);
-    }
-
     // Accept `https://discord.gg/code` and `discord.com/invite/code` as well as the bare code.
     const resolved = code.split("/").pop()!;
-    const invite = (await container.rest.get(Routes.invite(resolved), { query })) as APIInvite;
+    const invite = await this.core.api.invites.get(resolved, {
+      with_counts: options.withCounts ?? true,
+      guild_scheduled_event_id: options.guildScheduledEventId,
+    });
     return createInvite(invite);
   }
 
@@ -325,16 +329,14 @@ export class GatewayClient extends Client {
    * @param stickerId The ID of the sticker.
    */
   public async fetchSticker(stickerId: string): Promise<Sticker> {
-    return new Sticker((await container.rest.get(Routes.sticker(stickerId))) as APISticker);
+    return new Sticker(await this.core.api.stickers.get(stickerId));
   }
 
   /**
    * Fetches the packs of standard stickers.
    */
   public async fetchStickerPacks(): Promise<StickerPack[]> {
-    const { sticker_packs: packs } = (await container.rest.get(
-      Routes.stickerPacks(),
-    )) as RESTGetStickerPacksResult;
+    const { sticker_packs: packs } = await this.core.api.stickers.getStickers();
     return packs.map((pack) => new StickerPack(pack));
   }
 
@@ -342,7 +344,7 @@ export class GatewayClient extends Client {
    * Fetches the voice regions available to the bot.
    */
   public async fetchVoiceRegions(): Promise<APIVoiceRegion[]> {
-    return (await container.rest.get(Routes.voiceRegions())) as APIVoiceRegion[];
+    return this.core.api.voice.getVoiceRegions();
   }
 
   /**
@@ -366,12 +368,7 @@ export class GatewayClient extends Client {
     // Interactions are served by the HTTP endpoint, see the `DispatchHandlers` remarks.
     if (payload.t === GatewayDispatchEvents.InteractionCreate) return;
 
-    const handler = DispatchHandlers[payload.t] as
-      | DispatchHandler<typeof payload.t, GatewayEventName>
-      | undefined;
-    const multi = MultiDispatchHandlers[payload.t] as
-      | MultiDispatchHandler<typeof payload.t>
-      | undefined;
+    const action = this.actions.get(payload.t);
     // `READY` is never dropped: it sets `client.user` and `shardReady` from the payload alone, and a shard without it
     // looks dead to the bot. Reconciling the cache with it is best effort, see `reconcileGuilds`.
     const isReady = payload.t === GatewayDispatchEvents.Ready;
@@ -379,7 +376,7 @@ export class GatewayClient extends Client {
 
     let state: unknown;
     try {
-      state = await (handler ?? multi)?.before?.(this, payload.d as never);
+      state = await action?.before(payload.d);
       if (this.cache) {
         await applyGatewayDispatch(this.cache, payload, { clientUserId: this.user?.id ?? this.id });
       }
@@ -389,16 +386,7 @@ export class GatewayClient extends Client {
       state = undefined;
     }
 
-    if (multi) {
-      for (const [event, ...args] of await multi.emit(this, payload.d as never, state)) {
-        this.emit(event, ...(args as GatewayEventMap[GatewayEventName]));
-      }
-    }
-
-    if (!handler) return;
-
-    const args = await handler.build(this, payload.d as never, state, shardId);
-    this.emit(handler.event, ...(args as GatewayEventMap[GatewayEventName]));
+    await action?.handle(payload.d, state, shardId);
   }
 
   /**

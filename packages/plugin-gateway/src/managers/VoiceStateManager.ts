@@ -1,8 +1,6 @@
 import { voiceStateKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { Routes, type APIVoiceState } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { VoiceState } from "../structures/VoiceState.js";
-import { container } from "../util/container.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -64,9 +62,10 @@ export class VoiceStateManager extends CachedManager<
     const client = this.client;
     // The bot's own voice state is only reachable as `@me`.
     const target = (client.user?.id ?? client.id) === userId ? "@me" : userId;
-    const state = (await container.rest.get(
-      Routes.guildVoiceState(guildId, target),
-    )) as APIVoiceState;
+    const state =
+      target === "@me"
+        ? await client.core.api.voice.getVoiceState(guildId)
+        : await client.core.api.voice.getUserVoiceState(guildId, target);
     return { ...state, guild_id: guildId };
   }
 }

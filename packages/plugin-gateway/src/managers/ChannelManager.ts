@@ -4,8 +4,6 @@ import {
   ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
-  Routes,
-  type APIChannel,
   type APIOverwrite,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
@@ -13,7 +11,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AnnouncementChannel } from "../structures/AnnouncementChannel.js";
 import { AnnouncementThreadChannel } from "../structures/AnnouncementThreadChannel.js";
 import { BaseChannel } from "../structures/BaseChannel.js";
-import type { ChannelRelations } from "../structures/Channel.js";
+import { isThreadChannelType, type ChannelRelations } from "../structures/Channel.js";
 import { CategoryChannel } from "../structures/CategoryChannel.js";
 import { DMChannel } from "../structures/DMChannel.js";
 import { ForumChannel } from "../structures/ForumChannel.js";
@@ -25,7 +23,6 @@ import { StageChannel } from "../structures/StageChannel.js";
 import { TextChannel } from "../structures/TextChannel.js";
 import { VoiceChannel } from "../structures/VoiceChannel.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
 
@@ -138,7 +135,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     cache = true,
     options?: AddOptions,
   ): Promise<AnyChannel> {
-    return createChannel(data).isThread()
+    return isThreadChannelType(data.type)
       ? this.client.threads._add(data as CacheEntityTypes["threads"], cache, options)
       : super._add(data, cache, options);
   }
@@ -165,7 +162,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     channelId: string,
     raw: CacheEntityTypes["channels"],
   ): Promise<void> {
-    if (createChannel(raw).isThread()) {
+    if (isThreadChannelType(raw.type)) {
       await this.client.cache?.threads.set(channelId, raw as CacheEntityTypes["threads"]);
     } else {
       await this.cache?.set(channelId, raw);
@@ -196,10 +193,9 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
       }
     }
 
-    const channel = (await container.rest.patch(Routes.channel(channelId), {
-      body,
+    const channel = await this.client.core.api.channels.edit(channelId, body, {
       reason: options.reason,
-    })) as APIChannel;
+    });
     return this._add(channel);
   }
 
@@ -210,16 +206,16 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * @param reason The reason for the audit log.
    */
   public async delete(channelId: string, reason?: string): Promise<void> {
-    const channel = (await container.rest.delete(Routes.channel(channelId), {
+    const channel = await this.client.core.api.channels.delete(channelId, {
       reason,
-    })) as APIChannel;
+    });
     if (!this.client.cache) return;
 
     // The same cascade as the `CHANNEL_DELETE` (or `THREAD_DELETE`) that follows.
     await applyGatewayDispatch(this.client.cache, {
       op: GatewayOpcodes.Dispatch,
       s: 0,
-      t: createChannel(channel).isThread()
+      t: isThreadChannelType(channel.type)
         ? GatewayDispatchEvents.ThreadDelete
         : GatewayDispatchEvents.ChannelDelete,
       d: channel,
@@ -242,6 +238,6 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
   }
 
   protected async fetchRaw(channelId: string) {
-    return (await container.rest.get(Routes.channel(channelId))) as APIChannel;
+    return this.client.core.api.channels.get(channelId);
   }
 }

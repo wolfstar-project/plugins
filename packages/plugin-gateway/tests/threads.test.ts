@@ -226,8 +226,10 @@ describe("thread actions", () => {
     await cached.join();
     await cached.leave();
 
-    expect(put).toHaveBeenCalledWith(Routes.threadMembers(threadId, "@me"));
-    expect(remove).toHaveBeenCalledWith(Routes.threadMembers(threadId, "@me"));
+    expect(put).toHaveBeenCalledWith(Routes.threadMembers(threadId, "@me"), { signal: undefined });
+    expect(remove).toHaveBeenCalledWith(Routes.threadMembers(threadId, "@me"), {
+      signal: undefined,
+    });
   });
 
   test("GIVEN members.list THEN the members are cached with their guild ID", async () => {
@@ -268,7 +270,9 @@ describe("thread actions", () => {
 
     const starter = await cached.fetchStarterMessage();
 
-    expect(get).toHaveBeenCalledWith(Routes.channelMessage(channelId, threadId));
+    expect(get).toHaveBeenCalledWith(Routes.channelMessage(channelId, threadId), {
+      signal: undefined,
+    });
     expect(starter.content).toBe("start");
   });
 

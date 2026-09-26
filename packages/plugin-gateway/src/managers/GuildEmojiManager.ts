@@ -1,6 +1,5 @@
 import { emojiKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APIEmoji,
   type RESTPatchAPIGuildEmojiJSONBody,
   type RESTPostAPIGuildEmojiJSONBody,
@@ -8,7 +7,6 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { User } from "../structures/User.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -91,7 +89,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * Fetches every emoji of the guild, and caches them.
    */
   public async fetchAll(): Promise<GuildEmoji[]> {
-    const emojis = (await container.rest.get(Routes.guildEmojis(this.guildId))) as APIEmoji[];
+    const emojis = await this.client.core.api.guilds.getEmojis(this.guildId);
     return Promise.all(emojis.map((emoji) => this.store(emoji)));
   }
 
@@ -106,10 +104,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
       name: options.name,
       roles: options.roles ? [...options.roles] : undefined,
     };
-    const emoji = (await container.rest.post(Routes.guildEmojis(this.guildId), {
-      body,
+    const emoji = await this.client.core.api.guilds.createEmoji(this.guildId, body, {
       reason: options.reason,
-    })) as APIEmoji;
+    });
     return this.store(emoji);
   }
 
@@ -125,10 +122,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
       roles:
         options.roles === undefined || options.roles === null ? options.roles : [...options.roles],
     };
-    const emoji = (await container.rest.patch(Routes.guildEmoji(this.guildId, emojiId), {
-      body,
+    const emoji = await this.client.core.api.guilds.editEmoji(this.guildId, emojiId, body, {
       reason: options.reason,
-    })) as APIEmoji;
+    });
     return this.store(emoji);
   }
 
@@ -139,7 +135,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * @param reason The reason for the audit log.
    */
   public async delete(emojiId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildEmoji(this.guildId, emojiId), { reason });
+    await this.client.core.api.guilds.deleteEmoji(this.guildId, emojiId, { reason });
     await this.cache?.delete(this.resolveKey(emojiId));
   }
 
@@ -173,7 +169,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
   }
 
   protected async fetchRaw(emojiId: string) {
-    const emoji = (await container.rest.get(Routes.guildEmoji(this.guildId, emojiId))) as APIEmoji;
+    const emoji = await this.client.core.api.guilds.getEmoji(this.guildId, emojiId);
     return { ...emoji, guild_id: this.guildId };
   }
 

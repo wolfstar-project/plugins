@@ -1,8 +1,6 @@
 import { integrationKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { Routes, type APIGuildIntegration } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Integration } from "../structures/Integration.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -73,7 +71,7 @@ export class GuildIntegrationManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(integrationId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildIntegration(this.guildId, integrationId), { reason });
+    await this.client.core.api.guilds.deleteIntegration(this.guildId, integrationId, { reason });
     await this.cache?.delete(this.resolveKey(integrationId));
   }
 
@@ -87,9 +85,7 @@ export class GuildIntegrationManager extends CachedManager<
   }
 
   private async list(): Promise<CacheEntityTypes["integrations"][]> {
-    const integrations = (await container.rest.get(
-      Routes.guildIntegrations(this.guildId),
-    )) as APIGuildIntegration[];
+    const integrations = await this.client.core.api.guilds.getIntegrations(this.guildId);
     return integrations.map((integration) => ({ ...integration, guild_id: this.guildId }));
   }
 }

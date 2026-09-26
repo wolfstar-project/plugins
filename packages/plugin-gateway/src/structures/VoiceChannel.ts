@@ -1,9 +1,8 @@
 import {
-  Routes,
   type ChannelType,
   type RESTPostAPISoundboardSendSoundJSONBody,
 } from "discord-api-types/v10";
-import { container } from "../util/container.js";
+import { getGatewayClient } from "../util/container.js";
 import type { SoundboardSound } from "./SoundboardSound.js";
 import { Channel } from "./Channel.js";
 import { Mixin } from "./Mixin.js";
@@ -43,7 +42,7 @@ export class VoiceChannel extends Channel<ChannelType.GuildVoice> {
       sound_id: sound.soundId,
       source_guild_id: sound.guildId ?? undefined,
     };
-    await container.rest.post(Routes.sendSoundboardSound(this.id), { body });
+    await getGatewayClient().core.api.channels.sendSoundboardSound(this.id, body);
   }
 }
 

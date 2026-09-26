@@ -1,14 +1,9 @@
 import type { RawFile } from "@discordjs/rest";
 import { stickerKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
-import {
-  Routes,
-  type APISticker,
-  type RESTPatchAPIGuildStickerJSONBody,
-} from "discord-api-types/v10";
+import { type APISticker, type RESTPatchAPIGuildStickerJSONBody } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Sticker } from "../structures/Sticker.js";
 import type { User } from "../structures/User.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -90,7 +85,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * Fetches every sticker of the guild, and caches them.
    */
   public async fetchAll(): Promise<Sticker[]> {
-    const stickers = (await container.rest.get(Routes.guildStickers(this.guildId))) as APISticker[];
+    const stickers = await this.client.core.api.guilds.getStickers(this.guildId);
     return Promise.all(stickers.map((sticker) => this.store(sticker)));
   }
 
@@ -100,13 +95,16 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @param options The file, name, and tags.
    */
   public async create(options: GuildStickerCreateOptions): Promise<Sticker> {
-    // The endpoint takes a multipart form whose fields are the body's keys, next to the `file`.
-    const sticker = (await container.rest.post(Routes.guildStickers(this.guildId), {
-      appendToFormData: true,
-      body: { name: options.name, tags: options.tags, description: options.description ?? "" },
-      files: [{ ...options.file, key: "file" }],
-      reason: options.reason,
-    })) as APISticker;
+    const sticker = await this.client.core.api.guilds.createSticker(
+      this.guildId,
+      {
+        name: options.name,
+        tags: options.tags,
+        description: options.description ?? "",
+        file: options.file,
+      },
+      { reason: options.reason },
+    );
     return this.store(sticker);
   }
 
@@ -122,10 +120,9 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
       description: options.description,
       tags: options.tags,
     };
-    const sticker = (await container.rest.patch(Routes.guildSticker(this.guildId, stickerId), {
-      body,
+    const sticker = await this.client.core.api.guilds.editSticker(this.guildId, stickerId, body, {
       reason: options.reason,
-    })) as APISticker;
+    });
     return this.store(sticker);
   }
 
@@ -136,7 +133,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @param reason The reason for the audit log.
    */
   public async delete(stickerId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildSticker(this.guildId, stickerId), { reason });
+    await this.client.core.api.guilds.deleteSticker(this.guildId, stickerId, { reason });
     await this.cache?.delete(this.resolveKey(stickerId));
   }
 
@@ -170,9 +167,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
   }
 
   protected async fetchRaw(stickerId: string) {
-    const sticker = (await container.rest.get(
-      Routes.guildSticker(this.guildId, stickerId),
-    )) as APISticker;
+    const sticker = await this.client.core.api.guilds.getSticker(this.guildId, stickerId);
     return { ...sticker, guild_id: this.guildId };
   }
 

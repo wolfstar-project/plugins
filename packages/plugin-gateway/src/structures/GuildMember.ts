@@ -18,10 +18,6 @@ import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, Structure } from "./Structure.js";
 import { User } from "./User.js";
 
-function timestamp(value: string | null | undefined): number | null {
-  return value ? Date.parse(value) : null;
-}
-
 /**
  * A member of a Discord guild.
  *
@@ -31,6 +27,12 @@ function timestamp(value: string | null | undefined): number | null {
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   declare public [kRelations]: { user?: User; guild?: Guild | null };
+
+  protected override optimizeData(data: Partial<CacheEntityTypes["members"]>): void {
+    this.optimizeTimestamp("joined_at", data.joined_at);
+    this.optimizeTimestamp("premium_since", data.premium_since);
+    this.optimizeTimestamp("communication_disabled_until", data.communication_disabled_until);
+  }
 
   /**
    * @param data The raw member.
@@ -115,7 +117,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   public get joinedTimestamp(): number | null {
-    return timestamp(this[kData].joined_at);
+    return this.optimizedTimestamp("joined_at");
   }
 
   public get joinedAt(): Date | null {
@@ -127,7 +129,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * When the member started boosting the guild, `null` if they are not boosting it.
    */
   public get premiumSinceTimestamp(): number | null {
-    return timestamp(this[kData].premium_since);
+    return this.optimizedTimestamp("premium_since");
   }
 
   public get premiumSince(): Date | null {
@@ -136,7 +138,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   public get communicationDisabledUntilTimestamp(): number | null {
-    return timestamp(this[kData].communication_disabled_until);
+    return this.optimizedTimestamp("communication_disabled_until");
   }
 
   public get communicationDisabledUntil(): Date | null {

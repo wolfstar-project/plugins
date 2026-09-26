@@ -1,8 +1,5 @@
 import type { RawFile } from "@discordjs/rest";
 import {
-  Routes,
-  type APIMessage,
-  type APIWebhook,
   type RESTPatchAPIWebhookJSONBody,
   type RESTPatchAPIWebhookWithTokenMessageJSONBody,
   type RESTPostAPIChannelWebhookJSONBody,
@@ -12,7 +9,6 @@ import type { GatewayClient } from "../GatewayClient.js";
 import type { Message } from "../structures/Message.js";
 import { Webhook } from "../structures/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { resolveMessageOptions, type MessagePayloadResolvable } from "../util/messages.js";
 
 /**
@@ -85,9 +81,7 @@ export class WebhookManager {
    * @param token The webhook's token, to fetch it without the bot's authorization.
    */
   public async fetch(webhookId: string, token?: string): Promise<Webhook> {
-    const webhook = (await container.rest.get(Routes.webhook(webhookId, token), {
-      auth: token === undefined,
-    })) as APIWebhook;
+    const webhook = await this.client.core.api.webhooks.get(webhookId, { token });
     return new Webhook(webhook);
   }
 
@@ -97,7 +91,7 @@ export class WebhookManager {
    * @param channelId The ID of the channel.
    */
   public async fetchChannel(channelId: string): Promise<Webhook[]> {
-    const webhooks = (await container.rest.get(Routes.channelWebhooks(channelId))) as APIWebhook[];
+    const webhooks = await this.client.core.api.channels.getWebhooks(channelId);
     return webhooks.map((webhook) => new Webhook(webhook));
   }
 
@@ -107,7 +101,7 @@ export class WebhookManager {
    * @param guildId The ID of the guild.
    */
   public async fetchGuild(guildId: string): Promise<Webhook[]> {
-    const webhooks = (await container.rest.get(Routes.guildWebhooks(guildId))) as APIWebhook[];
+    const webhooks = await this.client.core.api.guilds.getWebhooks(guildId);
     return webhooks.map((webhook) => new Webhook(webhook));
   }
 
@@ -119,10 +113,9 @@ export class WebhookManager {
    */
   public async create(channelId: string, options: WebhookCreateOptions): Promise<Webhook> {
     const body: RESTPostAPIChannelWebhookJSONBody = { name: options.name, avatar: options.avatar };
-    const webhook = (await container.rest.post(Routes.channelWebhooks(channelId), {
-      body,
+    const webhook = await this.client.core.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
-    })) as APIWebhook;
+    });
     return new Webhook(webhook);
   }
 
@@ -143,11 +136,10 @@ export class WebhookManager {
       avatar: options.avatar,
       channel_id: options.channel === undefined ? undefined : resolveId(options.channel),
     };
-    const webhook = (await container.rest.patch(Routes.webhook(webhookId, token), {
-      body,
+    const webhook = await this.client.core.api.webhooks.edit(webhookId, body, {
+      token,
       reason: options.reason,
-      auth: token === undefined,
-    })) as APIWebhook;
+    });
     return new Webhook(webhook);
   }
 
@@ -161,10 +153,7 @@ export class WebhookManager {
     webhookId: string,
     options: { token?: string; reason?: string } = {},
   ): Promise<void> {
-    await container.rest.delete(Routes.webhook(webhookId, options.token), {
-      reason: options.reason,
-      auth: options.token === undefined,
-    });
+    await this.client.core.api.webhooks.delete(webhookId, options);
   }
 
   /**
@@ -182,12 +171,12 @@ export class WebhookManager {
     const { threadId, ...payload } =
       typeof options === "string" ? { content: options, threadId: undefined } : options;
     const { body, files } = resolveMessageOptions<WebhookMessageCreateOptions>(payload);
-    const message = (await container.rest.post(Routes.webhook(webhookId, token), {
-      body,
+    const message = await this.client.core.api.webhooks.execute(webhookId, token, {
+      ...body,
       files,
-      query: threadQuery(threadId, true),
-      auth: false,
-    })) as APIMessage;
+      thread_id: threadId,
+      wait: true,
+    });
     return this.client.messages._add(message);
   }
 
@@ -205,10 +194,9 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<Message> {
-    const message = (await container.rest.get(Routes.webhookMessage(webhookId, token, messageId), {
-      query: threadQuery(options.threadId),
-      auth: false,
-    })) as APIMessage;
+    const message = await this.client.core.api.webhooks.getMessage(webhookId, token, messageId, {
+      thread_id: options.threadId,
+    });
     return this.client.messages._add(message);
   }
 
@@ -229,10 +217,11 @@ export class WebhookManager {
     const { threadId, ...payload } =
       typeof options === "string" ? { content: options, threadId: undefined } : options;
     const { body, files } = resolveMessageOptions<WebhookMessageEditOptions>(payload);
-    const message = (await container.rest.patch(
-      Routes.webhookMessage(webhookId, token, messageId),
-      { body, files, query: threadQuery(threadId), auth: false },
-    )) as APIMessage;
+    const message = await this.client.core.api.webhooks.editMessage(webhookId, token, messageId, {
+      ...body,
+      files,
+      thread_id: threadId,
+    });
     return this.client.messages._add(message);
   }
 
@@ -250,17 +239,8 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<void> {
-    await container.rest.delete(Routes.webhookMessage(webhookId, token, messageId), {
-      query: threadQuery(options.threadId),
-      auth: false,
+    await this.client.core.api.webhooks.deleteMessage(webhookId, token, messageId, {
+      thread_id: options.threadId,
     });
   }
-}
-
-// `wait` makes Discord answer with the sent message instead of 204.
-function threadQuery(threadId: string | undefined, wait = false): URLSearchParams {
-  const query = new URLSearchParams();
-  if (wait) query.set("wait", "true");
-  if (threadId) query.set("thread_id", threadId);
-  return query;
 }

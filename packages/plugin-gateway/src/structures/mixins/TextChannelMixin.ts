@@ -1,12 +1,16 @@
-import { Routes, type ChannelType } from "discord-api-types/v10";
+import type { ChannelType } from "discord-api-types/v10";
 import { ChannelMessageManager } from "../../managers/ChannelMessageManager.js";
-import { container, getGatewayClient } from "../../util/container.js";
+import { getGatewayClient } from "../../util/container.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../../util/messages.js";
-import type { Channel } from "../Channel.js";
+import type { Channel, ChannelDataType } from "../Channel.js";
 import type { Message } from "../Message.js";
 import { kData } from "../Structure.js";
 
 type Data = { last_message_id?: string | null; last_pin_timestamp?: string | null };
+const kLastPinTimestamp: unique symbol = Symbol.for(
+  "wolfstar.structures.lastPinTimestamp",
+) as never;
+const kLastPinRaw: unique symbol = Symbol.for("wolfstar.structures.lastPinRaw") as never;
 
 export interface TextChannelMixin<Type extends ChannelType = ChannelType> extends Channel<Type> {}
 
@@ -14,13 +18,32 @@ export interface TextChannelMixin<Type extends ChannelType = ChannelType> extend
  * Adds the fields and message actions of channels holding messages.
  */
 export class TextChannelMixin<Type extends ChannelType = ChannelType> {
+  public static DataTemplate = {
+    set last_pin_timestamp(_value: string | null | undefined) {},
+  };
+
+  declare protected [kLastPinTimestamp]: number | null | undefined;
+  declare protected [kLastPinRaw]: string | null | undefined;
+
+  public static optimizeData(this: Channel, data: Partial<ChannelDataType>): void {
+    const { last_pin_timestamp: timestamp } = data as Data;
+    if (timestamp !== undefined) {
+      (this as TextChannelMixin)[kLastPinTimestamp] = timestamp ? Date.parse(timestamp) : null;
+      (this as TextChannelMixin)[kLastPinRaw] = timestamp;
+    }
+  }
+
+  public static enrichToJSON(this: Channel, data: object): void {
+    const raw = (this as TextChannelMixin)[kLastPinRaw];
+    if (raw !== undefined) (data as Data).last_pin_timestamp = raw;
+  }
+
   public get lastMessageId(): string | null {
     return (this[kData] as Data).last_message_id ?? null;
   }
 
   public get lastPinTimestamp(): number | null {
-    const { last_pin_timestamp: lastPinTimestamp } = this[kData] as Data;
-    return lastPinTimestamp ? Date.parse(lastPinTimestamp) : null;
+    return this[kLastPinTimestamp] ?? null;
   }
 
   public get lastPinAt(): Date | null {
@@ -48,7 +71,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * Shows the bot as typing in the channel, for about 10 seconds or until it sends a message.
    */
   public async sendTyping(): Promise<void> {
-    await container.rest.post(Routes.channelTyping(this.id));
+    await getGatewayClient().core.api.channels.showTyping(this.id);
   }
 
   /**

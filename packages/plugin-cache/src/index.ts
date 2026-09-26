@@ -1,5 +1,10 @@
 export * from "./lib/keys.js";
 export {
+  attachCacheToGateway,
+  type CacheGatewayOptions,
+  type GatewayDispatchSource,
+} from "./lib/gateway.js";
+export {
   createInMemoryCache,
   MemoryEntityCache,
   type InMemoryCache,

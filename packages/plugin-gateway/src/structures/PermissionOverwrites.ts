@@ -8,11 +8,21 @@ import { kData, kPatch, Structure } from "./Structure.js";
  * The raw data of a permission overwrite, with the channel it belongs to.
  */
 export type PermissionOverwritesData = APIOverwrite & { channel_id: string };
+const kOptimizedAllow: unique symbol = Symbol("overwrite.allow");
+const kOptimizedDeny: unique symbol = Symbol("overwrite.deny");
 
 /**
  * A permission overwrite of a channel: what it allows and denies to a role or a member.
  */
 export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
+  declare protected [kOptimizedAllow]: bigint;
+  declare protected [kOptimizedDeny]: bigint;
+
+  protected override optimizeData(data: Partial<PermissionOverwritesData>): void {
+    if (data.allow !== undefined) this[kOptimizedAllow] = BigInt(data.allow);
+    if (data.deny !== undefined) this[kOptimizedDeny] = BigInt(data.deny);
+  }
+
   /**
    * The ID of the role or member the overwrite targets.
    */
@@ -32,11 +42,11 @@ export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
   }
 
   public get allow(): Readonly<PermissionsBitField> {
-    return new PermissionsBitField(BigInt(this[kData].allow)).freeze();
+    return new PermissionsBitField(this[kOptimizedAllow] ?? 0n).freeze();
   }
 
   public get deny(): Readonly<PermissionsBitField> {
-    return new PermissionsBitField(BigInt(this[kData].deny)).freeze();
+    return new PermissionsBitField(this[kOptimizedDeny] ?? 0n).freeze();
   }
 
   /**

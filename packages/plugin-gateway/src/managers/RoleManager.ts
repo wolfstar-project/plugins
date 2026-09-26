@@ -1,14 +1,11 @@
 import { roleKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APIRole,
-  type RESTGetAPIGuildRoleMemberCountsResult,
   type RESTPatchAPIGuildRoleJSONBody,
   type RESTPatchAPIGuildRolePositionsJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Role, type RoleColors } from "../structures/Role.js";
-import { container } from "../util/container.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import { CachedManager } from "./CachedManager.js";
 
@@ -75,7 +72,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns The roles, highest first.
    */
   public async fetchAll(guildId: string): Promise<Role[]> {
-    const roles = (await container.rest.get(Routes.guildRoles(guildId))) as APIRole[];
+    const roles = await this.client.core.api.guilds.getRoles(guildId);
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
 
     return structures.toSorted((a, b) => b.comparePositionTo(a));
@@ -88,9 +85,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns The member count of every role, by role ID.
    */
   public async fetchMemberCounts(guildId: string): Promise<Map<string, number>> {
-    const counts = (await container.rest.get(
-      Routes.guildRoleMemberCounts(guildId),
-    )) as RESTGetAPIGuildRoleMemberCountsResult;
+    const counts = await this.client.core.api.guilds.getRoleMemberCounts(guildId);
     return new Map(Object.entries(counts));
   }
 
@@ -101,10 +96,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The role's fields.
    */
   public async create(guildId: string, options: RoleEditOptions = {}): Promise<Role> {
-    const role = (await container.rest.post(Routes.guildRoles(guildId), {
-      body: toRoleBody(options),
+    const role = await this.client.core.api.guilds.createRole(guildId, toRoleBody(options), {
       reason: options.reason,
-    })) as APIRole;
+    });
     return this.store(guildId, role);
   }
 
@@ -116,10 +110,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The fields to edit.
    */
   public async edit(guildId: string, roleId: string, options: RoleEditOptions): Promise<Role> {
-    const role = (await container.rest.patch(Routes.guildRole(guildId, roleId), {
-      body: toRoleBody(options),
+    const role = await this.client.core.api.guilds.editRole(guildId, roleId, toRoleBody(options), {
       reason: options.reason,
-    })) as APIRole;
+    });
     return this.store(guildId, role);
   }
 
@@ -131,7 +124,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param reason The reason for the audit log.
    */
   public async delete(guildId: string, roleId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildRole(guildId, roleId), { reason });
+    await this.client.core.api.guilds.deleteRole(guildId, roleId, { reason });
     await this.cache?.delete(this.resolveKey(guildId, roleId));
   }
 
@@ -169,10 +162,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
       id: role,
       position,
     }));
-    const roles = (await container.rest.patch(Routes.guildRoles(guildId), {
-      body,
-      reason,
-    })) as APIRole[];
+    const roles = await this.client.core.api.guilds.setRolePositions(guildId, body, { reason });
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
     return structures.toSorted((a, b) => b.comparePositionTo(a));
   }
@@ -226,7 +216,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
   }
 
   protected async fetchRaw(guildId: string, roleId: string) {
-    const role = (await container.rest.get(Routes.guildRole(guildId, roleId))) as APIRole;
+    const role = await this.client.core.api.guilds.getRole(guildId, roleId);
     return { ...role, guild_id: guildId };
   }
 

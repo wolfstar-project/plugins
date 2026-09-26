@@ -2,7 +2,15 @@ import { container } from "@wolfstar/http-framework";
 import { createInMemoryCache, memberKey, messageKey, roleKey } from "@wolfstar/plugin-cache";
 import { ChannelType, MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { GatewayClient, Guild, kClone, Message, TextChannel, User } from "../src/index.js";
+import {
+  GatewayClient,
+  Guild,
+  kClone,
+  Message,
+  StageChannel,
+  TextChannel,
+  User,
+} from "../src/index.js";
 
 const guildId = "100000000000000010";
 const channelId = "200000000000000020";
@@ -49,6 +57,28 @@ afterEach(() => {
 });
 
 describe("CachedManager#_add", () => {
+  test("GIVEN a stage channel THEN the manager hydrates optimized data without changing cache false", async () => {
+    const client = createClient();
+    const raw = {
+      id: channelId,
+      type: ChannelType.GuildStageVoice,
+      last_pin_timestamp: "2024-01-01T00:00:00.000Z",
+    };
+    const stage = await client.channels._add(raw as never);
+
+    expect(stage).toBeInstanceOf(StageChannel);
+    expect((stage as StageChannel).lastPinTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
+
+    const updated = await client.channels._add(
+      { ...raw, last_pin_timestamp: "2025-01-01T00:00:00.000Z" } as never,
+      false,
+    );
+    expect((updated as StageChannel).lastPinTimestamp).toBe(Date.parse("2025-01-01T00:00:00.000Z"));
+    expect((await client.cache!.channels.get(channelId))?.last_pin_timestamp).toBe(
+      "2024-01-01T00:00:00.000Z",
+    );
+  });
+
   test("GIVEN a partial payload THEN it is merged into the cached entry", async () => {
     const client = createClient();
     await client.cache!.users.set(user.id, { ...user, banner: "banner" });

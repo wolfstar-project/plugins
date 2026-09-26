@@ -1,6 +1,5 @@
 import { inviteKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APIExtendedInvite,
   type APIInvite,
   type InviteTargetType,
@@ -9,7 +8,6 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import type { InviteData } from "../structures/BaseInvite.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -95,9 +93,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    * Fetches every invite of the guild, with their metadata, and caches them.
    */
   public async fetchAll(): Promise<GuildInvite[]> {
-    const invites = (await container.rest.get(
-      Routes.guildInvites(this.guildId),
-    )) as APIExtendedInvite[];
+    const invites = await this.client.core.api.guilds.getInvites(this.guildId);
     return Promise.all(invites.map((invite) => this.store(invite)));
   }
 
@@ -107,9 +103,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    * @param channelId The ID of the channel.
    */
   public async fetchChannel(channelId: string): Promise<GuildInvite[]> {
-    const invites = (await container.rest.get(
-      Routes.channelInvites(channelId),
-    )) as APIExtendedInvite[];
+    const invites = await this.client.core.api.channels.getInvites(channelId);
     return Promise.all(invites.map((invite) => this.store(invite)));
   }
 
@@ -129,10 +123,9 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
       target_user_id: options.targetUserId,
       target_application_id: options.targetApplicationId,
     };
-    const invite = (await container.rest.post(Routes.channelInvites(channelId), {
-      body,
+    const invite = await this.client.core.api.channels.createInvite(channelId, body, {
       reason: options.reason,
-    })) as APIExtendedInvite;
+    });
     return this.store(invite);
   }
 
@@ -143,13 +136,12 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    * @param reason The reason for the audit log.
    */
   public async delete(code: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.invite(code), { reason });
+    await this.client.core.api.invites.delete(code, { reason });
     await this.cache?.delete(this.resolveKey(code));
   }
 
   protected async fetchRaw(code: string) {
-    const query = new URLSearchParams({ with_counts: "true" });
-    const invite = (await container.rest.get(Routes.invite(code), { query })) as APIInvite;
+    const invite = await this.client.core.api.invites.get(code, { with_counts: true });
     return this.toCached(invite);
   }
 

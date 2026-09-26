@@ -1,14 +1,11 @@
 import { soundboardSoundKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APISoundboardSound,
-  type RESTGetAPIGuildSoundboardSoundsResult,
   type RESTPatchAPIGuildSoundboardSoundJSONBody,
   type RESTPostAPIGuildSoundboardSoundJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { SoundboardSound } from "../structures/SoundboardSound.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -91,9 +88,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
    * Fetches every soundboard sound of the guild, and caches them.
    */
   public async fetchAll(): Promise<SoundboardSound[]> {
-    const { items } = (await container.rest.get(
-      Routes.guildSoundboardSounds(this.guildId),
-    )) as RESTGetAPIGuildSoundboardSoundsResult;
+    const { items } = await this.client.core.api.guilds.getSoundboardSounds(this.guildId);
     return Promise.all(items.map((sound) => this._add(this.withGuildId(sound))));
   }
 
@@ -108,10 +103,9 @@ export class GuildSoundboardSoundManager extends CachedManager<
       name: options.name,
       sound: options.sound,
     };
-    const sound = (await container.rest.post(Routes.guildSoundboardSounds(this.guildId), {
-      body,
+    const sound = await this.client.core.api.guilds.createSoundboardSound(this.guildId, body, {
       reason: options.reason,
-    })) as APISoundboardSound;
+    });
     return this._add(this.withGuildId(sound));
   }
 
@@ -125,10 +119,14 @@ export class GuildSoundboardSoundManager extends CachedManager<
     soundId: string,
     options: SoundboardSoundEditOptions,
   ): Promise<SoundboardSound> {
-    const sound = (await container.rest.patch(Routes.guildSoundboardSound(this.guildId, soundId), {
-      body: toSoundBody(options),
-      reason: options.reason,
-    })) as APISoundboardSound;
+    const sound = await this.client.core.api.guilds.editSoundboardSound(
+      this.guildId,
+      soundId,
+      toSoundBody(options),
+      {
+        reason: options.reason,
+      },
+    );
     return this._add(this.withGuildId(sound));
   }
 
@@ -139,14 +137,12 @@ export class GuildSoundboardSoundManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(soundId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildSoundboardSound(this.guildId, soundId), { reason });
+    await this.client.core.api.guilds.deleteSoundboardSound(this.guildId, soundId, { reason });
     await this.cache?.delete(this.resolveKey(soundId));
   }
 
   protected async fetchRaw(soundId: string) {
-    const sound = (await container.rest.get(
-      Routes.guildSoundboardSound(this.guildId, soundId),
-    )) as APISoundboardSound;
+    const sound = await this.client.core.api.guilds.getSoundboardSound(this.guildId, soundId);
     return this.withGuildId(sound);
   }
 
