@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
 import {
   applyGatewayDispatch,
+  CacheEntityNames,
   CacheValueError,
   createRedisCache,
   memberKey,
@@ -339,6 +340,17 @@ describe("createRedisCache", () => {
     expect(cache.guilds.prefix).toBe("bot:guilds");
     expect(cache.guilds.ttl).toBeUndefined();
   });
+
+  test.each(["none", "gzip", "brotli"] as const)(
+    "GIVEN %s compression THEN every entity cache is asynchronous",
+    async (compression) => {
+      const cache = createRedisCache({ redis: new FakeRedis(), compression, ttl: { users: 60 } });
+
+      for (const name of CacheEntityNames) expect(cache[name].synchronous).toBe(false);
+      expect(cache.users.get("1")).toBeInstanceOf(Promise);
+      await expect(cache.users.get("1")).resolves.toBeUndefined();
+    },
+  );
 
   test("GIVEN no prefix THEN the default one is used", () => {
     expect(createRedisCache({ redis: new FakeRedis() }).messages.prefix).toBe(

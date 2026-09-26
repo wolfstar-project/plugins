@@ -1,7 +1,8 @@
-import { threadMemberKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { threadMemberKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { Routes, type APIThreadMember } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { ThreadMember } from "../structures/ThreadMember.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -65,16 +66,18 @@ export class ThreadMemberManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["threadMembers"]): Promise<ThreadMember> {
+  public override _hydrate(data: CacheEntityTypes["threadMembers"]): Awaitable<ThreadMember> {
     const { member, guild_id: guildId, user_id: userId } = data;
-    let guildMember = null;
-    if (member?.user && guildId) {
-      guildMember = await this.client.members.resolveData({ ...member, guild_id: guildId });
-    } else if (guildId && userId) {
-      guildMember = (await this.client.members.get(guildId, userId)) ?? null;
-    }
-
-    return new ThreadMember(data, { guildMember });
+    return whenAll(
+      [
+        member?.user && guildId
+          ? this.client.members._resolveData({ ...member, guild_id: guildId })
+          : guildId && userId
+            ? this.client.members._get(guildId, userId)
+            : null,
+      ],
+      ([guildMember]) => new ThreadMember(data, { guildMember: guildMember ?? null }),
+    );
   }
 
   /**

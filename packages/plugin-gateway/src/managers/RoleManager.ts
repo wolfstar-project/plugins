@@ -1,4 +1,4 @@
-import { roleKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { roleKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type APIRole,
   type RESTPatchAPIGuildRoleJSONBody,
@@ -6,6 +6,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Role, type RoleColors } from "../structures/Role.js";
+import { whenAll } from "../util/cache.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import { CachedManager } from "./CachedManager.js";
 
@@ -57,8 +58,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     return this.resolveKey(data.guild_id, data.id);
   }
 
-  public override async hydrate(data: CacheEntityTypes["roles"]): Promise<Role> {
-    return new Role(data, { guild: await this.cachedGuild(data.guild_id) });
+  public override _hydrate(data: CacheEntityTypes["roles"]): Awaitable<Role> {
+    return whenAll([this.cachedGuild(data.guild_id)], ([guild]) => new Role(data, { guild }));
   }
 
   public resolveKey(guildId: string, roleId: string): string {

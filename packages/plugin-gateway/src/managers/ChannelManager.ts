@@ -1,4 +1,4 @@
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
@@ -22,6 +22,7 @@ import { PublicThreadChannel } from "../structures/PublicThreadChannel.js";
 import { StageChannel } from "../structures/StageChannel.js";
 import { TextChannel } from "../structures/TextChannel.js";
 import { VoiceChannel } from "../structures/VoiceChannel.js";
+import { whenAll } from "../util/cache.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
@@ -117,8 +118,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     return data.id;
   }
 
-  public override async hydrate(data: CacheEntityTypes["channels"]): Promise<AnyChannel> {
-    return createChannel(data, { guild: await this.cachedGuild(channelGuildId(data)) });
+  public override _hydrate(data: CacheEntityTypes["channels"]): Awaitable<AnyChannel> {
+    return whenAll([this.cachedGuild(channelGuildId(data))], ([guild]) =>
+      createChannel(data, { guild }),
+    );
   }
 
   public resolveKey(channelId: string): string {
@@ -141,15 +144,16 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
   }
 
   /**
-   * Gets a channel from the cache, looking it up in the thread cache as well.
+   * Gets a channel from the cache, looking it up in the thread cache as well, which `get` and `cached` rely on.
    *
    * @param channelId The ID of the channel.
+   * @internal
    */
-  public override async get(channelId: string): Promise<AnyChannel | undefined> {
-    const channel = await super.get(channelId);
-    if (channel) return channel;
-
-    return this.client.threads.get(channelId);
+  public override _get(channelId: string): Awaitable<AnyChannel | undefined> {
+    return whenAll(
+      [super._get(channelId)],
+      ([channel]) => channel ?? this.client.threads._get(channelId),
+    );
   }
 
   /**

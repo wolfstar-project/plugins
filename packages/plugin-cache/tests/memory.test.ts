@@ -26,6 +26,16 @@ describe("MemoryEntityCache", () => {
     expect(cache.getSize()).toBe(0);
   });
 
+  test("GIVEN a read THEN it returns the value rather than a promise", () => {
+    const cache = new MemoryEntityCache<{ id: string }>(1);
+
+    cache.set("1", { id: "1" });
+
+    expect(cache.synchronous).toBe(true);
+    expect(cache.get("1")).not.toBeInstanceOf(Promise);
+    expect(cache.get("2")).toBeUndefined();
+  });
+
   test("GIVEN a maxSize THEN the least recently used entry is evicted", () => {
     const cache = new MemoryEntityCache<number>(2);
 
@@ -74,5 +84,14 @@ describe("createInMemoryCache", () => {
 
     expect(cache.messages.maxSize).toBe(5);
     expect(cache.users.maxSize).toBe(Infinity);
+  });
+
+  test("GIVEN any options THEN every entity cache is synchronous", () => {
+    for (const cache of [
+      createInMemoryCache(),
+      createInMemoryCache({ maxSize: { messages: 5 } }),
+    ]) {
+      for (const name of CacheEntityNames) expect(cache[name].synchronous).toBe(true);
+    }
   });
 });

@@ -1,9 +1,10 @@
 import type { RawFile } from "@discordjs/rest";
-import { stickerKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { stickerKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { type APISticker, type RESTPatchAPIGuildStickerJSONBody } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Sticker } from "../structures/Sticker.js";
 import type { User } from "../structures/User.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -69,12 +70,14 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["stickers"]): Promise<Sticker> {
-    const [user, guild] = await Promise.all([
-      data.user ? this.client.users.resolveData(data.user) : undefined,
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new Sticker(data, { user, guild });
+  public override _hydrate(data: CacheEntityTypes["stickers"]): Awaitable<Sticker> {
+    return whenAll(
+      [
+        data.user ? this.client.users._resolveData(data.user) : undefined,
+        this.cachedGuild(data.guild_id),
+      ],
+      ([user, guild]) => new Sticker(data, { user, guild }),
+    );
   }
 
   public resolveKey(stickerId: string): string {

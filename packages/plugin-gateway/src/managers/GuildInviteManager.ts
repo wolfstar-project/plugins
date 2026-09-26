@@ -1,4 +1,4 @@
-import { inviteKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { inviteKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type APIExtendedInvite,
   type APIInvite,
@@ -8,6 +8,7 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import type { InviteData } from "../structures/BaseInvite.js";
 import { GuildInvite } from "../structures/GuildInvite.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -75,14 +76,16 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["invites"]): Promise<GuildInvite> {
+  public override _hydrate(data: CacheEntityTypes["invites"]): Awaitable<GuildInvite> {
     const { users } = this.client;
-    const [inviter, targetUser, guild] = await Promise.all([
-      data.inviter ? users.resolveData(data.inviter) : undefined,
-      data.target_user ? users.resolveData(data.target_user) : undefined,
-      this.cachedGuild(this.guildId),
-    ]);
-    return new GuildInvite(data, { inviter, targetUser, guild });
+    return whenAll(
+      [
+        data.inviter ? users._resolveData(data.inviter) : undefined,
+        data.target_user ? users._resolveData(data.target_user) : undefined,
+        this.cachedGuild(this.guildId),
+      ],
+      ([inviter, targetUser, guild]) => new GuildInvite(data, { inviter, targetUser, guild }),
+    );
   }
 
   public resolveKey(code: string): string {
