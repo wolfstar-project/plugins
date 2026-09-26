@@ -314,12 +314,12 @@ importers:
         specifier: ^0.38.33
         version: 0.38.54
       i18next:
-        specifier: ^25.10.10
-        version: 25.10.10(typescript@5.4.5)
+        specifier: ^26.4.0
+        version: 26.4.2(typescript@7.0.2)
     devDependencies:
       '@wolfstar/http-framework':
         specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1))(typescript@5.4.5)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/i18next-type-generator':
         specifier: 3.1.4
         version: 3.1.4
@@ -397,10 +397,6 @@ packages:
     resolution: {integrity: sha512-E8lTAYNB1KW+FH+VGJuZM1ioAx2E6oVlvQFRrf5P8ZZmsiJXYAD9vTFV7yyEURNzgh1dFqMZuO6tUwcARbqFCA==}
     engines: {node: '>=6.0.0'}
     hasBin: true
-
-  '@babel/runtime@7.29.7':
-    resolution: {integrity: sha512-Nq8OhGWiZIZGV6hLHoyAKLLcJihP/xFeBMGJoUrxTX2psI8dCifzLhZISFb+VWS3wFMRDmCGw5R+dOySCqPLhw==}
-    engines: {node: '>=6.9.0'}
 
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
@@ -3175,10 +3171,10 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  i18next@25.10.10:
-    resolution: {integrity: sha512-cqUW2Z3EkRx7NqSyywjkgCLK7KLCL6IFVFcONG7nVYIJ3ekZ1/N5jUsihHV6Bq37NfhgtczxJcxduELtjTwkuQ==}
+  i18next@26.4.2:
+    resolution: {integrity: sha512-RX+R0VLg13IbvRuJSxnqykUFS9vQZTl8wYpWPCIUDWVrSGjsQywB5Y+pjzrkboxGAuYfJZVH1InFTdgBdxq6ug==}
     peerDependencies:
-      typescript: ^5 || ^6
+      typescript: ^5 || ^6 || ^7
     peerDependenciesMeta:
       typescript:
         optional: true
@@ -4389,8 +4385,6 @@ snapshots:
   '@babel/parser@7.29.8':
     dependencies:
       '@babel/types': 7.29.8
-
-  '@babel/runtime@7.29.7': {}
 
   '@babel/types@7.29.8':
     dependencies:
@@ -5730,33 +5724,6 @@ snapshots:
 
   '@vladfrangu/async_event_emitter@2.4.7': {}
 
-  '@wolfstar/cli@2.0.1(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1))(typescript@5.4.5)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
-    dependencies:
-      '@clack/prompts': 1.8.1
-      '@sapphire/ts-config': 5.0.3
-      '@wolfstar/nitro-server': 0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
-      '@wolfstar/vite-server': 0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      chokidar: 5.0.0
-      citty: 0.2.2
-      colorette: 2.0.20
-      ink: 7.1.1(react@19.3.0)
-      mlly: 1.8.2
-      my-bad: 0.2.7(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      nostics: 1.3.0
-      react: 19.3.0
-      untun: 0.2.2
-    optionalDependencies:
-      tsdown: 0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1)
-      typescript: 5.4.5
-      vite: 6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)
-    transitivePeerDependencies:
-      - '@types/react'
-      - bufferutil
-      - magicast
-      - react-devtools-core
-      - utf-8-validate
-
   '@wolfstar/cli@2.0.1(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@clack/prompts': 1.8.1
@@ -5789,43 +5756,6 @@ snapshots:
       '@wolfstar/http-framework': 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
     optionalDependencies:
       vitest: 5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.15.21)(@vitest/coverage-v8@5.0.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-
-  '@wolfstar/http-framework@5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1))(typescript@5.4.5)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
-    dependencies:
-      '@discordjs/builders': 1.14.1
-      '@discordjs/collection': 2.1.1
-      '@discordjs/rest': 2.6.3
-      '@discordjs/util': 1.2.0
-      '@sapphire/pieces': 4.4.1
-      '@sapphire/result': 2.8.0
-      '@sapphire/utilities': 3.18.2
-      '@vladfrangu/async_event_emitter': 2.4.7
-      '@wolfstar/cli': 2.0.1(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1))(typescript@5.4.5)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
-      chokidar: 5.0.0
-      discord-api-types: 0.38.54
-      mlly: 1.8.2
-      unimport: 7.0.2(acorn@8.18.0)(esbuild@0.25.12)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-    transitivePeerDependencies:
-      - '@farmfe/core'
-      - '@rspack/core'
-      - '@types/react'
-      - acorn
-      - bufferutil
-      - bun-types-no-globals
-      - esbuild
-      - magicast
-      - nitro
-      - oxc-parser
-      - react-devtools-core
-      - rolldown
-      - rollup
-      - tsdown
-      - typescript
-      - unloader
-      - utf-8-validate
-      - vite
-      - webpack
 
   '@wolfstar/http-framework@5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
@@ -6577,11 +6507,9 @@ snapshots:
 
   husky@9.1.7: {}
 
-  i18next@25.10.10(typescript@5.4.5):
-    dependencies:
-      '@babel/runtime': 7.29.7
+  i18next@26.4.2(typescript@7.0.2):
     optionalDependencies:
-      typescript: 5.4.5
+      typescript: 7.0.2
 
   iconv-lite@0.6.3:
     dependencies:
@@ -7251,21 +7179,6 @@ snapshots:
 
   retry@0.12.0: {}
 
-  rolldown-plugin-dts@0.28.6(oxc-resolver@11.24.2)(rolldown@1.2.7)(typescript@5.4.5):
-    dependencies:
-      dts-resolver: 3.0.0(oxc-resolver@11.24.2)
-      get-tsconfig: 5.0.0-beta.6
-      obug: 3.0.0
-      rolldown: 1.2.7
-      yuku-ast: 0.10.2
-      yuku-codegen: 0.10.2
-      yuku-parser: 0.10.2
-    optionalDependencies:
-      typescript: 5.4.5
-    transitivePeerDependencies:
-      - oxc-resolver
-    optional: true
-
   rolldown-plugin-dts@0.28.6(oxc-resolver@11.24.2)(rolldown@1.2.7)(typescript@7.0.2):
     dependencies:
       dts-resolver: 3.0.0(oxc-resolver@11.24.2)
@@ -7506,35 +7419,6 @@ snapshots:
   triple-beam@1.4.1: {}
 
   ts-mixer@6.0.4: {}
-
-  tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@5.4.5)(unrun@0.3.1):
-    dependencies:
-      cac: 7.0.0
-      defu: 6.1.7
-      empathic: 2.0.1
-      hookable: 6.1.1
-      import-without-cache: 0.4.0
-      obug: 2.1.4
-      picomatch: 4.0.7
-      rolldown: 1.2.7
-      rolldown-plugin-dts: 0.28.6(oxc-resolver@11.24.2)(rolldown@1.2.7)(typescript@5.4.5)
-      tinyexec: 1.3.1
-      tinyglobby: 0.2.17
-      tree-kill: 1.2.2
-      unconfig-core: 7.5.0
-      verkit: 0.4.1
-    optionalDependencies:
-      '@arethetypeswrong/core': 0.18.5
-      publint: 0.3.24
-      typescript: 5.4.5
-      unrun: 0.3.1
-    transitivePeerDependencies:
-      - '@typescript/native-preview'
-      - '@volar/typescript'
-      - '@vue/language-core'
-      - oxc-resolver
-      - vue-tsc
-    optional: true
 
   tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1):
     dependencies:
