@@ -1,4 +1,8 @@
-import { autoModerationRuleKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  autoModerationRuleKey,
+  type Awaitable,
+  type CacheEntityTypes,
+} from "@wolfstar/plugin-cache";
 import {
   type APIAutoModerationAction,
   type APIAutoModerationRuleTriggerMetadata,
@@ -9,6 +13,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationRule } from "../structures/AutoModerationRule.js";
+import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager } from "./CachedManager.js";
 
@@ -66,10 +71,13 @@ export class AutoModerationRuleManager extends CachedManager<
     return autoModerationRuleKey(this.guildId, ruleId);
   }
 
-  public override async hydrate(
+  public override _hydrate(
     data: CacheEntityTypes["autoModerationRules"],
-  ): Promise<AutoModerationRule> {
-    return new AutoModerationRule(data, { guild: await this.cachedGuild(data.guild_id) });
+  ): Awaitable<AutoModerationRule> {
+    return whenAll(
+      [this.cachedGuild(data.guild_id)],
+      ([guild]) => new AutoModerationRule(data, { guild }),
+    );
   }
 
   /**

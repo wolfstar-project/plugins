@@ -1,5 +1,5 @@
 import { randomBytes } from "node:crypto";
-import { memberKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { memberKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   GatewayOpcodes,
   type APIGuildMember,
@@ -14,6 +14,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildMember } from "../structures/GuildMember.js";
+import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
@@ -199,12 +200,14 @@ export class GuildMemberManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["members"]): Promise<GuildMember> {
-    const [user, guild] = await Promise.all([
-      data.user ? this.client.users.resolveData(data.user) : undefined,
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new GuildMember(data, { user, guild });
+  public override _hydrate(data: CacheEntityTypes["members"]): Awaitable<GuildMember> {
+    return whenAll(
+      [
+        data.user ? this.client.users._resolveData(data.user) : undefined,
+        this.cachedGuild(data.guild_id),
+      ],
+      ([user, guild]) => new GuildMember(data, { user, guild }),
+    );
   }
 
   public resolveKey(guildId: string, userId: string): string {

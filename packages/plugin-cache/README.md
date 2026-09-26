@@ -132,6 +132,8 @@ propagate as the client throws them. `@wolfstar/plugin-gateway` surfaces both as
 
 ```ts
 interface EntityCache<Raw> {
+  // Optional: `true` when no method ever returns a promise.
+  readonly synchronous?: boolean;
   get(key: string): Awaitable<Raw | undefined>;
   set(key: string, value: Raw): Awaitable<void>;
   has(key: string): Awaitable<boolean>;
@@ -150,6 +152,12 @@ interface EntityCache<Raw> {
 semantics identical between synchronous and asynchronous stores. A store implementing `deleteGuild`
 lets `applyGatewayDispatch` skip the scans of a `GUILD_DELETE`; without it, or when it resolves to
 `null`, the scans run as before.
+
+Since an `Awaitable` cannot be told apart from a promise without calling the method, a store tells
+its consumers it never returns one through `synchronous`: the `MemoryEntityCache`s of
+`createInMemoryCache` set it to `true`, the `RedisEntityCache`s of `createRedisCache` to `false`
+(compressed or not), and a store leaving it out is treated as asynchronous. It is what lets
+`@wolfstar/plugin-gateway`'s `cached` accessors read the cache without awaiting it.
 
 ### Keys
 

@@ -1,4 +1,4 @@
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { RawFile } from "@discordjs/rest";
 import {
   ChannelType,
@@ -15,6 +15,7 @@ import type { AnnouncementThreadChannel } from "../structures/AnnouncementThread
 import type { PrivateThreadChannel } from "../structures/PrivateThreadChannel.js";
 import type { PublicThreadChannel } from "../structures/PublicThreadChannel.js";
 import type { ThreadMember } from "../structures/ThreadMember.js";
+import { whenAll } from "../util/cache.js";
 import {
   resolveMessageOptions,
   type MessageCreateOptions,
@@ -105,10 +106,11 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     return data.id;
   }
 
-  public override async hydrate(data: CacheEntityTypes["threads"]): Promise<AnyThreadChannel> {
-    return createChannel(data, {
-      guild: await this.cachedGuild(data.guild_id),
-    }) as AnyThreadChannel;
+  public override _hydrate(data: CacheEntityTypes["threads"]): Awaitable<AnyThreadChannel> {
+    return whenAll(
+      [this.cachedGuild(data.guild_id)],
+      ([guild]) => createChannel(data, { guild }) as AnyThreadChannel,
+    );
   }
 
   public resolveKey(threadId: string): string {

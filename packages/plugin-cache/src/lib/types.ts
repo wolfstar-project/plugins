@@ -85,6 +85,15 @@ export type CacheEntityName = keyof CacheEntityTypes;
  * semantics identical across backends.
  */
 export interface EntityCache<Raw> {
+  /**
+   * Whether every method returns its result synchronously, never a promise. Optional: a cache without it is treated
+   * as asynchronous, which is always safe.
+   *
+   * @remarks
+   * An {@link Awaitable} cannot be told apart from a promise without calling the method, so this is how consumers
+   * know they can read the cache without awaiting it, e.g. `@wolfstar/plugin-gateway`'s `cached` accessors.
+   */
+  readonly synchronous?: boolean;
   get(key: string): Awaitable<Raw | undefined>;
   set(key: string, value: Raw): Awaitable<void>;
   has(key: string): Awaitable<boolean>;

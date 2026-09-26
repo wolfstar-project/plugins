@@ -243,7 +243,8 @@ events.
   `{ force: true }` after the IDs to always hit the API, `{ cache: false }` not to store the result:
   `client.messages.fetch(channelId, messageId, { force: true })`;
 - `refresh` is `fetch` with `{ force: true }`;
-- `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`.
+- `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`;
+- `cached` is `get` without the `await`, for a synchronous cache, see below.
 
 Like discord.js's `CachedManager#_add`, every API payload goes through the manager's `_add`, which
 merges it into the cached entry (the fields a partial payload lacks keep their cached value) and
@@ -258,6 +259,32 @@ the copy embedded in its payload.
 
 Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
 [`@wolfstar/plugin-cache`](../plugin-cache).
+
+### Synchronous reads
+
+Every manager method above is asynchronous since the cache can be Redis, which makes a hot path
+such as a message filter await every lookup even when the cache lives in memory. With a synchronous
+cache (`createInMemoryCache()`), `cached` takes the same arguments as `get` and returns the same
+structure, relations included, without a promise:
+
+```ts
+client.on("messageCreate", (message) => {
+  const member = client.members.cached(message.guildId!, message.author.id);
+  if (member?.roleIds.includes(mutedRoleId)) return;
+  // ...
+});
+```
+
+It returns `undefined` on a miss, or when the client has no cache, like `get`. An asynchronous cache
+cannot tell a miss apart without awaiting it, so there `cached` throws a `TypeError` rather than
+silently returning `undefined`; the same goes for a custom cache mixing both kinds, when a relation
+lives in an asynchronous entity cache. `manager.cache?.synchronous` tells which path to take:
+
+```ts
+const user = client.users.cache?.synchronous
+  ? client.users.cached(userId)
+  : await client.users.get(userId);
+```
 
 ## Structures
 
@@ -328,7 +355,9 @@ The client also has discord.js's `fetchSticker`, `fetchStickerPacks`, and `fetch
 ### Users, members and roles
 
 They follow discord.js's API, with one difference: anything discord.js reads synchronously from its
-cache is asynchronous here, since the cache can be Redis.
+cache is asynchronous here, since the cache can be Redis. With an in-memory cache, `cached` reads
+`client.users`, `client.members` and `client.roles` synchronously, see
+[Synchronous reads](#synchronous-reads).
 
 ```ts
 const member = await client.members.fetch(guildId, userId);

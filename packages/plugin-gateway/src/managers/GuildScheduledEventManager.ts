@@ -1,4 +1,4 @@
-import { scheduledEventKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { scheduledEventKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type APIGuildScheduledEventEntityMetadata,
   type APIGuildScheduledEventRecurrenceRule,
@@ -12,6 +12,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { GuildScheduledEvent } from "../structures/GuildScheduledEvent.js";
 import type { GuildMember } from "../structures/GuildMember.js";
 import type { User } from "../structures/User.js";
+import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
@@ -123,23 +124,26 @@ export class GuildScheduledEventManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(
+  public override _hydrate(
     data: CacheEntityTypes["scheduledEvents"],
-  ): Promise<GuildScheduledEvent> {
-    const [creator, guild, channel] = await Promise.all([
-      data.creator
-        ? this.client.users.resolveData(data.creator)
-        : data.creator_id
-          ? this.client.users.get(data.creator_id)
-          : undefined,
-      this.cachedGuild(data.guild_id),
-      data.channel_id ? this.client.channels.get(data.channel_id) : undefined,
-    ]);
-    return new GuildScheduledEvent(data, {
-      creator: creator ?? null,
-      guild,
-      channel: channel ?? null,
-    });
+  ): Awaitable<GuildScheduledEvent> {
+    return whenAll(
+      [
+        data.creator
+          ? this.client.users._resolveData(data.creator)
+          : data.creator_id
+            ? this.client.users._get(data.creator_id)
+            : undefined,
+        this.cachedGuild(data.guild_id),
+        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+      ],
+      ([creator, guild, channel]) =>
+        new GuildScheduledEvent(data, {
+          creator: creator ?? null,
+          guild,
+          channel: channel ?? null,
+        }),
+    );
   }
 
   /**

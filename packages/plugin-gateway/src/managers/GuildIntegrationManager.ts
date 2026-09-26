@@ -1,6 +1,7 @@
-import { integrationKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { integrationKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Integration } from "../structures/Integration.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -48,12 +49,14 @@ export class GuildIntegrationManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["integrations"]): Promise<Integration> {
-    const [user, guild] = await Promise.all([
-      data.user ? this.client.users.resolveData(data.user) : null,
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new Integration(data, { user, guild });
+  public override _hydrate(data: CacheEntityTypes["integrations"]): Awaitable<Integration> {
+    return whenAll(
+      [
+        data.user ? this.client.users._resolveData(data.user) : null,
+        this.cachedGuild(data.guild_id),
+      ],
+      ([user, guild]) => new Integration(data, { user, guild }),
+    );
   }
 
   /**

@@ -6,6 +6,11 @@ import type { Cache, CacheEntityName, CacheEntityTypes, EntityCache } from "./ty
  */
 export class MemoryEntityCache<Raw> implements EntityCache<Raw> {
   /**
+   * Always `true`: every method returns synchronously.
+   */
+  public readonly synchronous = true;
+
+  /**
    * The maximum amount of entries, `Infinity` for an unbounded cache.
    */
   public readonly maxSize: number;
