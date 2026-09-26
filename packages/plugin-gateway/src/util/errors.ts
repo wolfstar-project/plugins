@@ -38,3 +38,64 @@ export class DispatchTimeoutError extends Error {
     this.timeout = timeout;
   }
 }
+
+/**
+ * Thrown by `GuildMemberManager#request` when Discord stops sending the chunks of the requested members.
+ *
+ * @remarks
+ * The request is dropped: chunks arriving later still update the cache and emit `guildMembersChunk`.
+ */
+export class GuildMembersTimeoutError extends Error {
+  /**
+   * The ID of the guild whose members were requested.
+   */
+  public readonly guildId: string;
+
+  /**
+   * The nonce of the request.
+   */
+  public readonly nonce: string;
+
+  /**
+   * The timeout that was exceeded, in milliseconds.
+   */
+  public readonly timeout: number;
+
+  public constructor(guildId: string, nonce: string, timeout: number) {
+    super(`Requesting the members of guild ${guildId} (${nonce}) took longer than ${timeout}ms`);
+    this.name = "GuildMembersTimeoutError";
+    this.guildId = guildId;
+    this.nonce = nonce;
+    this.timeout = timeout;
+  }
+}
+
+/**
+ * Thrown by `GuildMemberManager#request` when Discord answers with `RATE_LIMITED` instead of the members' chunks.
+ */
+export class GuildMembersRateLimitError extends Error {
+  /**
+   * The ID of the guild whose members were requested.
+   */
+  public readonly guildId: string;
+
+  /**
+   * The nonce of the request.
+   */
+  public readonly nonce: string;
+
+  /**
+   * How long to wait before requesting the members again, in milliseconds.
+   */
+  public readonly retryAfter: number;
+
+  public constructor(guildId: string, nonce: string, retryAfter: number) {
+    super(
+      `Requesting the members of guild ${guildId} (${nonce}) is rate limited, retry after ${retryAfter}ms`,
+    );
+    this.name = "GuildMembersRateLimitError";
+    this.guildId = guildId;
+    this.nonce = nonce;
+    this.retryAfter = retryAfter;
+  }
+}
