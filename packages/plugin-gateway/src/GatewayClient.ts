@@ -368,6 +368,8 @@ export class GatewayClient extends Client {
 
     // Interactions are served by the HTTP endpoint, see the `DispatchHandlers` remarks.
     if (payload.t === GatewayDispatchEvents.InteractionCreate) return;
+    // A rate limited members request gets no chunks: fail it now rather than at its timeout.
+    if (payload.t === GatewayDispatchEvents.RateLimited) this.members.handleRateLimited(payload.d);
 
     const action = this.actions.get(payload.t);
     // `READY` is never dropped: it sets `client.user` and `shardReady` from the payload alone, and a shard without it
