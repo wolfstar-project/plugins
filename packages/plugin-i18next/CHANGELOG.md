@@ -1,5 +1,17 @@
 # @wolfstar/plugin-i18next
 
+## 2.1.0
+
+### Minor Changes
+
+- [#116](https://github.com/wolfstar-project/plugins/pull/116) [`56ead81`](https://github.com/wolfstar-project/plugins/commit/56ead8126bb448a191897c562f0b62e9ae0c16bc) - feat: export `T`, `FT`, `resolveKey`, `resolveUserKey`, `TypedT` and `TypedFT` again as deprecated compatibility shims with `@wolfstar/http-framework-i18n`'s names and signatures, so a migration only has to rename the module specifier instead of failing at load time with `does not provide an export named 'T'` ([#114](https://github.com/wolfstar-project/plugins/issues/114))
+
+### Patch Changes
+
+- [#60](https://github.com/wolfstar-project/plugins/pull/60) [`0540e1c`](https://github.com/wolfstar-project/plugins/commit/0540e1cb500b85e70219ea56bd28d0a1dc93caa4) - fix(deps): update dependency i18next to v26 Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#116](https://github.com/wolfstar-project/plugins/pull/116) [`56ead81`](https://github.com/wolfstar-project/plugins/commit/56ead8126bb448a191897c562f0b62e9ae0c16bc) - fix: accept `@wolfstar/http-framework` v5 as a peer dependency (`^3.1.0 || ^5.0.0`), so v5 projects no longer install the plugin with an unmet peer ([#115](https://github.com/wolfstar-project/plugins/issues/115))
+
 ## 2.0.4
 
 ### Patch Changes
