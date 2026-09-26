@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-cache",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Pluggable, storage-agnostic Discord entity cache (in-memory and Redis, with optional compression) for @wolfstar/plugin-gateway",
   "keywords": [
     "cache",

@@ -1,5 +1,11 @@
 # @wolfstar/plugin-cache
 
+## 0.2.0
+
+### Minor Changes
+
+- [#119](https://github.com/wolfstar-project/plugins/pull/119) [`f762ba2`](https://github.com/wolfstar-project/plugins/commit/f762ba27b3ad58b05129cea11e81822d5af78663) - Index the guild-scoped Redis entity caches by guild (`indexGuilds`, on by default), so a `GUILD_DELETE` drops a guild's entries through the index instead of scanning every entry of every entity cache. `EntityCache` gains an optional `deleteGuild`, which `applyGatewayDispatch` uses when a store implements it and falls back to the scans otherwise.
+
 ## 0.1.0
 
 ### Minor Changes

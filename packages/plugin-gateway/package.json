@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-gateway",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Gateway (WebSocket) support for @wolfstar/http-framework: a GatewayClient emitting Structures, backed by a pluggable cache",
   "keywords": [
     "discord",
