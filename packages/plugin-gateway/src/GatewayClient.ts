@@ -169,6 +169,7 @@ export class GatewayClient extends Client {
 
   public constructor(options: GatewayClientOptions) {
     super(options);
+    container.gatewayClient = this;
 
     this.cache = options.cache;
     this.cacheFailure = options.cacheFailure ?? "skip";

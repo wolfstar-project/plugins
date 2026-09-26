@@ -16,3 +16,17 @@ export function getGatewayClient(): GatewayClient {
 
   return client as GatewayClient;
 }
+
+declare module "@sapphire/pieces" {
+  interface Container {
+    /**
+     * The most recently constructed {@link GatewayClient}, which registers itself here on construction next to
+     * `container.client`, so pieces reach its managers without {@link getGatewayClient} or a cast.
+     *
+     * @remarks
+     * `container.client` keeps the framework's `Client` type: a module augmentation cannot redeclare a property with
+     * another type (TS2717), and under `skipLibCheck` the framework's declaration silently wins.
+     */
+    gatewayClient: GatewayClient;
+  }
+}
