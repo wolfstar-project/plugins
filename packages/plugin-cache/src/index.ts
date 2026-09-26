@@ -31,6 +31,14 @@ export {
   type RedisEntityCacheOptions,
   type RedisTransactionLike,
 } from "./lib/redis.js";
+export {
+  createRedisSessionStore,
+  DefaultRedisSessionStorePrefix,
+  RedisSessionStore,
+  type GatewaySessionInfo,
+  type GatewaySessionStore,
+  type RedisSessionStoreOptions,
+} from "./lib/sessions.js";
 export type {
   Awaitable,
   Cache,

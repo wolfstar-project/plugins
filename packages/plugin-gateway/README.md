@@ -62,15 +62,17 @@ await client.start({ listen: { port: 8080 } }); // loads pieces, starts HTTP, co
 
 On top of the `Client` options:
 
-| Option            | Default     | Description                                                                                                       |
-| ----------------- | ----------- | ----------------------------------------------------------------------------------------------------------------- |
-| `intents`         | —           | The gateway intents.                                                                                              |
-| `cache`           | `undefined` | A `Cache` from `@wolfstar/plugin-cache`, see [Caching](#caching).                                                 |
-| `shardCount`      | `null`      | Total shards across every process, `null` for Discord's recommendation.                                           |
-| `shardIds`        | `null`      | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                             |
-| `gateway`         | `{}`        | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...).                         |
-| `cacheFailure`    | `"skip"`    | On a cache read/write failure, `"skip"` drops the event, `"emitUncached"` emits it from the payload.              |
-| `dispatchTimeout` | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it. |
+| Option                | Default     | Description                                                                                                                        |
+| --------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `intents`             | —           | The gateway intents.                                                                                                               |
+| `cache`               | `undefined` | A `Cache` from `@wolfstar/plugin-cache`, see [Caching](#caching).                                                                  |
+| `shardCount`          | `null`      | Total shards across every process, `null` for Discord's recommendation.                                                            |
+| `shardIds`            | `null`      | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                                              |
+| `gateway`             | `{}`        | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...).                                          |
+| `cacheFailure`        | `"skip"`    | On a cache read/write failure, `"skip"` drops the event, `"emitUncached"` emits it from the payload.                               |
+| `dispatchTimeout`     | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it.                  |
+| `sessionStore`        | `undefined` | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
+| `sessionStoreTimeout` | `5_000`     | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
 
@@ -238,6 +240,56 @@ the copy embedded in its payload.
 
 Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
 [`@wolfstar/plugin-cache`](../plugin-cache).
+
+## Resuming sessions across restarts
+
+`@discordjs/ws` resumes a shard's session after a dropped connection, but only within the process:
+every deploy or crash identifies every shard again, spending identify quota, missing the events sent
+meanwhile, and triggering a full `GUILD_CREATE` burst. A `sessionStore` keeps the sessions outside
+the process, so the next one resumes them and Discord replays what it missed:
+
+```ts
+import { createRedisCache, createRedisSessionStore } from "@wolfstar/plugin-cache";
+import { GatewayClient } from "@wolfstar/plugin-gateway";
+import { GatewayIntentBits } from "discord-api-types/v10";
+import { Redis } from "ioredis";
+
+const redis = new Redis(process.env.REDIS_URL!);
+const client = new GatewayClient({
+  intents: GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages,
+  cache: createRedisCache({ redis }),
+  sessionStore: createRedisSessionStore({ redis }),
+});
+
+process.once("SIGTERM", async () => {
+  await client.destroy({ resumable: true }); // the next process resumes the sessions
+  process.exit(0);
+});
+```
+
+- **Pair it with a persistent cache.** A resumed session only replays the missed events, not the
+  guilds: with `createInMemoryCache()`, a restarted process resumes with an empty cache that
+  `GUILD_CREATE` never refills.
+- **Shut down with `destroy({ resumable: true })`.** By default `destroy()` closes the connections
+  with code `1000`, which makes Discord invalidate the sessions, and `@discordjs/ws` drops them from
+  the store. With `resumable`, the shards close with code `4200` and their sessions stay stored.
+  Both wait for the pending session writes.
+- **The store is read once per shard**, when it first connects, and mirrored in memory from then on
+  (`@discordjs/ws` reads the session on every dispatch and heartbeat). A read failing, or taking
+  longer than `sessionStoreTimeout`, is reported as a `GatewaySessionStoreError` through `error`
+  and the shard identifies, it never stalls.
+- **Writes run in the background.** `@discordjs/ws` updates the session on every dispatch; the client
+  never holds a dispatch back for it, and writes one session per shard at a time, collapsing the
+  updates received meanwhile into a single write of the latest. On a busy shard that is still about
+  one write per store round trip. After a crash, the stored sequence may be a few dispatches behind:
+  the session is still resumable, and Discord replays those dispatches, which listeners then see
+  twice. A failed write is reported through `error` too.
+- A stale session is harmless: when Discord refuses to resume it, `@discordjs/ws` identifies. A
+  session stored with another shard count (e.g. after resharding) is not resumed at all.
+
+`sessionStore` replaces the `gateway.retrieveSessionInfo` and `gateway.updateSessionInfo` options,
+passing either alongside it throws. `destroy({ resumable: true })` also works with a
+`gateway.updateSessionInfo` of your own, which it does not tell to drop the sessions.
 
 ## Structures
 

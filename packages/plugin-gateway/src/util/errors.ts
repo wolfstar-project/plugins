@@ -38,3 +38,32 @@ export class DispatchTimeoutError extends Error {
     this.timeout = timeout;
   }
 }
+
+/**
+ * Emitted as an `error` when `GatewayClientOptions.sessionStore` fails to read or write the session of a shard.
+ *
+ * @remarks
+ * Neither failure stops the shard: a failed (or timed out) read identifies instead of resuming, and a failed write
+ * only means the session may not be resumed after a restart. The store's error is the `cause`.
+ */
+export class GatewaySessionStoreError extends Error {
+  /**
+   * Whether the store failed to read (`"get"`) or write (`"set"`) the session.
+   */
+  public readonly operation: "get" | "set";
+
+  /**
+   * The shard whose session was read or written.
+   */
+  public readonly shardId: number;
+
+  public constructor(operation: "get" | "set", shardId: number, cause: unknown) {
+    super(
+      `Cannot ${operation === "get" ? "read" : "write"} the session of shard ${shardId} in the session store`,
+      { cause },
+    );
+    this.name = "GatewaySessionStoreError";
+    this.operation = operation;
+    this.shardId = shardId;
+  }
+}

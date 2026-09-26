@@ -1,12 +1,15 @@
 import {
+  CloseCodes,
+  DefaultWebSocketManagerOptions,
   WebSocketManager,
   WebSocketShardEvents,
   type OptionalWebSocketManagerOptions,
+  type SessionInfo,
   type ShardRange,
 } from "@discordjs/ws";
 import { Client as DiscordCoreClient } from "@discordjs/core";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
-import { applyGatewayDispatch, type Cache } from "@wolfstar/plugin-cache";
+import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
@@ -39,6 +42,7 @@ import { StickerPack } from "./structures/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
+import { GatewaySessionMirror } from "./util/sessions.js";
 
 export interface GatewayClientOptions extends ClientOptions {
   /**
@@ -70,6 +74,29 @@ export interface GatewayClientOptions extends ClientOptions {
    */
   gateway?: Partial<Omit<OptionalWebSocketManagerOptions, "token" | "shardCount" | "shardIds">>;
   /**
+   * Where to keep the shards' sessions, e.g. `createRedisSessionStore` from `@wolfstar/plugin-cache`, so a restarted
+   * process resumes them instead of identifying again: no identify quota spent, the dispatches missed meanwhile
+   * replayed, and no `GUILD_CREATE` burst. Pair it with a persistent cache, since a resumed session does not refill an
+   * empty one. Use {@link GatewayClient.destroy}'s `resumable` option to keep the sessions on a graceful shutdown.
+   *
+   * @remarks
+   * The store is read once per shard when it first connects, then mirrored in memory, and written in the background
+   * on every sequence change, see {@link GatewayClientOptions.sessionStoreTimeout}. Its failures are reported as
+   * `GatewaySessionStoreError`s through the `error` event and never stop a shard: a failed read identifies.
+   *
+   * It replaces `gateway.retrieveSessionInfo` and `gateway.updateSessionInfo`, passing either alongside it throws.
+   *
+   * @default undefined
+   */
+  sessionStore?: GatewaySessionStore;
+  /**
+   * The time, in milliseconds, after which a shard stops waiting for {@link GatewayClientOptions.sessionStore} to read
+   * its session, and identifies instead. `null` waits forever.
+   *
+   * @default 5_000
+   */
+  sessionStoreTimeout?: number | null;
+  /**
    * What to do with a dispatch whose cache read or write fails, e.g. while Redis is unreachable. The error is always
    * reported through the `error` event (or the logger when nobody listens to it).
    *
@@ -94,6 +121,18 @@ export interface GatewayClientStartOptions {
   listen: Client.ServerListenOptions;
   /** Piece loading options. */
   load?: Client.PieceLoadOptions;
+}
+
+/** Options for disconnecting the gateway shards. */
+export interface GatewayClientDestroyOptions {
+  /**
+   * Whether to keep the shards' sessions resumable, for the next process to resume them (e.g. during a deploy): the
+   * shards close with a code Discord does not invalidate the session on, and their sessions stay stored. Only
+   * meaningful with {@link GatewayClientOptions.sessionStore}, or with `gateway.updateSessionInfo`.
+   *
+   * @default false
+   */
+  resumable?: boolean;
 }
 
 /**
@@ -167,6 +206,11 @@ export class GatewayClient extends Client {
 
   readonly #shardCount: number | null;
 
+  #sessions: GatewaySessionMirror | null = null;
+
+  // Set while a resumable `destroy` runs, see `sessionCallbacks`.
+  #keepSessions = false;
+
   public constructor(options: GatewayClientOptions) {
     super(options);
 
@@ -189,6 +233,7 @@ export class GatewayClient extends Client {
 
     this.gateway = new WebSocketManager({
       ...options.gateway,
+      ...this.sessionCallbacks(options),
       // The base client validated the token already, and scrubs it from `this.options`.
       token: (options.discordToken ?? process.env.DISCORD_TOKEN)!,
       intents: options.intents as GatewayIntentBits,
@@ -233,9 +278,26 @@ export class GatewayClient extends Client {
 
   /**
    * Disconnects every shard from the gateway. The HTTP server, if listening, is left untouched.
+   *
+   * @remarks
+   * By default, the shards close their sessions, which Discord invalidates. Pass `resumable: true` to keep them
+   * resumable instead, e.g. on a graceful shutdown before a deploy. Either way, it waits for the sessions to be
+   * written to {@link GatewayClientOptions.sessionStore}.
+   *
+   * @param options Whether to keep the sessions resumable.
    */
-  public async destroy(): Promise<void> {
-    await this.gateway.destroy();
+  public async destroy(options: GatewayClientDestroyOptions = {}): Promise<void> {
+    this.#keepSessions = options.resumable ?? false;
+    try {
+      // Discord invalidates the session of a connection closed with 1000 or 1001, the default is 1000.
+      await this.gateway.destroy(
+        this.#keepSessions ? { code: CloseCodes.Resuming, reason: "Resumable shutdown" } : {},
+      );
+    } finally {
+      this.#keepSessions = false;
+    }
+
+    await this.#sessions?.flush();
     await this.idle();
   }
 
@@ -459,6 +521,41 @@ export class GatewayClient extends Client {
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  private sessionCallbacks(
+    options: GatewayClientOptions,
+  ): Pick<OptionalWebSocketManagerOptions, "retrieveSessionInfo" | "updateSessionInfo"> {
+    const { sessionStore, gateway } = options;
+    if (sessionStore && (gateway?.retrieveSessionInfo || gateway?.updateSessionInfo)) {
+      throw new TypeError(
+        "sessionStore replaces gateway.retrieveSessionInfo and gateway.updateSessionInfo, pass one or the other",
+      );
+    }
+
+    let retrieve =
+      gateway?.retrieveSessionInfo ?? DefaultWebSocketManagerOptions.retrieveSessionInfo;
+    let update = gateway?.updateSessionInfo ?? DefaultWebSocketManagerOptions.updateSessionInfo;
+    if (sessionStore) {
+      const timeout =
+        options.sessionStoreTimeout === undefined ? 5_000 : options.sessionStoreTimeout;
+      const sessions = new GatewaySessionMirror(sessionStore, timeout, (error) => {
+        if (this.listenerCount("error") > 0) this.emit("error", error);
+        else this.logger.error(`[Gateway] [Shard ${error.shardId}] ${error.message}:`, error.cause);
+      });
+      this.#sessions = sessions;
+      // Both directions keep `GatewaySessionInfo` assignable to and from `@discordjs/ws`'s `SessionInfo`.
+      retrieve = (shardId): Promise<SessionInfo | null> => sessions.get(shardId);
+      update = (shardId, info) => sessions.set(shardId, info);
+    }
+
+    return {
+      retrieveSessionInfo: retrieve,
+      // `@discordjs/ws` drops the session of every shard destroyed without resuming, a resumable shutdown included:
+      // the session must stay stored for the next process to resume it.
+      updateSessionInfo: (shardId, info) =>
+        info === null && this.#keepSessions ? undefined : update(shardId, info),
+    };
   }
 
   // Emitting "error" without listeners throws, which would reject the queue and stall the partition.
