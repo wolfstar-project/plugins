@@ -51,6 +51,7 @@
     "@discordjs/rest": "^2.6.0",
     "@discordjs/structures": "1.0.0-dev.1790035407-dbb749062",
     "@discordjs/ws": "^2.0.4",
+    "@sapphire/pieces": "^4.4.1",
     "@wolfstar/plugin-cache": "workspace:^",
     "discord-api-types": "^0.38.33"
   },
