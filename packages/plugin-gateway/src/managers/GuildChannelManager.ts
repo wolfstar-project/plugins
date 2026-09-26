@@ -1,3 +1,4 @@
+import type { APIChannel, RESTPostAPIGuildChannelJSONBody } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import {
   resolveId,
@@ -106,4 +107,3 @@ export class GuildChannelManager {
     await this.fetch();
   }
 }
-import type { APIChannel, RESTPostAPIGuildChannelJSONBody } from "discord-api-types/v10";

@@ -43,6 +43,13 @@ jobs:
             plugin-api
             plugin-i18next
             plugin-logger
+            plugin-gateway
+            plugin-cache
+            plugin-sharder
+            plugin-subcommands-advanced
+            gateway
+            cache
+            sharder
             deps
             release
             ci

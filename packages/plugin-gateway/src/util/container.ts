@@ -1,8 +1,6 @@
 import { container } from "@wolfstar/http-framework";
 import type { GatewayClient } from "../GatewayClient.js";
 
-export { container };
-
 /**
  * Gets the {@link GatewayClient} registered in the framework's container.
  *

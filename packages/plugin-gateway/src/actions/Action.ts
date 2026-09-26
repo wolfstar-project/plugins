@@ -86,6 +86,12 @@ export class ActionsManager {
     }
     for (const [event, handler] of Object.entries(MultiDispatchHandlers)) {
       if (handler) {
+        // An event holds a single action, so it may be registered in only one of the two handler tables.
+        if (this.#actions.has(event as GatewayDispatchPayload["t"])) {
+          throw new Error(
+            `Dispatch event "${event}" is registered in both DispatchHandlers and MultiDispatchHandlers`,
+          );
+        }
         this.#actions.set(
           event as GatewayDispatchPayload["t"],
           new MultiDispatchAction(client, handler as never),
