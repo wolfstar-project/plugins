@@ -1,5 +1,12 @@
 # @wolfstar/plugin-gateway
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [[`f762ba2`](https://github.com/wolfstar-project/plugins/commit/f762ba27b3ad58b05129cea11e81822d5af78663)]:
+  - @wolfstar/plugin-cache@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes
