@@ -128,6 +128,48 @@ A missing value is not an error: `get` resolves to `undefined`. A value that can
 carrying the Redis `key`, and the original error as `cause`. Connection errors are not wrapped, they
 propagate as the client throws them. `@wolfstar/plugin-gateway` surfaces both as an `error` event.
 
+### Gateway sessions
+
+`createRedisSessionStore` stores the gateway shards' sessions for `@wolfstar/plugin-gateway`'s
+`sessionStore` option, so a restarted process resumes them instead of identifying again (see
+[Resuming sessions across restarts](../plugin-gateway#resuming-sessions-across-restarts)). It only
+needs `get`, `set`, and `del`, so it can share the cache's client:
+
+```ts
+import { createRedisCache, createRedisSessionStore } from "@wolfstar/plugin-cache";
+import { Redis } from "ioredis";
+
+const redis = new Redis(process.env.REDIS_URL!);
+const cache = createRedisCache({ redis });
+const sessionStore = createRedisSessionStore({ redis, prefix: "my-bot:sessions" });
+```
+
+| Option   | Default               | Description                                                                      |
+| -------- | --------------------- | -------------------------------------------------------------------------------- |
+| `redis`  | —                     | The client to use.                                                               |
+| `prefix` | `"wolfstar:sessions"` | Prefix of every key, sessions live at `<prefix>:<shardId>` as JSON.              |
+| `ttl`    | `600`                 | Seconds a session is kept after its last write, `null` to keep it until dropped. |
+
+Discord only lets a session be resumed for a while after its connection closes, and does not say
+for how long: the `ttl` spares a restart the attempt to resume a session long gone (which costs a
+connection before identifying anyway) and keeps Redis tidy. Each write pushes the expiration back,
+and the gateway writes on every dispatch, so only a shard receiving no dispatch for longer than the
+`ttl` identifies on the next restart. A value that is not valid JSON rejects with a
+`CacheValueError`, which the gateway reports before identifying.
+
+The store is a `GatewaySessionStore`, any object with the same two methods works:
+
+```ts
+interface GatewaySessionStore {
+  get(shardId: number): Awaitable<GatewaySessionInfo | null>;
+  // `null` once the session can no longer be resumed.
+  set(shardId: number, info: GatewaySessionInfo | null): Awaitable<void>;
+}
+```
+
+`GatewaySessionInfo` has the same shape as `@discordjs/ws`'s `SessionInfo`, without the package
+depending on it.
+
 ### Custom stores
 
 ```ts
