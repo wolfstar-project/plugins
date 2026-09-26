@@ -9,6 +9,7 @@ import {
   DMChannel,
   GuildMember,
   kClone,
+  kData,
   kPatch,
   Message,
   Mixin,
@@ -52,6 +53,12 @@ describe("Structure", () => {
 
     expect(user.toJSON()).toEqual(data);
     expect(user.toJSON()).not.toBe(user.toJSON());
+  });
+
+  test("GIVEN the data and patch/clone symbols THEN they are @discordjs/structures' registered ones", () => {
+    expect(kData).toBe(Symbol.for("djs.structures.data"));
+    expect(kPatch).toBe(Symbol.for("djs.structures.patch"));
+    expect(kClone).toBe(Symbol.for("djs.structures.clone"));
   });
 
   test("GIVEN the input data is mutated THEN the structure is unaffected", () => {
