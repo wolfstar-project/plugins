@@ -1,15 +1,8 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import {
-  Routes,
-  type APIDMChannel,
-  type APIUser,
-  type RESTPostAPICurrentUserCreateDMChannelJSONBody,
-} from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { DMChannel } from "../structures/DMChannel.js";
 import type { Message } from "../structures/Message.js";
 import { User } from "../structures/User.js";
-import { container } from "../util/container.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../util/messages.js";
 import { CachedManager } from "./CachedManager.js";
 
@@ -43,8 +36,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
    * @param userId The ID of the user.
    */
   public async createDM(userId: string): Promise<DMChannel> {
-    const body: RESTPostAPICurrentUserCreateDMChannelJSONBody = { recipient_id: userId };
-    const channel = (await container.rest.post(Routes.userChannels(), { body })) as APIDMChannel;
+    const channel = await this.client.core.api.users.createDM(userId);
     return (await this.client.channels._add(channel)) as DMChannel;
   }
 
@@ -56,7 +48,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
    */
   public async deleteDM(userId: string): Promise<DMChannel> {
     const channel = await this.createDM(userId);
-    await container.rest.delete(Routes.channel(channel.id));
+    await this.client.core.api.channels.delete(channel.id);
     await this.client.cache?.channels.delete(channel.id);
     return channel;
   }
@@ -76,6 +68,6 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
   }
 
   protected async fetchRaw(userId: string) {
-    return (await container.rest.get(Routes.user(userId))) as APIUser;
+    return this.client.core.api.users.get(userId);
   }
 }

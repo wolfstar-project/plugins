@@ -2,7 +2,6 @@ import { threadMemberKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { Routes, type APIThreadMember } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { ThreadMember } from "../structures/ThreadMember.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -90,10 +89,11 @@ export class ThreadMemberManager extends CachedManager<
     userId: string,
     options: { withMember?: boolean } = {},
   ): Promise<ThreadMember> {
-    const query = new URLSearchParams({ with_member: String(options.withMember ?? false) });
-    const member = (await container.rest.get(Routes.threadMembers(threadId, userId), {
-      query,
-    })) as APIThreadMember;
+    const member = options.withMember
+      ? ((await this.client.core.api.rest.get(Routes.threadMembers(threadId, userId), {
+          query: new URLSearchParams({ with_member: "true" }),
+        })) as APIThreadMember)
+      : await this.client.core.api.threads.getMember(threadId, userId);
     return this._add(await this.withGuildId(threadId, member));
   }
 
@@ -107,13 +107,16 @@ export class ThreadMemberManager extends CachedManager<
     threadId: string,
     options: ThreadMemberListOptions = {},
   ): Promise<ThreadMember[]> {
-    const query = new URLSearchParams({ with_member: String(options.withMember ?? false) });
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.after) query.set("after", options.after);
-
-    const members = (await container.rest.get(Routes.threadMembers(threadId), {
-      query,
-    })) as APIThreadMember[];
+    const members =
+      options.withMember || options.limit || options.after
+        ? ((await this.client.core.api.rest.get(Routes.threadMembers(threadId), {
+            query: new URLSearchParams({
+              with_member: String(options.withMember ?? false),
+              ...(options.limit && { limit: String(options.limit) }),
+              ...(options.after && { after: options.after }),
+            }),
+          })) as APIThreadMember[])
+        : await this.client.core.api.threads.getAllMembers(threadId);
     const guildId = await this.guildIdOf(threadId);
     return Promise.all(
       members.map((member) => this._add(guildId ? { ...member, guild_id: guildId } : member)),
@@ -127,7 +130,8 @@ export class ThreadMemberManager extends CachedManager<
    * @param userId The ID of the user, `"@me"` (the default) to join it.
    */
   public async add(threadId: string, userId = "@me"): Promise<void> {
-    await container.rest.put(Routes.threadMembers(threadId, userId));
+    if (userId === "@me") await this.client.core.api.threads.join(threadId);
+    else await this.client.core.api.threads.addMember(threadId, userId);
   }
 
   /**
@@ -137,15 +141,14 @@ export class ThreadMemberManager extends CachedManager<
    * @param userId The ID of the user, `"@me"` (the default) to leave it.
    */
   public async remove(threadId: string, userId = "@me"): Promise<void> {
-    await container.rest.delete(Routes.threadMembers(threadId, userId));
+    if (userId === "@me") await this.client.core.api.threads.leave(threadId);
+    else await this.client.core.api.threads.removeMember(threadId, userId);
     const cachedId = userId === "@me" ? (this.client.user?.id ?? this.client.id) : userId;
     await this.cache?.delete(this.resolveKey(threadId, cachedId));
   }
 
   protected async fetchRaw(threadId: string, userId: string) {
-    const member = (await container.rest.get(
-      Routes.threadMembers(threadId, userId),
-    )) as APIThreadMember;
+    const member = await this.client.core.api.threads.getMember(threadId, userId);
     return this.withGuildId(threadId, member);
   }
 

@@ -185,6 +185,7 @@ describe("Message", () => {
 
     expect(put).toHaveBeenCalledWith(
       Routes.channelMessageOwnReaction(channelId, "1200000000000000000", "howl:123456789012345678"),
+      { signal: undefined },
     );
   });
 
@@ -269,7 +270,7 @@ describe("MessageManager", () => {
       body: { content: "hello" },
       files: undefined,
     });
-    expect(post).toHaveBeenCalledWith(Routes.channelTyping(channelId));
+    expect(post).toHaveBeenCalledWith(Routes.channelTyping(channelId), { signal: undefined });
     expect(channel.messages.channelId).toBe(channelId);
   });
 });

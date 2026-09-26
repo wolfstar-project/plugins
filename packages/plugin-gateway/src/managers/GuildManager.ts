@@ -2,12 +2,9 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
-  Routes,
   type APIGuild,
-  type APIGuildPreview,
   type APIIncidentsData,
   type APIVoiceRegion,
-  type RESTAPIPartialCurrentUserGuild,
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
   type RESTPostAPIGuildsJSONBody,
@@ -18,10 +15,7 @@ import {
   type AuditLogEvent,
   type GuildOnboardingMode,
   type GuildOnboardingPromptType,
-  type APIGuildOnboarding,
   type APIGuildWelcomeScreen,
-  type APIGuildWidgetSettings,
-  type RESTGetAPIAuditLogResult,
   type RESTPatchAPIGuildWelcomeScreenJSONBody,
   type RESTPatchAPIGuildWidgetSettingsJSONBody,
   type RESTPutAPIGuildOnboardingJSONBody,
@@ -40,7 +34,6 @@ import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
 import type { User } from "../structures/User.js";
 import { Webhook } from "../structures/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
@@ -240,9 +233,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWelcomeScreen(guildId: string): Promise<WelcomeScreen> {
-    const screen = (await container.rest.get(
-      Routes.guildWelcomeScreen(guildId),
-    )) as APIGuildWelcomeScreen;
+    const screen = await this.client.core.api.guilds.getWelcomeScreen(guildId);
     return this.welcomeScreen(guildId, screen);
   }
 
@@ -269,10 +260,9 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
         };
       }),
     };
-    const screen = (await container.rest.patch(Routes.guildWelcomeScreen(guildId), {
-      body,
+    const screen = await this.client.core.api.guilds.editWelcomeScreen(guildId, body, {
       reason: options.reason,
-    })) as APIGuildWelcomeScreen;
+    });
     return this.welcomeScreen(guildId, screen);
   }
 
@@ -282,9 +272,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWidgetSettings(guildId: string): Promise<GuildWidgetSettings> {
-    const settings = (await container.rest.get(
-      Routes.guildWidgetSettings(guildId),
-    )) as APIGuildWidgetSettings;
+    const settings = await this.client.core.api.guilds.getWidgetSettings(guildId);
     return { enabled: settings.enabled, channelId: settings.channel_id };
   }
 
@@ -303,10 +291,9 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       channel_id:
         options.channel === undefined ? undefined : options.channel && resolveId(options.channel),
     };
-    const settings = (await container.rest.patch(Routes.guildWidgetSettings(guildId), {
-      body,
+    const settings = await this.client.core.api.guilds.editWidgetSettings(guildId, body, {
       reason: options.reason,
-    })) as APIGuildWidgetSettings;
+    });
     const cached = await this.cache?.get(guildId);
     if (cached) {
       await this.cache!.set(guildId, {
@@ -325,9 +312,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchOnboarding(guildId: string): Promise<GuildOnboarding> {
-    const onboarding = (await container.rest.get(
-      Routes.guildOnboarding(guildId),
-    )) as APIGuildOnboarding;
+    const onboarding = await this.client.core.api.guilds.getOnboarding(guildId);
     return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
   }
 
@@ -367,10 +352,9 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       enabled: options.enabled,
       mode: options.mode,
     };
-    const onboarding = (await container.rest.put(Routes.guildOnboarding(guildId), {
-      body,
+    const onboarding = await this.client.core.api.guilds.editOnboarding(guildId, body, {
       reason: options.reason,
-    })) as APIGuildOnboarding;
+    });
     return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
   }
 
@@ -402,16 +386,13 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     guildId: string,
     options: GuildAuditLogsFetchOptions = {},
   ): Promise<GuildAuditLogs> {
-    const query = new URLSearchParams();
-    if (options.user) query.set("user_id", resolveId(options.user));
-    if (options.type !== undefined) query.set("action_type", String(options.type));
-    if (options.before) query.set("before", resolveId(options.before));
-    if (options.after) query.set("after", resolveId(options.after));
-    if (options.limit) query.set("limit", String(options.limit));
-
-    const log = (await container.rest.get(Routes.guildAuditLog(guildId), {
-      query,
-    })) as RESTGetAPIAuditLogResult;
+    const log = await this.client.core.api.guilds.getAuditLogs(guildId, {
+      user_id: options.user && resolveId(options.user),
+      action_type: options.type,
+      before: options.before && resolveId(options.before),
+      after: options.after && resolveId(options.after),
+      limit: options.limit,
+    });
     const [users, guild] = await Promise.all([
       Promise.all(log.users.map((user) => this.client.users._add(user))),
       this.cachedGuild(guildId),
@@ -488,14 +469,12 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   public async fetchPartials(
     options: { limit?: number; before?: string; after?: string; withCounts?: boolean } = {},
   ): Promise<AnonymousGuild[]> {
-    const query = new URLSearchParams();
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.before) query.set("before", options.before);
-    if (options.after) query.set("after", options.after);
-    if (options.withCounts) query.set("with_counts", "true");
-    const guilds = (await container.rest.get(Routes.userGuilds(), {
-      query,
-    })) as RESTAPIPartialCurrentUserGuild[];
+    const guilds = await this.client.core.api.users.getGuilds({
+      limit: options.limit,
+      before: options.before,
+      after: options.after,
+      with_counts: options.withCounts,
+    });
     return guilds.map((guild) => new AnonymousGuild(guild));
   }
 
@@ -505,7 +484,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param options The guild's name and initial setup.
    */
   public async create(options: RESTPostAPIGuildsJSONBody): Promise<Guild> {
-    const guild = (await container.rest.post(Routes.guilds(), { body: options })) as APIGuild;
+    const guild = await this.client.core.api.guilds.create(options);
     return this.store(guild);
   }
 
@@ -541,10 +520,9 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       premium_progress_bar_enabled: options.premiumProgressBarEnabled,
       safety_alerts_channel_id: options.safetyAlertsChannel,
     };
-    const guild = (await container.rest.patch(Routes.guild(guildId), {
-      body,
+    const guild = await this.client.core.api.guilds.edit(guildId, body, {
       reason: options.reason,
-    })) as APIGuild;
+    });
     return this.store(guild);
   }
 
@@ -554,7 +532,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async leave(guildId: string): Promise<void> {
-    await container.rest.delete(Routes.userGuild(guildId));
+    await this.client.core.api.users.leaveGuild(guildId);
     await this.forget(guildId);
   }
 
@@ -564,7 +542,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async delete(guildId: string): Promise<void> {
-    await container.rest.delete(Routes.guild(guildId));
+    await this.client.core.api.guilds.delete(guildId);
     await this.forget(guildId);
   }
 
@@ -574,9 +552,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchPreview(guildId: string): Promise<GuildPreview> {
-    return new GuildPreview(
-      (await container.rest.get(Routes.guildPreview(guildId))) as APIGuildPreview,
-    );
+    return new GuildPreview(await this.client.core.api.guilds.getPreview(guildId));
   }
 
   /**
@@ -585,7 +561,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVoiceRegions(guildId: string): Promise<APIVoiceRegion[]> {
-    return (await container.rest.get(Routes.guildVoiceRegions(guildId))) as APIVoiceRegion[];
+    return this.client.core.api.guilds.getVoiceRegions(guildId);
   }
 
   /**
@@ -594,9 +570,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVanityData(guildId: string): Promise<RESTGetAPIGuildVanityUrlResult> {
-    return (await container.rest.get(
-      Routes.guildVanityUrl(guildId),
-    )) as RESTGetAPIGuildVanityUrlResult;
+    return this.client.core.api.guilds.getVanityURL(guildId);
   }
 
   /**
@@ -613,17 +587,14 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       invites_disabled_until: toISO(options.invitesDisabledUntil),
       dms_disabled_until: toISO(options.dmsDisabledUntil),
     };
-    const incidents = (await container.rest.put(Routes.guildIncidentActions(guildId), {
-      body,
-    })) as APIIncidentsData;
+    const incidents = await this.client.core.api.guilds.editIncidentActions(guildId, body);
     const cached = await this.cache?.get(guildId);
     if (cached) await this.cache!.set(guildId, { ...cached, incidents_data: incidents });
     return incidents;
   }
 
   protected async fetchRaw(guildId: string) {
-    const query = new URLSearchParams({ with_counts: "true" });
-    return (await container.rest.get(Routes.guild(guildId), { query })) as APIGuild;
+    return this.client.core.api.guilds.get(guildId, { with_counts: true });
   }
 
   private store(guild: APIGuild): Promise<Guild> {

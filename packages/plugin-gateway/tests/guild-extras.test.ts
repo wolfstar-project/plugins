@@ -169,7 +169,7 @@ describe("templates", () => {
 
     const fetched = await client.fetchGuildTemplate("https://discord.new/howl");
 
-    expect(get).toHaveBeenCalledWith(Routes.template("howl"));
+    expect(get).toHaveBeenCalledWith(Routes.template("howl"), { signal: undefined });
     expect(fetched).toBeInstanceOf(GuildTemplate);
     expect(fetched.url).toBe("https://discord.new/howl");
     expect(fetched.creator.id).toBe(userId);

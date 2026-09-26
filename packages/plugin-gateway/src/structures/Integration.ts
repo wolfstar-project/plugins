@@ -18,6 +18,10 @@ export interface IntegrationRelations {
 export class Integration extends Structure<CacheEntityTypes["integrations"]> {
   declare public [kRelations]: IntegrationRelations;
 
+  protected override optimizeData(data: Partial<CacheEntityTypes["integrations"]>): void {
+    this.optimizeTimestamp("synced_at", data.synced_at);
+  }
+
   /**
    * @param data The raw integration.
    * @param relations The user and guild as resolved from the cache, by the guild's integration manager.
@@ -91,8 +95,7 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
   }
 
   public get syncedTimestamp(): number | null {
-    const { synced_at: syncedAt } = this[kData];
-    return syncedAt ? Date.parse(syncedAt) : null;
+    return this.optimizedTimestamp("synced_at");
   }
 
   public get syncedAt(): Date | null {

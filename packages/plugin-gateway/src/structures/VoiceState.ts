@@ -1,7 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { Routes } from "discord-api-types/v10";
 import type { AnyChannel } from "../managers/ChannelManager.js";
-import { container, getGatewayClient } from "../util/container.js";
+import { getGatewayClient } from "../util/container.js";
 import type { Guild } from "./Guild.js";
 import type { GuildMember } from "./GuildMember.js";
 import { kData, kPatch, kRelations, Structure } from "./Structure.js";
@@ -34,6 +33,10 @@ export interface VoiceStateRelations {
  */
 export class VoiceState extends Structure<CacheEntityTypes["voiceStates"]> {
   declare public [kRelations]: VoiceStateRelations;
+
+  protected override optimizeData(data: Partial<CacheEntityTypes["voiceStates"]>): void {
+    this.optimizeTimestamp("request_to_speak_timestamp", data.request_to_speak_timestamp);
+  }
 
   /**
    * @param data The raw voice state.
@@ -130,8 +133,7 @@ export class VoiceState extends Structure<CacheEntityTypes["voiceStates"]> {
    * channels.
    */
   public get requestToSpeakTimestamp(): number | null {
-    const timestamp = this[kData].request_to_speak_timestamp;
-    return timestamp ? Date.parse(timestamp) : null;
+    return this.optimizedTimestamp("request_to_speak_timestamp");
   }
 
   /**
@@ -241,13 +243,20 @@ export class VoiceState extends Structure<CacheEntityTypes["voiceStates"]> {
       : options.requestToSpeak === false
         ? null
         : undefined;
-    await container.rest.patch(Routes.guildVoiceState(this.requireGuildId(), target), {
-      body: {
-        channel_id: this.channelId,
-        request_to_speak_timestamp: requestToSpeakTimestamp,
-        suppress: options.suppressed,
-      },
-    });
+    const body = {
+      channel_id: this.channelId ?? undefined,
+      request_to_speak_timestamp: requestToSpeakTimestamp,
+      suppress: options.suppressed,
+    };
+    if (target === "@me") {
+      await getGatewayClient().core.api.voice.editVoiceState(this.requireGuildId(), body);
+    } else {
+      await getGatewayClient().core.api.voice.editUserVoiceState(
+        this.requireGuildId(),
+        target,
+        body,
+      );
+    }
 
     return this[kPatch]({
       ...(requestToSpeakTimestamp !== undefined && {

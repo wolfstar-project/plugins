@@ -47,6 +47,8 @@ export abstract class Structure<
   Data extends object,
   Omitted extends keyof Data | "" = "",
 > extends BaseStructure<Data, Omitted> {
+  readonly #timestamps = new Map<string, number | null>();
+
   /**
    * The raw API data of this structure.
    */
@@ -67,6 +69,17 @@ export abstract class Structure<
   public constructor(data: Readonly<Partial<Data>>, relations: object = {}) {
     super(data as never);
     this[kRelations] = relations;
+    this.optimizeData(data);
+  }
+
+  /** Parses a timestamp once when constructing or patching a structure. */
+  protected optimizeTimestamp(key: string, value: string | null | undefined): void {
+    if (value !== undefined) this.#timestamps.set(key, value ? Date.parse(value) : null);
+  }
+
+  /** Gets a timestamp previously parsed by `optimizeData`. */
+  protected optimizedTimestamp(key: string): number | null {
+    return this.#timestamps.get(key) ?? null;
   }
 
   /**

@@ -1,7 +1,6 @@
-import { Routes, type APIUser, type ReactionType } from "discord-api-types/v10";
+import type { ReactionType } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { type User } from "../structures/User.js";
-import { container } from "../util/container.js";
 
 /**
  * Manages the users who reacted to a message with one emoji.
@@ -30,14 +29,12 @@ export class ReactionUserManager {
   public async fetch(
     options: { limit?: number; after?: string; type?: ReactionType } = {},
   ): Promise<User[]> {
-    const query = new URLSearchParams({ limit: String(options.limit ?? 100) });
-    if (options.after) query.set("after", options.after);
-    if (options.type !== undefined) query.set("type", String(options.type));
-
-    const users = (await container.rest.get(
-      Routes.channelMessageReaction(this.channelId, this.messageId, this.emoji),
-      { query },
-    )) as APIUser[];
+    const users = await this.client.core.api.channels.getMessageReactions(
+      this.channelId,
+      this.messageId,
+      this.emoji,
+      { limit: options.limit ?? 100, after: options.after, type: options.type },
+    );
     return Promise.all(users.map((user) => this.client.users._add(user)));
   }
 
@@ -47,10 +44,19 @@ export class ReactionUserManager {
    * @param userId The ID of the user, `"@me"` for the bot.
    */
   public async remove(userId = "@me"): Promise<void> {
-    await container.rest.delete(
-      userId === "@me" || userId === this.client.user?.id
-        ? Routes.channelMessageOwnReaction(this.channelId, this.messageId, this.emoji)
-        : Routes.channelMessageUserReaction(this.channelId, this.messageId, this.emoji, userId),
-    );
+    if (userId === "@me" || userId === this.client.user?.id) {
+      await this.client.core.api.channels.deleteOwnMessageReaction(
+        this.channelId,
+        this.messageId,
+        this.emoji,
+      );
+    } else {
+      await this.client.core.api.channels.deleteUserMessageReaction(
+        this.channelId,
+        this.messageId,
+        this.emoji,
+        userId,
+      );
+    }
   }
 }

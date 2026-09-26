@@ -1,11 +1,6 @@
-import {
-  Routes,
-  type ChannelType,
-  type RESTPostAPIChannelFollowersJSONBody,
-  type RESTPostAPIChannelFollowersResult,
-} from "discord-api-types/v10";
+import { type ChannelType } from "discord-api-types/v10";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
+import { getGatewayClient } from "../util/container.js";
 import { Channel } from "./Channel.js";
 import { Mixin } from "./Mixin.js";
 import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
@@ -42,11 +37,11 @@ export class AnnouncementChannel extends Channel<ChannelType.GuildAnnouncement> 
    * @returns The ID of the follower webhook created in the target channel.
    */
   public async addFollower(channel: IdResolvable, reason?: string): Promise<string> {
-    const body: RESTPostAPIChannelFollowersJSONBody = { webhook_channel_id: resolveId(channel) };
-    const result = (await container.rest.post(Routes.channelFollowers(this.id), {
-      body,
-      reason,
-    })) as RESTPostAPIChannelFollowersResult;
+    const result = await getGatewayClient().core.api.channels.followAnnouncements(
+      this.id,
+      resolveId(channel),
+      { reason },
+    );
     return result.webhook_id;
   }
 }

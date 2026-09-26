@@ -1,13 +1,10 @@
 import { scheduledEventKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
-  type APIGuildScheduledEvent,
   type APIGuildScheduledEventEntityMetadata,
   type APIGuildScheduledEventRecurrenceRule,
   type GuildScheduledEventEntityType,
   type GuildScheduledEventPrivacyLevel,
   type GuildScheduledEventStatus,
-  type RESTGetAPIGuildScheduledEventUsersResult,
   type RESTPatchAPIGuildScheduledEventJSONBody,
   type RESTPostAPIGuildScheduledEventJSONBody,
 } from "discord-api-types/v10";
@@ -16,7 +13,6 @@ import { GuildScheduledEvent } from "../structures/GuildScheduledEvent.js";
 import type { GuildMember } from "../structures/GuildMember.js";
 import type { User } from "../structures/User.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -152,10 +148,9 @@ export class GuildScheduledEventManager extends CachedManager<
    * @param options Whether to include how many users subscribed to each.
    */
   public async fetchAll(options: { withUserCount?: boolean } = {}): Promise<GuildScheduledEvent[]> {
-    const query = new URLSearchParams({ with_user_count: String(options.withUserCount ?? true) });
-    const events = (await container.rest.get(Routes.guildScheduledEvents(this.guildId), {
-      query,
-    })) as APIGuildScheduledEvent[];
+    const events = await this.client.core.api.guilds.getScheduledEvents(this.guildId, {
+      with_user_count: options.withUserCount ?? true,
+    });
     return Promise.all(events.map((event) => this._add(event)));
   }
 
@@ -165,10 +160,13 @@ export class GuildScheduledEventManager extends CachedManager<
    * @param options The event's name, time, place, and privacy.
    */
   public async create(options: GuildScheduledEventCreateOptions): Promise<GuildScheduledEvent> {
-    const event = (await container.rest.post(Routes.guildScheduledEvents(this.guildId), {
-      body: toEventBody(options) as RESTPostAPIGuildScheduledEventJSONBody,
-      reason: options.reason,
-    })) as APIGuildScheduledEvent;
+    const event = await this.client.core.api.guilds.createScheduledEvent(
+      this.guildId,
+      toEventBody(options) as RESTPostAPIGuildScheduledEventJSONBody,
+      {
+        reason: options.reason,
+      },
+    );
     return this._add(event);
   }
 
@@ -182,10 +180,14 @@ export class GuildScheduledEventManager extends CachedManager<
     eventId: string,
     options: GuildScheduledEventEditOptions,
   ): Promise<GuildScheduledEvent> {
-    const event = (await container.rest.patch(Routes.guildScheduledEvent(this.guildId, eventId), {
-      body: toEventBody(options),
-      reason: options.reason,
-    })) as APIGuildScheduledEvent;
+    const event = await this.client.core.api.guilds.editScheduledEvent(
+      this.guildId,
+      eventId,
+      toEventBody(options),
+      {
+        reason: options.reason,
+      },
+    );
     return this._add(event);
   }
 
@@ -196,7 +198,7 @@ export class GuildScheduledEventManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(eventId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildScheduledEvent(this.guildId, eventId), { reason });
+    await this.client.core.api.guilds.deleteScheduledEvent(this.guildId, eventId, { reason });
     await this.cache?.delete(this.resolveKey(eventId));
   }
 
@@ -210,15 +212,16 @@ export class GuildScheduledEventManager extends CachedManager<
     eventId: string,
     options: GuildScheduledEventSubscribersOptions = {},
   ): Promise<GuildScheduledEventSubscriber[]> {
-    const query = new URLSearchParams({ with_member: String(options.withMember ?? false) });
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.before) query.set("before", options.before);
-    if (options.after) query.set("after", options.after);
-
-    const subscribers = (await container.rest.get(
-      Routes.guildScheduledEventUsers(this.guildId, eventId),
-      { query },
-    )) as RESTGetAPIGuildScheduledEventUsersResult;
+    const subscribers = await this.client.core.api.guilds.getScheduledEventUsers(
+      this.guildId,
+      eventId,
+      {
+        with_member: options.withMember ?? false,
+        limit: options.limit,
+        before: options.before,
+        after: options.after,
+      },
+    );
     return Promise.all(
       subscribers.map(async (subscriber) => ({
         user: await this.client.users._add(subscriber.user),
@@ -234,10 +237,9 @@ export class GuildScheduledEventManager extends CachedManager<
   }
 
   protected async fetchRaw(eventId: string) {
-    const query = new URLSearchParams({ with_user_count: "true" });
-    return (await container.rest.get(Routes.guildScheduledEvent(this.guildId, eventId), {
-      query,
-    })) as APIGuildScheduledEvent;
+    return this.client.core.api.guilds.getScheduledEvent(this.guildId, eventId, {
+      with_user_count: true,
+    });
   }
 }
 

@@ -23,6 +23,11 @@ const ThreadTypes: readonly ChannelType[] = [
   ChannelType.PrivateThread,
 ];
 
+/** Whether a raw channel type belongs in the thread cache. */
+export function isThreadChannelType(type: ChannelType): boolean {
+  return ThreadTypes.includes(type);
+}
+
 /**
  * The base of every channel structure, holding what all channel types share.
  *
@@ -69,7 +74,7 @@ export class Channel<Type extends ChannelType = ChannelType> extends Structure<
    * Whether this channel is a thread.
    */
   public isThread(): boolean {
-    return ThreadTypes.includes(this.type);
+    return isThreadChannelType(this.type);
   }
 
   /**

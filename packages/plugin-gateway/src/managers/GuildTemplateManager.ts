@@ -9,7 +9,6 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/Guild.js";
 import { GuildTemplate } from "../structures/GuildTemplate.js";
-import { container } from "../util/container.js";
 
 /**
  * The options to create a template with.
@@ -56,7 +55,7 @@ export class GuildTemplateManager {
   public async fetch(code: string): Promise<GuildTemplate> {
     // Accept `https://discord.new/code` as well as the bare code.
     const resolved = code.split("/").pop()!;
-    return this.build((await container.rest.get(Routes.template(resolved))) as APITemplate);
+    return this.build(await this.client.core.api.guilds.getTemplate(resolved));
   }
 
   /**
@@ -65,7 +64,7 @@ export class GuildTemplateManager {
    * @param guildId The ID of the guild.
    */
   public async list(guildId: string): Promise<GuildTemplate[]> {
-    const templates = (await container.rest.get(Routes.guildTemplates(guildId))) as APITemplate[];
+    const templates = await this.client.core.api.guilds.getTemplates(guildId);
     return Promise.all(templates.map((template) => this.build(template)));
   }
 
@@ -83,9 +82,7 @@ export class GuildTemplateManager {
       name: options.name,
       description: options.description,
     };
-    const template = (await container.rest.post(Routes.guildTemplates(guildId), {
-      body,
-    })) as APITemplate;
+    const template = await this.client.core.api.guilds.createTemplate(guildId, body);
     return this.build(template);
   }
 
@@ -105,9 +102,7 @@ export class GuildTemplateManager {
       name: options.name,
       description: options.description,
     };
-    const template = (await container.rest.patch(Routes.guildTemplate(guildId, code), {
-      body,
-    })) as APITemplate;
+    const template = await this.client.core.api.guilds.editTemplate(guildId, code, body);
     return this.build(template);
   }
 
@@ -118,7 +113,7 @@ export class GuildTemplateManager {
    * @param code The code of the template.
    */
   public async sync(guildId: string, code: string): Promise<GuildTemplate> {
-    const template = (await container.rest.put(Routes.guildTemplate(guildId, code))) as APITemplate;
+    const template = await this.client.core.api.guilds.syncTemplate(guildId, code);
     return this.build(template);
   }
 
@@ -129,7 +124,7 @@ export class GuildTemplateManager {
    * @param code The code of the template.
    */
   public async delete(guildId: string, code: string): Promise<void> {
-    await container.rest.delete(Routes.guildTemplate(guildId, code));
+    await this.client.core.api.guilds.deleteTemplate(guildId, code);
   }
 
   /**
@@ -140,7 +135,9 @@ export class GuildTemplateManager {
    */
   public async createGuild(code: string, options: GuildTemplateCreateGuildOptions): Promise<Guild> {
     const body: RESTPostAPITemplateCreateGuildJSONBody = { name: options.name, icon: options.icon };
-    const guild = (await container.rest.post(Routes.template(code), { body })) as APIGuild;
+    const guild = (await this.client.core.api.rest.post(Routes.template(code), {
+      body,
+    })) as APIGuild;
     return this.client.guilds._add(guild);
   }
 

@@ -88,6 +88,11 @@ export interface GuildEditOptions {
  * guild-scoped ones discord.js exposes on the guild itself (`emojis`, `stickers`, `invites`) are here too.
  */
 export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
+  protected override optimizeData(data: Partial<CacheEntityTypes["guilds"]>): void {
+    super.optimizeData(data);
+    this.optimizeTimestamp("joined_at", data.joined_at);
+  }
+
   public get ownerId() {
     return this[kData].owner_id;
   }
@@ -241,8 +246,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * The timestamp the client user joined the guild at, as sent in `GUILD_CREATE`, or `null` if unknown.
    */
   public get joinedTimestamp(): number | null {
-    const { joined_at: joinedAt } = this[kData];
-    return joinedAt ? Date.parse(joinedAt) : null;
+    return this.optimizedTimestamp("joined_at");
   }
 
   public get joinedAt(): Date | null {

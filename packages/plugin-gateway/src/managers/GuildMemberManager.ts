@@ -1,19 +1,14 @@
 import { memberKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  Routes,
   type APIGuildMember,
-  type RESTGetAPIGuildPruneCountResult,
   type RESTPatchAPICurrentGuildMemberJSONBody,
   type RESTPatchAPIGuildMemberJSONBody,
   type RESTPostAPIGuildBulkBanJSONBody,
-  type RESTPostAPIGuildBulkBanResult,
-  type RESTPostAPIGuildPruneResult,
   type RESTPutAPIGuildBanJSONBody,
   type RESTPutAPIGuildMemberJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildMember } from "../structures/GuildMember.js";
-import { container } from "../util/container.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
@@ -174,11 +169,10 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { limit?: number; after?: string } = {},
   ): Promise<GuildMember[]> {
-    const query = new URLSearchParams({ limit: String(options.limit ?? 1) });
-    if (options.after) query.set("after", options.after);
-    const members = (await container.rest.get(Routes.guildMembers(guildId), {
-      query,
-    })) as APIGuildMember[];
+    const members = await this.client.core.api.guilds.getMembers(guildId, {
+      limit: options.limit ?? 1,
+      after: options.after,
+    });
     return Promise.all(members.map((member) => this.store(guildId, member)));
   }
 
@@ -192,13 +186,10 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { query: string; limit?: number },
   ): Promise<GuildMember[]> {
-    const query = new URLSearchParams({
+    const members = await this.client.core.api.guilds.searchForMembers(guildId, {
       query: options.query,
-      limit: String(options.limit ?? 1),
+      limit: options.limit ?? 1,
     });
-    const members = (await container.rest.get(Routes.guildMembersSearch(guildId), {
-      query,
-    })) as APIGuildMember[];
     return Promise.all(members.map((member) => this.store(guildId, member)));
   }
 
@@ -222,9 +213,7 @@ export class GuildMemberManager extends CachedManager<
       deaf: options.deaf,
     };
     // The API answers 204 without a body when the user already is a member.
-    const member = (await container.rest.put(Routes.guildMember(guildId, userId), {
-      body,
-    })) as APIGuildMember | undefined;
+    const member = await this.client.core.api.guilds.addMember(guildId, userId, body);
     return member ? this.store(guildId, member) : this.fetch(guildId, userId);
   }
 
@@ -254,10 +243,9 @@ export class GuildMemberManager extends CachedManager<
           ? undefined
           : Number(GuildMemberFlagsBitField.resolve(options.flags)),
     };
-    const member = (await container.rest.patch(Routes.guildMember(guildId, userId), {
-      body,
+    const member = await this.client.core.api.guilds.editMember(guildId, userId, body, {
       reason: options.reason,
-    })) as APIGuildMember;
+    });
     return this.store(guildId, member);
   }
 
@@ -269,10 +257,11 @@ export class GuildMemberManager extends CachedManager<
    */
   public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
     const { reason, ...body } = options;
-    const member = (await container.rest.patch(Routes.guildMember(guildId, "@me"), {
-      body: body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
-      reason,
-    })) as APIGuildMember;
+    const member = await this.client.core.api.users.editCurrentGuildMember(
+      guildId,
+      body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
+      { reason },
+    );
     return this.store(guildId, member);
   }
 
@@ -284,7 +273,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildMember(guildId, userId), { reason });
+    await this.client.core.api.guilds.removeMember(guildId, userId, { reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -299,7 +288,7 @@ export class GuildMemberManager extends CachedManager<
     const body: RESTPutAPIGuildBanJSONBody = {
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    await container.rest.put(Routes.guildBan(guildId, userId), { body, reason: options.reason });
+    await this.client.core.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -311,7 +300,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unban(guildId: string, userId: string, reason?: string): Promise<void> {
-    await container.rest.delete(Routes.guildBan(guildId, userId), { reason });
+    await this.client.core.api.guilds.unbanUser(guildId, userId, { reason });
   }
 
   /**
@@ -331,10 +320,9 @@ export class GuildMemberManager extends CachedManager<
       user_ids: [...userIds],
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    const result = (await container.rest.post(Routes.guildBulkBan(guildId), {
-      body,
+    const result = await this.client.core.api.guilds.bulkBanUsers(guildId, body, {
       reason: options.reason,
-    })) as RESTPostAPIGuildBulkBanResult;
+    });
     await Promise.all(
       result.banned_users.map((userId) => this.cache?.delete(this.resolveKey(guildId, userId))),
     );
@@ -351,22 +339,22 @@ export class GuildMemberManager extends CachedManager<
   public async prune(guildId: string, options: GuildPruneOptions = {}): Promise<number | null> {
     const days = options.days ?? 7;
     if (options.dry) {
-      const query = new URLSearchParams({ days: String(days) });
-      if (options.roles?.length) query.set("include_roles", options.roles.join(","));
-      const result = (await container.rest.get(Routes.guildPrune(guildId), {
-        query,
-      })) as RESTGetAPIGuildPruneCountResult;
+      const result = await this.client.core.api.guilds.getPruneCount(guildId, {
+        days,
+        include_roles: options.roles?.length ? options.roles.join(",") : undefined,
+      });
       return result.pruned;
     }
 
-    const result = (await container.rest.post(Routes.guildPrune(guildId), {
-      body: {
+    const result = await this.client.core.api.guilds.beginPrune(
+      guildId,
+      {
         days,
         compute_prune_count: options.count ?? true,
         include_roles: options.roles ? [...options.roles] : undefined,
       },
-      reason: options.reason,
-    })) as RESTPostAPIGuildPruneResult;
+      { reason: options.reason },
+    );
     return result.pruned;
   }
 
@@ -384,7 +372,7 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await container.rest.put(Routes.guildMemberRole(guildId, userId, roleId), { reason });
+    await this.client.core.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => [...new Set([...roles, roleId])]);
   }
 
@@ -402,14 +390,12 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await container.rest.delete(Routes.guildMemberRole(guildId, userId, roleId), { reason });
+    await this.client.core.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => roles.filter((id) => id !== roleId));
   }
 
   protected async fetchRaw(guildId: string, userId: string) {
-    const member = (await container.rest.get(
-      Routes.guildMember(guildId, userId),
-    )) as APIGuildMember;
+    const member = await this.client.core.api.guilds.getMember(guildId, userId);
     return { ...member, guild_id: guildId };
   }
 

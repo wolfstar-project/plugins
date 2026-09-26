@@ -1,5 +1,5 @@
-import { Routes, type APIChannel, type ChannelType } from "discord-api-types/v10";
-import { container, getGatewayClient } from "../../util/container.js";
+import { type ChannelType } from "discord-api-types/v10";
+import { getGatewayClient } from "../../util/container.js";
 import type { Channel, ChannelDataType } from "../Channel.js";
 import { kPatch } from "../Structure.js";
 
@@ -23,7 +23,7 @@ export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
    * Fetches the channel from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const data = (await container.rest.get(Routes.channel(this.id))) as APIChannel;
+    const data = await getGatewayClient().core.api.channels.get(this.id);
     if (data.type !== this.type) {
       throw new TypeError(`Channel ${this.id} changed type from ${this.type} to ${data.type}`);
     }

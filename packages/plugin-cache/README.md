@@ -54,11 +54,12 @@ const client = new GatewayClient({
 It can also be used on its own, with any gateway dispatch source:
 
 ```ts
-import { WebSocketShardEvents } from "@discordjs/ws";
-import { applyGatewayDispatch, createInMemoryCache } from "@wolfstar/plugin-cache";
+import { attachCacheToGateway, createInMemoryCache } from "@wolfstar/plugin-cache";
 
 const cache = createInMemoryCache();
-gateway.on(WebSocketShardEvents.Dispatch, (payload) => applyGatewayDispatch(cache, payload));
+const detach = attachCacheToGateway(gateway, cache, {
+  onError: (error) => console.error(error),
+});
 
 const guild = await cache.guilds.get(guildId);
 ```

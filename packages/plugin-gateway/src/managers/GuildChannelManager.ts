@@ -1,4 +1,3 @@
-import { Routes, type APIChannel } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import {
   resolveId,
@@ -7,7 +6,6 @@ import {
   type GuildChannelEditOptions,
   type IdResolvable,
 } from "../util/channels.js";
-import { container } from "../util/container.js";
 import type { AnyChannel } from "./ChannelManager.js";
 
 /**
@@ -42,7 +40,7 @@ export class GuildChannelManager {
    * Fetches every channel of the guild, threads excluded, and caches them.
    */
   public async fetch(): Promise<AnyChannel[]> {
-    const channels = (await container.rest.get(Routes.guildChannels(this.guildId))) as APIChannel[];
+    const channels = (await this.client.core.api.guilds.getChannels(this.guildId)) as APIChannel[];
     return Promise.all(
       channels.map((channel) => this.client.channels._add({ ...channel, guild_id: this.guildId })),
     );
@@ -54,10 +52,13 @@ export class GuildChannelManager {
    * @param options The channel's name, type, and settings.
    */
   public async create(options: GuildChannelCreateOptions): Promise<AnyChannel> {
-    const channel = (await container.rest.post(Routes.guildChannels(this.guildId), {
-      body: { ...toChannelBody(options), type: options.type },
+    const body = {
+      ...toChannelBody(options),
+      type: options.type,
+    } as RESTPostAPIGuildChannelJSONBody;
+    const channel = await this.client.core.api.guilds.createChannel(this.guildId, body, {
       reason: options.reason,
-    })) as APIChannel;
+    });
     return this.client.channels._add(channel);
   }
 
@@ -99,9 +100,10 @@ export class GuildChannelManager {
             : resolveId(position.parent),
       lock_permissions: position.lockPermissions,
     }));
-    await container.rest.patch(Routes.guildChannels(this.guildId), { body, reason });
+    await this.client.core.api.guilds.setChannelPositions(this.guildId, body, { reason });
 
     // The endpoint answers 204: refetch the moved channels rather than guessing the positions Discord shifted.
     await this.fetch();
   }
 }
+import type { APIChannel, RESTPostAPIGuildChannelJSONBody } from "discord-api-types/v10";

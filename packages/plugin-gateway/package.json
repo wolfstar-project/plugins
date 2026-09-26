@@ -34,18 +34,6 @@
         "types": "./dist/esm/index.d.ts",
         "default": "./dist/esm/index.js"
       }
-    },
-    "./rest": {
-      "import": {
-        "types": "./dist/esm/exports/rest.d.ts",
-        "default": "./dist/esm/exports/rest.js"
-      }
-    },
-    "./ws": {
-      "import": {
-        "types": "./dist/esm/exports/ws.d.ts",
-        "default": "./dist/esm/exports/ws.js"
-      }
     }
   },
   "publishConfig": {
@@ -59,6 +47,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
+    "@discordjs/core": "^2.6.0",
     "@discordjs/rest": "^2.6.0",
     "@discordjs/structures": "1.0.0-dev.1790035407-dbb749062",
     "@discordjs/ws": "^2.0.4",

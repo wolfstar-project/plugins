@@ -2,13 +2,10 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { RawFile } from "@discordjs/rest";
 import {
   ChannelType,
-  Routes,
   type ThreadChannelType,
   type APIMessage,
   type APIThreadChannel,
   type APIThreadMember,
-  type RESTGetAPIChannelThreadsArchivedPublicResult,
-  type RESTGetAPIGuildThreadsResult,
   type RESTPostAPIChannelThreadsJSONBody,
   type RESTPostAPIGuildForumThreadsJSONBody,
   type ThreadAutoArchiveDuration,
@@ -18,7 +15,6 @@ import type { AnnouncementThreadChannel } from "../structures/AnnouncementThread
 import type { PrivateThreadChannel } from "../structures/PrivateThreadChannel.js";
 import type { PublicThreadChannel } from "../structures/PublicThreadChannel.js";
 import type { ThreadMember } from "../structures/ThreadMember.js";
-import { container } from "../util/container.js";
 import {
   resolveMessageOptions,
   type MessageCreateOptions,
@@ -143,11 +139,23 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
       files = message.files;
     }
 
-    const thread = (await container.rest.post(Routes.threads(channelId), {
-      body,
-      files,
-      reason: options.reason,
-    })) as APIThreadChannel & { message?: APIMessage };
+    const thread = (
+      options.message === undefined
+        ? await this.client.core.api.channels.createThread(
+            channelId,
+            body as RESTPostAPIChannelThreadsJSONBody,
+            undefined,
+            { reason: options.reason },
+          )
+        : await this.client.core.api.channels.createForumThread(
+            channelId,
+            {
+              ...(body as RESTPostAPIGuildForumThreadsJSONBody),
+              message: { ...(body as RESTPostAPIGuildForumThreadsJSONBody).message, files },
+            },
+            { reason: options.reason },
+          )
+    ) as APIThreadChannel & { message?: APIMessage };
     // A forum post comes with its first message.
     if (thread.message) await this.client.messages._add(thread.message);
     return this._add(thread);
@@ -159,9 +167,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
    * @param guildId The ID of the guild.
    */
   public async fetchActive(guildId: string): Promise<FetchedThreads> {
-    const result = (await container.rest.get(
-      Routes.guildActiveThreads(guildId),
-    )) as RESTGetAPIGuildThreadsResult;
+    const result = await this.client.core.api.guilds.getActiveThreads(guildId);
     return this.storeList(result.threads as APIThreadChannel[], result.members, guildId, false);
   }
 
@@ -175,22 +181,22 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     channelId: string,
     options: FetchArchivedThreadsOptions = {},
   ): Promise<FetchedThreads> {
-    const query = new URLSearchParams();
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.before !== undefined) {
-      // Joined private threads paginate by ID, the others by archive time.
-      query.set(
-        "before",
-        options.joined ? String(options.before) : new Date(options.before).toISOString(),
-      );
-    }
-
-    const route = options.joined
-      ? Routes.channelJoinedArchivedThreads(channelId)
-      : Routes.channelThreads(channelId, options.type ?? "public");
-    const result = (await container.rest.get(route, {
-      query,
-    })) as RESTGetAPIChannelThreadsArchivedPublicResult;
+    const query = {
+      limit: options.limit,
+      before:
+        options.before === undefined
+          ? undefined
+          : options.joined
+            ? String(options.before)
+            : new Date(options.before).toISOString(),
+    };
+    const result = options.joined
+      ? await this.client.core.api.channels.getJoinedPrivateArchivedThreads(channelId, query)
+      : await this.client.core.api.channels.getArchivedThreads(
+          channelId,
+          options.type ?? "public",
+          query,
+        );
     const guildId = (result.threads[0] as { guild_id?: string } | undefined)?.guild_id;
     return this.storeList(
       result.threads as APIThreadChannel[],
@@ -225,6 +231,6 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
   }
 
   protected async fetchRaw(threadId: string) {
-    return (await container.rest.get(Routes.channel(threadId))) as APIThreadChannel;
+    return this.client.core.api.channels.get(threadId) as Promise<APIThreadChannel>;
   }
 }

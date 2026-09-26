@@ -7,11 +7,15 @@ import {
   BaseChannel,
   Channel,
   DMChannel,
+  GuildMember,
   kClone,
   kPatch,
+  Message,
   Mixin,
+  PermissionOverwrites,
   PublicThreadChannel,
   Role,
+  StageChannel,
   snowflakeTimestamp,
   TextChannel,
   User,
@@ -89,6 +93,30 @@ describe("User", () => {
 });
 
 describe("Channel", () => {
+  test("GIVEN text and stage channel pin timestamps THEN construction and patches optimize them", () => {
+    const channels = [
+      new TextChannel({
+        id: "1",
+        type: ChannelType.GuildText,
+        last_pin_timestamp: "2024-01-01T00:00:00.000Z",
+      } as never),
+      new StageChannel({
+        id: "2",
+        type: ChannelType.GuildStageVoice,
+        last_pin_timestamp: "2024-01-01T00:00:00.000Z",
+      } as never),
+    ];
+
+    for (const channel of channels) {
+      expect(channel.lastPinTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
+      channel[kPatch]({ last_pin_timestamp: "2025-01-01T00:00:00.000Z" } as never);
+      expect(channel.lastPinTimestamp).toBe(Date.parse("2025-01-01T00:00:00.000Z"));
+      expect(channel.toJSON()).toHaveProperty("last_pin_timestamp", "2025-01-01T00:00:00.000Z");
+      channel[kPatch]({ last_pin_timestamp: null } as never);
+      expect(channel.lastPinTimestamp).toBeNull();
+    }
+  });
+
   test("GIVEN announcement, forum, and media channels THEN their slowmode is exposed", () => {
     const channels = [
       new AnnouncementChannel({
@@ -149,6 +177,15 @@ describe("Channel", () => {
     expect(thread.archived).toBe(true);
     expect(thread.archiveTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
     expect(thread.autoArchiveDuration).toBe(60);
+    thread[kPatch]({
+      thread_metadata: {
+        archived: false,
+        locked: false,
+        auto_archive_duration: 60,
+        archive_timestamp: "2025-01-01T00:00:00.000Z",
+      },
+    } as never);
+    expect(thread.archiveTimestamp).toBe(Date.parse("2025-01-01T00:00:00.000Z"));
   });
 
   test("GIVEN a DM THEN its recipients are users", () => {
@@ -167,6 +204,31 @@ describe("Channel", () => {
     expect(clone).toBeInstanceOf(TextChannel);
     expect(clone.name).toBe("b");
     expect(channel.name).toBe("a");
+  });
+
+  test("GIVEN a subclass with another mixin THEN it retains optimized channel data", () => {
+    class Extra {
+      public static enrichToJSON(this: object, output: object): void {
+        (output as { extra?: boolean }).extra = true;
+      }
+
+      public get marker(): boolean {
+        return true;
+      }
+    }
+    class CustomTextChannel extends TextChannel {}
+    Mixin(CustomTextChannel, [Extra]);
+
+    const channel = new CustomTextChannel({
+      id: "1",
+      type: ChannelType.GuildText,
+      last_pin_timestamp: "2024-01-01T00:00:00.000Z",
+    } as never);
+
+    expect(channel.toJSON()).toMatchObject({
+      last_pin_timestamp: "2024-01-01T00:00:00.000Z",
+      extra: true,
+    });
   });
 
   test("GIVEN an unknown channel type THEN it falls back to BaseChannel", () => {
@@ -230,6 +292,51 @@ describe("Role", () => {
 
     expect(role.permissions.bitField).toBe(8n);
     expect(role.permissions.has("Administrator")).toBe(true);
+    role[kPatch]({ permissions: "1024" });
+    expect(role.permissions.bitField).toBe(1024n);
+    expect(role.toJSON().permissions).toBe("1024");
     expect(`${role}`).toBe("<@&1>");
+  });
+});
+
+describe("optimized structures", () => {
+  test("GIVEN member timestamps THEN patches update only supplied fields and clones remain independent", () => {
+    const joinedAt = "2024-01-01T00:00:00.000Z";
+    const member = new GuildMember({ guild_id: "1", roles: [], joined_at: joinedAt } as never);
+
+    expect(member.joinedTimestamp).toBe(Date.parse(joinedAt));
+    member[kPatch]({ premium_since: "2025-01-01T00:00:00.000Z" });
+    expect(member.joinedTimestamp).toBe(Date.parse(joinedAt));
+    expect(member.premiumSinceTimestamp).toBe(Date.parse("2025-01-01T00:00:00.000Z"));
+
+    const clone = member[kClone]({ joined_at: "2026-01-01T00:00:00.000Z" });
+    expect(clone.joinedTimestamp).toBe(Date.parse("2026-01-01T00:00:00.000Z"));
+    expect(member.joinedTimestamp).toBe(Date.parse(joinedAt));
+    expect(clone.toJSON().joined_at).toBe("2026-01-01T00:00:00.000Z");
+  });
+
+  test("GIVEN a message edit and permission overwrite THEN optimized values follow patches", () => {
+    const message = new Message({
+      id: "1",
+      channel_id: "2",
+      author: data,
+      edited_timestamp: null,
+    } as never);
+    message[kPatch]({ edited_timestamp: "2025-01-01T00:00:00.000Z" });
+    expect(message.editedTimestamp).toBe(Date.parse("2025-01-01T00:00:00.000Z"));
+    message[kPatch]({ edited_timestamp: null });
+    expect(message.editedTimestamp).toBeNull();
+
+    const overwrite = new PermissionOverwrites({
+      id: "1",
+      channel_id: "2",
+      type: 0,
+      allow: "8",
+      deny: "0",
+    } as never);
+    overwrite[kPatch]({ allow: "16" });
+    expect(overwrite.allow.bitField).toBe(16n);
+    expect(overwrite.deny.bitField).toBe(0n);
+    expect(overwrite.toJSON().allow).toBe("16");
   });
 });

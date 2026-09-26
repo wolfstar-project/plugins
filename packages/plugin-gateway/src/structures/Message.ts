@@ -63,6 +63,10 @@ const NonSystemTypes: readonly MessageType[] = [
 export class Message extends Structure<CacheEntityTypes["messages"]> {
   declare public [kRelations]: MessageRelations;
 
+  protected override optimizeData(data: Partial<CacheEntityTypes["messages"]>): void {
+    this.optimizeTimestamp("edited_timestamp", data.edited_timestamp);
+  }
+
   /**
    * @param data The raw message.
    * @param relations The author, member, guild, and channel as resolved from the cache, by `client.messages`.
@@ -301,8 +305,7 @@ export class Message extends Structure<CacheEntityTypes["messages"]> {
   }
 
   public get editedTimestamp(): number | null {
-    const editedAt = this[kData].edited_timestamp;
-    return editedAt ? Date.parse(editedAt) : null;
+    return this.optimizedTimestamp("edited_timestamp");
   }
 
   public get editedAt(): Date | null {

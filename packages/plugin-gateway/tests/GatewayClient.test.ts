@@ -110,6 +110,29 @@ describe("GatewayClient", () => {
     const client = createClient();
 
     expect(container.client).toBe(client);
+    expect(client.core.gateway).toBe(client.gateway);
+    expect(client.core.rest).toBe(container.rest);
+  });
+
+  test("start loads pieces, listens for interactions, then connects shards", async () => {
+    const client = createClient();
+    const order: string[] = [];
+    const load = vi.spyOn(client, "load").mockImplementation(async () => {
+      order.push("load");
+    });
+    const listen = vi.spyOn(client, "listen").mockImplementation(async () => {
+      order.push("listen");
+    });
+    const connect = vi.spyOn(client, "connect").mockImplementation(async () => {
+      order.push("connect");
+    });
+
+    await client.start({ listen: { port: 8080 } });
+
+    expect(order).toEqual(["load", "listen", "connect"]);
+    expect(load).toHaveBeenCalledWith(undefined);
+    expect(listen).toHaveBeenCalledWith({ port: 8080 });
+    expect(connect).toHaveBeenCalledOnce();
   });
 
   test("GIVEN READY THEN client.user is set and shardReady is emitted", async () => {
@@ -364,7 +387,7 @@ describe("CachedManager", () => {
     expect(first).toBeInstanceOf(User);
     expect(second.username).toBe("wolf");
     expect(get).toHaveBeenCalledTimes(1);
-    expect(get).toHaveBeenCalledWith(`/users/${user.id}`);
+    expect(get).toHaveBeenCalledWith(`/users/${user.id}`, { signal: undefined });
   });
 
   test("GIVEN refresh THEN the API is always hit", async () => {

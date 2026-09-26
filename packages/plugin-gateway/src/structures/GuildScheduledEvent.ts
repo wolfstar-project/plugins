@@ -31,6 +31,11 @@ export interface GuildScheduledEventRelations {
 export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   declare public [kRelations]: GuildScheduledEventRelations;
 
+  protected override optimizeData(data: Partial<APIGuildScheduledEvent>): void {
+    this.optimizeTimestamp("scheduled_start_time", data.scheduled_start_time);
+    this.optimizeTimestamp("scheduled_end_time", data.scheduled_end_time);
+  }
+
   /**
    * @param data The raw event.
    * @param relations The creator, guild, and channel as resolved from the cache, by the guild's event manager.
@@ -70,7 +75,7 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   }
 
   public get scheduledStartTimestamp(): number {
-    return Date.parse(this[kData].scheduled_start_time);
+    return this.optimizedTimestamp("scheduled_start_time")!;
   }
 
   public get scheduledStartAt(): Date {
@@ -78,8 +83,7 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   }
 
   public get scheduledEndTimestamp(): number | null {
-    const end = this[kData].scheduled_end_time;
-    return end ? Date.parse(end) : null;
+    return this.optimizedTimestamp("scheduled_end_time");
   }
 
   public get scheduledEndAt(): Date | null {

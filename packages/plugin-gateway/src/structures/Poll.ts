@@ -14,6 +14,10 @@ export type PollData = APIPoll & { channel_id: string; message_id: string };
  * The poll of a message.
  */
 export class Poll extends Structure<PollData> {
+  protected override optimizeData(data: Partial<PollData>): void {
+    this.optimizeTimestamp("expiry", data.expiry);
+  }
+
   public get channelId() {
     return this[kData].channel_id;
   }
@@ -65,8 +69,7 @@ export class Poll extends Structure<PollData> {
    * When the poll ends, `null` for polls that never do.
    */
   public get expiresTimestamp(): number | null {
-    const { expiry } = this[kData];
-    return expiry ? Date.parse(expiry) : null;
+    return this.optimizedTimestamp("expiry");
   }
 
   public get expiresAt(): Date | null {

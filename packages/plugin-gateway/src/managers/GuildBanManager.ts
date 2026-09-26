@@ -1,9 +1,8 @@
 import { banKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { Routes, type APIBan } from "discord-api-types/v10";
+import type { APIBan } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildBan, type GuildBanData } from "../structures/GuildBan.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { container } from "../util/container.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { BanOptions } from "./GuildMemberManager.js";
 
@@ -73,12 +72,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
    * @param options How many bans, and around which user ID.
    */
   public async list(options: GuildBanListOptions = {}): Promise<GuildBan[]> {
-    const query = new URLSearchParams();
-    if (options.limit) query.set("limit", String(options.limit));
-    if (options.before) query.set("before", options.before);
-    if (options.after) query.set("after", options.after);
-
-    const bans = (await container.rest.get(Routes.guildBans(this.guildId), { query })) as APIBan[];
+    const bans = await this.client.core.api.guilds.getMemberBans(this.guildId, options);
     return Promise.all(bans.map((ban) => this._add(this.toData(ban))));
   }
 
@@ -118,7 +112,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
   }
 
   protected async fetchRaw(userId: string) {
-    const ban = (await container.rest.get(Routes.guildBan(this.guildId, userId))) as APIBan;
+    const ban = await this.client.core.api.guilds.getMemberBan(this.guildId, userId);
     return this.toData(ban);
   }
 

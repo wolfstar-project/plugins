@@ -34,6 +34,11 @@ export interface InviteRelations {
 export class BaseInvite<Data extends InviteData = InviteData> extends Structure<Data> {
   declare public [kRelations]: InviteRelations;
 
+  protected override optimizeData(data: Partial<Data>): void {
+    this.optimizeTimestamp("created_at", data.created_at);
+    this.optimizeTimestamp("expires_at", data.expires_at);
+  }
+
   /**
    * @param data The raw invite.
    * @param relations The inviter, target user, and guild as resolved from the cache, by `client.guilds.invites()`.
@@ -139,8 +144,7 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Structure<
   }
 
   public get createdTimestamp(): number | null {
-    const { created_at: createdAt } = this[kData];
-    return createdAt ? Date.parse(createdAt) : null;
+    return this.optimizedTimestamp("created_at");
   }
 
   public get createdAt(): Date | null {
@@ -152,8 +156,8 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Structure<
    * When the invite expires, `null` when it never does or it is unknown.
    */
   public get expiresTimestamp(): number | null {
-    const { expires_at: expiresAt } = this[kData];
-    if (expiresAt) return Date.parse(expiresAt);
+    const expiresAt = this.optimizedTimestamp("expires_at");
+    if (expiresAt !== null) return expiresAt;
 
     const { createdTimestamp, maxAge } = this;
     return createdTimestamp !== null && maxAge ? createdTimestamp + maxAge * 1000 : null;
