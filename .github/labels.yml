@@ -18,6 +18,15 @@
   description: This will not be worked on
 - name: packages:plugin-api
   color: "1d76db"
+- name: packages:plugin-cache
+  color: "1d76db"
+  description: Changes in plugin-cache
+- name: packages:plugin-gateway
+  color: "1d76db"
+  description: Changes in plugin-gateway
+- name: packages:plugin-sharder
+  color: "1d76db"
+  description: Changes in plugin-sharder
 - name: packages:plugin-logger
   color: "1d76db"
   description: Changes in plugin-logger
