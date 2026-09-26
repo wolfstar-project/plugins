@@ -128,8 +128,11 @@ describe("GatewayClient sessionStore", () => {
 
     expect(await retrieved).toBeNull();
     expect(logged).toHaveBeenCalledWith(
-      expect.stringContaining("Cannot read the session of shard 0"),
-      expect.objectContaining({ message: "Timed out after 1000ms" }),
+      "[Gateway] [Shard 0] Failed to process the session store get:",
+      expect.objectContaining({
+        message: expect.stringContaining("Cannot read the session of shard 0"),
+        cause: expect.objectContaining({ message: "Timed out after 1000ms" }),
+      }),
     );
   });
 
@@ -204,6 +207,22 @@ describe("GatewayClient#destroy", () => {
     // Only the resumable shutdown keeps them.
     await client.destroy();
     expect(store.sessions.has(0)).toBe(false);
+  });
+
+  test("GIVEN a destroy while a resumable one runs THEN it joins it and the sessions are kept", async () => {
+    const store = createStore();
+    const client = createClient({ sessionStore: store });
+    const destroy = vi.spyOn(client.gateway, "destroy").mockImplementation(async () => {
+      // The shards close asynchronously, so a second call lands while they are still closing.
+      await new Promise((resolve) => setImmediate(resolve));
+      await update(client, null);
+    });
+
+    update(client, session);
+    await Promise.all([client.destroy({ resumable: true }), client.destroy()]);
+
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(store.sessions.get(0)).toEqual(session);
   });
 
   test("GIVEN resumable with gateway.updateSessionInfo THEN it is not told to drop the sessions", async () => {

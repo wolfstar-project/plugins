@@ -211,6 +211,9 @@ export class GatewayClient extends Client {
   // Set while a resumable `destroy` runs, see `sessionCallbacks`.
   #keepSessions = false;
 
+  // The `destroy` in progress, which a concurrent call joins instead of changing `#keepSessions` under it.
+  #destroying: Promise<void> | null = null;
+
   public constructor(options: GatewayClientOptions) {
     super(options);
     container.gatewayClient = this;
@@ -285,10 +288,19 @@ export class GatewayClient extends Client {
    * resumable instead, e.g. on a graceful shutdown before a deploy. Either way, it waits for the sessions to be
    * written to {@link GatewayClientOptions.sessionStore}.
    *
+   * A call made while another one is still disconnecting the shards joins it, keeping the first call's `resumable`.
+   *
    * @param options Whether to keep the sessions resumable.
    */
-  public async destroy(options: GatewayClientDestroyOptions = {}): Promise<void> {
-    this.#keepSessions = options.resumable ?? false;
+  public destroy(options: GatewayClientDestroyOptions = {}): Promise<void> {
+    this.#destroying ??= this.disconnect(options.resumable ?? false).finally(() => {
+      this.#destroying = null;
+    });
+    return this.#destroying;
+  }
+
+  private async disconnect(resumable: boolean): Promise<void> {
+    this.#keepSessions = resumable;
     try {
       // Discord invalidates the session of a connection closed with 1000 or 1001, the default is 1000.
       await this.gateway.destroy(
@@ -540,10 +552,9 @@ export class GatewayClient extends Client {
     if (sessionStore) {
       const timeout =
         options.sessionStoreTimeout === undefined ? 5_000 : options.sessionStoreTimeout;
-      const sessions = new GatewaySessionMirror(sessionStore, timeout, (error) => {
-        if (this.listenerCount("error") > 0) this.emit("error", error);
-        else this.logger.error(`[Gateway] [Shard ${error.shardId}] ${error.message}:`, error.cause);
-      });
+      const sessions = new GatewaySessionMirror(sessionStore, timeout, (error) =>
+        this.reportError(error, `the session store ${error.operation}`, error.shardId),
+      );
       this.#sessions = sessions;
       // Both directions keep `GatewaySessionInfo` assignable to and from `@discordjs/ws`'s `SessionInfo`.
       retrieve = (shardId): Promise<SessionInfo | null> => sessions.get(shardId);
