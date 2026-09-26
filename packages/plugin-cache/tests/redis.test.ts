@@ -184,7 +184,7 @@ describe("RedisEntityCache guild index", () => {
     return new RedisEntityCache<{ guild_id?: string }>(redis, {
       prefix: "test",
       ttl,
-      guildOf: (_key, value) => value.guild_id,
+      guildOf: (_key, value) => value?.guild_id,
     });
   }
 
@@ -212,6 +212,20 @@ describe("RedisEntityCache guild index", () => {
 
     await cache.set("1", { guild_id: "10" });
     expect(await cache.deleteGuild("10")).toBe(1);
+  });
+
+  test("GIVEN a guild resolvable from the key THEN delete does not read the value", async () => {
+    const cache = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      guildOf: (key) => key.split(":")[0],
+    });
+    await cache.set("10:1", { id: "1" });
+    const get = vi.spyOn(redis, "get");
+
+    await cache.delete("10:1");
+
+    expect(get).not.toHaveBeenCalled();
+    expect(await redis.zcard("test:@guild:10")).toBe(0);
   });
 
   test("GIVEN no guildOf THEN deleteGuild resolves to null", async () => {
@@ -246,32 +260,32 @@ describe("RedisEntityCache guild index", () => {
   });
 });
 
+const guildDelete = (id: string) =>
+  ({ op: 0, s: 1, t: GatewayDispatchEvents.GuildDelete, d: { id } }) as GatewayDispatchPayload;
+
+async function seed(
+  cache: ReturnType<typeof createRedisCache>,
+  guildId: string,
+  channelId: string,
+) {
+  await cache.channels.set(channelId, { id: channelId, type: 0, guild_id: guildId } as never);
+  await cache.members.set(memberKey(guildId, "1"), {
+    user: { id: "1" },
+    guild_id: guildId,
+  } as never);
+  // Values keyed by guild are indexed through their key even without a `guild_id`.
+  await cache.roles.set(`${guildId}:2`, { id: "2" } as never);
+  await cache.messages.set(messageKey(channelId, "3"), {
+    id: "3",
+    channel_id: channelId,
+    guild_id: guildId,
+  } as never);
+}
+
 describe("createRedisCache guild index", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  const guildDelete = (id: string) =>
-    ({ op: 0, s: 1, t: GatewayDispatchEvents.GuildDelete, d: { id } }) as GatewayDispatchPayload;
-
-  async function seed(
-    cache: ReturnType<typeof createRedisCache>,
-    guildId: string,
-    channelId: string,
-  ) {
-    await cache.channels.set(channelId, { id: channelId, type: 0, guild_id: guildId } as never);
-    await cache.members.set(memberKey(guildId, "1"), {
-      user: { id: "1" },
-      guild_id: guildId,
-    } as never);
-    // Values keyed by guild are indexed through their key even without a `guild_id`.
-    await cache.roles.set(`${guildId}:2`, { id: "2" } as never);
-    await cache.messages.set(messageKey(channelId, "3"), {
-      id: "3",
-      channel_id: channelId,
-      guild_id: guildId,
-    } as never);
-  }
 
   test("GIVEN a GUILD_DELETE THEN the guild's data is dropped through the index, without a scan", async () => {
     const cache = createRedisCache({ redis: new FakeRedis() });

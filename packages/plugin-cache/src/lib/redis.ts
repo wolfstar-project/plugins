@@ -101,8 +101,11 @@ export interface RedisEntityCacheOptions<Raw = unknown> {
    * Resolves the guild an entry belongs to, indexing the entries by guild so {@link RedisEntityCache.deleteGuild}
    * does not have to scan the whole cache. Entries it resolves no guild for are not indexed. Without it, nothing is
    * indexed and `deleteGuild` resolves to `null`.
+   *
+   * On delete, it is first called without the value: when the key alone gives the guild away, the value is not
+   * read back.
    */
-  guildOf?: (key: string, value: Raw) => string | undefined;
+  guildOf?: (key: string, value?: Raw) => string | undefined;
 }
 
 // The most keys a single `DEL`/`ZREM` of `deleteGuild` sends, so a large guild does not make one huge command.
@@ -129,7 +132,7 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   public readonly compressionThreshold: number;
 
   readonly #redis: RedisClientLike;
-  readonly #guildOf: ((key: string, value: Raw) => string | undefined) | undefined;
+  readonly #guildOf: ((key: string, value?: Raw) => string | undefined) | undefined;
 
   public constructor(redis: RedisClientLike, options: RedisEntityCacheOptions<Raw>) {
     if (options.ttl !== undefined && !(options.ttl > 0)) {
@@ -312,6 +315,10 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   private async readGuild(key: string): Promise<string | undefined> {
     if (this.#guildOf === undefined) return undefined;
 
+    // Most guild-scoped keys start with the guild ID, sparing a read (and a decompression) on every delete.
+    const fromKey = this.#guildOf(key);
+    if (fromKey !== undefined) return fromKey;
+
     let value: Raw | undefined;
     try {
       value = await this.get(key);
@@ -424,7 +431,7 @@ export interface RedisCacheOptions {
 /**
  * The guild of an entry keyed by its guild (`${guildId}:...`), matching what the `deletePrefix` scan drops.
  */
-function guildOfKey(key: string, value: unknown): string | undefined {
+function guildOfKey(key: string, value?: unknown): string | undefined {
   const separator = key.indexOf(":");
   return separator > 0 ? key.slice(0, separator) : guildOfField(key, value);
 }
@@ -432,14 +439,14 @@ function guildOfKey(key: string, value: unknown): string | undefined {
 /**
  * The guild of an entry keyed by its own ID, matching what the `deleteWhere` scan over `guild_id` drops.
  */
-function guildOfField(_key: string, value: unknown): string | undefined {
+function guildOfField(_key: string, value?: unknown): string | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const guildId = (value as { guild_id?: unknown }).guild_id;
   return typeof guildId === "string" ? guildId : undefined;
 }
 
 const GuildResolvers: Partial<
-  Record<CacheEntityName, (key: string, value: unknown) => string | undefined>
+  Record<CacheEntityName, (key: string, value?: unknown) => string | undefined>
 > = Object.fromEntries([
   ...GuildKeyedCacheEntityNames.map((name) => [name, guildOfKey] as const),
   ...GuildFieldCacheEntityNames.map((name) => [name, guildOfField] as const),
