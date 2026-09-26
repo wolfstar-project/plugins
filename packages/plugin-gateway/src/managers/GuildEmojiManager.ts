@@ -1,4 +1,4 @@
-import { emojiKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { emojiKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type APIEmoji,
   type RESTPatchAPIGuildEmojiJSONBody,
@@ -7,6 +7,7 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildEmoji } from "../structures/GuildEmoji.js";
 import type { User } from "../structures/User.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -73,12 +74,14 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["emojis"]): Promise<GuildEmoji> {
-    const [author, guild] = await Promise.all([
-      data.user ? this.client.users.resolveData(data.user) : undefined,
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new GuildEmoji(data, { author, guild });
+  public override _hydrate(data: CacheEntityTypes["emojis"]): Awaitable<GuildEmoji> {
+    return whenAll(
+      [
+        data.user ? this.client.users._resolveData(data.user) : undefined,
+        this.cachedGuild(data.guild_id),
+      ],
+      ([author, guild]) => new GuildEmoji(data, { author, guild }),
+    );
   }
 
   public resolveKey(emojiId: string): string {
