@@ -3,7 +3,7 @@ import { createTsdownOptions } from "../../scripts/tsdown.config";
 
 export default defineConfig(
   createTsdownOptions({
-    attwEntrypoints: ["."],
-    entry: ["src/index.ts"],
+    attwEntrypoints: [".", "./rest", "./ws"],
+    entry: ["src/index.ts", "src/rest.ts", "src/ws.ts"],
   }),
 );
