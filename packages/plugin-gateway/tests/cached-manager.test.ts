@@ -1,5 +1,12 @@
 import { container } from "@wolfstar/http-framework";
-import { createInMemoryCache, memberKey, messageKey, roleKey } from "@wolfstar/plugin-cache";
+import {
+  createInMemoryCache,
+  createRedisCache,
+  memberKey,
+  messageKey,
+  roleKey,
+  type Cache,
+} from "@wolfstar/plugin-cache";
 import { ChannelType, MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
@@ -11,6 +18,7 @@ import {
   TextChannel,
   User,
 } from "../src/index.js";
+import { FakeRedis } from "../../../tests/fixtures/FakeRedis.js";
 
 const guildId = "100000000000000010";
 const channelId = "200000000000000020";
@@ -22,13 +30,13 @@ const user: APIUser = {
   avatar: null,
 };
 
-function createClient() {
+function createClient({ cache }: { cache?: Cache } = { cache: createInMemoryCache() }) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: createInMemoryCache(),
+    cache,
   });
 }
 
@@ -266,5 +274,95 @@ describe("guild relations of guild assets", () => {
     expect(emoji.guild).toBeInstanceOf(Guild);
     expect(sticker.guild?.id).toBe(guildId);
     expect(invite.guild).toBeInstanceOf(Guild);
+  });
+});
+
+describe("CachedManager#cached", () => {
+  const guild = { id: guildId, name: "Pack", icon: null, owner_id: user.id, features: [] } as never;
+  const member = { user, roles: [], joined_at: "2026-01-01T00:00:00.000Z", guild_id: guildId };
+
+  test("GIVEN an in-memory cache THEN it returns the structure get resolves to, relations included", async () => {
+    const client = createClient();
+    await client.cache!.guilds.set(guildId, guild);
+    await client.cache!.channels.set(channelId, {
+      id: channelId,
+      type: ChannelType.GuildText,
+      name: "general",
+      guild_id: guildId,
+    } as never);
+    await client.cache!.users.set(user.id, { ...user, username: "renamed" });
+    await client.cache!.messages.set(
+      messageKey(channelId, "1200000000000000000"),
+      message({
+        guild_id: guildId,
+        member: { roles: [], joined_at: "2026-01-01T00:00:00.000Z", nick: "Alpha" } as never,
+      }),
+    );
+
+    const cached = client.messages.cached(channelId, "1200000000000000000");
+
+    expect(cached).toBeInstanceOf(Message);
+    expect(cached).toEqual(await client.messages.get(channelId, "1200000000000000000"));
+    expect(cached?.author.username).toBe("renamed");
+    expect(cached?.member?.nickname).toBe("Alpha");
+    expect(cached?.guild?.name).toBe("Pack");
+    expect(cached?.channel).toBeInstanceOf(TextChannel);
+  });
+
+  test("GIVEN several IDs THEN it reads the entity they identify", async () => {
+    const client = createClient();
+    await client.cache!.users.set(user.id, { ...user, banner: "banner" });
+    await client.cache!.members.set(memberKey(guildId, user.id), member);
+    await client.cache!.roles.set(roleKey(guildId, "5"), {
+      id: "5",
+      name: "Alpha",
+      guild_id: guildId,
+    } as never);
+
+    expect(client.members.cached(guildId, user.id)?.user?.banner).toBe("banner");
+    expect(client.roles.cached(guildId, "5")?.name).toBe("Alpha");
+    expect(client.members.cached(guildId, "1")).toBeUndefined();
+  });
+
+  test("GIVEN a thread ID THEN channels falls back to the thread cache", async () => {
+    const client = createClient();
+    const threadId = "200000000000000030";
+    await client.cache!.threads.set(threadId, {
+      id: threadId,
+      type: ChannelType.PublicThread,
+      name: "hunt",
+      guild_id: guildId,
+      parent_id: channelId,
+    } as never);
+
+    expect(client.channels.cached(threadId)?.id).toBe(threadId);
+    expect(client.channels.cached("1")).toBeUndefined();
+  });
+
+  test("GIVEN a client without cache THEN it returns undefined, like get", async () => {
+    const client = createClient({});
+
+    expect(client.users.cached(user.id)).toBeUndefined();
+    await expect(client.users.get(user.id)).resolves.toBeUndefined();
+  });
+
+  test("GIVEN a Redis cache THEN it throws rather than reporting a miss", async () => {
+    const client = createClient({ cache: createRedisCache({ redis: new FakeRedis() }) });
+    await client.cache!.users.set(user.id, user);
+
+    expect(client.users.cache?.synchronous).toBe(false);
+    expect(() => client.users.cached(user.id)).toThrow(TypeError);
+    expect((await client.users.get(user.id))?.username).toBe("wolf");
+  });
+
+  test("GIVEN a relation in an asynchronous entity cache THEN it throws", async () => {
+    const redis = createRedisCache({ redis: new FakeRedis() });
+    const client = createClient({ cache: { ...createInMemoryCache(), users: redis.users } });
+    await client.cache!.users.set(user.id, user);
+    await client.cache!.members.set(memberKey(guildId, user.id), member);
+
+    expect(client.members.cache?.synchronous).toBe(true);
+    expect(() => client.members.cached(guildId, user.id)).toThrow(TypeError);
+    expect((await client.members.get(guildId, user.id))?.user?.username).toBe("wolf");
   });
 });

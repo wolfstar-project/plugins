@@ -1,4 +1,4 @@
-import { messageKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   MessageReferenceType,
   Routes,
@@ -11,6 +11,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Message } from "../structures/Message.js";
 import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
 import { type User } from "../structures/User.js";
+import { whenAll } from "../util/cache.js";
 import {
   resolveMessageOptions,
   type MessageCreateOptions,
@@ -98,25 +99,28 @@ export class MessageManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["messages"]): Promise<Message> {
+  public override _hydrate(data: CacheEntityTypes["messages"]): Awaitable<Message> {
     const { author, member, guild_id: guildId } = data;
-    const [resolvedAuthor, resolvedMember, guild, channel] = await Promise.all([
-      // A webhook is not a user: its author only holds for this message.
-      data.webhook_id
-        ? this.client.users.createStructure(author)
-        : this.client.users.resolveData(author),
-      member && guildId
-        ? this.client.members.resolveData({ ...member, user: author, guild_id: guildId })
-        : null,
-      this.cachedGuild(guildId),
-      this.client.channels.get(data.channel_id),
-    ]);
-    return new Message(data, {
-      author: resolvedAuthor,
-      member: resolvedMember,
-      guild,
-      channel: channel ?? null,
-    });
+    return whenAll(
+      [
+        // A webhook is not a user: its author only holds for this message.
+        data.webhook_id
+          ? this.client.users.createStructure(author)
+          : this.client.users._resolveData(author),
+        member && guildId
+          ? this.client.members._resolveData({ ...member, user: author, guild_id: guildId })
+          : null,
+        this.cachedGuild(guildId),
+        this.client.channels._get(data.channel_id),
+      ],
+      ([resolvedAuthor, resolvedMember, guild, channel]) =>
+        new Message(data, {
+          author: resolvedAuthor,
+          member: resolvedMember,
+          guild,
+          channel: channel ?? null,
+        }),
+    );
   }
 
   public resolveKey(channelId: string, messageId: string): string {

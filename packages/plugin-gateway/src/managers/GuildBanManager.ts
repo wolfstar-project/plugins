@@ -1,7 +1,8 @@
-import { banKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { banKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIBan } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildBan, type GuildBanData } from "../structures/GuildBan.js";
+import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { BanOptions } from "./GuildMemberManager.js";
@@ -58,12 +59,11 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(data: CacheEntityTypes["bans"]): Promise<GuildBan> {
-    const [user, guild] = await Promise.all([
-      this.client.users.resolveData(data.user),
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new GuildBan(data, { user, guild });
+  public override _hydrate(data: CacheEntityTypes["bans"]): Awaitable<GuildBan> {
+    return whenAll(
+      [this.client.users._resolveData(data.user), this.cachedGuild(data.guild_id)],
+      ([user, guild]) => new GuildBan(data, { user, guild }),
+    );
   }
 
   /**

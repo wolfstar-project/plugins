@@ -1,4 +1,4 @@
-import { stageInstanceKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { stageInstanceKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type RESTPatchAPIStageInstanceJSONBody,
   type RESTPostAPIStageInstanceJSONBody,
@@ -6,6 +6,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { StageInstance } from "../structures/StageInstance.js";
+import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager } from "./CachedManager.js";
 
@@ -60,12 +61,11 @@ export class StageInstanceManager extends CachedManager<
     return stageInstanceKey(this.guildId, channelId);
   }
 
-  public override async hydrate(data: CacheEntityTypes["stageInstances"]): Promise<StageInstance> {
-    const [guild, channel] = await Promise.all([
-      this.cachedGuild(data.guild_id),
-      this.client.channels.get(data.channel_id),
-    ]);
-    return new StageInstance(data, { guild, channel: channel ?? null });
+  public override _hydrate(data: CacheEntityTypes["stageInstances"]): Awaitable<StageInstance> {
+    return whenAll(
+      [this.cachedGuild(data.guild_id), this.client.channels._get(data.channel_id)],
+      ([guild, channel]) => new StageInstance(data, { guild, channel: channel ?? null }),
+    );
   }
 
   /**

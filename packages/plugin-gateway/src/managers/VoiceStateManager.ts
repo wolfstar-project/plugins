@@ -1,6 +1,7 @@
-import { voiceStateKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { voiceStateKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { VoiceState } from "../structures/VoiceState.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -32,17 +33,19 @@ export class VoiceStateManager extends CachedManager<
     return voiceStateKey(guildId, userId);
   }
 
-  public override async hydrate(data: CacheEntityTypes["voiceStates"]): Promise<VoiceState> {
+  public override _hydrate(data: CacheEntityTypes["voiceStates"]): Awaitable<VoiceState> {
     const { member, guild_id: guildId, user_id: userId } = data;
-    const [resolvedMember, guild] = await Promise.all([
-      member?.user && guildId
-        ? this.client.members.resolveData({ ...member, guild_id: guildId })
-        : guildId
-          ? this.client.members.get(guildId, userId).then((cached) => cached ?? null)
-          : null,
-      this.cachedGuild(guildId),
-    ]);
-    return new VoiceState(data, { member: resolvedMember, guild });
+    return whenAll(
+      [
+        member?.user && guildId
+          ? this.client.members._resolveData({ ...member, guild_id: guildId })
+          : guildId
+            ? this.client.members._get(guildId, userId)
+            : null,
+        this.cachedGuild(guildId),
+      ],
+      ([resolvedMember, guild]) => new VoiceState(data, { member: resolvedMember ?? null, guild }),
+    );
   }
 
   /**

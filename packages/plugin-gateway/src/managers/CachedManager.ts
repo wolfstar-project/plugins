@@ -1,7 +1,13 @@
-import type { CacheEntityName, CacheEntityTypes, EntityCache } from "@wolfstar/plugin-cache";
+import type {
+  Awaitable,
+  CacheEntityName,
+  CacheEntityTypes,
+  EntityCache,
+} from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/Guild.js";
 import type { Structure } from "../structures/Structure.js";
+import { isPromiseLike, whenAll } from "../util/cache.js";
 
 /**
  * The options to fetch an entity with.
@@ -38,6 +44,9 @@ export interface AddOptions {
  * @remarks
  * The cache only ever holds raw API data, building structures is always the manager's job. Without a cache, `get`
  * always resolves to `undefined` and `fetch` always hits the API.
+ *
+ * Every method is asynchronous since the cache can be Redis, except {@link CachedManager.cached}, which reads a
+ * synchronous cache (`createInMemoryCache`) without awaiting it.
  *
  * Like discord.js's `CachedManager`, every payload coming from the API goes through {@link CachedManager._add}, which
  * patches the cached entry and builds the structure. Structures are built by {@link CachedManager.hydrate}, which
@@ -82,6 +91,57 @@ export abstract class CachedManager<
    * @returns The entity, or `undefined` if it is not cached.
    */
   public async get(...args: Args): Promise<Value | undefined> {
+    return this._get(...args);
+  }
+
+  /**
+   * Gets an entity from a synchronous cache, without awaiting it: the synchronous counterpart of
+   * {@link CachedManager.get}, for hot paths such as message filters.
+   *
+   * @remarks
+   * It builds the same structure as `get`, relations included, so the entity caches they are read from must be
+   * synchronous too, which they all are with `createInMemoryCache`. `manager.cache?.synchronous` tells whether it can
+   * be called.
+   *
+   * An asynchronous cache throws rather than returning `undefined`: it cannot tell whether the entity is cached, and
+   * reporting a miss would silently skip whatever the caller does with cached entities, e.g. a filter.
+   *
+   * @example
+   * ```typescript
+   * const member = client.members.cached(guildId, userId);
+   * ```
+   *
+   * @param args The arguments identifying the entity.
+   * @returns The entity, or `undefined` if it is not cached or the client has no cache.
+   * @throws {TypeError} When the entity cache, or one of the caches its relations are read from, is asynchronous.
+   */
+  public cached(...args: Args): Value | undefined {
+    const { cache } = this;
+    if (cache === undefined) return undefined;
+    if (cache.synchronous !== true) {
+      throw new TypeError(`The ${this.entity} cache is asynchronous, use get instead of cached`);
+    }
+
+    const value = this._get(...args);
+    if (isPromiseLike(value)) {
+      // Nothing awaits the promise anymore, so its rejection must not go unhandled.
+      value.catch(() => undefined);
+      throw new TypeError(
+        `The relations of the ${this.entity} cache are read from an asynchronous cache, use get instead of cached`,
+      );
+    }
+
+    return value;
+  }
+
+  /**
+   * Gets an entity from the cache, synchronously when every cache it reads is: the {@link Awaitable} counterpart of
+   * {@link CachedManager.get}, which both `get` and {@link CachedManager.cached} rely on.
+   *
+   * @param args The arguments identifying the entity.
+   * @internal
+   */
+  public _get(...args: Args): Awaitable<Value | undefined> {
     return this.getByKey(this.resolveKey(...args));
   }
 
@@ -131,17 +191,27 @@ export abstract class CachedManager<
    * @param data The raw data.
    */
   public async resolveData(data: CacheEntityTypes[Name]): Promise<Value> {
-    return (await this.getByKey(this.keyOf(data))) ?? this.hydrate(data);
+    return this._resolveData(data);
   }
 
   /**
-   * Gets a guild from the cache, to resolve the `guild` of a structure.
+   * The {@link Awaitable} counterpart of {@link CachedManager.resolveData}, synchronous when every cache it reads is.
+   *
+   * @param data The raw data.
+   * @internal
+   */
+  public _resolveData(data: CacheEntityTypes[Name]): Awaitable<Value> {
+    return whenAll([this.getByKey(this.keyOf(data))], ([cached]) => cached ?? this._hydrate(data));
+  }
+
+  /**
+   * Gets a guild from the cache, to resolve the `guild` of a structure. Synchronous when the guild cache is.
    *
    * @param guildId The ID of the guild, if the structure belongs to one.
    * @returns The guild, or `null` when there is no ID or the guild is not cached.
    */
-  protected async cachedGuild(guildId: string | null | undefined): Promise<Guild | null> {
-    return guildId ? ((await this.client.guilds.get(guildId)) ?? null) : null;
+  protected cachedGuild(guildId: string | null | undefined): Awaitable<Guild | null> {
+    return guildId ? whenAll([this.client.guilds._get(guildId)], ([guild]) => guild ?? null) : null;
   }
 
   /**
@@ -151,6 +221,18 @@ export abstract class CachedManager<
    * @param data The raw data.
    */
   public async hydrate(data: CacheEntityTypes[Name]): Promise<Value> {
+    return this._hydrate(data);
+  }
+
+  /**
+   * The {@link Awaitable} counterpart of {@link CachedManager.hydrate}, synchronous when every cache the relations
+   * are read from is. Managers resolving relations override this one, so `hydrate` and
+   * {@link CachedManager.cached} build the same structures.
+   *
+   * @param data The raw data.
+   * @internal
+   */
+  public _hydrate(data: CacheEntityTypes[Name]): Awaitable<Value> {
     return this.createStructure(data);
   }
 
@@ -227,12 +309,13 @@ export abstract class CachedManager<
   }
 
   /**
-   * Gets an entity from the cache by its key.
+   * Gets an entity from the cache by its key, synchronously when every cache it reads is.
    *
    * @param key The cache key of the entity.
    */
-  protected async getByKey(key: string): Promise<Value | undefined> {
-    const raw = await this.cache?.get(key);
-    return raw === undefined ? undefined : this.hydrate(raw);
+  protected getByKey(key: string): Awaitable<Value | undefined> {
+    return whenAll([this.cache?.get(key)], ([raw]) =>
+      raw === undefined ? undefined : this._hydrate(raw),
+    );
   }
 }

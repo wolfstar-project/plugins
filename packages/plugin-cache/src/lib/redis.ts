@@ -126,6 +126,11 @@ const CompressionMarkers = { gzip: "gz:", brotli: "br:" } as const;
  * keys of that guild's entries the same way, and `<prefix>:@guilds` lists the guilds having one, for `clear`.
  */
 export class RedisEntityCache<Raw> implements EntityCache<Raw> {
+  /**
+   * Always `false`: every method returns a promise, compressed or not.
+   */
+  public readonly synchronous = false;
+
   public readonly prefix: string;
   public readonly ttl: number | undefined;
   public readonly compression: RedisCacheCompression;

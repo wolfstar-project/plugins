@@ -1,4 +1,4 @@
-import { soundboardSoundKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { soundboardSoundKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   type APISoundboardSound,
   type RESTPatchAPIGuildSoundboardSoundJSONBody,
@@ -6,6 +6,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { SoundboardSound } from "../structures/SoundboardSound.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -74,14 +75,14 @@ export class GuildSoundboardSoundManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
-  public override async hydrate(
-    data: CacheEntityTypes["soundboardSounds"],
-  ): Promise<SoundboardSound> {
-    const [user, guild] = await Promise.all([
-      data.user ? this.client.users.resolveData(data.user) : null,
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new SoundboardSound(data, { user, guild });
+  public override _hydrate(data: CacheEntityTypes["soundboardSounds"]): Awaitable<SoundboardSound> {
+    return whenAll(
+      [
+        data.user ? this.client.users._resolveData(data.user) : null,
+        this.cachedGuild(data.guild_id),
+      ],
+      ([user, guild]) => new SoundboardSound(data, { user, guild }),
+    );
   }
 
   /**

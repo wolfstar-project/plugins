@@ -21,7 +21,10 @@
     {
       "files": ["packages/plugin-gateway/src/**/*.ts", "packages/plugin-gateway/tests/**/*.ts"],
       "rules": {
-        "no-underscore-dangle": ["warn", { "allow": ["_add"], "allowAfterThis": true }]
+        "no-underscore-dangle": [
+          "warn",
+          { "allow": ["_add", "_get", "_hydrate", "_resolveData"], "allowAfterThis": true }
+        ]
       }
     },
     {

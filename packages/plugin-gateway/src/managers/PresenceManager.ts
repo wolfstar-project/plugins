@@ -1,6 +1,7 @@
-import { presenceKey, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { presenceKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Presence } from "../structures/Presence.js";
+import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -31,13 +32,16 @@ export class PresenceManager extends CachedManager<
     return presenceKey(guildId, userId);
   }
 
-  public override async hydrate(data: CacheEntityTypes["presences"]): Promise<Presence> {
-    const [user, member, guild] = await Promise.all([
-      this.client.users.get(data.user.id),
-      this.client.members.get(data.guild_id, data.user.id),
-      this.cachedGuild(data.guild_id),
-    ]);
-    return new Presence(data, { user: user ?? null, member: member ?? null, guild });
+  public override _hydrate(data: CacheEntityTypes["presences"]): Awaitable<Presence> {
+    return whenAll(
+      [
+        this.client.users._get(data.user.id),
+        this.client.members._get(data.guild_id, data.user.id),
+        this.cachedGuild(data.guild_id),
+      ],
+      ([user, member, guild]) =>
+        new Presence(data, { user: user ?? null, member: member ?? null, guild }),
+    );
   }
 
   /**
