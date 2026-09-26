@@ -202,6 +202,25 @@ export class LogMessagesListener extends EventGatewayListener<"messageCreate"> {
 
 With `once: true`, the listener unloads itself after its first run.
 
+Any piece (listener, command, interaction handler) reaches the client through
+`this.container.gatewayClient`, typed as `GatewayClient`, so its managers need no cast:
+
+```ts
+import { Command } from "@wolfstar/http-framework";
+
+export class GuildNameCommand extends Command {
+  public override async chatInputRun(interaction: Command.ChatInputInteraction) {
+    const guild = await this.container.gatewayClient.guilds.fetch(interaction.guildId!);
+    return interaction.reply({ content: guild.name });
+  }
+}
+```
+
+`GatewayClient` registers itself as `container.gatewayClient` on construction, next to the
+framework's `container.client`. The latter stays typed as the base `Client`: a module augmentation
+cannot redeclare it with another type (TypeScript reports TS2717, or silently keeps `Client` under
+`skipLibCheck`).
+
 ## Caching
 
 The cache only holds raw API data, managers build the structures:

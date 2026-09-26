@@ -18,6 +18,10 @@
       "entry": ["src/index.ts", "tests/types/*.ts"],
       "project": ["src/**/*.ts", "tests/types/*.ts"]
     },
+    "packages/plugin-gateway": {
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@sapphire/pieces"]
+    },
     "packages/plugin-i18next": {
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@wolfstar/i18next-type-generator"]
