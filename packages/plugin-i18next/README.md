@@ -302,9 +302,11 @@ did), `supportedLanguages`, `isSupportedDiscordLocale`, `getLocalizedData`,
 | `loadedFormatters`             | `container.i18n.options.formatters`                                           |
 | `Formatter`                    | `I18nextFormatter`                                                            |
 
-`T`, `FT`, `resolveKey` and `resolveUserKey` were removed upstream in
-[wolfstar-project/stars-components#30](https://github.com/wolfstar-project/stars-components/pull/30) and are gone here
-too — see [Migrating off `T` / `FT` / `resolve*`](#migrating-off-t--ft--resolve) below.
+`T`, `FT`, `resolveKey` and `resolveUserKey` (and the `TypedT` / `TypedFT` types) were removed upstream in
+[wolfstar-project/stars-components#30](https://github.com/wolfstar-project/stars-components/pull/30). They are still
+exported here with the same names and signatures, as deprecated shims, so a migration only has to rename the module
+specifier — then move off them at your own pace, see [Migrating off `T` / `FT` / `resolve*`](#migrating-off-t--ft--resolve)
+below.
 
 Other differences: `@wolfstar/http-framework@^3.1.0` is now a peer dependency, `i18next` moves from `^22` to `^25`, and
 the locales directory defaults to `<root>/languages` instead of an explicit path passed to `load()` — the layout itself
@@ -312,7 +314,7 @@ is unchanged.
 
 ## Migrating off `T` / `FT` / `resolve*`
 
-The branded-key helpers were replaced by i18next's native TypeScript support, so keys are plain
+The branded-key helpers are deprecated in favour of i18next's native TypeScript support, so keys are plain
 strings typed by the `CustomTypeOptions` augmentation
 [`@wolfstar/i18next-type-generator`](https://www.npmjs.com/package/@wolfstar/i18next-type-generator) emits.
 
@@ -323,7 +325,7 @@ strings typed by the `CustomTypeOptions` augmentation
 -export const SuccessWithLatency = FT<{ latency: number }>("commands/ping:successWithLatency");
 ```
 
-| Removed                                | Replacement                                              |
+| Deprecated or removed                  | Replacement                                              |
 | -------------------------------------- | -------------------------------------------------------- |
 | `T(key)` / `FT<Args>(key)`             | The key itself, typed by the generated augmentation      |
 | `resolveKey(target, key, options)`     | `getSupportedLanguageT(target, key, options)`            |

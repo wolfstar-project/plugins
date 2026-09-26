@@ -9,6 +9,7 @@ export {
   type TOptions,
   type TOptionsBase,
 } from "i18next";
+export * from "./lib/compat";
 export * from "./lib/functions";
 export * from "./lib/InternationalizationHandler";
 export type * from "./lib/types";
