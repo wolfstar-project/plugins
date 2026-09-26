@@ -299,6 +299,22 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     before: (client, data) => client.members.get(data.guild_id, data.user.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
+  [GatewayDispatchEvents.GuildMembersChunk]: {
+    event: "guildMembersChunk",
+    build: async (client, data) => {
+      const [members, guild] = await Promise.all([
+        Promise.all(
+          data.members.map((member) =>
+            client.members.hydrate({ ...member, guild_id: data.guild_id }),
+          ),
+        ),
+        cachedOrUndefined(client.guilds.get(data.guild_id)),
+      ]);
+      // The chunk is cached by now, so a request resolving with it is followed by reads that see it.
+      client.members.handleChunk(members, data);
+      return [members, guild ?? null, data];
+    },
+  },
 
   [GatewayDispatchEvents.GuildRoleCreate]: {
     event: "guildRoleCreate",

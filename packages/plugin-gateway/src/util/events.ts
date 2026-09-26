@@ -5,6 +5,7 @@ import type {
   GatewayGuildIntegrationsUpdateDispatchData,
   GatewayIntegrationDeleteDispatchData,
   GatewayGuildMemberRemoveDispatchData,
+  GatewayGuildMembersChunkDispatchData,
   GatewayGuildRoleDeleteDispatchData,
   GatewayInviteDeleteDispatchData,
   GatewayMessageDeleteBulkDispatchData,
@@ -179,6 +180,15 @@ export interface GatewayEventMap {
   guildMemberAdd: [member: GuildMember];
   guildMemberUpdate: [oldMember: GuildMember | null, newMember: GuildMember];
   guildMemberRemove: [member: GuildMember | null, data: GatewayGuildMemberRemoveDispatchData];
+  /**
+   * Emitted for each chunk of members Discord sends in answer to `client.members.request`, once it is cached.
+   * `data` has the chunk's index and count, its nonce, and the requested IDs that are not members (`not_found`).
+   */
+  guildMembersChunk: [
+    members: GuildMember[],
+    guild: Guild | null,
+    data: GatewayGuildMembersChunkDispatchData,
+  ];
 
   guildRoleCreate: [role: Role];
   guildRoleUpdate: [oldRole: Role | null, newRole: Role];

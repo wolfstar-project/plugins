@@ -104,6 +104,7 @@ On top of the `Client` options:
 | `guildMemberUpdate`                                       | `oldMember \| null`, `newMember`               |
 | `guildMemberRemove`                                       | `member \| null`, `data`                       |
 | `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete` | same shapes as members                         |
+| `guildMembersChunk`                                       | `members`, `guild \| null`, `data`             |
 | `userUpdate`                                              | `oldUser \| null`, `newUser`                   |
 | `emojiCreate` / `emojiDelete`                             | `emoji`                                        |
 | `emojiUpdate`                                             | `oldEmoji`, `newEmoji`                         |
@@ -432,6 +433,22 @@ await (await client.users.fetch(userId)).send("Welcome!");
 member counts. Permissions are `PermissionsBitField`s, computed like Discord does: owner and
 administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
 apply through `member.fetchPermissionsIn(channel)`, see below.
+
+`client.members.request(guildId, options)` (or `guild.requestMembers(options)`, discord.js:
+`guild.members.fetch()`) asks the guild's shard for its members over the gateway instead of REST:
+every member by default, those matching a `query` (with a `limit`), or up to 100 `userIds`, with
+their `presences` if asked. It resolves with the `GuildMember`s once Discord's last
+`GUILD_MEMBERS_CHUNK` for its `nonce` is cached, so `client.members.get` sees them, and rejects
+with a `GuildMembersTimeoutError` when no chunk arrives for `time` milliseconds (120 seconds by
+default), or a `GuildMembersRateLimitError` when Discord answers with `RATE_LIMITED`. Every chunk
+is also emitted as `guildMembersChunk`, whose `data.not_found` lists the requested IDs that are
+not members. Requesting every member or a query needs the `GuildMembers` intent, and presences the
+`GuildPresences` one. `@discordjs/ws` keeps the requests within the gateway's rate limit.
+
+```ts
+const members = await client.members.request(guildId); // every member
+const [wolf] = await client.members.request(guildId, { userIds: [userId], presences: true });
+```
 
 ### Channels and permissions
 

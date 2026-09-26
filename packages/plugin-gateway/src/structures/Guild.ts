@@ -22,6 +22,7 @@ import type { GuildChannelManager } from "../managers/GuildChannelManager.js";
 import type { FetchedThreads } from "../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../managers/GuildEmojiManager.js";
 import type { GuildIntegrationManager } from "../managers/GuildIntegrationManager.js";
+import type { GuildMembersRequestOptions } from "../managers/GuildMemberManager.js";
 import type {
   GuildAuditLogs,
   GuildAuditLogsFetchOptions,
@@ -485,6 +486,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public fetchOwner(): Promise<GuildMember> {
     return getGatewayClient().members.fetch(this.id, this.ownerId);
+  }
+
+  /**
+   * Requests the members of this guild over the gateway, every one of them by default, and caches them. discord.js:
+   * `guild.members.fetch()`. See `client.members.request`.
+   *
+   * @param options Which members to request.
+   */
+  public requestMembers(options?: GuildMembersRequestOptions): Promise<GuildMember[]> {
+    return getGatewayClient().members.request(this.id, options);
   }
 
   /**
