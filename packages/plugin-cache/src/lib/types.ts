@@ -94,6 +94,14 @@ export interface EntityCache<Raw> {
   keys(): Awaitable<string[]>;
   values(): Awaitable<Raw[]>;
   entries(): Awaitable<[key: string, value: Raw][]>;
+  /**
+   * Deletes every entry belonging to a guild through an index, rather than a scan of the whole cache. Optional:
+   * {@link applyGatewayDispatch} falls back to a scan for caches without it.
+   *
+   * @param guildId The ID of the guild.
+   * @returns The amount of deleted entries, or `null` when this cache does not index its entries by guild.
+   */
+  deleteGuild?(guildId: string): Awaitable<number | null>;
 }
 
 /**

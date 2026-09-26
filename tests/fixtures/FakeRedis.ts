@@ -16,6 +16,8 @@ function score(value: string | number): number {
 export class FakeRedis implements RedisClientLike {
   public readonly strings = new Map<string, { value: string; expiresAt: number }>();
   public readonly sortedSets = new Map<string, Map<string, number>>();
+  /** The expiration time of the sorted sets given one through `PEXPIRE`. */
+  public readonly sortedSetExpirations = new Map<string, number>();
   public failure: Error | null = null;
   public abortTransactions = false;
 
@@ -94,6 +96,10 @@ export class FakeRedis implements RedisClientLike {
         queue.push(() => this.zremrangebyscoreSync(key, min, max));
         return transaction;
       },
+      pexpire: (key: string, milliseconds: number) => {
+        queue.push(() => this.pexpireSync(key, milliseconds));
+        return transaction;
+      },
       exec: async () => {
         this.check();
         if (this.abortTransactions) return null;
@@ -122,6 +128,18 @@ export class FakeRedis implements RedisClientLike {
         deleted++;
     }
     return deleted;
+  }
+
+  private pexpireSync(key: string, milliseconds: number) {
+    const expiresAt = Date.now() + milliseconds;
+    const entry = this.strings.get(key);
+    if (entry && this.read(key) !== null) {
+      entry.expiresAt = expiresAt;
+      return 1;
+    }
+    if (!this.sortedSets.has(key)) return 0;
+    this.sortedSetExpirations.set(key, expiresAt);
+    return 1;
   }
 
   private zaddSync(key: string, scoreMembers: (string | number)[]) {
@@ -160,6 +178,12 @@ export class FakeRedis implements RedisClientLike {
   }
 
   private sortedSet(key: string) {
+    const expiresAt = this.sortedSetExpirations.get(key);
+    if (expiresAt !== undefined && expiresAt <= Date.now()) {
+      this.sortedSets.delete(key);
+      this.sortedSetExpirations.delete(key);
+    }
+
     let set = this.sortedSets.get(key);
     if (!set) this.sortedSets.set(key, (set = new Map()));
     return set;

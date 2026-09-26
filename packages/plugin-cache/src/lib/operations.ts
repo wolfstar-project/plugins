@@ -70,6 +70,41 @@ const cacheEntityNameRecord: Record<CacheEntityName, true> = {
 export const CacheEntityNames = Object.keys(cacheEntityNameRecord) as readonly CacheEntityName[];
 
 /**
+ * The entity caches whose keys start with the ID of the guild the entity belongs to (`${guildId}:...`).
+ *
+ * @internal
+ */
+export const GuildKeyedCacheEntityNames = [
+  "auditLogEntries",
+  "autoModerationRules",
+  "bans",
+  "emojis",
+  "integrations",
+  "members",
+  "presences",
+  "roles",
+  "scheduledEvents",
+  "soundboardSounds",
+  "stageInstances",
+  "stickers",
+  "voiceStates",
+] as const satisfies readonly CacheEntityName[];
+
+/**
+ * The entity caches keyed by the entity's own ID, which only know their guild through the stored `guild_id`.
+ *
+ * @internal
+ */
+export const GuildFieldCacheEntityNames = [
+  "applicationCommandPermissions",
+  "channels",
+  "threads",
+  "threadMembers",
+  "messages",
+  "invites",
+] as const satisfies readonly CacheEntityName[];
+
+/**
  * A single mutation a gateway dispatch produces on a {@link Cache}.
  */
 export type CacheOperation =
@@ -89,8 +124,20 @@ export type CacheOperation =
       update: (value: unknown) => unknown;
     }
   | { type: "delete"; store: CacheEntityName; key: string }
-  | { type: "deletePrefix"; store: CacheEntityName; prefix: string }
-  | { type: "deleteWhere"; store: CacheEntityName; predicate: (value: unknown) => boolean };
+  | {
+      type: "deletePrefix";
+      store: CacheEntityName;
+      prefix: string;
+      /** The guild the deleted entries are exactly the entries of, see {@link EntityCache.deleteGuild}. */
+      guildId?: Snowflake;
+    }
+  | {
+      type: "deleteWhere";
+      store: CacheEntityName;
+      predicate: (value: unknown) => boolean;
+      /** The guild the deleted entries are exactly the entries of, see {@link EntityCache.deleteGuild}. */
+      guildId?: Snowflake;
+    };
 
 /**
  * What {@link createCacheOperations} needs to know besides the dispatch.
@@ -247,7 +294,12 @@ export function createCacheOperations(
 
     case GatewayDispatchEvents.GuildEmojisUpdate: {
       const data = payload.d;
-      operations.push({ type: "deletePrefix", store: "emojis", prefix: `${data.guild_id}:` });
+      operations.push({
+        type: "deletePrefix",
+        store: "emojis",
+        prefix: `${data.guild_id}:`,
+        guildId: data.guild_id,
+      });
       for (const emoji of data.emojis) {
         if (!emoji.id) continue;
         operations.push({
@@ -262,7 +314,12 @@ export function createCacheOperations(
 
     case GatewayDispatchEvents.GuildStickersUpdate: {
       const data = payload.d;
-      operations.push({ type: "deletePrefix", store: "stickers", prefix: `${data.guild_id}:` });
+      operations.push({
+        type: "deletePrefix",
+        store: "stickers",
+        prefix: `${data.guild_id}:`,
+        guildId: data.guild_id,
+      });
       for (const sticker of data.stickers) {
         operations.push({
           type: "upsert",
@@ -743,17 +800,32 @@ export async function applyCacheOperations(
         await store.delete(operation.key);
         break;
       case "deletePrefix":
+        if (await deleteGuildThroughIndex(store, operation.guildId)) break;
         for (const key of await store.keys()) {
           if (key.startsWith(operation.prefix)) await store.delete(key);
         }
         break;
       case "deleteWhere":
+        if (await deleteGuildThroughIndex(store, operation.guildId)) break;
         for (const [key, value] of await store.entries()) {
           if (operation.predicate(value)) await store.delete(key);
         }
         break;
     }
   }
+}
+
+/**
+ * Deletes a guild's entries through the store's guild index, when it has one.
+ *
+ * @returns Whether the entries were deleted, `false` when the caller has to scan the store instead.
+ */
+async function deleteGuildThroughIndex(
+  store: EntityCache<unknown>,
+  guildId: Snowflake | undefined,
+): Promise<boolean> {
+  if (guildId === undefined || store.deleteGuild === undefined) return false;
+  return (await store.deleteGuild(guildId)) !== null;
 }
 
 /**
@@ -897,7 +969,12 @@ function hydrateGuildSoundboardSoundsUpdate(
   operations: CacheOperation[],
   data: GatewayGuildSoundboardSoundsUpdateDispatchData,
 ): void {
-  operations.push({ type: "deletePrefix", store: "soundboardSounds", prefix: `${data.guild_id}:` });
+  operations.push({
+    type: "deletePrefix",
+    store: "soundboardSounds",
+    prefix: `${data.guild_id}:`,
+    guildId: data.guild_id,
+  });
   for (const sound of data.soundboard_sounds)
     hydrateSoundboardSound(operations, data.guild_id, sound);
 }
@@ -1020,42 +1097,19 @@ function hydrateSoundboardSound(
 }
 
 function deleteGuildScopedResources(operations: CacheOperation[], guildId: Snowflake): void {
-  // Entities keyed by `${guildId}:...` can be dropped by prefix, which is cheap.
-  const prefixed = [
-    "auditLogEntries",
-    "autoModerationRules",
-    "bans",
-    "emojis",
-    "integrations",
-    "members",
-    "presences",
-    "roles",
-    "scheduledEvents",
-    "soundboardSounds",
-    "stageInstances",
-    "stickers",
-    "voiceStates",
-  ] as const satisfies readonly CacheEntityName[];
-
-  for (const store of prefixed) {
-    operations.push({ type: "deletePrefix", store, prefix: `${guildId}:` });
+  // Every operation carries the guild, so a store indexing its entries by guild skips the scans below.
+  // Entities keyed by `${guildId}:...` can be dropped by prefix, which only reads the keys.
+  for (const store of GuildKeyedCacheEntityNames) {
+    operations.push({ type: "deletePrefix", store, prefix: `${guildId}:`, guildId });
   }
 
   // The rest are keyed by their own ID and need a scan over the stored `guild_id`.
-  const scanned = [
-    "applicationCommandPermissions",
-    "channels",
-    "threads",
-    "threadMembers",
-    "messages",
-    "invites",
-  ] as const satisfies readonly CacheEntityName[];
-
-  for (const store of scanned) {
+  for (const store of GuildFieldCacheEntityNames) {
     operations.push({
       type: "deleteWhere",
       store,
       predicate: (value) => isObject(value) && value.guild_id === guildId,
+      guildId,
     });
   }
 }

@@ -1,5 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { CacheValueError, createRedisCache, RedisEntityCache } from "../src/index.js";
+import { GatewayDispatchEvents, type GatewayDispatchPayload } from "discord-api-types/v10";
+import {
+  applyGatewayDispatch,
+  CacheValueError,
+  createRedisCache,
+  memberKey,
+  messageKey,
+  RedisEntityCache,
+} from "../src/index.js";
 import { FakeRedis } from "../../../tests/fixtures/FakeRedis.js";
 
 describe("RedisEntityCache", () => {
@@ -158,6 +166,147 @@ describe("RedisEntityCache failures", () => {
     const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
 
     await expect(cache.get("missing")).resolves.toBeUndefined();
+  });
+});
+
+describe("RedisEntityCache guild index", () => {
+  let redis: FakeRedis;
+
+  beforeEach(() => {
+    redis = new FakeRedis();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function indexedCache(ttl?: number) {
+    return new RedisEntityCache<{ guild_id?: string }>(redis, {
+      prefix: "test",
+      ttl,
+      guildOf: (_key, value) => value.guild_id,
+    });
+  }
+
+  test("GIVEN guildOf THEN deleteGuild drops that guild's entries only", async () => {
+    const cache = indexedCache();
+    await cache.set("1", { guild_id: "10" });
+    await cache.set("2", { guild_id: "10" });
+    await cache.set("3", { guild_id: "11" });
+    await cache.set("4", {});
+
+    expect(await cache.deleteGuild("10")).toBe(2);
+
+    expect((await cache.keys()).toSorted()).toEqual(["3", "4"]);
+    expect(await cache.get("1")).toBeUndefined();
+    expect(await redis.zcard("test:@guild:10")).toBe(0);
+    expect(await redis.zcard("test:@guild:11")).toBe(1);
+  });
+
+  test("GIVEN a deleted entry THEN it leaves its guild index", async () => {
+    const cache = indexedCache();
+    await cache.set("1", { guild_id: "10" });
+
+    await cache.delete("1");
+    expect(await redis.zcard("test:@guild:10")).toBe(0);
+
+    await cache.set("1", { guild_id: "10" });
+    expect(await cache.deleteGuild("10")).toBe(1);
+  });
+
+  test("GIVEN no guildOf THEN deleteGuild resolves to null", async () => {
+    const cache = new RedisEntityCache<{ guild_id?: string }>(redis, { prefix: "test" });
+    await cache.set("1", { guild_id: "10" });
+
+    expect(await cache.deleteGuild("10")).toBeNull();
+    expect(await cache.has("1")).toBe(true);
+  });
+
+  test("GIVEN a ttl THEN the guild index expires with its entries", async () => {
+    vi.useFakeTimers();
+    const cache = indexedCache(10);
+    await cache.set("1", { guild_id: "10" });
+
+    vi.advanceTimersByTime(11_000);
+
+    expect(await redis.zcard("test:@guild:10")).toBe(0);
+    expect(await redis.zcard("test:@guilds")).toBe(0);
+  });
+
+  test("GIVEN clear THEN the guild indexes are dropped too", async () => {
+    const cache = indexedCache();
+    await cache.set("1", { guild_id: "10" });
+    await cache.set("2", { guild_id: "11" });
+
+    await cache.clear();
+
+    expect(await redis.zcard("test:@guild:10")).toBe(0);
+    expect(await redis.zcard("test:@guild:11")).toBe(0);
+    expect(await redis.zcard("test:@guilds")).toBe(0);
+  });
+});
+
+describe("createRedisCache guild index", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const guildDelete = (id: string) =>
+    ({ op: 0, s: 1, t: GatewayDispatchEvents.GuildDelete, d: { id } }) as GatewayDispatchPayload;
+
+  async function seed(
+    cache: ReturnType<typeof createRedisCache>,
+    guildId: string,
+    channelId: string,
+  ) {
+    await cache.channels.set(channelId, { id: channelId, type: 0, guild_id: guildId } as never);
+    await cache.members.set(memberKey(guildId, "1"), {
+      user: { id: "1" },
+      guild_id: guildId,
+    } as never);
+    // Values keyed by guild are indexed through their key even without a `guild_id`.
+    await cache.roles.set(`${guildId}:2`, { id: "2" } as never);
+    await cache.messages.set(messageKey(channelId, "3"), {
+      id: "3",
+      channel_id: channelId,
+      guild_id: guildId,
+    } as never);
+  }
+
+  test("GIVEN a GUILD_DELETE THEN the guild's data is dropped through the index, without a scan", async () => {
+    const cache = createRedisCache({ redis: new FakeRedis() });
+    await seed(cache, "10", "20");
+    await seed(cache, "11", "21");
+    const entries = vi.spyOn(RedisEntityCache.prototype, "entries");
+    const keys = vi.spyOn(RedisEntityCache.prototype, "keys");
+
+    await applyGatewayDispatch(cache, guildDelete("10"));
+
+    expect(entries).not.toHaveBeenCalled();
+    expect(keys).not.toHaveBeenCalled();
+    expect(await cache.channels.has("20")).toBe(false);
+    expect(await cache.members.has(memberKey("10", "1"))).toBe(false);
+    expect(await cache.roles.has("10:2")).toBe(false);
+    expect(await cache.messages.has(messageKey("20", "3"))).toBe(false);
+    expect(await cache.channels.has("21")).toBe(true);
+    expect(await cache.members.has(memberKey("11", "1"))).toBe(true);
+    expect(await cache.roles.has("11:2")).toBe(true);
+    expect(await cache.messages.has(messageKey("21", "3"))).toBe(true);
+  });
+
+  test("GIVEN indexGuilds false THEN a GUILD_DELETE falls back to scanning", async () => {
+    const cache = createRedisCache({ redis: new FakeRedis(), indexGuilds: false });
+    await seed(cache, "10", "20");
+    await seed(cache, "11", "21");
+    const entries = vi.spyOn(RedisEntityCache.prototype, "entries");
+
+    await applyGatewayDispatch(cache, guildDelete("10"));
+
+    expect(entries).toHaveBeenCalled();
+    expect(await cache.channels.has("20")).toBe(false);
+    expect(await cache.roles.has("10:2")).toBe(false);
+    expect(await cache.messages.has(messageKey("20", "3"))).toBe(false);
+    expect(await cache.channels.has("21")).toBe(true);
   });
 });
 
