@@ -118,7 +118,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * @param channel The channel, or its ID. Threads use their parent's overwrites.
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
-    return computePermissionsIn(channel, this as Role);
+    return computePermissionsIn(channel, this as unknown as Role);
   }
 
   public get hoist() {
