@@ -8,11 +8,14 @@ import {
   type ShardRange,
 } from "@discordjs/ws";
 import { Client as DiscordCoreClient } from "@discordjs/core";
+import type { REST } from "@discordjs/rest";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
 import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
+  Routes,
+  type APIGatewayBotInfo,
   type APIVoiceRegion,
   type GatewayDispatchPayload,
   type GatewayReadyDispatchData,
@@ -164,6 +167,12 @@ export class GatewayClient extends Client {
   public readonly cache: Cache | undefined;
 
   /**
+   * The REST manager the gateway (for its gateway bot info) and every manager's API calls go through, like
+   * discord.js's `Client#rest`.
+   */
+  public readonly rest: REST;
+
+  /**
    * The underlying `@discordjs/ws` manager, handling the shards' connections, resumes, and identify rate limits.
    */
   public readonly gateway: WebSocketManager;
@@ -220,6 +229,8 @@ export class GatewayClient extends Client {
     super(options);
     container.gatewayClient = this;
 
+    // Set by the base client's constructor, which validated the token and built the REST manager already.
+    this.rest = container.rest;
     this.cache = options.cache;
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
@@ -243,11 +254,11 @@ export class GatewayClient extends Client {
       // The base client validated the token already, and scrubs it from `this.options`.
       token: (options.discordToken ?? process.env.DISCORD_TOKEN)!,
       intents: options.intents as GatewayIntentBits,
-      rest: container.rest,
+      rest: this.rest,
       shardCount: options.shardCount ?? null,
       shardIds: options.shardIds ?? null,
     });
-    this.core = new DiscordCoreClient({ gateway: this.gateway, rest: container.rest });
+    this.core = new DiscordCoreClient({ gateway: this.gateway, rest: this.rest });
     this.actions = new ActionsManager(this);
 
     this.gateway.on(WebSocketShardEvents.Dispatch, (payload, shardId) => {
@@ -273,6 +284,19 @@ export class GatewayClient extends Client {
    */
   public async connect(): Promise<void> {
     await this.gateway.connect();
+  }
+
+  /**
+   * Fetches the gateway's connection info: the WebSocket URL, the recommended shard count, and the identify rate
+   * limit remaining for the current session.
+   *
+   * @remarks
+   * `@discordjs/ws` already calls this (cached, and re-fetched as the identify rate limit runs out) to size and
+   * spread the shards {@link GatewayClient.connect} spawns, so this is only needed to inspect that info directly,
+   * e.g. to log the recommended shard count before overriding it.
+   */
+  public fetchGatewayInformation(): Promise<APIGatewayBotInfo> {
+    return this.rest.get(Routes.gatewayBot()) as Promise<APIGatewayBotInfo>;
   }
 
   /** Loads pieces, starts the interaction endpoint, then connects gateway shards. */

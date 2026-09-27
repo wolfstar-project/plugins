@@ -5,6 +5,7 @@ import {
   ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
+  Routes,
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
@@ -112,7 +113,19 @@ describe("GatewayClient", () => {
     expect(container.client).toBe(client);
     expect(container.gatewayClient).toBe(client);
     expect(client.core.gateway).toBe(client.gateway);
-    expect(client.core.rest).toBe(container.rest);
+    expect(client.rest).toBe(container.rest);
+    expect(client.core.rest).toBe(client.rest);
+  });
+
+  test("GIVEN fetchGatewayInformation THEN it requests the gateway bot info through rest", async () => {
+    const client = createClient();
+    const info = { url: "wss://gateway.discord.gg", shards: 4, session_start_limit: {} };
+    const get = vi.spyOn(client.rest, "get").mockResolvedValue(info);
+
+    const result = await client.fetchGatewayInformation();
+
+    expect(get).toHaveBeenCalledWith(Routes.gatewayBot());
+    expect(result).toBe(info);
   });
 
   test("start loads pieces, listens for interactions, then connects shards", async () => {
