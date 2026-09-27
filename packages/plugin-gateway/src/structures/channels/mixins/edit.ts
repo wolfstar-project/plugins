@@ -1,5 +1,4 @@
 import type { GuildChannelEditOptions } from "../../../util/channels.js";
-import { getGatewayClient } from "../../../util/container.js";
 import { kPatch, type StructureMixin } from "../../Structure.js";
 
 /**
@@ -12,6 +11,6 @@ export async function editChannel<Value extends StructureMixin<object> & { id: s
   channel: Value,
   options: GuildChannelEditOptions,
 ): Promise<Value> {
-  const edited = await getGatewayClient().channels.edit(channel.id, options);
+  const edited = await channel.client.channels.edit(channel.id, options);
   return channel[kPatch](edited.toJSON() as never);
 }

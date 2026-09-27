@@ -13,7 +13,10 @@ import {
   type RESTPutAPIGuildMemberJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { GuildMember } from "../structures/guilds/GuildMember.js";
+import { GuildMember, type GuildMemberRelations } from "../structures/guilds/GuildMember.js";
+import { Presence } from "../structures/presences/Presence.js";
+import { bindClient } from "../structures/Structure.js";
+import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
@@ -200,13 +203,50 @@ export class GuildMemberManager extends CachedManager<
     return super._add(data, cache, options);
   }
 
+  /**
+   * Builds a member, resolving its user, guild, voice state, and presence from the cache.
+   *
+   * @remarks
+   * The voice state and presence are built from their raw cache entries rather than by their managers, which resolve
+   * their member in turn: their `member` is this very structure.
+   *
+   * @internal
+   */
   public override _hydrate(data: CacheEntityTypes["members"]): Awaitable<GuildMember> {
+    const { client } = this;
+    const key = data.user ? memberKey(data.guild_id, data.user.id) : null;
     return whenAll(
       [
-        data.user ? this.client.users._resolveData(data.user) : undefined,
+        data.user ? client.users._resolveData(data.user) : undefined,
         this.cachedGuild(data.guild_id),
+        key ? client.cache?.voiceStates.get(key) : undefined,
+        key ? client.cache?.presences.get(key) : undefined,
       ],
-      ([user, guild]) => new GuildMember(data, { user, guild }),
+      ([user, guild, voiceData, presenceData]) => {
+        const relations: GuildMemberRelations = { user, guild };
+        const member = bindClient(new GuildMember(data, relations), client);
+        return whenAll(
+          [voiceData?.channel_id ? client.channels._get(voiceData.channel_id) : undefined],
+          ([channel]) => {
+            if (key && client.cache) {
+              relations.voice = voiceData
+                ? bindClient(
+                    new VoiceState(voiceData, { member, guild, channel: channel ?? null }),
+                    client,
+                  )
+                : null;
+              relations.presence = presenceData
+                ? bindClient(
+                    new Presence(presenceData, { user: user ?? null, member, guild }),
+                    client,
+                  )
+                : null;
+            }
+
+            return member;
+          },
+        );
+      },
     );
   }
 
@@ -233,7 +273,7 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { limit?: number; after?: string } = {},
   ): Promise<GuildMember[]> {
-    const members = await this.client.core.api.guilds.getMembers(guildId, {
+    const members = await this.client.api.guilds.getMembers(guildId, {
       limit: options.limit ?? 1,
       after: options.after,
     });
@@ -250,7 +290,7 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { query: string; limit?: number },
   ): Promise<GuildMember[]> {
-    const members = await this.client.core.api.guilds.searchForMembers(guildId, {
+    const members = await this.client.api.guilds.searchForMembers(guildId, {
       query: options.query,
       limit: options.limit ?? 1,
     });
@@ -378,7 +418,7 @@ export class GuildMemberManager extends CachedManager<
       deaf: options.deaf,
     };
     // The API answers 204 without a body when the user already is a member.
-    const member = await this.client.core.api.guilds.addMember(guildId, userId, body);
+    const member = await this.client.api.guilds.addMember(guildId, userId, body);
     return member ? this.store(guildId, member) : this.fetch(guildId, userId);
   }
 
@@ -408,7 +448,7 @@ export class GuildMemberManager extends CachedManager<
           ? undefined
           : Number(GuildMemberFlagsBitField.resolve(options.flags)),
     };
-    const member = await this.client.core.api.guilds.editMember(guildId, userId, body, {
+    const member = await this.client.api.guilds.editMember(guildId, userId, body, {
       reason: options.reason,
     });
     return this.store(guildId, member);
@@ -422,7 +462,7 @@ export class GuildMemberManager extends CachedManager<
    */
   public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
     const { reason, ...body } = options;
-    const member = await this.client.core.api.users.editCurrentGuildMember(
+    const member = await this.client.api.users.editCurrentGuildMember(
       guildId,
       body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
       { reason },
@@ -438,7 +478,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.removeMember(guildId, userId, { reason });
+    await this.client.api.guilds.removeMember(guildId, userId, { reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -453,7 +493,7 @@ export class GuildMemberManager extends CachedManager<
     const body: RESTPutAPIGuildBanJSONBody = {
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    await this.client.core.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
+    await this.client.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -465,7 +505,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unban(guildId: string, userId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.unbanUser(guildId, userId, { reason });
+    await this.client.api.guilds.unbanUser(guildId, userId, { reason });
   }
 
   /**
@@ -485,7 +525,7 @@ export class GuildMemberManager extends CachedManager<
       user_ids: [...userIds],
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    const result = await this.client.core.api.guilds.bulkBanUsers(guildId, body, {
+    const result = await this.client.api.guilds.bulkBanUsers(guildId, body, {
       reason: options.reason,
     });
     await Promise.all(
@@ -504,14 +544,14 @@ export class GuildMemberManager extends CachedManager<
   public async prune(guildId: string, options: GuildPruneOptions = {}): Promise<number | null> {
     const days = options.days ?? 7;
     if (options.dry) {
-      const result = await this.client.core.api.guilds.getPruneCount(guildId, {
+      const result = await this.client.api.guilds.getPruneCount(guildId, {
         days,
         include_roles: options.roles?.length ? options.roles.join(",") : undefined,
       });
       return result.pruned;
     }
 
-    const result = await this.client.core.api.guilds.beginPrune(
+    const result = await this.client.api.guilds.beginPrune(
       guildId,
       {
         days,
@@ -537,7 +577,7 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await this.client.core.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
+    await this.client.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => [...new Set([...roles, roleId])]);
   }
 
@@ -555,12 +595,12 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await this.client.core.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
+    await this.client.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => roles.filter((id) => id !== roleId));
   }
 
   protected async fetchRaw(guildId: string, userId: string) {
-    const member = await this.client.core.api.guilds.getMember(guildId, userId);
+    const member = await this.client.api.guilds.getMember(guildId, userId);
     return { ...member, guild_id: guildId };
   }
 

@@ -5,7 +5,6 @@ import {
   type GatewayPresenceClientStatus,
   type PresenceUpdateReceiveStatus,
 } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import { Activity } from "./Activity.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
@@ -88,11 +87,11 @@ export class Presence extends BasePresence {
   }
 
   public fetchMember(): Promise<GuildMember> {
-    return getGatewayClient().members.fetch(this.guildId, this.userId);
+    return this.client.members.fetch(this.guildId, this.userId);
   }
 
   public fetchUser(): Promise<User> {
-    return getGatewayClient().users.fetch(this.userId);
+    return this.client.users.fetch(this.userId);
   }
 
   /**

@@ -1,7 +1,7 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
-import { kData, kRelations, Structure } from "../Structure.js";
+import type { Role } from "./Role.js";
+import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
 
 /**
@@ -10,6 +10,7 @@ import { User } from "../users/User.js";
 export interface IntegrationRelations {
   user?: User | null;
   guild?: Guild | null;
+  role?: Role | null;
 }
 
 /**
@@ -62,6 +63,20 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
    */
   public get roleId(): string | null {
     return this[kData].role_id ?? null;
+  }
+
+  /**
+   * The role given to the integration's subscribers, from the cache, like discord.js's `Integration#role`: `null`
+   * when it has none, when it is not cached, or when the integration was not built by a manager.
+   */
+  public get role(): Role | null {
+    return this[kRelations].role ?? null;
+  }
+
+  public override [kPatch](data: Readonly<Partial<CacheEntityTypes["integrations"]>>): this {
+    if (data.user) this.dropRelations("user");
+    this.dropChangedRelations(data, { role: "role_id" });
+    return super[kPatch](data);
   }
 
   public get enableEmoticons(): boolean | null {
@@ -135,7 +150,7 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.integrations(this.guildId).delete(this.id, reason);
+    await this.client.guilds.integrations(this.guildId).delete(this.id, reason);
     return this;
   }
 }

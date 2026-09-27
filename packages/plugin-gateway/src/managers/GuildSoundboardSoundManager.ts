@@ -80,8 +80,11 @@ export class GuildSoundboardSoundManager extends CachedManager<
       [
         data.user ? this.client.users._resolveData(data.user) : null,
         this.cachedGuild(data.guild_id),
+        data.emoji_id && data.guild_id
+          ? this.client.guilds.emojis(data.guild_id)._get(data.emoji_id)
+          : undefined,
       ],
-      ([user, guild]) => new SoundboardSound(data, { user, guild }),
+      ([user, guild, emoji]) => new SoundboardSound(data, { user, guild, emoji: emoji ?? null }),
     );
   }
 
@@ -89,7 +92,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
    * Fetches every soundboard sound of the guild, and caches them.
    */
   public async fetchAll(): Promise<SoundboardSound[]> {
-    const { items } = await this.client.core.api.guilds.getSoundboardSounds(this.guildId);
+    const { items } = await this.client.api.guilds.getSoundboardSounds(this.guildId);
     return Promise.all(items.map((sound) => this._add(this.withGuildId(sound))));
   }
 
@@ -104,7 +107,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
       name: options.name,
       sound: options.sound,
     };
-    const sound = await this.client.core.api.guilds.createSoundboardSound(this.guildId, body, {
+    const sound = await this.client.api.guilds.createSoundboardSound(this.guildId, body, {
       reason: options.reason,
     });
     return this._add(this.withGuildId(sound));
@@ -120,7 +123,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
     soundId: string,
     options: SoundboardSoundEditOptions,
   ): Promise<SoundboardSound> {
-    const sound = await this.client.core.api.guilds.editSoundboardSound(
+    const sound = await this.client.api.guilds.editSoundboardSound(
       this.guildId,
       soundId,
       toSoundBody(options),
@@ -138,12 +141,12 @@ export class GuildSoundboardSoundManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(soundId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteSoundboardSound(this.guildId, soundId, { reason });
+    await this.client.api.guilds.deleteSoundboardSound(this.guildId, soundId, { reason });
     await this.cache?.delete(this.resolveKey(soundId));
   }
 
   protected async fetchRaw(soundId: string) {
-    const sound = await this.client.core.api.guilds.getSoundboardSound(this.guildId, soundId);
+    const sound = await this.client.api.guilds.getSoundboardSound(this.guildId, soundId);
     return this.withGuildId(sound);
   }
 

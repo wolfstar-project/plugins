@@ -1,5 +1,4 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { kData, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
@@ -54,7 +53,7 @@ export class GuildBan extends Structure<GuildBanData> {
    * Fetches the ban from the API, which knows its reason.
    */
   public fetch(): Promise<GuildBan> {
-    return getGatewayClient().guilds.bans(this.guildId).fetch(this.user.id, { force: true });
+    return this.client.guilds.bans(this.guildId).fetch(this.user.id, { force: true });
   }
 
   /**
@@ -63,7 +62,7 @@ export class GuildBan extends Structure<GuildBanData> {
    * @param reason The reason for the audit log.
    */
   public async remove(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.bans(this.guildId).remove(this.user.id, reason);
+    await this.client.guilds.bans(this.guildId).remove(this.user.id, reason);
     return this;
   }
 }

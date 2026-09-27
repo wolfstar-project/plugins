@@ -6,7 +6,6 @@ import {
   type GatewayPresenceUpdateData,
   type RESTPatchAPICurrentUserJSONBody,
 } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import { kData, kPatch } from "../Structure.js";
 import { User } from "./User.js";
 
@@ -82,8 +81,8 @@ export class ClientUser extends User {
    */
   public async edit(options: ClientUserEditOptions): Promise<this> {
     const body: RESTPatchAPICurrentUserJSONBody = options;
-    const user = await getGatewayClient().core.api.users.edit(body);
-    await getGatewayClient().users._add(user);
+    const user = await this.client.api.users.edit(body);
+    await this.client.users._add(user);
     return this[kPatch](user);
   }
 
@@ -112,7 +111,7 @@ export class ClientUser extends User {
       since: presence.afk ? Date.now() : this.#presence.since,
     };
 
-    const gateway = getGatewayClient().gateway;
+    const gateway = this.client.gateway;
     const shards =
       shardId === undefined
         ? await gateway.getShardIds()

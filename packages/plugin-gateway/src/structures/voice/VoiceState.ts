@@ -1,7 +1,6 @@
 import { VoiceState as BaseVoiceState } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { Mixin } from "../Mixin.js";
@@ -28,6 +27,7 @@ export interface VoiceStateEditOptions {
 export interface VoiceStateRelations {
   member?: GuildMember | null;
   guild?: Guild | null;
+  channel?: AnyChannel | null;
 }
 
 export interface VoiceState extends StructureMixin<
@@ -59,6 +59,7 @@ export class VoiceState extends BaseVoiceState {
 
   public [kPatch](data: Readonly<Partial<CacheEntityTypes["voiceStates"]>>): this {
     if (data.member) this.dropRelations("member");
+    this.dropChangedRelations(data, { channel: "channel_id" });
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
@@ -120,12 +121,20 @@ export class VoiceState extends BaseVoiceState {
     return this[kRelations].guild ?? null;
   }
 
+  /**
+   * The channel the member is connected to, from the cache, like discord.js's `VoiceState#channel`. `null` when they
+   * are disconnected, when the channel is not cached, or when the voice state was not built by a manager.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
+  }
+
   public fetchMember(): Promise<GuildMember> {
-    return getGatewayClient().members.fetch(this.requireGuildId(), this.userId);
+    return this.client.members.fetch(this.requireGuildId(), this.userId);
   }
 
   public fetchUser(): Promise<User> {
-    return getGatewayClient().users.fetch(this.userId);
+    return this.client.users.fetch(this.userId);
   }
 
   /**
@@ -133,14 +142,14 @@ export class VoiceState extends BaseVoiceState {
    */
   public async fetchChannel(): Promise<AnyChannel | null> {
     const { channelId } = this;
-    return channelId ? getGatewayClient().channels.fetch(channelId) : null;
+    return channelId ? this.client.channels.fetch(channelId) : null;
   }
 
   /**
    * Fetches the voice state from the API, and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const state = await getGatewayClient().voiceStates.fetch(this.requireGuildId(), this.userId, {
+    const state = await this.client.voiceStates.fetch(this.requireGuildId(), this.userId, {
       force: true,
     });
     return this[kPatch](state.toJSON());
@@ -150,21 +159,21 @@ export class VoiceState extends BaseVoiceState {
    * Mutes or unmutes the member server-wide.
    */
   public setMute(mute = true, reason?: string): Promise<GuildMember> {
-    return getGatewayClient().members.edit(this.requireGuildId(), this.userId, { mute, reason });
+    return this.client.members.edit(this.requireGuildId(), this.userId, { mute, reason });
   }
 
   /**
    * Deafens or undeafens the member server-wide.
    */
   public setDeaf(deaf = true, reason?: string): Promise<GuildMember> {
-    return getGatewayClient().members.edit(this.requireGuildId(), this.userId, { deaf, reason });
+    return this.client.members.edit(this.requireGuildId(), this.userId, { deaf, reason });
   }
 
   /**
    * Moves the member to another voice channel, or disconnects them with `null`.
    */
   public setChannel(channel: string | null, reason?: string): Promise<GuildMember> {
-    return getGatewayClient().members.edit(this.requireGuildId(), this.userId, {
+    return this.client.members.edit(this.requireGuildId(), this.userId, {
       channel,
       reason,
     });
@@ -196,13 +205,9 @@ export class VoiceState extends BaseVoiceState {
       suppress: options.suppressed,
     };
     if (target === "@me") {
-      await getGatewayClient().core.api.voice.editVoiceState(this.requireGuildId(), body);
+      await this.client.api.voice.editVoiceState(this.requireGuildId(), body);
     } else {
-      await getGatewayClient().core.api.voice.editUserVoiceState(
-        this.requireGuildId(),
-        target,
-        body,
-      );
+      await this.client.api.voice.editUserVoiceState(this.requireGuildId(), target, body);
     }
 
     return this[kPatch]({
@@ -235,7 +240,7 @@ export class VoiceState extends BaseVoiceState {
 
   // The bot's own voice state is addressed as `@me`, the only one allowed to request to speak.
   private resolveTarget(): string {
-    const client = getGatewayClient();
+    const client = this.client;
     return (client.user?.id ?? client.id) === this.userId ? "@me" : this.userId;
   }
 }

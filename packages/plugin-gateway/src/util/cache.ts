@@ -41,3 +41,44 @@ export function whenAll<const T extends readonly unknown[], R>(
     ? Promise.all(values).then(callback)
     : callback(values as { -readonly [Index in keyof T]: Awaited<T[Index]> });
 }
+
+/**
+ * Picks the cached structures of some IDs, in their order, skipping the ones that are not cached: the equivalent of
+ * the collections discord.js fills from its caches, e.g. `MessageMentions#channels`.
+ *
+ * @param ids The IDs.
+ * @param cached The cached structures, by ID.
+ * @internal
+ */
+export function pickCached<Value>(
+  ids: readonly string[],
+  cached: ReadonlyMap<string, Value> | undefined,
+): Map<string, Value> {
+  const picked = new Map<string, Value>();
+  for (const id of ids) {
+    const value = cached?.get(id);
+    if (value) picked.set(id, value);
+  }
+
+  return picked;
+}
+
+/**
+ * Reads the cached structures of some IDs, synchronously when every read is, skipping duplicates and the IDs that
+ * are not cached. The {@link Awaitable} counterpart of discord.js's collections filled from its caches.
+ *
+ * @param ids The IDs.
+ * @param get Reads the structure of an ID.
+ * @internal
+ */
+export function whenCachedMap<Value>(
+  ids: Iterable<string>,
+  get: (id: string) => Awaitable<Value | null | undefined>,
+): Awaitable<Map<string, Value>> {
+  const unique = [...new Set(ids)];
+  return whenAll(unique.map(get), (values) => {
+    const map = new Map<string, Value>();
+    for (const [index, value] of values.entries()) if (value) map.set(unique[index]!, value);
+    return map;
+  });
+}

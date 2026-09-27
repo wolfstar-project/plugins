@@ -21,6 +21,7 @@ import type {
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
+import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
 import type { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
@@ -68,6 +69,9 @@ export interface MessageReactionEventDetails {
  * Update events receive the previous state of the entity as read from the cache before the dispatch was applied, or
  * `null` when it was not cached. Delete events receive the cached entity (or `null`) alongside the raw dispatch data,
  * which always identifies the deleted entity.
+ *
+ * With the matching `Partials` enabled, uncached messages, users, members, thread members, scheduled events,
+ * soundboard sounds, polls, and direct messages are partial structures (`partial` is `true`) instead of `null`.
  */
 export interface GatewayEventMap {
   /**
@@ -78,6 +82,12 @@ export interface GatewayEventMap {
    * Emitted when a shard receives `READY`.
    */
   shardReady: [shardId: number, user: User];
+  /**
+   * Emitted once, when every shard this client manages has connected and every guild `READY` listed as initially
+   * unavailable became available, or {@link GatewayClientOptions.waitGuildTimeout} elapsed, like discord.js's
+   * `Client#clientReady` (`ready` before discord.js deprecated it).
+   */
+  clientReady: [client: GatewayClient];
   /**
    * Emitted when a shard resumes its session.
    */
@@ -300,6 +310,96 @@ export interface GatewayEventMap {
  * The name of any of the events listed in {@link GatewayEventMap}.
  */
 export type GatewayEventName = keyof GatewayEventMap;
+
+/**
+ * The name of every event a {@link GatewayClient} emits, mirroring the keys of {@link GatewayEventMap}, like
+ * `@wolfstar/http-framework`'s own `Events`.
+ *
+ * @remarks
+ * Each member's value is the plain event name, so they are interchangeable with the string literals accepted by
+ * `GatewayClient#on`, `GatewayClient#emit`, and `Listener.Options.event`.
+ *
+ * @example
+ * ```typescript
+ * client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
+ * ```
+ */
+export enum GatewayEvents {
+  Raw = "raw",
+  ShardReady = "shardReady",
+  ClientReady = "clientReady",
+  ShardResume = "shardResume",
+  ShardClose = "shardClose",
+  ShardError = "shardError",
+  GuildCreate = "guildCreate",
+  GuildUpdate = "guildUpdate",
+  GuildDelete = "guildDelete",
+  ChannelCreate = "channelCreate",
+  ChannelUpdate = "channelUpdate",
+  ChannelDelete = "channelDelete",
+  ChannelPinsUpdate = "channelPinsUpdate",
+  WebhooksUpdate = "webhooksUpdate",
+  ThreadCreate = "threadCreate",
+  ThreadUpdate = "threadUpdate",
+  ThreadDelete = "threadDelete",
+  ThreadListSync = "threadListSync",
+  ThreadMemberUpdate = "threadMemberUpdate",
+  ThreadMembersUpdate = "threadMembersUpdate",
+  MessageCreate = "messageCreate",
+  MessageUpdate = "messageUpdate",
+  MessageDelete = "messageDelete",
+  MessageDeleteBulk = "messageDeleteBulk",
+  MessageReactionAdd = "messageReactionAdd",
+  MessageReactionRemove = "messageReactionRemove",
+  MessageReactionRemoveAll = "messageReactionRemoveAll",
+  MessageReactionRemoveEmoji = "messageReactionRemoveEmoji",
+  MessagePollVoteAdd = "messagePollVoteAdd",
+  MessagePollVoteRemove = "messagePollVoteRemove",
+  GuildMemberAdd = "guildMemberAdd",
+  GuildMemberUpdate = "guildMemberUpdate",
+  GuildMemberRemove = "guildMemberRemove",
+  GuildMembersChunk = "guildMembersChunk",
+  GuildRoleCreate = "guildRoleCreate",
+  GuildRoleUpdate = "guildRoleUpdate",
+  GuildRoleDelete = "guildRoleDelete",
+  UserUpdate = "userUpdate",
+  EmojiCreate = "emojiCreate",
+  EmojiUpdate = "emojiUpdate",
+  EmojiDelete = "emojiDelete",
+  StickerCreate = "stickerCreate",
+  StickerUpdate = "stickerUpdate",
+  StickerDelete = "stickerDelete",
+  InviteCreate = "inviteCreate",
+  InviteDelete = "inviteDelete",
+  TypingStart = "typingStart",
+  VoiceServerUpdate = "voiceServerUpdate",
+  GuildScheduledEventCreate = "guildScheduledEventCreate",
+  GuildScheduledEventUpdate = "guildScheduledEventUpdate",
+  GuildScheduledEventDelete = "guildScheduledEventDelete",
+  GuildScheduledEventUserAdd = "guildScheduledEventUserAdd",
+  GuildScheduledEventUserRemove = "guildScheduledEventUserRemove",
+  StageInstanceCreate = "stageInstanceCreate",
+  StageInstanceUpdate = "stageInstanceUpdate",
+  StageInstanceDelete = "stageInstanceDelete",
+  GuildSoundboardSoundCreate = "guildSoundboardSoundCreate",
+  GuildSoundboardSoundUpdate = "guildSoundboardSoundUpdate",
+  GuildSoundboardSoundDelete = "guildSoundboardSoundDelete",
+  GuildSoundboardSoundsUpdate = "guildSoundboardSoundsUpdate",
+  SoundboardSounds = "soundboardSounds",
+  GuildBanAdd = "guildBanAdd",
+  GuildBanRemove = "guildBanRemove",
+  GuildAuditLogEntryCreate = "guildAuditLogEntryCreate",
+  AutoModerationRuleCreate = "autoModerationRuleCreate",
+  AutoModerationRuleUpdate = "autoModerationRuleUpdate",
+  AutoModerationRuleDelete = "autoModerationRuleDelete",
+  AutoModerationActionExecution = "autoModerationActionExecution",
+  GuildIntegrationsUpdate = "guildIntegrationsUpdate",
+  IntegrationCreate = "integrationCreate",
+  IntegrationUpdate = "integrationUpdate",
+  IntegrationDelete = "integrationDelete",
+  VoiceStateUpdate = "voiceStateUpdate",
+  PresenceUpdate = "presenceUpdate",
+}
 
 declare module "@wolfstar/http-framework" {
   interface ClientEvents extends GatewayEventMap {}

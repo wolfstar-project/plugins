@@ -1,7 +1,6 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GuildEmojiEditOptions } from "../../managers/GuildEmojiManager.js";
 import { GuildEmojiRoleManager } from "../../managers/GuildEmojiRoleManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import { Emoji } from "./Emoji.js";
 import type { Guild } from "../guilds/Guild.js";
 import { kData, kPatch, kRelations } from "../Structure.js";
@@ -52,7 +51,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    * Fetches the guild, cache first.
    */
   public fetchGuild(): Promise<Guild> {
-    return getGatewayClient().guilds.fetch(this.guildId);
+    return this.client.guilds.fetch(this.guildId);
   }
 
   /**
@@ -84,7 +83,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    * The roles allowed to use the emoji.
    */
   public get roles(): GuildEmojiRoleManager {
-    return new GuildEmojiRoleManager(getGatewayClient(), this.guildId, this.id, this.roleIds);
+    return new GuildEmojiRoleManager(this.client, this.guildId, this.id, this.roleIds);
   }
 
   /**
@@ -100,7 +99,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    */
   public async fetchDeletable(): Promise<boolean> {
     if (this.managed) return false;
-    const me = await getGatewayClient().members.fetchMe(this.guildId);
+    const me = await this.client.members.fetchMe(this.guildId);
     return (await me.fetchPermissions()).has("ManageGuildExpressions");
   }
 
@@ -108,11 +107,11 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    * Fetches the user who uploaded the emoji.
    */
   public fetchAuthor(): Promise<User | null> {
-    return getGatewayClient().guilds.emojis(this.guildId).fetchAuthor(this.id);
+    return this.client.guilds.emojis(this.guildId).fetchAuthor(this.id);
   }
 
   public async edit(options: GuildEmojiEditOptions): Promise<this> {
-    const emoji = await getGatewayClient().guilds.emojis(this.guildId).edit(this.id, options);
+    const emoji = await this.client.guilds.emojis(this.guildId).edit(this.id, options);
     return this[kPatch](emoji.toJSON());
   }
 
@@ -121,7 +120,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.emojis(this.guildId).delete(this.id, reason);
+    await this.client.guilds.emojis(this.guildId).delete(this.id, reason);
     return this;
   }
 

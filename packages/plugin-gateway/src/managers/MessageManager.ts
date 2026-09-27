@@ -1,9 +1,10 @@
 import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  MessageReferenceType,
+  MessageFlags,
   Routes,
   type APIMessage,
   type RESTGetAPIChannelMessagesPinsResult,
+  type RESTPatchAPIChannelMessageJSONBody,
   type RESTPostAPIChannelMessagesThreadsJSONBody,
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
@@ -14,9 +15,14 @@ import {
   type EmojiIdentifierResolvable,
 } from "../structures/emojis/ReactionEmoji.js";
 import { type User } from "../structures/users/User.js";
-import { whenAll } from "../util/cache.js";
+import { whenAll, whenCachedMap } from "../util/cache.js";
+import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import {
-  resolveMessageOptions,
+  MessageMentions,
+  type MessageMentionsRelations,
+} from "../structures/messages/MessageMentions.js";
+import {
+  MessagePayload,
   type MessageCreateOptions,
   type MessageEditOptions,
   type MessagePayloadResolvable,
@@ -115,15 +121,67 @@ export class MessageManager extends CachedManager<
           : null,
         this.cachedGuild(guildId),
         this.client.channels._get(data.channel_id),
+        (data as { thread?: unknown }).thread !== undefined ||
+        ((data.flags ?? 0) & MessageFlags.HasThread) !== 0
+          ? this.client.threads._get(data.id)
+          : undefined,
+        this.resolveMentions(data),
+        guildId ? this.resolveEmojis(guildId, data) : undefined,
       ],
-      ([resolvedAuthor, resolvedMember, guild, channel]) =>
+      ([resolvedAuthor, resolvedMember, guild, channel, thread, mentions, emojis]) =>
         new Message(data, {
           author: resolvedAuthor,
           member: resolvedMember,
           guild,
           channel: channel ?? null,
+          thread: thread ?? null,
+          mentions,
+          emojis,
         }),
     );
+  }
+
+  // The cached copies of the users, members, roles, and channels a message mentions, like discord.js's mentions.
+  private resolveMentions(data: CacheEntityTypes["messages"]): Awaitable<MessageMentionsRelations> {
+    const { client } = this;
+    const { guild_id: guildId, content = "" } = data;
+    const users = [
+      ...data.mentions.map((user) => user.id),
+      ...MessageMentions.parseIds(content, MessageMentions.UsersPattern),
+      ...(data.referenced_message ? [data.referenced_message.author.id] : []),
+    ];
+    const members = data.mentions.filter((user) => "member" in user).map((user) => user.id);
+    return whenAll(
+      [
+        whenCachedMap(users, (id) => client.users._get(id)),
+        guildId ? whenCachedMap(members, (id) => client.members._get(guildId, id)) : undefined,
+        guildId
+          ? whenCachedMap(data.mention_roles, (id) => client.roles._get(guildId, id))
+          : undefined,
+        whenCachedMap(MessageMentions.parseIds(content, MessageMentions.ChannelsPattern), (id) =>
+          client.channels._get(id),
+        ),
+      ],
+      ([resolvedUsers, resolvedMembers, roles, channels]) => ({
+        users: resolvedUsers,
+        members: resolvedMembers,
+        roles,
+        channels,
+      }),
+    );
+  }
+
+  // The cached custom emojis of a message's reactions and poll answers, from its own guild.
+  private resolveEmojis(
+    guildId: string,
+    data: CacheEntityTypes["messages"],
+  ): Awaitable<Map<string, GuildEmoji>> {
+    const ids = [
+      ...(data.reactions ?? []).map((reaction) => reaction.emoji.id),
+      ...(data.poll?.answers ?? []).map((answer) => answer.poll_media.emoji?.id),
+    ].filter((id): id is string => Boolean(id));
+    const emojis = this.client.guilds.emojis(guildId);
+    return whenCachedMap(ids, (id) => emojis._get(id));
   }
 
   public resolveKey(channelId: string, messageId: string): string {
@@ -137,7 +195,7 @@ export class MessageManager extends CachedManager<
    * @param options How many messages, and around which one.
    */
   public async list(channelId: string, options: MessageListOptions = {}): Promise<Message[]> {
-    const messages = await this.client.core.api.channels.getMessages(channelId, {
+    const messages = await this.client.api.channels.getMessages(channelId, {
       limit: options.limit ?? 50,
       before: options.before,
       after: options.after,
@@ -156,8 +214,8 @@ export class MessageManager extends CachedManager<
     channelId: string,
     options: MessagePayloadResolvable<MessageCreateOptions>,
   ): Promise<Message> {
-    const { body, files } = resolveMessageOptions(options);
-    const message = await this.client.core.api.channels.createMessage(channelId, {
+    const { body, files } = await MessagePayload.create(this.client, options).resolve();
+    const message = await this.client.api.channels.createMessage(channelId, {
       ...body,
       files,
     });
@@ -173,11 +231,7 @@ export class MessageManager extends CachedManager<
    */
   public forward(channelId: string, messageId: string, targetChannelId: string): Promise<Message> {
     return this.send(targetChannelId, {
-      message_reference: {
-        type: MessageReferenceType.Forward,
-        channel_id: channelId,
-        message_id: messageId,
-      },
+      forward: { message: messageId, channel: channelId },
     });
   }
 
@@ -193,8 +247,10 @@ export class MessageManager extends CachedManager<
     messageId: string,
     options: MessagePayloadResolvable<MessageEditOptions>,
   ): Promise<Message> {
-    const { body, files } = resolveMessageOptions(options);
-    const message = await this.client.core.api.channels.editMessage(channelId, messageId, {
+    const { body, files } = await MessagePayload.create(this.client, options, {
+      edit: true,
+    }).resolve<RESTPatchAPIChannelMessageJSONBody>();
+    const message = await this.client.api.channels.editMessage(channelId, messageId, {
       ...body,
       files,
     });
@@ -209,7 +265,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log, when deleting someone else's message.
    */
   public async delete(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.deleteMessage(channelId, messageId, { reason });
+    await this.client.api.channels.deleteMessage(channelId, messageId, { reason });
     await this.cache?.delete(this.resolveKey(channelId, messageId));
   }
 
@@ -240,7 +296,7 @@ export class MessageManager extends CachedManager<
     if (ids.length === 1) {
       await this.delete(channelId, ids[0]!);
     } else {
-      await this.client.core.api.channels.bulkDeleteMessages(channelId, ids);
+      await this.client.api.channels.bulkDeleteMessages(channelId, ids);
       await Promise.all(ids.map((id) => this.cache?.delete(this.resolveKey(channelId, id))));
     }
 
@@ -261,7 +317,7 @@ export class MessageManager extends CachedManager<
     if (options.limit) query.set("limit", String(options.limit));
     if (options.before !== undefined) query.set("before", new Date(options.before).toISOString());
 
-    const result = (await this.client.core.api.rest.get(Routes.channelMessagesPins(channelId), {
+    const result = (await this.client.api.rest.get(Routes.channelMessagesPins(channelId), {
       query,
     })) as RESTGetAPIChannelMessagesPinsResult;
     const items = await Promise.all(
@@ -281,7 +337,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async pin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.pinMessage(channelId, messageId, { reason });
+    await this.client.api.channels.pinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: true });
   }
 
@@ -293,7 +349,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unpin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.unpinMessage(channelId, messageId, { reason });
+    await this.client.api.channels.unpinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: false });
   }
 
@@ -304,7 +360,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async crosspost(channelId: string, messageId: string): Promise<Message> {
-    const message = await this.client.core.api.channels.crosspostMessage(channelId, messageId);
+    const message = await this.client.api.channels.crosspostMessage(channelId, messageId);
     return this.store(message);
   }
 
@@ -320,7 +376,7 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await this.client.core.api.channels.addMessageReaction(
+    await this.client.api.channels.addMessageReaction(
       channelId,
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
@@ -339,7 +395,7 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await this.client.core.api.channels.deleteAllMessageReactionsForEmoji(
+    await this.client.api.channels.deleteAllMessageReactionsForEmoji(
       channelId,
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
@@ -353,7 +409,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async removeAllReactions(channelId: string, messageId: string): Promise<void> {
-    await this.client.core.api.channels.deleteAllMessageReactions(channelId, messageId);
+    await this.client.api.channels.deleteAllMessageReactions(channelId, messageId);
     await this.patchCached(channelId, messageId, { reactions: [] });
   }
 
@@ -374,7 +430,7 @@ export class MessageManager extends CachedManager<
       auto_archive_duration: options.autoArchiveDuration,
       rate_limit_per_user: options.rateLimitPerUser,
     };
-    const thread = await this.client.core.api.channels.createThread(channelId, body, messageId, {
+    const thread = await this.client.api.channels.createThread(channelId, body, messageId, {
       reason: options.reason,
     });
     return this.client.threads._add(thread);
@@ -387,7 +443,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message holding the poll.
    */
   public async endPoll(channelId: string, messageId: string): Promise<Message> {
-    const message = await this.client.core.api.poll.expirePoll(channelId, messageId);
+    const message = await this.client.api.poll.expirePoll(channelId, messageId);
     return this.store(message);
   }
 
@@ -405,7 +461,7 @@ export class MessageManager extends CachedManager<
     answerId: number,
     options: { limit?: number; after?: string } = {},
   ): Promise<User[]> {
-    const { users } = await this.client.core.api.poll.getAnswerVoters(
+    const { users } = await this.client.api.poll.getAnswerVoters(
       channelId,
       messageId,
       answerId,
@@ -415,7 +471,7 @@ export class MessageManager extends CachedManager<
   }
 
   protected async fetchRaw(channelId: string, messageId: string) {
-    return this.client.core.api.channels.getMessage(channelId, messageId);
+    return this.client.api.channels.getMessage(channelId, messageId);
   }
 
   private store(message: APIMessage): Promise<Message> {

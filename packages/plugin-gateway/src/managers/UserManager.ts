@@ -36,7 +36,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
    * @param userId The ID of the user.
    */
   public async createDM(userId: string): Promise<DMChannel> {
-    const channel = await this.client.core.api.users.createDM(userId);
+    const channel = await this.client.api.users.createDM(userId);
     return (await this.client.channels._add(channel)) as DMChannel;
   }
 
@@ -48,7 +48,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
    */
   public async deleteDM(userId: string): Promise<DMChannel> {
     const channel = await this.createDM(userId);
-    await this.client.core.api.channels.delete(channel.id);
+    await this.client.api.channels.delete(channel.id);
     await this.client.cache?.channels.delete(channel.id);
     return channel;
   }
@@ -68,6 +68,6 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
   }
 
   protected async fetchRaw(userId: string) {
-    return this.client.core.api.users.get(userId);
+    return this.client.api.users.get(userId);
   }
 }

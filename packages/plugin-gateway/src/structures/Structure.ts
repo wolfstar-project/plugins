@@ -1,4 +1,6 @@
 import { Structure as BaseStructure } from "@discordjs/structures";
+import type { GatewayClient } from "../GatewayClient.js";
+import { getGatewayClient } from "../util/container.js";
 import { Mixin } from "./Mixin.js";
 
 // `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
@@ -25,6 +27,22 @@ export const kClone: unique symbol = Symbol.for("djs.structures.clone") as never
  * like a message's author or a channel's guild.
  */
 export const kRelations: unique symbol = Symbol.for("wolfstar.structures.relations") as never;
+
+/**
+ * The symbol under which a {@link Structure} stores the client that built it, see {@link StructureMixin.client}.
+ */
+export const kClient: unique symbol = Symbol.for("wolfstar.structures.client") as never;
+
+/**
+ * The symbol of the optional method a mixin defines to drop the relations a patch invalidates, called by
+ * {@link StructureMixin}'s patch before the data is patched. Mixins cannot override the patch itself: the first mixin
+ * defining a member wins, and {@link StructureMixin} comes first.
+ *
+ * @internal
+ */
+export const kPatchRelations: unique symbol = Symbol.for(
+  "wolfstar.structures.patchRelations",
+) as never;
 
 /**
  * The Discord epoch, used to extract timestamps from snowflakes.
@@ -74,12 +92,31 @@ export class StructureMixin<Data extends object, Relations extends object = obje
   declare private [kTimestamps]?: Map<string, number | null>;
 
   /**
+   * The client that built this structure, set by its manager.
+   *
+   * @internal
+   */
+  declare public [kClient]?: GatewayClient;
+
+  /**
+   * The client that instantiated this structure, like discord.js's `Base#client`: the one whose manager built it, or
+   * the most recently constructed {@link GatewayClient} for structures built by hand from a raw payload.
+   *
+   * @remarks
+   * It is not part of the structure's data, so it is neither serialized by `toJSON` nor stored in the cache.
+   */
+  public get client(): GatewayClient {
+    return this[kClient] ?? getGatewayClient();
+  }
+
+  /**
    * Patches the raw data of this structure in place, with a shallow merge.
    *
    * @param data The updated data.
    * @returns This structure.
    */
   public [kPatch](data: Readonly<Partial<Data>>): this {
+    (this as { [kPatchRelations]?: (data: object) => void })[kPatchRelations]?.(data);
     (BaseStructure.prototype as unknown as Record<typeof kPatch, Patch<Data>>)[kPatch].call(
       this,
       data,
@@ -98,6 +135,7 @@ export class StructureMixin<Data extends object, Relations extends object = obje
       kClone
     ].call(this, patch ?? ({} as Readonly<Partial<Data>>)) as this;
     clone[kRelations] = { ...this[kRelations] };
+    if (this[kClient]) clone[kClient] = this[kClient];
     return clone;
   }
 
@@ -122,6 +160,25 @@ export class StructureMixin<Data extends object, Relations extends object = obje
     const relations: Record<string, unknown> = { ...(this[kRelations] as object) };
     for (const name of names) delete relations[name];
     this[kRelations] = relations as Relations;
+  }
+
+  /**
+   * Forgets the relations whose ID a patch changes, e.g. a channel's parent when the patch moves it to another
+   * category. A patch carrying the same ID keeps the relation.
+   *
+   * @param data The patch.
+   * @param fields The names of the relations, mapped to the raw field holding their ID.
+   */
+  protected dropChangedRelations(
+    data: object,
+    fields: Partial<Record<keyof Relations & string, string>>,
+  ): void {
+    const current = this[kData] as Record<string, unknown>;
+    const patch = data as Record<string, unknown>;
+    const names = Object.entries(fields as Record<string, string>)
+      .filter(([, key]) => key in patch && patch[key] !== current[key])
+      .map(([name]) => name);
+    if (names.length > 0) this.dropRelations(...(names as never[]));
   }
 }
 
@@ -150,8 +207,9 @@ export interface Structure<
  * {@link StructureMixin} mixed in.
  *
  * @remarks
- * Structures never hold a reference to a client, so they can be built from any raw payload, be it a gateway dispatch,
- * a cache hit, or a REST response.
+ * Structures can be built from any raw payload, be it a gateway dispatch, a cache hit, or a REST response. Their
+ * {@link StructureMixin.client | client} is the one whose manager built them, the most recently constructed one
+ * otherwise.
  *
  * @typeParam Data The raw API data this structure wraps.
  * @typeParam Omitted The keys the structure's `DataTemplate` strips from the stored data.
@@ -171,6 +229,19 @@ export abstract class Structure<
 }
 
 Mixin(Structure, [StructureMixin]);
+
+/**
+ * Binds a structure to the client that built it, see {@link StructureMixin.client}.
+ *
+ * @param structure The structure.
+ * @param client The client.
+ * @returns The structure.
+ * @internal
+ */
+export function bindClient<Value extends object>(structure: Value, client: GatewayClient): Value {
+  (structure as StructureMixin<object>)[kClient] = client;
+  return structure;
+}
 
 /**
  * Gets the timestamp, in milliseconds, a snowflake was created at.

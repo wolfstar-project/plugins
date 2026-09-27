@@ -63,8 +63,19 @@ export class StageInstanceManager extends CachedManager<
 
   public override _hydrate(data: CacheEntityTypes["stageInstances"]): Awaitable<StageInstance> {
     return whenAll(
-      [this.cachedGuild(data.guild_id), this.client.channels._get(data.channel_id)],
-      ([guild, channel]) => new StageInstance(data, { guild, channel: channel ?? null }),
+      [
+        this.cachedGuild(data.guild_id),
+        this.client.channels._get(data.channel_id),
+        data.guild_scheduled_event_id
+          ? this.client.guilds.scheduledEvents(data.guild_id)._get(data.guild_scheduled_event_id)
+          : undefined,
+      ],
+      ([guild, channel, guildScheduledEvent]) =>
+        new StageInstance(data, {
+          guild,
+          channel: channel ?? null,
+          guildScheduledEvent: guildScheduledEvent ?? null,
+        }),
     );
   }
 
@@ -86,7 +97,7 @@ export class StageInstanceManager extends CachedManager<
       guild_scheduled_event_id:
         options.guildScheduledEvent && resolveId(options.guildScheduledEvent),
     };
-    const instance = await this.client.core.api.stageInstances.create(body, {
+    const instance = await this.client.api.stageInstances.create(body, {
       reason: options.reason,
     });
     return this._add(instance);
@@ -103,7 +114,7 @@ export class StageInstanceManager extends CachedManager<
       topic: options.topic,
       privacy_level: options.privacyLevel,
     };
-    const instance = await this.client.core.api.stageInstances.edit(channelId, body, {
+    const instance = await this.client.api.stageInstances.edit(channelId, body, {
       reason: options.reason,
     });
     return this._add(instance);
@@ -116,11 +127,11 @@ export class StageInstanceManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(channelId: string, reason?: string): Promise<void> {
-    await this.client.core.api.stageInstances.delete(channelId, { reason });
+    await this.client.api.stageInstances.delete(channelId, { reason });
     await this.cache?.delete(this.resolveKey(channelId));
   }
 
   protected async fetchRaw(channelId: string) {
-    return this.client.core.api.stageInstances.get(channelId);
+    return this.client.api.stageInstances.get(channelId);
   }
 }

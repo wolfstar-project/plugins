@@ -73,7 +73,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns The roles, highest first.
    */
   public async fetchAll(guildId: string): Promise<Role[]> {
-    const roles = await this.client.core.api.guilds.getRoles(guildId);
+    const roles = await this.client.api.guilds.getRoles(guildId);
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
 
     return structures.toSorted((a, b) => b.comparePositionTo(a));
@@ -86,7 +86,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns The member count of every role, by role ID.
    */
   public async fetchMemberCounts(guildId: string): Promise<Map<string, number>> {
-    const counts = await this.client.core.api.guilds.getRoleMemberCounts(guildId);
+    const counts = await this.client.api.guilds.getRoleMemberCounts(guildId);
     return new Map(Object.entries(counts));
   }
 
@@ -97,7 +97,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The role's fields.
    */
   public async create(guildId: string, options: RoleEditOptions = {}): Promise<Role> {
-    const role = await this.client.core.api.guilds.createRole(guildId, toRoleBody(options), {
+    const role = await this.client.api.guilds.createRole(guildId, toRoleBody(options), {
       reason: options.reason,
     });
     return this.store(guildId, role);
@@ -111,7 +111,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The fields to edit.
    */
   public async edit(guildId: string, roleId: string, options: RoleEditOptions): Promise<Role> {
-    const role = await this.client.core.api.guilds.editRole(guildId, roleId, toRoleBody(options), {
+    const role = await this.client.api.guilds.editRole(guildId, roleId, toRoleBody(options), {
       reason: options.reason,
     });
     return this.store(guildId, role);
@@ -125,7 +125,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param reason The reason for the audit log.
    */
   public async delete(guildId: string, roleId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteRole(guildId, roleId, { reason });
+    await this.client.api.guilds.deleteRole(guildId, roleId, { reason });
     await this.cache?.delete(this.resolveKey(guildId, roleId));
   }
 
@@ -163,7 +163,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
       id: role,
       position,
     }));
-    const roles = await this.client.core.api.guilds.setRolePositions(guildId, body, { reason });
+    const roles = await this.client.api.guilds.setRolePositions(guildId, body, { reason });
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
     return structures.toSorted((a, b) => b.comparePositionTo(a));
   }
@@ -217,7 +217,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
   }
 
   protected async fetchRaw(guildId: string, roleId: string) {
-    const role = await this.client.core.api.guilds.getRole(guildId, roleId);
+    const role = await this.client.api.guilds.getRole(guildId, roleId);
     return { ...role, guild_id: guildId };
   }
 

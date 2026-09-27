@@ -3,7 +3,6 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   MessageFlags,
-  MessageReferenceType,
   MessageType,
   type APIMessage,
   type APIThreadChannel,
@@ -12,24 +11,26 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { MessageThreadCreateOptions } from "../../managers/MessageManager.js";
 import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import { isDeepEqual } from "../../util/equal.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
-import type {
-  MessageCreateOptions,
-  MessageEditOptions,
-  MessagePayloadResolvable,
-} from "../../util/messages.js";
+import {
+  MessagePayload,
+  type MessageCreateOptions,
+  type MessageEditOptions,
+  type MessagePayloadResolvable,
+} from "./MessagePayload.js";
 import type { PermissionsString } from "../../util/PermissionsBitField.js";
 import { Attachment } from "./Attachment.js";
 import { Embed } from "./Embed.js";
 import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
-import { MessageMentions } from "./MessageMentions.js";
+import { MessageMentions, type MessageMentionsRelations } from "./MessageMentions.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import { Poll } from "../polls/Poll.js";
 import type { EmojiIdentifierResolvable } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import {
+  bindClient,
   initStructure,
   kData,
   kPatch,
@@ -52,6 +53,18 @@ export interface MessageRelations {
   member?: GuildMember | null;
   guild?: Guild | null;
   channel?: AnyChannel | null;
+  /**
+   * The thread started from the message, from the thread cache.
+   */
+  thread?: AnyThreadChannel | null;
+  /**
+   * The mentioned users, members, roles, and channels, from the cache.
+   */
+  mentions?: MessageMentionsRelations;
+  /**
+   * The cached custom emojis of the message's reactions and poll answers, by ID, when they belong to its guild.
+   */
+  emojis?: ReadonlyMap<string, GuildEmoji>;
 }
 
 // The message types a user can send; every other type is a system message.
@@ -97,6 +110,12 @@ export class Message extends BaseMessage<""> {
     // A payload carrying the author is fresher than the one resolved when the message was built.
     if (data.author) this.dropRelations("author", "member");
     else if (data.member) this.dropRelations("member");
+    if (data.content !== undefined || data.mentions || data.mention_roles) {
+      this.dropRelations("mentions");
+    }
+
+    if (data.reactions || data.poll) this.dropRelations("emojis");
+    if ("thread" in data) this.dropRelations("thread");
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
@@ -116,7 +135,8 @@ export class Message extends BaseMessage<""> {
    * the user, not only the copy embedded in the message.
    */
   public get author(): User {
-    return this[kRelations].author ?? new User(this[kData].author);
+    // Only a partial message lacks its author: it gets an empty user rather than a crash.
+    return this[kRelations].author ?? new User(this[kData].author ?? ({} as never));
   }
 
   /**
@@ -152,11 +172,11 @@ export class Message extends BaseMessage<""> {
   }
 
   public get attachments(): Attachment[] {
-    return this[kData].attachments.map((attachment) => new Attachment(attachment));
+    return (this[kData].attachments ?? []).map((attachment) => new Attachment(attachment));
   }
 
   public get embeds(): Embed[] {
-    return this[kData].embeds.map((embed) => new Embed(embed));
+    return (this[kData].embeds ?? []).map((embed) => new Embed(embed));
   }
 
   /**
@@ -173,22 +193,44 @@ export class Message extends BaseMessage<""> {
     return this[kData].sticker_items ?? [];
   }
 
+  /**
+   * The users, members, roles, and channels the message mentions: their cached copies when the message was built by
+   * `client.messages`, like discord.js.
+   */
   public get mentions(): MessageMentions {
-    return new MessageMentions(this[kData]);
+    return new MessageMentions(this[kData], {
+      guild: this.guild,
+      ...this[kRelations].mentions,
+    });
   }
 
+  /**
+   * The reactions of the message, whose `message` is this one, and whose custom emojis are the cached ones.
+   */
   public get reactions(): ReactionManager {
     return new ReactionManager(
-      getGatewayClient(),
+      this.client,
       this.channelId,
       this.id,
       this[kData].reactions ?? [],
+      this,
+      this[kRelations].emojis,
     );
   }
 
+  /**
+   * The poll of the message, whose `message` is this one.
+   */
   public get poll(): Poll | null {
     const { poll } = this[kData];
-    return poll ? new Poll({ ...poll, channel_id: this.channelId, message_id: this.id }) : null;
+    if (!poll) return null;
+    return bindClient(
+      new Poll(
+        { ...poll, channel_id: this.channelId, message_id: this.id },
+        { message: this, channel: this.channel, emojis: this[kRelations].emojis },
+      ),
+      this.client,
+    );
   }
 
   /**
@@ -241,26 +283,43 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The thread started from the message, when the payload includes it.
+   * The thread started from the message, like discord.js's `Message#thread`: the cached thread (its ID is the
+   * message's), else the one of the payload.
    */
   public get thread(): AnyThreadChannel | null {
+    const resolved = this[kRelations].thread;
+    if (resolved) return resolved;
     const { thread } = this[kData] as APIMessage & { thread?: APIThreadChannel };
-    return thread ? getGatewayClient().threads.createStructure(thread) : null;
+    return thread ? this.client.threads.createStructure(thread) : null;
   }
 
   /**
-   * The content with user mentions replaced by names, and `@everyone`/`@here` defused. Role and channel mentions are
-   * kept, since resolving them would take the (asynchronous) cache.
+   * The content with user, role, and channel mentions replaced by names, and `@everyone`/`@here` defused, like
+   * discord.js's `Message#cleanContent`. Mentions of entities that are not cached are kept.
    */
   public get cleanContent(): string {
+    const { mentions } = this;
     const members = new Map(
-      this.mentions.members.map((member) => [member.id, member.displayName] as const),
+      mentions.members.map((member) => [member.id, member.displayName] as const),
     );
-    const users = new Map(this.mentions.users.map((user) => [user.id, user.displayName] as const));
+    const users = new Map(
+      [...mentions.users, ...mentions.parsedUsers.values()].map(
+        (user) => [user.id, user.displayName] as const,
+      ),
+    );
+    const { roles, channels } = mentions;
     return this.content
       .replaceAll(MessageMentions.UsersPattern, (match, id: string) => {
         const name = members.get(id) ?? users.get(id);
         return name ? `@${name}` : match;
+      })
+      .replaceAll(MessageMentions.RolesPattern, (match, id: string) => {
+        const role = roles.get(id);
+        return role ? `@${role.name}` : match;
+      })
+      .replaceAll(MessageMentions.ChannelsPattern, (match, id: string) => {
+        const channel = channels.get(id) as { name?: string | null } | undefined;
+        return channel?.name ? `#${channel.name}` : match;
       })
       .replaceAll(/@(everyone|here)/g, `@${ZeroWidthSpace}$1`);
   }
@@ -303,7 +362,7 @@ export class Message extends BaseMessage<""> {
    * Fetches the channel the message was sent in.
    */
   public fetchChannel(): Promise<AnyChannel> {
-    return getGatewayClient().channels.fetch(this.channelId);
+    return this.client.channels.fetch(this.channelId);
   }
 
   /**
@@ -311,7 +370,7 @@ export class Message extends BaseMessage<""> {
    */
   public async fetchGuild(): Promise<Guild | null> {
     const { guildId } = this;
-    return guildId ? getGatewayClient().guilds.fetch(guildId) : null;
+    return guildId ? this.client.guilds.fetch(guildId) : null;
   }
 
   /**
@@ -320,17 +379,14 @@ export class Message extends BaseMessage<""> {
   public async fetchReference(): Promise<Message> {
     const reference = this.reference;
     if (!reference?.message_id) throw new Error(`Message ${this.id} references no message`);
-    return getGatewayClient().messages.fetch(
-      reference.channel_id ?? this.channelId,
-      reference.message_id,
-    );
+    return this.client.messages.fetch(reference.channel_id ?? this.channelId, reference.message_id);
   }
 
   /**
    * Whether the bot can edit the message: it is the author.
    */
   public async fetchEditable(): Promise<boolean> {
-    const client = getGatewayClient();
+    const client = this.client;
     return this.author.id === (client.user?.id ?? client.id);
   }
 
@@ -371,10 +427,19 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
+   * Whether the message is partial: built from its IDs alone for an event about an uncached message, see
+   * `Partials.Message`. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch} completes
+   * it.
+   */
+  public get partial(): boolean {
+    return this[kData].author === undefined;
+  }
+
+  /**
    * Fetches the message from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const message = await getGatewayClient().messages.fetch(this.channelId, this.id, {
+    const message = await this.client.messages.fetch(this.channelId, this.id, {
       force: true,
     });
     return this[kPatch](message.toJSON());
@@ -386,7 +451,11 @@ export class Message extends BaseMessage<""> {
    * @param options The changes, or the new content.
    */
   public async edit(options: MessagePayloadResolvable<MessageEditOptions>): Promise<this> {
-    const message = await getGatewayClient().messages.edit(this.channelId, this.id, options);
+    const message = await this.client.messages.edit(
+      this.channelId,
+      this.id,
+      MessagePayload.create(this, options, { edit: true }),
+    );
     return this[kPatch](message.toJSON());
   }
 
@@ -396,16 +465,14 @@ export class Message extends BaseMessage<""> {
    * @param options The reply, or its content.
    */
   public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    const payload = typeof options === "string" ? { content: options } : options;
-    return getGatewayClient().messages.send(this.channelId, {
-      ...payload,
-      message_reference: {
-        type: MessageReferenceType.Default,
-        message_id: this.id,
-        channel_id: this.channelId,
-        fail_if_not_exists: false,
-      },
-    });
+    const payload = MessagePayload.create(this, options);
+    return this.client.messages.send(
+      this.channelId,
+      MessagePayload.create(this, {
+        ...payload.options,
+        reply: { messageReference: this },
+      }),
+    );
   }
 
   /**
@@ -414,21 +481,21 @@ export class Message extends BaseMessage<""> {
    * @param channelId The ID of the channel to forward it to.
    */
   public forward(channelId: string): Promise<Message> {
-    return getGatewayClient().messages.forward(this.channelId, this.id, channelId);
+    return this.client.messages.forward(this.channelId, this.id, channelId);
   }
 
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().messages.delete(this.channelId, this.id, reason);
+    await this.client.messages.delete(this.channelId, this.id, reason);
     return this;
   }
 
   public async pin(reason?: string): Promise<this> {
-    await getGatewayClient().messages.pin(this.channelId, this.id, reason);
+    await this.client.messages.pin(this.channelId, this.id, reason);
     return this[kPatch]({ pinned: true });
   }
 
   public async unpin(reason?: string): Promise<this> {
-    await getGatewayClient().messages.unpin(this.channelId, this.id, reason);
+    await this.client.messages.unpin(this.channelId, this.id, reason);
     return this[kPatch]({ pinned: false });
   }
 
@@ -438,7 +505,7 @@ export class Message extends BaseMessage<""> {
    * @param emoji The emoji.
    */
   public async react(emoji: EmojiIdentifierResolvable): Promise<this> {
-    await getGatewayClient().messages.react(this.channelId, this.id, emoji);
+    await this.client.messages.react(this.channelId, this.id, emoji);
     return this;
   }
 
@@ -446,7 +513,7 @@ export class Message extends BaseMessage<""> {
    * Publishes the message of an announcement channel to the channels following it.
    */
   public async crosspost(): Promise<this> {
-    const message = await getGatewayClient().messages.crosspost(this.channelId, this.id);
+    const message = await this.client.messages.crosspost(this.channelId, this.id);
     return this[kPatch](message.toJSON());
   }
 
@@ -456,7 +523,7 @@ export class Message extends BaseMessage<""> {
    * @param options The thread's name and settings.
    */
   public startThread(options: MessageThreadCreateOptions): Promise<AnyThreadChannel> {
-    return getGatewayClient().messages.startThread(this.channelId, this.id, options);
+    return this.client.messages.startThread(this.channelId, this.id, options);
   }
 
   /**
@@ -509,7 +576,7 @@ export class Message extends BaseMessage<""> {
   private async hasPermission(permission: PermissionsString): Promise<boolean> {
     const { guildId } = this;
     if (!guildId) return false;
-    const me = await getGatewayClient().members.fetchMe(guildId);
+    const me = await this.client.members.fetchMe(guildId);
     return (await me.fetchPermissionsIn(this.channelId)).has(permission);
   }
 }

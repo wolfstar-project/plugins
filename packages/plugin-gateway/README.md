@@ -25,7 +25,7 @@ sharding, reconnects, and session resumes. Actions turn dispatches into events c
 such as `Message`, `User`, and `Guild`; `EventGatewayListener` lets pieces in the `listeners`
 directory handle those events. Managers such as `client.users` and `client.guilds` read from an
 optional [`@wolfstar/plugin-cache`](../plugin-cache) cache and fetch missing data through
-`@discordjs/core`. The same core API is available as `client.core.api`.
+`@discordjs/core`. The same core API is available as `client.api`.
 
 > [!NOTE]
 > A gateway connection is long-lived: a `GatewayClient` needs a persistent process, unlike a bot
@@ -73,15 +73,45 @@ On top of the `Client` options:
 | `dispatchTimeout`     | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it.                  |
 | `sessionStore`        | `undefined` | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
 | `sessionStoreTimeout` | `5_000`     | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
+| `partials`            | `[]`        | The structures to build partially for uncached entities, see [Partials](#partials).                                                |
+| `waitGuildTimeout`    | `15_000`    | Milliseconds `clientReady` waits for initially unavailable guilds before emitting anyway, see [Events](#events).                   |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
 
+### Partials
+
+Like discord.js's `partials`, `Partials` lists the structures the client builds from the IDs a dispatch carries when
+an event concerns an entity it has not cached: `User`, `Channel` (direct messages only), `GuildMember`, `Message`,
+`Reaction`, `GuildScheduledEvent`, `ThreadMember`, `Poll`, `PollAnswer`, and `SoundboardSound`.
+
+Unlike discord.js, events are emitted either way: without the partial, the uncached entity is `null` as usual. With
+it, it is a structure whose `partial` is `true`. Only its IDs are reliable, and `fetch()` completes it. Partial
+structures are never written to the cache. The reactions and poll answers of uncached messages are always partial, so
+`Partials.Reaction` and `Partials.PollAnswer` change nothing and exist for parity.
+
+```ts
+const client = new GatewayClient({ intents, partials: [Partials.Message, Partials.User] });
+
+client.on("messageDelete", async (message) => {
+  if (message?.partial)
+    console.log(`Uncached message ${message.id} deleted in ${message.channelId}`);
+});
+```
+
 ## Events
+
+`GatewayEvents` mirrors the keys of the table below, like `@wolfstar/http-framework`'s own `Events`: each member's
+value is the plain event name, so it is interchangeable with the string literal.
+
+```ts
+client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
+```
 
 | Event                                                     | Arguments                                      |
 | --------------------------------------------------------- | ---------------------------------------------- |
 | `raw`                                                     | `payload`, `shardId` — every dispatch          |
 | `shardReady`                                              | `shardId`, `user`                              |
+| `clientReady`                                             | `client` — once, see below                     |
 | `shardResume` / `shardClose` / `shardError`               | `shardId` / `shardId, code` / `error, shardId` |
 | `guildCreate`                                             | `guild`                                        |
 | `guildUpdate`                                             | `oldGuild \| null`, `newGuild`                 |
@@ -137,12 +167,23 @@ The previous state of update events and the entity of delete events come from th
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
 which always identifies the deleted entity.
 
+`clientReady` is emitted once, like discord.js's `Client#clientReady`: after every shard this client manages has
+connected, and every guild `READY` listed as initially unavailable became available (or `waitGuildTimeout`, `15_000`
+by default, elapsed — that timeout only bounds the wait on guilds, never on shards connecting).
+`client.isClientReady()` and `client.clientReadyAt` report it after the fact.
+
+```ts
+client.on(GatewayEvents.ClientReady, (client) =>
+  console.log(`Logged in as ${client.user!.username}`),
+);
+```
+
 `client.actions` holds an `Action` for each handled gateway dispatch. Each action captures the
 previous state, then builds and emits events after the cache has been updated. The built-in actions
 use the `DispatchHandlers` and `MultiDispatchHandlers` tables. Dispatches they do not cover are
 still written to the cache and emitted as `raw`. `INTERACTION_CREATE` is handled by the HTTP endpoint.
 
-REST operations use `client.core.api` from `@discordjs/core`. A few endpoints without a matching
+REST operations use `client.api` from `@discordjs/core`. A few endpoints without a matching
 core method (cursor-based message pins, guild creation from a template, and thread member queries
 with extra parameters) use the same core client's underlying REST transport.
 
@@ -592,8 +633,8 @@ console.log(widget.presenceCount, widget.imageURL(GuildWidgetStyle.Banner2));
 
 ### Webhooks
 
-`client.webhooks` fetches, creates, edits, and deletes webhooks, and posts with their token like
-discord.js's `WebhookClient`. Text, announcement, voice, stage, forum, and media channels have
+`client.webhooks` fetches, creates, edits, and deletes webhooks, and posts with their token, without
+the bot's authorization. Text, announcement, voice, stage, forum, and media channels have
 `fetchWebhooks` and `createWebhook`, guilds `fetchWebhooks`, and announcement channels
 `addFollower`. Webhooks are not cached: Discord only says that they changed (`webhooksUpdate`).
 

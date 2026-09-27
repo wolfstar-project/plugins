@@ -4,7 +4,6 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIRoleTags } from "discord-api-types/v10";
 import type { RoleEditOptions } from "../../managers/RoleManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
@@ -73,7 +72,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * Fetches the guild, cache first.
    */
   public fetchGuild(): Promise<Guild> {
-    return getGatewayClient().guilds.fetch(this.guildId);
+    return this.client.guilds.fetch(this.guildId);
   }
 
   public get name() {
@@ -185,7 +184,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   public async fetchEditable(): Promise<boolean> {
     if (this.managed) return false;
 
-    const client = getGatewayClient();
+    const client = this.client;
     const me = await client.members.fetchMe(this.guildId);
     const permissions = await me.fetchPermissions();
     if (!permissions.has("ManageRoles")) return false;
@@ -201,7 +200,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * @returns This role, patched.
    */
   public async edit(options: RoleEditOptions): Promise<this> {
-    const role = await getGatewayClient().roles.edit(this.guildId, this.id, options);
+    const role = await this.client.roles.edit(this.guildId, this.id, options);
     return this[kPatch](role.toJSON());
   }
 
@@ -243,7 +242,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * @param reason The reason for the audit log.
    */
   public async setPosition(position: number, reason?: string): Promise<this> {
-    const roles = await getGatewayClient().roles.setPositions(
+    const roles = await this.client.roles.setPositions(
       this.guildId,
       [{ role: this.id, position }],
       reason,
@@ -259,7 +258,7 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().roles.delete(this.guildId, this.id, reason);
+    await this.client.roles.delete(this.guildId, this.id, reason);
     return this;
   }
 

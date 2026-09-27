@@ -6,6 +6,7 @@ import {
   type APIInviteChannel,
   type GatewayInviteCreateDispatchData,
 } from "discord-api-types/v10";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
@@ -25,6 +26,7 @@ export interface InviteRelations {
   inviter?: User;
   targetUser?: User;
   guild?: Guild | null;
+  channel?: AnyChannel | null;
 }
 
 export interface BaseInvite<Data extends InviteData = InviteData> extends StructureMixin<
@@ -83,10 +85,11 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Invite<"">
   }
 
   /**
-   * The channel the invite leads to, as the partial channel the API returns, if known.
+   * The channel the invite leads to, like discord.js's `BaseInvite#channel`: the cached channel, else the partial
+   * channel the API returns with the invite, if any.
    */
-  public get channel(): APIInviteChannel | null {
-    return this[kData].channel ?? null;
+  public get channel(): AnyChannel | APIInviteChannel | null {
+    return this[kRelations].channel ?? this[kData].channel ?? null;
   }
 
   /**

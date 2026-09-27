@@ -3,20 +3,22 @@ import {
   DefaultWebSocketManagerOptions,
   WebSocketManager,
   WebSocketShardEvents,
+  WebSocketShardStatus,
   type OptionalWebSocketManagerOptions,
   type SessionInfo,
   type ShardRange,
 } from "@discordjs/ws";
-import { Client as DiscordCoreClient } from "@discordjs/core";
+import { Client as DiscordCoreClient, type API } from "@discordjs/core";
+import type { REST } from "@discordjs/rest";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
 import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
+  GatewayIntentBits,
   GatewayOpcodes,
   type APIVoiceRegion,
   type GatewayDispatchPayload,
   type GatewayReadyDispatchData,
-  type GatewayIntentBits,
 } from "discord-api-types/v10";
 import { ChannelManager } from "./managers/ChannelManager.js";
 import { GuildManager } from "./managers/GuildManager.js";
@@ -34,6 +36,7 @@ import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
 import type { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
+import { bindClient } from "./structures/Structure.js";
 import { Sticker } from "./structures/stickers/Sticker.js";
 import type { Webhook } from "./structures/webhooks/Webhook.js";
 import type { GuildTemplate } from "./structures/guilds/GuildTemplate.js";
@@ -42,9 +45,11 @@ import { StickerPack } from "./structures/stickers/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
+import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
+import type { Partials } from "./util/Partials.js";
 import { GatewaySessionMirror } from "./util/sessions.js";
 
-export interface GatewayClientOptions extends ClientOptions {
+export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
   /**
    * The gateway intents to identify with, e.g. `GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages`.
    */
@@ -113,6 +118,27 @@ export interface GatewayClientOptions extends ClientOptions {
    * @default 30_000
    */
   dispatchTimeout?: number | null;
+  /**
+   * The structures to build partially when an event concerns one that is not cached, like discord.js's `partials`,
+   * e.g. `[Partials.Message, Partials.User]`. See {@link Partials}.
+   *
+   * @default []
+   */
+  partials?: readonly Partials[];
+  /**
+   * How long, in milliseconds, the client waits for every guild `READY` listed as initially unavailable to become
+   * available (its `GUILD_CREATE`) before emitting `clientReady` anyway, like discord.js's `waitGuildTimeout`.
+   *
+   * @remarks
+   * It only bounds the wait on guild availability: `clientReady` still never fires before every shard this client
+   * manages has connected, however long that takes, even past this timeout.
+   *
+   * Skipped (waits `0` ms) when `intents` does not include `GatewayIntentBits.Guilds`, since without it Discord never
+   * sends the guilds' data, so no `GUILD_CREATE` for them ever arrives.
+   *
+   * @default 15_000
+   */
+  waitGuildTimeout?: number;
 }
 
 /** Options for loading pieces and starting both transports. */
@@ -162,12 +188,31 @@ export class GatewayClient extends Client {
   public readonly cache: Cache | undefined;
 
   /**
+   * The REST manager the gateway (for its gateway bot info) and every manager's API calls go through, like
+   * discord.js's `Client#rest`.
+   */
+  public readonly rest: REST;
+
+  /**
    * The underlying `@discordjs/ws` manager, handling the shards' connections, resumes, and identify rate limits.
    */
   public readonly gateway: WebSocketManager;
 
-  /** The discord.js core client, sharing this client's REST and gateway transports. */
-  public readonly core: DiscordCoreClient;
+  /**
+   * The typed REST API every manager's calls go through, `@discordjs/core`'s `API` built from {@link GatewayClient.rest}.
+   */
+  public readonly api: API;
+
+  /**
+   * The discord.js core client, sharing this client's REST and gateway transports, like the RFC `next` `Client`'s
+   * own `core`.
+   *
+   * @remarks
+   * Kept protected: managers and structures reach its typed REST calls through {@link GatewayClient.api} instead, and
+   * its gateway and REST manager are already {@link GatewayClient.gateway} and {@link GatewayClient.rest}. It is only
+   * needed to build the discord.js core client's own event listeners, if this class ever wraps them.
+   */
+  protected readonly core: DiscordCoreClient;
 
   /** The actions that turn gateway dispatches into public client events. */
   public readonly actions: ActionsManager;
@@ -200,11 +245,41 @@ export class GatewayClient extends Client {
    */
   public readonly dispatchTimeout: number | null;
 
+  /**
+   * The structures built partially for uncached entities, see {@link GatewayClientOptions.partials}.
+   */
+  public readonly partials: readonly Partials[];
+
+  /**
+   * See {@link GatewayClientOptions.waitGuildTimeout}.
+   */
+  public readonly waitGuildTimeout: number;
+
+  /**
+   * The timestamp the client last became ready, like discord.js's `Client#readyTimestamp`. `null` until
+   * `clientReady` is first emitted, see {@link GatewayClient.clientReadyAt}.
+   */
+  public clientReadyTimestamp: number | null = null;
+
   // Dispatches of a guild are processed in order, so an asynchronous cache never reorders them, while different
   // guilds proceed concurrently.
   readonly #queue = new DispatchQueue();
 
   readonly #shardCount: number | null;
+
+  readonly #intents: number;
+
+  // Resolved once from the options (or the environment) and kept private, rather than read again from `this.options`,
+  // which the base client scrubs it from.
+  readonly #token: string;
+
+  // The guilds `READY` listed as initially unavailable, whose `GUILD_CREATE` or `GUILD_DELETE` the client waits for
+  // before emitting `clientReady`, like discord.js's `Client#expectedGuilds`.
+  readonly #expectedGuilds = new Set<string>();
+
+  // The fallback timer emitting `clientReady` even with guilds still unavailable, like discord.js's own
+  // `readyTimeout`. Cleared and rescheduled every time `#checkClientReady` runs short of triggering it.
+  #clientReadyTimer: ReturnType<typeof setTimeout> | null = null;
 
   #sessions: GatewaySessionMirror | null = null;
 
@@ -218,10 +293,17 @@ export class GatewayClient extends Client {
     super(options);
     container.gatewayClient = this;
 
+    // Set by the base client's constructor, which validated the token and built the REST manager already.
+    this.rest = container.rest;
     this.cache = options.cache;
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
+    this.partials = Object.freeze([...(options.partials ?? [])]);
+    this.waitGuildTimeout = options.waitGuildTimeout ?? 15_000;
     this.#shardCount = options.shardCount ?? null;
+    this.#intents = Number(options.intents);
+    // The base client validated it already, and scrubs it from `this.options`.
+    this.#token = (options.discordToken ?? process.env.DISCORD_TOKEN)!;
     this.users = new UserManager(this);
     this.guilds = new GuildManager(this);
     this.channels = new ChannelManager(this);
@@ -238,14 +320,14 @@ export class GatewayClient extends Client {
     this.gateway = new WebSocketManager({
       ...options.gateway,
       ...this.sessionCallbacks(options),
-      // The base client validated the token already, and scrubs it from `this.options`.
-      token: (options.discordToken ?? process.env.DISCORD_TOKEN)!,
+      token: this.#token,
       intents: options.intents as GatewayIntentBits,
-      rest: container.rest,
+      rest: this.rest,
       shardCount: options.shardCount ?? null,
       shardIds: options.shardIds ?? null,
     });
-    this.core = new DiscordCoreClient({ gateway: this.gateway, rest: container.rest });
+    this.core = new DiscordCoreClient({ gateway: this.gateway, rest: this.rest });
+    this.api = this.core.api;
     this.actions = new ActionsManager(this);
 
     this.gateway.on(WebSocketShardEvents.Dispatch, (payload, shardId) => {
@@ -347,7 +429,7 @@ export class GatewayClient extends Client {
    * Fetches Discord's default soundboard sounds, which every guild can play.
    */
   public async fetchDefaultSoundboardSounds(): Promise<SoundboardSound[]> {
-    const sounds = await this.core.api.soundboardSounds.getSoundboardDefaultSounds();
+    const sounds = await this.api.soundboardSounds.getSoundboardDefaultSounds();
     return sounds.map((sound) => new SoundboardSound(sound));
   }
 
@@ -376,7 +458,7 @@ export class GatewayClient extends Client {
    * @param guildId The ID of the guild.
    */
   public async fetchGuildWidget(guildId: string): Promise<Widget> {
-    return new Widget(await this.core.api.guilds.getWidget(guildId));
+    return new Widget(await this.api.guilds.getWidget(guildId));
   }
 
   /**
@@ -391,11 +473,20 @@ export class GatewayClient extends Client {
   ): Promise<BaseInvite> {
     // Accept `https://discord.gg/code` and `discord.com/invite/code` as well as the bare code.
     const resolved = code.split("/").pop()!;
-    const invite = await this.core.api.invites.get(resolved, {
+    const invite = await this.api.invites.get(resolved, {
       with_counts: options.withCounts ?? true,
       guild_scheduled_event_id: options.guildScheduledEventId,
     });
-    return createInvite(invite);
+    const [guild, channel, inviter, targetUser] = await Promise.all([
+      invite.guild ? this.guilds.get(invite.guild.id) : undefined,
+      invite.channel ? this.channels.get(invite.channel.id) : undefined,
+      invite.inviter ? this.users.resolveData(invite.inviter) : undefined,
+      invite.target_user ? this.users.resolveData(invite.target_user) : undefined,
+    ]);
+    return bindClient(
+      createInvite(invite, { guild: guild ?? null, channel: channel ?? null, inviter, targetUser }),
+      this,
+    );
   }
 
   /**
@@ -404,14 +495,14 @@ export class GatewayClient extends Client {
    * @param stickerId The ID of the sticker.
    */
   public async fetchSticker(stickerId: string): Promise<Sticker> {
-    return new Sticker(await this.core.api.stickers.get(stickerId));
+    return new Sticker(await this.api.stickers.get(stickerId));
   }
 
   /**
    * Fetches the packs of standard stickers.
    */
   public async fetchStickerPacks(): Promise<StickerPack[]> {
-    const { sticker_packs: packs } = await this.core.api.stickers.getStickers();
+    const { sticker_packs: packs } = await this.api.stickers.getStickers();
     return packs.map((pack) => new StickerPack(pack));
   }
 
@@ -419,7 +510,7 @@ export class GatewayClient extends Client {
    * Fetches the voice regions available to the bot.
    */
   public async fetchVoiceRegions(): Promise<APIVoiceRegion[]> {
-    return this.core.api.voice.getVoiceRegions();
+    return this.api.voice.getVoiceRegions();
   }
 
   /**
@@ -428,6 +519,21 @@ export class GatewayClient extends Client {
    */
   public get queueStats(): DispatchQueueStats {
     return this.#queue.stats;
+  }
+
+  /**
+   * The time the client last became ready, like discord.js's `Client#readyAt`. `null` until `clientReady` is first
+   * emitted.
+   */
+  public get clientReadyAt(): Date | null {
+    return this.clientReadyTimestamp === null ? null : new Date(this.clientReadyTimestamp);
+  }
+
+  /**
+   * Whether the client already emitted `clientReady`, like discord.js's `Client#isReady()`.
+   */
+  public isClientReady(): boolean {
+    return this.clientReadyTimestamp !== null;
   }
 
   /**
@@ -449,7 +555,11 @@ export class GatewayClient extends Client {
     // `READY` is never dropped: it sets `client.user` and `shardReady` from the payload alone, and a shard without it
     // looks dead to the bot. Reconciling the cache with it is best effort, see `reconcileGuilds`.
     const isReady = payload.t === GatewayDispatchEvents.Ready;
-    if (isReady) await this.reconcileGuilds(payload.d, shardId);
+    if (isReady) {
+      await this.reconcileGuilds(payload.d, shardId);
+      // The guilds this shard's `READY` listed as initially unavailable, awaited by `clientReady`.
+      for (const guild of payload.d.guilds) this.#expectedGuilds.add(guild.id);
+    }
 
     let state: unknown;
     try {
@@ -464,6 +574,78 @@ export class GatewayClient extends Client {
     }
 
     await action?.handle(payload.d, state, shardId);
+
+    if (this.clientReadyTimestamp === null) {
+      if (isReady) {
+        await this.#checkClientReady();
+      } else if (
+        (payload.t === GatewayDispatchEvents.GuildCreate ||
+          payload.t === GatewayDispatchEvents.GuildDelete) &&
+        this.#expectedGuilds.delete(payload.d.id)
+      ) {
+        await this.#checkClientReady();
+      }
+    }
+  }
+
+  /**
+   * Emits `clientReady` once every shard this client manages has connected and every guild `READY` listed as
+   * initially unavailable became available, or {@link GatewayClientOptions.waitGuildTimeout} elapses, like
+   * discord.js's `Client#_checkReady`.
+   *
+   * @remarks
+   * `waitGuildTimeout` bounds the wait on guild availability only: once it elapses, the still-unavailable guilds are
+   * forgotten (so a later `GUILD_CREATE`/`GUILD_DELETE` for one of them does not spuriously re-run this), but every
+   * shard connecting is never skipped, however long that takes — there is no such timeout for it, matching
+   * `@discordjs/ws`, which waits for the network rather than giving up.
+   *
+   * Unlike discord.js, `clientReady` only ever fires once: subsequent guild or shard activity does not re-trigger it.
+   */
+  async #checkClientReady(): Promise<void> {
+    // A concurrent shard's call already triggered it.
+    if (this.clientReadyTimestamp !== null) return;
+
+    if (this.#clientReadyTimer) {
+      clearTimeout(this.#clientReadyTimer);
+      this.#clientReadyTimer = null;
+    }
+
+    if (this.#expectedGuilds.size > 0) {
+      // Without the `Guilds` intent, Discord never sends the unavailable guilds' data, so no `GUILD_CREATE` for them
+      // ever arrives: there is nothing to wait for.
+      const hasGuildsIntent = (this.#intents & GatewayIntentBits.Guilds) !== 0;
+      this.#clientReadyTimer = setTimeout(
+        () => {
+          this.#clientReadyTimer = null;
+          this.#expectedGuilds.clear();
+          void this.#checkClientReady();
+        },
+        hasGuildsIntent ? this.waitGuildTimeout : 0,
+      );
+      this.#clientReadyTimer.unref?.();
+      return;
+    }
+
+    const statuses = await this.gateway.fetchStatus();
+    // Re-check: a concurrent call may have triggered it, or a shard may have disconnected, while this one awaited
+    // the shards' statuses.
+    if (this.clientReadyTimestamp !== null || this.#expectedGuilds.size > 0) return;
+
+    const everyShardReady = [...statuses.values()].every(
+      (status) => status === WebSocketShardStatus.Ready,
+    );
+    if (everyShardReady) this.#triggerClientReady();
+    // Otherwise, nothing left to bound with a timer: the next shard to connect re-enters here through its own
+    // `READY`.
+  }
+
+  // Sets `clientReadyTimestamp` and emits `clientReady`, guarding against a concurrent call (a racing shard, or the
+  // fallback timer) doing it first: this is always called synchronously, with no `await` before it, so the guard
+  // cannot itself be raced.
+  #triggerClientReady(): void {
+    if (this.clientReadyTimestamp !== null) return;
+    this.clientReadyTimestamp = Date.now();
+    this.emit("clientReady", this);
   }
 
   /**
