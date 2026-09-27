@@ -1,5 +1,11 @@
 # @wolfstar/plugin-gateway
 
+## 0.5.0
+
+### Minor Changes
+
+- [#147](https://github.com/wolfstar-project/plugins/pull/147) [`77aa9cc`](https://github.com/wolfstar-project/plugins/commit/77aa9cc4602b6b77fd38decbea103e644cd7b9af) - Add the `dispatch` event (`GatewayEvents.Dispatch`), emitted for every gateway dispatch once it is written to the cache, before the matching event: unlike `raw`, a listener reading the cache sees the dispatch applied. `@wolfstar/plugin-broker`'s `forwardGatewayDispatches` relies on it.
+
 ## 0.4.0
 
 ### Minor Changes
