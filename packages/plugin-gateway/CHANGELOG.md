@@ -1,5 +1,12 @@
 # @wolfstar/plugin-gateway
 
+## 0.4.0
+
+### Minor Changes
+
+- [#145](https://github.com/wolfstar-project/plugins/pull/145) [`3e429e5`](https://github.com/wolfstar-project/plugins/commit/3e429e5265427cd2565811b6df418ac2db75fd2c) - - Add `GatewayEvents`, an enum mirroring the keys of `GatewayEventMap`, like `@wolfstar/http-framework`'s own `Events`: `client.on(GatewayEvents.MessageCreate, ...)` is interchangeable with the string literal `client.on("messageCreate", ...)`. The internal dispatch table now emits through it.
+  - Add the `clientReady` event, like discord.js's `Client#clientReady`: emitted once, after every shard the client manages has connected and every guild `READY` listed as initially unavailable became available, or the new `waitGuildTimeout` option (`15_000` ms by default, matching discord.js's, skipped without the `Guilds` intent) elapses. `waitGuildTimeout` only bounds the wait on guilds: it never lets `clientReady` fire before every shard has connected, however long that takes. `GatewayClient` gains `clientReadyTimestamp`, `clientReadyAt`, and `isClientReady()`.
+
 ## 0.3.0
 
 ### Minor Changes
