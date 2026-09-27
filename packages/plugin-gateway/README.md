@@ -371,13 +371,13 @@ Mixin(MyTextChannel, [MyMixin]);
 ```
 
 > [!NOTE]
-> `Structure`, `BitField`, and `PermissionsBitField` are adapted from
-> [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures)
-> (Apache-2.0), which is not a dependency: it is only published as `dev` snapshots requiring
-> Node.js 24.17, and has no `Guild` nor `GuildMember` yet. That package does not export the symbols
-> keying a structure's data and its patch/clone methods, but creates them with `Symbol.for`, so
-> `kData`, `kPatch`, and `kClone` are created under the same keys: they are the very same symbols.
-> The structures here are this package's own, following its conventions.
+> `Structure` extends
+> [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures)'
+> own base class. That package does not export the symbols keying a structure's data and its
+> patch/clone methods, but creates them with `Symbol.for`, so `kData`, `kPatch`, and `kClone` are the
+> very same symbols, re-exported for subclasses and mixins. It is only published as `dev` snapshots
+> requiring Node.js 24.17 (hence this package's `engines`), and has no `Guild` nor `GuildMember`
+> yet: the structures here are this package's own, following its conventions.
 
 ### Guilds, emojis, stickers and invites
 
@@ -602,16 +602,6 @@ if (channel instanceof TextChannel) {
 const { items } = await client.messages.fetchPins(channelId);
 const users = await message.reactions.resolve("🐺")?.users.fetch();
 ```
-
-## Subpath exports
-
-Like `@discordjs/next`, the gateway and REST libraries are re-exported, so a bot does not need to
-depend on them directly:
-
-| Import                          | Re-exports        |
-| ------------------------------- | ----------------- |
-| `@wolfstar/plugin-gateway/rest` | `@discordjs/rest` |
-| `@wolfstar/plugin-gateway/ws`   | `@discordjs/ws`   |
 
 ## Limitations
 

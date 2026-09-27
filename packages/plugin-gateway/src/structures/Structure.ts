@@ -1,15 +1,8 @@
-/*!
- * The base of `Structure` (its data template, constructor, `kPatch`, `kClone`, `optimizeData`, and `toJSON`) is adapted
- * from `@discordjs/structures`' `Structure` (https://github.com/discordjs/discord.js/tree/main/packages/structures),
- * Copyright 2023 Noel Buechler and Chai Kohen, licensed under the Apache License, Version 2.0
- * (https://www.apache.org/licenses/LICENSE-2.0). Changed from the original: merged into this package's `Structure`,
- * which adds relations and parsed timestamps, with `kPatch` and `kClone` made public and the mixin constructor hook
- * dropped.
- */
+import { Structure as BaseStructure } from "@discordjs/structures";
 
-// The data of a structure and its patch/clone methods are keyed with the symbols of `@discordjs/structures`, which it
-// does not export. They are created with `Symbol.for`, in the global registry, under the same keys, so they are the very
-// same symbols. Each is typed as a `unique symbol` of our own, which lets subclasses declare typed members keyed by them.
+// `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
+// are created with `Symbol.for`, in the global registry, so the same key yields the very same symbols here. Each is
+// typed as a `unique symbol` of our own, which lets the subclasses below declare typed members keyed by them.
 
 /**
  * The symbol under which a {@link Structure} stores its raw API data, shared with `@discordjs/structures`.
@@ -33,42 +26,33 @@ export const kClone: unique symbol = Symbol.for("djs.structures.clone") as never
 export const kRelations: unique symbol = Symbol.for("wolfstar.structures.relations") as never;
 
 /**
- * The symbol of the method `Mixin` combines the mixins' `enrichToJSON` hooks into, shared with `@discordjs/structures`.
- */
-const kMixinToJSON = Symbol.for("djs.structures.mixin.toJSON");
-
-/**
  * The Discord epoch, used to extract timestamps from snowflakes.
  */
 const DiscordEpoch = 1_420_070_400_000n;
 
+type Patch<Data> = (this: object, data: Readonly<Partial<Data>>) => unknown;
+
 /**
- * The base class every structure extends, following `@discordjs/structures`' `Structure`, with its data and
- * patch/clone methods reachable from subclasses outside of discord.js.
+ * The base class every structure extends: `@discordjs/structures`' `Structure`, with its data and patch/clone methods
+ * made reachable from subclasses outside of discord.js.
  *
  * @remarks
  * Structures never hold a reference to a client, so they can be built from any raw payload, be it a gateway dispatch,
  * a cache hit, or a REST response.
  *
  * @typeParam Data The raw API data this structure wraps.
- * @typeParam _Omitted The keys the structure's `DataTemplate` strips from the stored data, for subclasses to type their
- * constructor with.
+ * @typeParam Omitted The keys the structure's `DataTemplate` strips from the stored data.
  */
-export abstract class Structure<Data extends object, _Omitted extends keyof Data | "" = ""> {
-  /**
-   * The template used for removing data from the raw data stored for each structure.
-   *
-   * @remarks This template should be overridden in all subclasses to provide more accurate type information.
-   * The template in the base {@link Structure} class will have no effect on most subclasses for this reason.
-   */
-  protected static readonly DataTemplate: Record<string, unknown> = {};
-
+export abstract class Structure<
+  Data extends object,
+  Omitted extends keyof Data | "" = "",
+> extends BaseStructure<Data, Omitted> {
   readonly #timestamps = new Map<string, number | null>();
 
   /**
    * The raw API data of this structure.
    */
-  protected [kData]: Readonly<Data>;
+  declare protected [kData]: Readonly<Data>;
 
   /**
    * The relations of this structure, resolved from the cache by its manager. Subclasses narrow its type. Public only
@@ -83,29 +67,10 @@ export abstract class Structure<Data extends object, _Omitted extends keyof Data
    * @param relations The related structures, resolved from the cache by the structure's manager.
    */
   public constructor(data: Readonly<Partial<Data>>, relations: object = {}) {
-    this[kData] = Object.assign(this.getDataTemplate(), data);
+    super(data as never);
     this[kRelations] = relations;
     this.optimizeData(data);
   }
-
-  /**
-   * @returns A cloned version of the data template, ready to create a new data object.
-   */
-  private getDataTemplate(): Data {
-    return Object.create((this.constructor as typeof Structure).DataTemplate);
-  }
-
-  /**
-   * Stores raw data in optimized formats, used in tandem with a data template. Called by the constructor and by
-   * `kPatch`.
-   *
-   * @example `created_timestamp` is an ISO string, which can be stored in optimized form as a number.
-   * @param _data The raw data received from the API to optimize.
-   * @remarks Implemented in subclasses and mixins where needed; mixins must use the closest ancestor's access modifier.
-   * When implementing it, call `super.optimizeData` if any class in the super chain aside from {@link Structure}
-   * implements it. Mixins never need to, as `Mixin` walks the prototype chain.
-   */
-  protected optimizeData(_data: Partial<Data>): void {}
 
   /** Parses a timestamp once when constructing or patching a structure. */
   protected optimizeTimestamp(key: string, value: string | null | undefined): void {
@@ -124,8 +89,10 @@ export abstract class Structure<Data extends object, _Omitted extends keyof Data
    * @returns This structure.
    */
   public [kPatch](data: Readonly<Partial<Data>>): this {
-    this[kData] = Object.assign(this.getDataTemplate(), this[kData], data);
-    this.optimizeData(data);
+    (BaseStructure.prototype as unknown as Record<typeof kPatch, Patch<Data>>)[kPatch].call(
+      this,
+      data,
+    );
     return this;
   }
 
@@ -136,31 +103,11 @@ export abstract class Structure<Data extends object, _Omitted extends keyof Data
    * @returns The copy.
    */
   public [kClone](patch?: Readonly<Partial<Data>>): this {
-    const data = this.toJSON();
-    const clone = new (this.constructor as new (data: Readonly<Partial<Data>>) => this)(
-      patch ? Object.assign(data, patch) : data,
-    );
+    const clone = (BaseStructure.prototype as unknown as Record<typeof kClone, Patch<Data>>)[
+      kClone
+    ].call(this, patch ?? ({} as Readonly<Partial<Data>>)) as this;
     clone[kRelations] = { ...this[kRelations] };
     return clone;
-  }
-
-  /**
-   * Transforms this structure to its JSON format, with raw API data (or close to it), automatically called by
-   * `JSON.stringify()` when this structure is stringified.
-   *
-   * @remarks
-   * The type of this data is determined by omissions at runtime and is only guaranteed for default omissions.
-   */
-  public toJSON(): Data {
-    const data =
-      // Spread is way faster than `structuredClone`, but is shallow, so it is only used without nested objects.
-      (
-        Object.values(this[kData]).some((value) => typeof value === "object" && value !== null)
-          ? structuredClone(this[kData])
-          : { ...this[kData] }
-      ) as Data;
-    (this as { [kMixinToJSON]?: (data: Data) => void })[kMixinToJSON]?.(data);
-    return data;
   }
 
   /**

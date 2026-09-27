@@ -1,4 +1,5 @@
 import type { ImageURLOptions } from "@discordjs/rest";
+import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIRoleTags } from "discord-api-types/v10";
 import type { RoleEditOptions } from "../managers/RoleManager.js";
@@ -8,7 +9,6 @@ import { RoleFlagsBitField } from "../util/flags.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import { compareRolePositions, computePermissionsIn } from "../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
-import type { Partialize } from "../util/types.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "./Structure.js";
 
