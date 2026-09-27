@@ -603,16 +603,6 @@ const { items } = await client.messages.fetchPins(channelId);
 const users = await message.reactions.resolve("🐺")?.users.fetch();
 ```
 
-## Subpath exports
-
-Like `@discordjs/next`, the gateway and REST libraries are re-exported, so a bot does not need to
-depend on them directly:
-
-| Import                          | Re-exports        |
-| ------------------------------- | ----------------- |
-| `@wolfstar/plugin-gateway/rest` | `@discordjs/rest` |
-| `@wolfstar/plugin-gateway/ws`   | `@discordjs/ws`   |
-
 ## Limitations
 
 - A `GatewayClient` connects its gateway shards from a single process (`@discordjs/ws`'s
