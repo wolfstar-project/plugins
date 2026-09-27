@@ -48,7 +48,7 @@ The library's core is `ApiServer`, a standalone REST server (default port `4000`
 
 ## Secrets, approvals, and definition of done
 
-- **Secrets:** never commit them. `.env` and `.env.*` are gitignored (only `.env.example` is tracked). CI secrets (`WOLFSTAR_TOKEN`, `CODECOV_TOKEN`, AI provider keys for the review workflows) live in GitHub Actions secrets. npm publishing uses OIDC trusted publishing, so no npm token exists anywhere.
+- **Secrets:** never commit them. `.env` and `.env.*` are gitignored (`.env.example` is exempted for templates, though none exists yet). CI secrets (`WOLFSTAR_TOKEN`, `CODECOV_TOKEN`, AI provider keys for the review workflows) live in GitHub Actions secrets. npm publishing uses OIDC trusted publishing, so no npm token exists anywhere.
 - **Ask before:** publishing to npm or running `pnpm run publish`/`publish:snapshot` locally, dispatching the `Release` workflow, force-pushing or rewriting history on shared branches, and deleting branches, tags, or releases.
 - **Done** means: `pnpm lint`, `pnpm build`, `pnpm typecheck`, and `pnpm test` pass locally; a changeset exists for every user-facing package change (CI's `🦋 Verify changesets` runs `changeset status --since=origin/<base>` and fails without one); tests are added or updated for behaviour changes; and this file is updated when commands, packages, CI, or release flow change.
 
