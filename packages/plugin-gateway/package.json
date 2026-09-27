@@ -55,6 +55,7 @@
   "dependencies": {
     "@discordjs/core": "^2.6.0",
     "@discordjs/rest": "^2.6.3",
+    "@discordjs/structures": "1.0.0-dev.1790035407-dbb749062",
     "@discordjs/ws": "^2.0.4",
     "@sapphire/pieces": "^4.4.1",
     "@wolfstar/plugin-cache": "workspace:^",
@@ -67,6 +68,6 @@
     "@wolfstar/http-framework": "^3.4.0 || ^5.0.0"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=24.17.0"
   }
 }

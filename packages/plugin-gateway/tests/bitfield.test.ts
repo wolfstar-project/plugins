@@ -5,7 +5,7 @@ import { IntentsBitField, MessageFlagsBitField, UserFlagsBitField } from "../src
 import { PermissionsBitField } from "../src/util/PermissionsBitField.js";
 
 describe("BitField", () => {
-  test("GIVEN the flags and permissions bitfields THEN they share the BitField base", () => {
+  test("GIVEN the re-exported and derived classes THEN they share @discordjs/structures' base", () => {
     expect(new MessageFlagsBitField()).toBeInstanceOf(BitField);
     expect(new PermissionsBitField()).toBeInstanceOf(BitField);
     expect(new UserFlagsBitField()).toBeInstanceOf(BitField);
