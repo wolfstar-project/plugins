@@ -1,5 +1,5 @@
 import type { GatewayClient } from "../GatewayClient.js";
-import type { ThreadMember } from "../structures/ThreadMember.js";
+import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { FetchOptions } from "./CachedManager.js";
 import type { ThreadMemberListOptions } from "./ThreadMemberManager.js";
 

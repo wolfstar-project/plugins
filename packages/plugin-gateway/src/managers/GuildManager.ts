@@ -22,17 +22,20 @@ import {
 } from "discord-api-types/v10";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import { AnonymousGuild } from "../structures/AnonymousGuild.js";
-import { Guild, type GuildEditOptions } from "../structures/Guild.js";
-import { GuildPreview } from "../structures/GuildPreview.js";
-import { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
-import { GuildOnboarding } from "../structures/GuildOnboarding.js";
-import type { Integration } from "../structures/Integration.js";
-import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
-import { WelcomeScreen } from "../structures/WelcomeScreen.js";
-import type { AutoModerationRule } from "../structures/AutoModerationRule.js";
-import type { User } from "../structures/User.js";
-import { Webhook } from "../structures/Webhook.js";
+import { AnonymousGuild } from "../structures/guilds/AnonymousGuild.js";
+import { Guild, type GuildEditOptions } from "../structures/guilds/Guild.js";
+import { GuildPreview } from "../structures/guilds/GuildPreview.js";
+import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
+import { GuildOnboarding } from "../structures/guilds/GuildOnboarding.js";
+import type { Integration } from "../structures/guilds/Integration.js";
+import {
+  ReactionEmoji,
+  type EmojiIdentifierResolvable,
+} from "../structures/emojis/ReactionEmoji.js";
+import { WelcomeScreen } from "../structures/guilds/WelcomeScreen.js";
+import type { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
+import type { User } from "../structures/users/User.js";
+import { Webhook } from "../structures/webhooks/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";

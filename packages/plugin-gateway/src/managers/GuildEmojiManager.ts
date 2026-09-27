@@ -5,8 +5,8 @@ import {
   type RESTPostAPIGuildEmojiJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { GuildEmoji } from "../structures/GuildEmoji.js";
-import type { User } from "../structures/User.js";
+import { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

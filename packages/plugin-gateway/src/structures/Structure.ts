@@ -1,8 +1,9 @@
 import { Structure as BaseStructure } from "@discordjs/structures";
+import { Mixin } from "./Mixin.js";
 
 // `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
 // are created with `Symbol.for`, in the global registry, so the same key yields the very same symbols here. Each is
-// typed as a `unique symbol` of our own, which lets the subclasses below declare typed members keyed by them.
+// typed as a `unique symbol` of our own, which lets the structures declare typed members keyed by them.
 
 /**
  * The symbol under which a {@link Structure} stores its raw API data, shared with `@discordjs/structures`.
@@ -32,55 +33,45 @@ const DiscordEpoch = 1_420_070_400_000n;
 
 type Patch<Data> = (this: object, data: Readonly<Partial<Data>>) => unknown;
 
+const kTimestamps: unique symbol = Symbol("wolfstar.structures.timestamps") as never;
+
 /**
- * The base class every structure extends: `@discordjs/structures`' `Structure`, with its data and patch/clone methods
- * made reachable from subclasses outside of discord.js.
+ * The members every structure of this package has on top of `@discordjs/structures`' own: relations resolved from the
+ * cache, public patch/clone methods, and parsed timestamps.
  *
  * @remarks
- * Structures never hold a reference to a client, so they can be built from any raw payload, be it a gateway dispatch,
- * a cache hit, or a REST response.
+ * It is mixed into {@link Structure} and into every class extending one of `@discordjs/structures`' structures, which
+ * also have to call {@link initStructure} from their constructor:
  *
- * @typeParam Data The raw API data this structure wraps.
- * @typeParam Omitted The keys the structure's `DataTemplate` strips from the stored data.
+ * ```typescript
+ * export interface User extends StructureMixin<APIUser> {}
+ * export class User extends BaseUser {
+ *   public constructor(data: Partial<APIUser>, relations: object = {}) {
+ *     super(data);
+ *     initStructure(this, data, relations);
+ *   }
+ * }
+ * Mixin(User, [StructureMixin]);
+ * ```
+ *
+ * @typeParam Data The raw API data the structure wraps.
+ * @typeParam Relations The relations of the structure, resolved from the cache by its manager.
  */
-export abstract class Structure<
-  Data extends object,
-  Omitted extends keyof Data | "" = "",
-> extends BaseStructure<Data, Omitted> {
-  readonly #timestamps = new Map<string, number | null>();
-
+export class StructureMixin<Data extends object, Relations extends object = object> {
   /**
    * The raw API data of this structure.
    */
   declare protected [kData]: Readonly<Data>;
 
   /**
-   * The relations of this structure, resolved from the cache by its manager. Subclasses narrow its type. Public only
-   * so that {@link Structure.dropRelations} can check relation names against it.
+   * The relations of this structure, resolved from the cache by its manager. Public only so that
+   * {@link StructureMixin.dropRelations} can check relation names against it.
    *
    * @internal
    */
-  declare public [kRelations]: object;
+  declare public [kRelations]: Relations;
 
-  /**
-   * @param data The raw API data.
-   * @param relations The related structures, resolved from the cache by the structure's manager.
-   */
-  public constructor(data: Readonly<Partial<Data>>, relations: object = {}) {
-    super(data as never);
-    this[kRelations] = relations;
-    this.optimizeData(data);
-  }
-
-  /** Parses a timestamp once when constructing or patching a structure. */
-  protected optimizeTimestamp(key: string, value: string | null | undefined): void {
-    if (value !== undefined) this.#timestamps.set(key, value ? Date.parse(value) : null);
-  }
-
-  /** Gets a timestamp previously parsed by `optimizeData`. */
-  protected optimizedTimestamp(key: string): number | null {
-    return this.#timestamps.get(key) ?? null;
-  }
+  declare private [kTimestamps]?: Map<string, number | null>;
 
   /**
    * Patches the raw data of this structure in place, with a shallow merge.
@@ -110,17 +101,76 @@ export abstract class Structure<
     return clone;
   }
 
+  /** Parses a timestamp once when constructing or patching a structure. */
+  protected optimizeTimestamp(key: string, value: string | null | undefined): void {
+    if (value !== undefined) {
+      (this[kTimestamps] ??= new Map()).set(key, value ? Date.parse(value) : null);
+    }
+  }
+
+  /** Gets a timestamp previously parsed by `optimizeData`. */
+  protected optimizedTimestamp(key: string): number | null {
+    return this[kTimestamps]?.get(key) ?? null;
+  }
+
   /**
    * Forgets resolved relations, e.g. when a patch carries fresher data for them.
    *
    * @param names The names of the relations.
    */
   protected dropRelations(...names: (keyof this[typeof kRelations] & string)[]): void {
-    const relations: Record<string, unknown> = { ...this[kRelations] };
+    const relations: Record<string, unknown> = { ...(this[kRelations] as object) };
     for (const name of names) delete relations[name];
-    this[kRelations] = relations;
+    this[kRelations] = relations as Relations;
   }
 }
+
+/**
+ * Sets up the members {@link StructureMixin} adds, from the constructor of a structure extending one of
+ * `@discordjs/structures`'.
+ *
+ * @param structure The structure being constructed.
+ * @param data The raw API data it was constructed with.
+ * @param relations The related structures, resolved from the cache by the structure's manager.
+ */
+export function initStructure(structure: object, data: object, relations: object): void {
+  (structure as StructureMixin<object>)[kRelations] = relations;
+  // `@discordjs/structures` only runs `optimizeData` from the constructors of the classes implementing it, which the
+  // mixins' optimizations are not part of. Running it again is harmless: it only (re)parses fields.
+  (structure as unknown as { optimizeData(data: object): void }).optimizeData(data);
+}
+
+export interface Structure<
+  Data extends object,
+  Omitted extends keyof Data | "" = "",
+> extends StructureMixin<Data> {}
+
+/**
+ * The base class of the structures `@discordjs/structures` has no counterpart for: its `Structure`, with
+ * {@link StructureMixin} mixed in.
+ *
+ * @remarks
+ * Structures never hold a reference to a client, so they can be built from any raw payload, be it a gateway dispatch,
+ * a cache hit, or a REST response.
+ *
+ * @typeParam Data The raw API data this structure wraps.
+ * @typeParam Omitted The keys the structure's `DataTemplate` strips from the stored data.
+ */
+export abstract class Structure<
+  Data extends object,
+  Omitted extends keyof Data | "" = "",
+> extends BaseStructure<Data, Omitted> {
+  /**
+   * @param data The raw API data.
+   * @param relations The related structures, resolved from the cache by the structure's manager.
+   */
+  public constructor(data: Readonly<Partial<Data>>, relations: object = {}) {
+    super(data as never);
+    initStructure(this, data, relations);
+  }
+}
+
+Mixin(Structure, [StructureMixin]);
 
 /**
  * Gets the timestamp, in milliseconds, a snowflake was created at.

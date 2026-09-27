@@ -6,8 +6,8 @@ import {
   type Snowflake,
 } from "discord-api-types/v10";
 import type { AnyChannel } from "../managers/ChannelManager.js";
-import type { GuildMember } from "../structures/GuildMember.js";
-import type { Role } from "../structures/Role.js";
+import type { GuildMember } from "../structures/guilds/GuildMember.js";
+import type { Role } from "../structures/guilds/Role.js";
 import { getGatewayClient } from "./container.js";
 import { PermissionsBitField } from "./PermissionsBitField.js";
 

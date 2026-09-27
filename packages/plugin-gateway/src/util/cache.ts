@@ -1,17 +1,17 @@
 import type { Awaitable } from "@wolfstar/plugin-cache";
-import type { Structure } from "../structures/Structure.js";
+import type { StructureMixin } from "../structures/Structure.js";
 
 /**
- * The raw API data a {@link Structure} wraps.
+ * The raw API data a {@link StructureMixin | structure} wraps.
  */
-export type RawAPIType<Value extends Structure<object>> =
-  Value extends Structure<infer Type> ? Type : never;
+export type RawAPIType<Value extends StructureMixin<object>> =
+  Value extends StructureMixin<infer Type> ? Type : never;
 
 /**
- * A function building a {@link Structure} out of its raw API data.
+ * A function building a {@link StructureMixin | structure} out of its raw API data.
  */
 export type StructureCreator<
-  Value extends Structure<object>,
+  Value extends StructureMixin<object>,
   Raw extends RawAPIType<Value> = RawAPIType<Value>,
 > = (data: Raw) => Value;
 

@@ -9,9 +9,9 @@ import {
   type RESTPostAPIGuildScheduledEventJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { GuildScheduledEvent } from "../structures/GuildScheduledEvent.js";
-import type { GuildMember } from "../structures/GuildMember.js";
-import type { User } from "../structures/User.js";
+import { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
+import type { GuildMember } from "../structures/guilds/GuildMember.js";
+import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";

@@ -1,6 +1,6 @@
 import type { GatewayClient } from "../GatewayClient.js";
-import type { GuildEmoji } from "../structures/GuildEmoji.js";
-import type { Role } from "../structures/Role.js";
+import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import type { Role } from "../structures/guilds/Role.js";
 
 /**
  * Manages the roles allowed to use one custom emoji. When it has none, everyone can use it.

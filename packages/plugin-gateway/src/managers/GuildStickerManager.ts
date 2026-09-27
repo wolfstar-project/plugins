@@ -2,8 +2,8 @@ import type { RawFile } from "@discordjs/rest";
 import { stickerKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { type APISticker, type RESTPatchAPIGuildStickerJSONBody } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Sticker } from "../structures/Sticker.js";
-import type { User } from "../structures/User.js";
+import { Sticker } from "../structures/stickers/Sticker.js";
+import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

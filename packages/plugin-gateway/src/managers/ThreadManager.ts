@@ -11,10 +11,10 @@ import {
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { AnnouncementThreadChannel } from "../structures/AnnouncementThreadChannel.js";
-import type { PrivateThreadChannel } from "../structures/PrivateThreadChannel.js";
-import type { PublicThreadChannel } from "../structures/PublicThreadChannel.js";
-import type { ThreadMember } from "../structures/ThreadMember.js";
+import type { AnnouncementThreadChannel } from "../structures/channels/AnnouncementThreadChannel.js";
+import type { PrivateThreadChannel } from "../structures/channels/PrivateThreadChannel.js";
+import type { PublicThreadChannel } from "../structures/channels/PublicThreadChannel.js";
+import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import {
   resolveMessageOptions,

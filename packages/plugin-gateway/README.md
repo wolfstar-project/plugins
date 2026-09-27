@@ -340,16 +340,29 @@ passing either alongside it throws. `destroy({ resumable: true })` also works wi
 
 ## Structures
 
-`User`, `Guild`, `Message`, `GuildMember`, and `Role` wrap the raw data behind typed getters.
+Structures extend the ones
+[`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures)
+already ships (`User`, `Message`, `Attachment`, `Embed`, `Reaction`, `Poll`, `Emoji`, `Invite`,
+`Presence`, `Activity`, `VoiceState`, `Webhook`, `Sticker`, `StickerPack`, `SoundboardSound`,
+`StageInstance`, `AutoModerationRule`, and every channel type), adding relations resolved from the
+cache, CDN URLs, and actions through the client. The ones it has no counterpart for yet (`Guild`,
+`GuildMember`, `Role`, `ThreadMember`, `GuildScheduledEvent`, ...) extend its base `Structure`.
+They live in one folder per domain, each with an `index.ts`, mirroring `@discordjs/structures`:
+`automoderation/`, `channels/` (and `channels/mixins/`), `emojis/`, `guilds/`, `invites/`,
+`messages/`, `polls/`, `presences/`, `soundboards/`, `stageInstances/`, `stickers/`, `users/`,
+`voice/`, and `webhooks/`.
+
+Where a getter of ours has stricter semantics (e.g. `null` or a default instead of `undefined`),
+it overrides `@discordjs/structures`' one, which keeps typing it.
+
 Channels get one class per type (`TextChannel`, `VoiceChannel`, `ForumChannel`,
-`PublicThreadChannel`, `DMChannel`, ...), all extending `Channel` and composed from mixins
-(`GuildChannelMixin`, `ChannelTopicMixin`, `ThreadChannelMixin`, ...), following
-`@discordjs/structures` and the layout of discord.js's `@discordjs/next` prototype.
-`ChannelManager` picks the class matching the channel type, `BaseChannel` covers the unknown ones.
-Channel mixins can supply a `DataTemplate`, an `optimizeData` hook, and an `enrichToJSON` hook.
-Construction and patches optimize timestamps across channels, messages, members, invites, events,
-templates, and voice states, as well as role and overwrite permission bits. `toJSON()` retains the
-original API fields.
+`PublicThreadChannel`, `DMChannel`, ...), each extending `@discordjs/structures`' own and composed
+from mixins (`GuildChannelMixin`, `ChannelTopicMixin`, `ThreadChannelMixin`, ...). `instanceof
+Channel` matches any of them. `ChannelManager` picks the class matching the channel type,
+`BaseChannel` covers the unknown ones. Channel mixins can supply a `DataTemplate`, an
+`optimizeData` hook, and an `enrichToJSON` hook. Construction and patches optimize timestamps
+across channels, messages, members, invites, events, templates, and voice states, as well as role
+and overwrite permission bits. `toJSON()` retains the original API fields.
 
 ```ts
 client.on("channelCreate", (channel) => {
@@ -360,8 +373,8 @@ client.on("channelCreate", (channel) => {
 Structures never hold a reference to the client. Every channel has `fetch()` and `delete()`
 (from `BaseChannelMixin`), which use `@discordjs/core` for API calls.
 
-`Structure`, `Mixin`, and the `kData`, `kPatch`, and `kClone` symbols are exported, so structures
-can be subclassed and new mixins written:
+`Structure`, `StructureMixin`, `initStructure`, `Mixin`, `MixinTypes`, and the `kData`, `kPatch`,
+and `kClone` symbols are exported, so structures can be subclassed and new mixins written:
 
 ```ts
 import { Mixin, TextChannel, kData } from "@wolfstar/plugin-gateway";
@@ -370,14 +383,28 @@ class MyTextChannel extends TextChannel {}
 Mixin(MyTextChannel, [MyMixin]);
 ```
 
+To extend another `@discordjs/structures` class the same way, mix `StructureMixin` in and call
+`initStructure` from the constructor:
+
+```ts
+import { User as BaseUser } from "@discordjs/structures";
+import { initStructure, Mixin, StructureMixin } from "@wolfstar/plugin-gateway";
+
+export interface MyUser extends StructureMixin<APIUser> {}
+export class MyUser extends BaseUser {
+  public constructor(data: APIUser, relations: object = {}) {
+    super(data);
+    initStructure(this, data, relations);
+  }
+}
+Mixin(MyUser, [StructureMixin]);
+```
+
 > [!NOTE]
-> `Structure` extends
-> [`@discordjs/structures`](https://github.com/discordjs/discord.js/tree/main/packages/structures)'
-> own base class. That package does not export the symbols keying a structure's data and its
+> `@discordjs/structures` does not export the symbols keying a structure's data and its
 > patch/clone methods, but creates them with `Symbol.for`, so `kData`, `kPatch`, and `kClone` are the
 > very same symbols, re-exported for subclasses and mixins. It is only published as `dev` snapshots
-> requiring Node.js 24.17 (hence this package's `engines`), and has no `Guild` nor `GuildMember`
-> yet: the structures here are this package's own, following its conventions.
+> requiring Node.js 24.17 (hence this package's `engines`).
 
 ### Guilds, emojis, stickers and invites
 

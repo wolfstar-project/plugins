@@ -1,6 +1,6 @@
 import { OverwriteType, type APIOverwrite } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { PermissionOverwrites } from "../structures/PermissionOverwrites.js";
+import { PermissionOverwrites } from "../structures/channels/PermissionOverwrites.js";
 import {
   resolveId,
   resolveOverwriteOptions,

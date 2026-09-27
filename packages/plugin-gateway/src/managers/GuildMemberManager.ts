@@ -13,7 +13,7 @@ import {
   type RESTPutAPIGuildMemberJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { GuildMember } from "../structures/GuildMember.js";
+import { GuildMember } from "../structures/guilds/GuildMember.js";
 import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";

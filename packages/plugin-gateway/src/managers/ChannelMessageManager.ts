@@ -1,8 +1,8 @@
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Message } from "../structures/Message.js";
+import type { Message } from "../structures/messages/Message.js";
 import type { FetchOptions } from "./CachedManager.js";
-import type { EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
-import type { User } from "../structures/User.js";
+import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
+import type { User } from "../structures/users/User.js";
 import type {
   MessageListOptions,
   MessageThreadCreateOptions,

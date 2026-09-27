@@ -6,8 +6,8 @@ import {
   type RESTPostAPIChannelInviteJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { InviteData } from "../structures/BaseInvite.js";
-import { GuildInvite } from "../structures/GuildInvite.js";
+import type { InviteData } from "../structures/invites/BaseInvite.js";
+import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

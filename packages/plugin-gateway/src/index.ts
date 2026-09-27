@@ -2,8 +2,7 @@ export * from "./EventGatewayListener.js";
 export * from "./GatewayClient.js";
 export * from "./actions/Action.js";
 
-export * from "./structures/mixins/index.js";
-export * from "./structures";
+export * from "./structures/index.js";
 
 export * from "./managers";
 

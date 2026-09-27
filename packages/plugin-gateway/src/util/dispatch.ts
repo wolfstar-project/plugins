@@ -6,17 +6,17 @@ import {
 } from "discord-api-types/v10";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import { AutoModerationActionExecution } from "../structures/AutoModerationActionExecution.js";
-import { ClientUser } from "../structures/ClientUser.js";
-import { GuildAuditLogsEntry } from "../structures/GuildAuditLogsEntry.js";
+import { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
+import { ClientUser } from "../structures/users/ClientUser.js";
+import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { kPatch } from "../structures/Structure.js";
-import type { GuildEmoji } from "../structures/GuildEmoji.js";
-import { GuildInvite } from "../structures/GuildInvite.js";
-import type { Sticker } from "../structures/Sticker.js";
-import { MessageReaction } from "../structures/MessageReaction.js";
-import { PollAnswer } from "../structures/PollAnswer.js";
-import type { ThreadMember } from "../structures/ThreadMember.js";
-import { Typing } from "../structures/Typing.js";
+import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import { GuildInvite } from "../structures/invites/GuildInvite.js";
+import type { Sticker } from "../structures/stickers/Sticker.js";
+import { MessageReaction } from "../structures/messages/MessageReaction.js";
+import { PollAnswer } from "../structures/polls/PollAnswer.js";
+import type { ThreadMember } from "../structures/channels/ThreadMember.js";
+import { Typing } from "../structures/channels/Typing.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
 /**

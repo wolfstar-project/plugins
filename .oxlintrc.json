@@ -28,9 +28,12 @@
       }
     },
     {
-      "files": ["packages/plugin-gateway/src/structures/mixins/*.ts"],
+      "files": [
+        "packages/plugin-gateway/src/structures/channels/mixins/*.ts",
+        "packages/plugin-gateway/src/structures/Structure.ts"
+      ],
       "rules": {
-        "no-unused-vars": ["error", { "varsIgnorePattern": "^Type$" }]
+        "no-unused-vars": ["error", { "varsIgnorePattern": "^(Type|Omitted)$" }]
       }
     }
   ],

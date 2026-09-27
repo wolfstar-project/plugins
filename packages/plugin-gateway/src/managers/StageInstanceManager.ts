@@ -5,7 +5,7 @@ import {
   type StageInstancePrivacyLevel,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { StageInstance } from "../structures/StageInstance.js";
+import { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager } from "./CachedManager.js";

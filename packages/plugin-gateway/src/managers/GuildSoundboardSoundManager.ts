@@ -5,7 +5,7 @@ import {
   type RESTPostAPIGuildSoundboardSoundJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { SoundboardSound } from "../structures/SoundboardSound.js";
+import { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

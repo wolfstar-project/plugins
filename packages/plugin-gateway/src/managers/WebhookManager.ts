@@ -6,8 +6,8 @@ import {
   type RESTPostAPIWebhookWithTokenJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Message } from "../structures/Message.js";
-import { Webhook } from "../structures/Webhook.js";
+import type { Message } from "../structures/messages/Message.js";
+import { Webhook } from "../structures/webhooks/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { resolveMessageOptions, type MessagePayloadResolvable } from "../util/messages.js";
 
