@@ -1,6 +1,5 @@
 import type { GatewayAutoModerationActionExecutionDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { AutoModerationRule } from "./AutoModerationRule.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
@@ -13,6 +12,9 @@ import type { User } from "../users/User.js";
 export interface AutoModerationActionExecutionRelations {
   guild?: Guild | null;
   user?: User | null;
+  member?: GuildMember | null;
+  channel?: AnyChannel | null;
+  autoModerationRule?: AutoModerationRule | null;
 }
 
 /**
@@ -96,16 +98,37 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
     return this[kRelations].user ?? null;
   }
 
+  /**
+   * The member who triggered the rule, from the cache, like discord.js's `AutoModerationActionExecution#member`.
+   */
+  public get member(): GuildMember | null {
+    return this[kRelations].member ?? null;
+  }
+
+  /**
+   * The channel the rule was triggered in, from the cache: `null` when there is none or it is not cached.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
+  }
+
+  /**
+   * The rule that was triggered, from the cache: `null` when it is not cached.
+   */
+  public get autoModerationRule(): AutoModerationRule | null {
+    return this[kRelations].autoModerationRule ?? null;
+  }
+
   public fetchRule(): Promise<AutoModerationRule> {
-    return getGatewayClient().guilds.autoModerationRules(this.guildId).fetch(this.ruleId);
+    return this.client.guilds.autoModerationRules(this.guildId).fetch(this.ruleId);
   }
 
   public fetchMember(): Promise<GuildMember> {
-    return getGatewayClient().members.fetch(this.guildId, this.userId);
+    return this.client.members.fetch(this.guildId, this.userId);
   }
 
   public async fetchChannel(): Promise<AnyChannel | null> {
     const { channelId } = this;
-    return channelId ? getGatewayClient().channels.fetch(channelId) : null;
+    return channelId ? this.client.channels.fetch(channelId) : null;
   }
 }

@@ -23,7 +23,18 @@
       "rules": {
         "no-underscore-dangle": [
           "warn",
-          { "allow": ["_add", "_get", "_hydrate", "_resolveData"], "allowAfterThis": true }
+          {
+            "allow": [
+              "_add",
+              "_get",
+              "_getInGuild",
+              "_getShallow",
+              "_hydrate",
+              "_hydrateInGuild",
+              "_resolveData"
+            ],
+            "allowAfterThis": true
+          }
         ]
       }
     },

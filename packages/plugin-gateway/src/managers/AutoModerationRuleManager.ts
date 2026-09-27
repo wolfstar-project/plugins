@@ -84,7 +84,7 @@ export class AutoModerationRuleManager extends CachedManager<
    * Fetches every rule of the guild, and caches them.
    */
   public async fetchAll(): Promise<AutoModerationRule[]> {
-    const rules = await this.client.core.api.guilds.getAutoModerationRules(this.guildId);
+    const rules = await this.client.api.guilds.getAutoModerationRules(this.guildId);
     return Promise.all(rules.map((rule) => this._add(rule)));
   }
 
@@ -101,7 +101,7 @@ export class AutoModerationRuleManager extends CachedManager<
       trigger_type: options.triggerType,
       actions: [...options.actions],
     };
-    const rule = await this.client.core.api.guilds.createAutoModerationRule(this.guildId, body, {
+    const rule = await this.client.api.guilds.createAutoModerationRule(this.guildId, body, {
       reason: options.reason,
     });
     return this._add(rule);
@@ -117,7 +117,7 @@ export class AutoModerationRuleManager extends CachedManager<
     ruleId: string,
     options: AutoModerationRuleEditOptions,
   ): Promise<AutoModerationRule> {
-    const rule = await this.client.core.api.guilds.editAutoModerationRule(
+    const rule = await this.client.api.guilds.editAutoModerationRule(
       this.guildId,
       ruleId,
       toRuleBody(options),
@@ -135,12 +135,12 @@ export class AutoModerationRuleManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(ruleId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteAutoModerationRule(this.guildId, ruleId, { reason });
+    await this.client.api.guilds.deleteAutoModerationRule(this.guildId, ruleId, { reason });
     await this.cache?.delete(this.resolveKey(ruleId));
   }
 
   protected async fetchRaw(ruleId: string) {
-    return this.client.core.api.guilds.getAutoModerationRule(this.guildId, ruleId);
+    return this.client.api.guilds.getAutoModerationRule(this.guildId, ruleId);
   }
 }
 

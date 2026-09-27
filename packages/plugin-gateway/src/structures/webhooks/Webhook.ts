@@ -1,21 +1,35 @@
 import type { ImageURLOptions } from "@discordjs/rest";
 import { Webhook as BaseWebhook } from "@discordjs/structures";
 import { WebhookType, type APIWebhook } from "discord-api-types/v10";
-import type {
-  WebhookEditOptions,
-  WebhookMessageCreateOptions,
-  WebhookMessageEditOptions,
-  WebhookThreadOptions,
-} from "../../managers/WebhookManager.js";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import type { WebhookEditOptions } from "../../managers/WebhookManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
-import type { MessagePayloadResolvable } from "../../util/messages.js";
-import type { Message } from "../messages/Message.js";
-import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kPatch, snowflakeTimestamp, StructureMixin } from "../Structure.js";
+import type { Guild } from "../guilds/Guild.js";
+import { Mixin, type MixinTypes } from "../Mixin.js";
+import {
+  initStructure,
+  kData,
+  kPatch,
+  kRelations,
+  snowflakeTimestamp,
+  StructureMixin,
+} from "../Structure.js";
 import { User } from "../users/User.js";
+import { WebhookMixin } from "./WebhookMixin.js";
 
-export interface Webhook extends StructureMixin<APIWebhook> {}
+/**
+ * The relations of a {@link Webhook}, resolved from the cache by `client.webhooks`.
+ */
+export interface WebhookRelations {
+  guild?: Guild | null;
+  channel?: AnyChannel | null;
+  sourceGuild?: Guild | null;
+  sourceChannel?: AnyChannel | null;
+  owner?: User;
+}
+
+export interface Webhook
+  extends StructureMixin<APIWebhook, WebhookRelations>, MixinTypes<BaseWebhook, [WebhookMixin]> {}
 
 /**
  * A webhook, an incoming one posting to a channel, a channel follower, or an application's: `@discordjs/structures`'
@@ -34,30 +48,46 @@ export class Webhook extends BaseWebhook {
     initStructure(this, data, relations);
   }
 
+  declare public [kRelations]: WebhookRelations;
+
   public override get guildId(): string | null {
     return this[kData].guild_id ?? null;
   }
 
   /**
-   * The user who created the webhook, when the payload includes it.
+   * The guild of the webhook, from the cache, like discord.js's `Webhook#guild`: `null` when it is not cached.
+   */
+  public get guild(): Guild | null {
+    return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * The channel the webhook posts to, from the cache: `null` when it is not cached.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
+  }
+
+  /**
+   * The user who created the webhook, from the cache, else from the payload.
    */
   public get owner(): User | null {
     const { user } = this[kData];
-    return user ? new User(user) : null;
+    return this[kRelations].owner ?? (user ? new User(user) : null);
   }
 
   /**
-   * The guild a channel follower webhook posts from.
+   * The guild a channel follower webhook posts from: the cached guild, else the partial one of the payload.
    */
-  public get sourceGuild() {
-    return this[kData].source_guild ?? null;
+  public get sourceGuild(): Guild | NonNullable<APIWebhook["source_guild"]> | null {
+    return this[kRelations].sourceGuild ?? this[kData].source_guild ?? null;
   }
 
   /**
-   * The channel a channel follower webhook posts from.
+   * The channel a channel follower webhook posts from: the cached channel, else the partial one of the payload.
    */
-  public get sourceChannel() {
-    return this[kData].source_channel ?? null;
+  public get sourceChannel(): AnyChannel | NonNullable<APIWebhook["source_channel"]> | null {
+    return this[kRelations].sourceChannel ?? this[kData].source_channel ?? null;
   }
 
   /**
@@ -97,24 +127,13 @@ export class Webhook extends BaseWebhook {
   }
 
   /**
-   * Sends a message through the webhook.
-   *
-   * @param options The message, or its content, and the thread to send it in.
-   */
-  public send(
-    options: MessagePayloadResolvable<WebhookMessageCreateOptions> & WebhookThreadOptions,
-  ): Promise<Message> {
-    return getGatewayClient().webhooks.send(this.id, this.requireToken(), options);
-  }
-
-  /**
    * Edits the webhook, with its token when it has one (then it cannot be moved to another channel).
    *
    * @param options The fields to edit, and the reason for the audit log.
    */
   public async edit(options: WebhookEditOptions): Promise<this> {
     const token = options.channel === undefined ? this.token : undefined;
-    const webhook = await getGatewayClient().webhooks.edit(this.id, options, token);
+    const webhook = await this.client.webhooks.edit(this.id, options, token);
     return this[kPatch](webhook.toJSON());
   }
 
@@ -124,45 +143,9 @@ export class Webhook extends BaseWebhook {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().webhooks.delete(this.id, { token: this.token, reason });
+    await this.client.webhooks.delete(this.id, { token: this.token, reason });
     return this;
-  }
-
-  public fetchMessage(messageId: string, options?: WebhookThreadOptions): Promise<Message> {
-    return getGatewayClient().webhooks.fetchMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
-  }
-
-  public editMessage(
-    messageId: string,
-    options: MessagePayloadResolvable<WebhookMessageEditOptions> & WebhookThreadOptions,
-  ): Promise<Message> {
-    return getGatewayClient().webhooks.editMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
-  }
-
-  public deleteMessage(messageId: string, options?: WebhookThreadOptions): Promise<void> {
-    return getGatewayClient().webhooks.deleteMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
-  }
-
-  private requireToken(): string {
-    const { token } = this;
-    if (!token) throw new Error(`Webhook ${this.id} has no token to post with`);
-    return token;
   }
 }
 
-Mixin(Webhook, [StructureMixin]);
+Mixin(Webhook, [StructureMixin, WebhookMixin]);

@@ -1,5 +1,5 @@
-import type { RawFile } from "@discordjs/rest";
 import {
+  type APIWebhook,
   type RESTPatchAPIWebhookJSONBody,
   type RESTPatchAPIWebhookWithTokenMessageJSONBody,
   type RESTPostAPIChannelWebhookJSONBody,
@@ -7,9 +7,18 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Message } from "../structures/messages/Message.js";
+import { bindClient } from "../structures/Structure.js";
 import { Webhook } from "../structures/webhooks/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { resolveMessageOptions, type MessagePayloadResolvable } from "../util/messages.js";
+import {
+  MessagePayload,
+  type MessagePayloadResolvable,
+  type WebhookMessageCreateOptions,
+  type WebhookMessageEditOptions,
+  type WebhookThreadOptions,
+} from "../util/messages.js";
+
+export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThreadOptions };
 
 /**
  * The options to create a webhook with.
@@ -40,32 +49,11 @@ export interface WebhookEditOptions {
 }
 
 /**
- * The options to send a message through a webhook with: the REST body, plus the files to attach.
- */
-export type WebhookMessageCreateOptions = RESTPostAPIWebhookWithTokenJSONBody & {
-  files?: RawFile[];
-};
-
-/**
- * The options to edit a message sent by a webhook with: the REST body, plus the files to attach.
- */
-export type WebhookMessageEditOptions = RESTPatchAPIWebhookWithTokenMessageJSONBody & {
-  files?: RawFile[];
-};
-
-/**
- * The thread a webhook message is in, for webhooks of forum and media channels, or of a thread's parent.
- */
-export interface WebhookThreadOptions {
-  threadId?: string;
-}
-
-/**
  * Manages webhooks. Discord does not send them over the gateway, so they are never cached.
  *
  * @remarks
- * Methods taking a webhook's token call the API with it rather than with the bot's authorization, like discord.js's
- * `WebhookClient`: they work for webhooks of other applications too.
+ * Methods taking a webhook's token call the API with it rather than with the bot's authorization, so they work for
+ * webhooks of other applications too.
  */
 export class WebhookManager {
   public readonly client: GatewayClient;
@@ -81,8 +69,8 @@ export class WebhookManager {
    * @param token The webhook's token, to fetch it without the bot's authorization.
    */
   public async fetch(webhookId: string, token?: string): Promise<Webhook> {
-    const webhook = await this.client.core.api.webhooks.get(webhookId, { token });
-    return new Webhook(webhook);
+    const webhook = await this.client.api.webhooks.get(webhookId, { token });
+    return this.hydrate(webhook);
   }
 
   /**
@@ -91,8 +79,8 @@ export class WebhookManager {
    * @param channelId The ID of the channel.
    */
   public async fetchChannel(channelId: string): Promise<Webhook[]> {
-    const webhooks = await this.client.core.api.channels.getWebhooks(channelId);
-    return webhooks.map((webhook) => new Webhook(webhook));
+    const webhooks = await this.client.api.channels.getWebhooks(channelId);
+    return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
   /**
@@ -101,8 +89,8 @@ export class WebhookManager {
    * @param guildId The ID of the guild.
    */
   public async fetchGuild(guildId: string): Promise<Webhook[]> {
-    const webhooks = await this.client.core.api.guilds.getWebhooks(guildId);
-    return webhooks.map((webhook) => new Webhook(webhook));
+    const webhooks = await this.client.api.guilds.getWebhooks(guildId);
+    return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
   /**
@@ -113,10 +101,10 @@ export class WebhookManager {
    */
   public async create(channelId: string, options: WebhookCreateOptions): Promise<Webhook> {
     const body: RESTPostAPIChannelWebhookJSONBody = { name: options.name, avatar: options.avatar };
-    const webhook = await this.client.core.api.channels.createWebhook(channelId, body, {
+    const webhook = await this.client.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
     });
-    return new Webhook(webhook);
+    return this.hydrate(webhook);
   }
 
   /**
@@ -136,11 +124,11 @@ export class WebhookManager {
       avatar: options.avatar,
       channel_id: options.channel === undefined ? undefined : resolveId(options.channel),
     };
-    const webhook = await this.client.core.api.webhooks.edit(webhookId, body, {
+    const webhook = await this.client.api.webhooks.edit(webhookId, body, {
       token,
       reason: options.reason,
     });
-    return new Webhook(webhook);
+    return this.hydrate(webhook);
   }
 
   /**
@@ -153,7 +141,7 @@ export class WebhookManager {
     webhookId: string,
     options: { token?: string; reason?: string } = {},
   ): Promise<void> {
-    await this.client.core.api.webhooks.delete(webhookId, options);
+    await this.client.api.webhooks.delete(webhookId, options);
   }
 
   /**
@@ -166,12 +154,12 @@ export class WebhookManager {
   public async send(
     webhookId: string,
     token: string,
-    options: MessagePayloadResolvable<WebhookMessageCreateOptions> & WebhookThreadOptions,
+    options: MessagePayloadResolvable<WebhookMessageCreateOptions>,
   ): Promise<Message> {
-    const { threadId, ...payload } =
-      typeof options === "string" ? { content: options, threadId: undefined } : options;
-    const { body, files } = resolveMessageOptions<WebhookMessageCreateOptions>(payload);
-    const message = await this.client.core.api.webhooks.execute(webhookId, token, {
+    const payload = MessagePayload.create(this.client, options, { webhook: true });
+    const { threadId } = payload.options as WebhookThreadOptions;
+    const { body, files } = await payload.resolve<RESTPostAPIWebhookWithTokenJSONBody>();
+    const message = await this.client.api.webhooks.execute(webhookId, token, {
       ...body,
       files,
       thread_id: threadId,
@@ -194,7 +182,7 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<Message> {
-    const message = await this.client.core.api.webhooks.getMessage(webhookId, token, messageId, {
+    const message = await this.client.api.webhooks.getMessage(webhookId, token, messageId, {
       thread_id: options.threadId,
     });
     return this.client.messages._add(message);
@@ -212,12 +200,12 @@ export class WebhookManager {
     webhookId: string,
     token: string,
     messageId: string,
-    options: MessagePayloadResolvable<WebhookMessageEditOptions> & WebhookThreadOptions,
+    options: MessagePayloadResolvable<WebhookMessageEditOptions>,
   ): Promise<Message> {
-    const { threadId, ...payload } =
-      typeof options === "string" ? { content: options, threadId: undefined } : options;
-    const { body, files } = resolveMessageOptions<WebhookMessageEditOptions>(payload);
-    const message = await this.client.core.api.webhooks.editMessage(webhookId, token, messageId, {
+    const payload = MessagePayload.create(this.client, options, { webhook: true, edit: true });
+    const { threadId } = payload.options as WebhookThreadOptions;
+    const { body, files } = await payload.resolve<RESTPatchAPIWebhookWithTokenMessageJSONBody>();
+    const message = await this.client.api.webhooks.editMessage(webhookId, token, messageId, {
       ...body,
       files,
       thread_id: threadId,
@@ -239,8 +227,34 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<void> {
-    await this.client.core.api.webhooks.deleteMessage(webhookId, token, messageId, {
+    await this.client.api.webhooks.deleteMessage(webhookId, token, messageId, {
       thread_id: options.threadId,
     });
+  }
+
+  /**
+   * Builds the structure of a raw webhook, resolving its guild, channel, source guild, source channel, and owner from
+   * the cache.
+   *
+   * @param data The raw webhook.
+   */
+  public async hydrate(data: APIWebhook): Promise<Webhook> {
+    const [guild, channel, sourceGuild, sourceChannel, owner] = await Promise.all([
+      data.guild_id ? this.client.guilds.get(data.guild_id) : undefined,
+      data.channel_id ? this.client.channels.get(data.channel_id) : undefined,
+      data.source_guild ? this.client.guilds.get(data.source_guild.id) : undefined,
+      data.source_channel ? this.client.channels.get(data.source_channel.id) : undefined,
+      data.user ? this.client.users.resolveData(data.user) : undefined,
+    ]);
+    return bindClient(
+      new Webhook(data, {
+        guild: guild ?? null,
+        channel: channel ?? null,
+        sourceGuild: sourceGuild ?? null,
+        sourceChannel: sourceChannel ?? null,
+        owner,
+      }),
+      this.client,
+    );
   }
 }

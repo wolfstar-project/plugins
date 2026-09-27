@@ -88,7 +88,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * Fetches every sticker of the guild, and caches them.
    */
   public async fetchAll(): Promise<Sticker[]> {
-    const stickers = await this.client.core.api.guilds.getStickers(this.guildId);
+    const stickers = await this.client.api.guilds.getStickers(this.guildId);
     return Promise.all(stickers.map((sticker) => this.store(sticker)));
   }
 
@@ -98,7 +98,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @param options The file, name, and tags.
    */
   public async create(options: GuildStickerCreateOptions): Promise<Sticker> {
-    const sticker = await this.client.core.api.guilds.createSticker(
+    const sticker = await this.client.api.guilds.createSticker(
       this.guildId,
       {
         name: options.name,
@@ -123,7 +123,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
       description: options.description,
       tags: options.tags,
     };
-    const sticker = await this.client.core.api.guilds.editSticker(this.guildId, stickerId, body, {
+    const sticker = await this.client.api.guilds.editSticker(this.guildId, stickerId, body, {
       reason: options.reason,
     });
     return this.store(sticker);
@@ -136,7 +136,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @param reason The reason for the audit log.
    */
   public async delete(stickerId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteSticker(this.guildId, stickerId, { reason });
+    await this.client.api.guilds.deleteSticker(this.guildId, stickerId, { reason });
     await this.cache?.delete(this.resolveKey(stickerId));
   }
 
@@ -170,7 +170,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
   }
 
   protected async fetchRaw(stickerId: string) {
-    const sticker = await this.client.core.api.guilds.getSticker(this.guildId, stickerId);
+    const sticker = await this.client.api.guilds.getSticker(this.guildId, stickerId);
     return { ...sticker, guild_id: this.guildId };
   }
 

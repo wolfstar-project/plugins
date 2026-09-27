@@ -17,7 +17,7 @@ import type { PublicThreadChannel } from "../structures/channels/PublicThreadCha
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import {
-  resolveMessageOptions,
+  MessagePayload,
   type MessageCreateOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
@@ -109,7 +109,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
   public override _hydrate(data: CacheEntityTypes["threads"]): Awaitable<AnyThreadChannel> {
     return whenAll(
       [this.cachedGuild(data.guild_id)],
-      ([guild]) => createChannel(data, { guild }) as AnyThreadChannel,
+      ([guild]) => this.client.channels._hydrateInGuild(data, guild) as Awaitable<AnyThreadChannel>,
     );
   }
 
@@ -136,20 +136,20 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
       const type = options.type ?? (await this.defaultThreadType(channelId));
       body = { ...common, type, invitable: options.invitable };
     } else {
-      const message = resolveMessageOptions(options.message);
+      const message = await MessagePayload.create(this.client, options.message).resolve();
       body = { ...common, message: message.body, applied_tags: options.appliedTags?.slice() };
       files = message.files;
     }
 
     const thread = (
       options.message === undefined
-        ? await this.client.core.api.channels.createThread(
+        ? await this.client.api.channels.createThread(
             channelId,
             body as RESTPostAPIChannelThreadsJSONBody,
             undefined,
             { reason: options.reason },
           )
-        : await this.client.core.api.channels.createForumThread(
+        : await this.client.api.channels.createForumThread(
             channelId,
             {
               ...(body as RESTPostAPIGuildForumThreadsJSONBody),
@@ -169,7 +169,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
    * @param guildId The ID of the guild.
    */
   public async fetchActive(guildId: string): Promise<FetchedThreads> {
-    const result = await this.client.core.api.guilds.getActiveThreads(guildId);
+    const result = await this.client.api.guilds.getActiveThreads(guildId);
     return this.storeList(result.threads as APIThreadChannel[], result.members, guildId, false);
   }
 
@@ -193,8 +193,8 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
             : new Date(options.before).toISOString(),
     };
     const result = options.joined
-      ? await this.client.core.api.channels.getJoinedPrivateArchivedThreads(channelId, query)
-      : await this.client.core.api.channels.getArchivedThreads(
+      ? await this.client.api.channels.getJoinedPrivateArchivedThreads(channelId, query)
+      : await this.client.api.channels.getArchivedThreads(
           channelId,
           options.type ?? "public",
           query,
@@ -233,6 +233,6 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
   }
 
   protected async fetchRaw(threadId: string) {
-    return this.client.core.api.channels.get(threadId) as Promise<APIThreadChannel>;
+    return this.client.api.channels.get(threadId) as Promise<APIThreadChannel>;
   }
 }

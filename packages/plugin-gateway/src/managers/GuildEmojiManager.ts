@@ -92,7 +92,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * Fetches every emoji of the guild, and caches them.
    */
   public async fetchAll(): Promise<GuildEmoji[]> {
-    const emojis = await this.client.core.api.guilds.getEmojis(this.guildId);
+    const emojis = await this.client.api.guilds.getEmojis(this.guildId);
     return Promise.all(emojis.map((emoji) => this.store(emoji)));
   }
 
@@ -107,7 +107,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
       name: options.name,
       roles: options.roles ? [...options.roles] : undefined,
     };
-    const emoji = await this.client.core.api.guilds.createEmoji(this.guildId, body, {
+    const emoji = await this.client.api.guilds.createEmoji(this.guildId, body, {
       reason: options.reason,
     });
     return this.store(emoji);
@@ -125,7 +125,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
       roles:
         options.roles === undefined || options.roles === null ? options.roles : [...options.roles],
     };
-    const emoji = await this.client.core.api.guilds.editEmoji(this.guildId, emojiId, body, {
+    const emoji = await this.client.api.guilds.editEmoji(this.guildId, emojiId, body, {
       reason: options.reason,
     });
     return this.store(emoji);
@@ -138,7 +138,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * @param reason The reason for the audit log.
    */
   public async delete(emojiId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteEmoji(this.guildId, emojiId, { reason });
+    await this.client.api.guilds.deleteEmoji(this.guildId, emojiId, { reason });
     await this.cache?.delete(this.resolveKey(emojiId));
   }
 
@@ -172,7 +172,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
   }
 
   protected async fetchRaw(emojiId: string) {
-    const emoji = await this.client.core.api.guilds.getEmoji(this.guildId, emojiId);
+    const emoji = await this.client.api.guilds.getEmoji(this.guildId, emojiId);
     return { ...emoji, guild_id: this.guildId };
   }
 

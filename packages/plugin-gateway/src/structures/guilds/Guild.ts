@@ -36,7 +36,6 @@ import type { GuildTemplateCreateOptions } from "../../managers/GuildTemplateMan
 import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Webhook } from "../webhooks/Webhook.js";
 import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from "../../util/flags.js";
 import { AnonymousGuild } from "./AnonymousGuild.js";
@@ -48,7 +47,34 @@ import type { GuildTemplate } from "./GuildTemplate.js";
 import type { Integration } from "./Integration.js";
 import type { WelcomeScreen } from "./WelcomeScreen.js";
 import type { Widget } from "./Widget.js";
-import { kData, kPatch } from "../Structure.js";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import { kData, kPatch, kPatchRelations, kRelations } from "../Structure.js";
+
+/**
+ * The relations of a {@link Guild}: its special channels, resolved from the cache by `client.guilds`.
+ */
+export interface GuildRelations {
+  afkChannel?: AnyChannel | null;
+  systemChannel?: AnyChannel | null;
+  widgetChannel?: AnyChannel | null;
+  rulesChannel?: AnyChannel | null;
+  publicUpdatesChannel?: AnyChannel | null;
+  safetyAlertsChannel?: AnyChannel | null;
+}
+
+/**
+ * The raw field holding the ID of each channel of {@link GuildRelations}.
+ *
+ * @internal
+ */
+export const GuildChannelFields = {
+  afkChannel: "afk_channel_id",
+  systemChannel: "system_channel_id",
+  widgetChannel: "widget_channel_id",
+  rulesChannel: "rules_channel_id",
+  publicUpdatesChannel: "public_updates_channel_id",
+  safetyAlertsChannel: "safety_alerts_channel_id",
+} as const satisfies Record<keyof GuildRelations, string>;
 
 /**
  * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`), channels are IDs.
@@ -89,6 +115,16 @@ export interface GuildEditOptions {
  * guild-scoped ones discord.js exposes on the guild itself (`emojis`, `stickers`, `invites`) are here too.
  */
 export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
+  declare public [kRelations]: GuildRelations;
+
+  /**
+   * @param data The raw guild.
+   * @param relations The channels of the guild, as resolved from the cache by `client.guilds`.
+   */
+  public constructor(data: CacheEntityTypes["guilds"], relations: GuildRelations = {}) {
+    super(data, relations);
+  }
+
   protected override optimizeData(data: Partial<CacheEntityTypes["guilds"]>): void {
     super.optimizeData(data);
     this.optimizeTimestamp("joined_at", data.joined_at);
@@ -165,6 +201,78 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
 
   public get safetyAlertsChannelId() {
     return this[kData].safety_alerts_channel_id;
+  }
+
+  /**
+   * The channel members are moved to when idle, from the cache, like discord.js's `Guild#afkChannel`. `null` when
+   * the guild has none, when it is not cached, or when the guild was not built by a manager.
+   */
+  public get afkChannel(): AnyChannel | null {
+    return this.relatedChannel("afkChannel");
+  }
+
+  /**
+   * The channel system messages are sent to, from the cache.
+   */
+  public get systemChannel(): AnyChannel | null {
+    return this.relatedChannel("systemChannel");
+  }
+
+  /**
+   * The channel the widget's invite leads to, from the cache.
+   */
+  public get widgetChannel(): AnyChannel | null {
+    return this.relatedChannel("widgetChannel");
+  }
+
+  /**
+   * The rules channel of a community guild, from the cache.
+   */
+  public get rulesChannel(): AnyChannel | null {
+    return this.relatedChannel("rulesChannel");
+  }
+
+  /**
+   * The channel Discord sends community updates to, from the cache.
+   */
+  public get publicUpdatesChannel(): AnyChannel | null {
+    return this.relatedChannel("publicUpdatesChannel");
+  }
+
+  /**
+   * The channel Discord sends safety alerts to, from the cache.
+   */
+  public get safetyAlertsChannel(): AnyChannel | null {
+    return this.relatedChannel("safetyAlertsChannel");
+  }
+
+  /**
+   * Gets one of the channels of {@link GuildRelations}: the one `client.guilds` resolved, else, for guilds built
+   * without their channels (e.g. `message.guild`), a lookup in a synchronous cache.
+   */
+  private relatedChannel(name: keyof GuildRelations): AnyChannel | null {
+    const resolved = this[kRelations][name];
+    if (resolved !== undefined) return resolved;
+
+    const channelId = (this[kData] as unknown as Record<string, string | null | undefined>)[
+      GuildChannelFields[name]
+    ];
+    if (!channelId || this.client.cache?.channels.synchronous !== true) return null;
+    try {
+      return this.client.channels.cached(channelId) ?? null;
+    } catch {
+      // A relation of the channel is read from an asynchronous cache.
+      return null;
+    }
+  }
+
+  /**
+   * Forgets the channels a patch changes.
+   *
+   * @internal
+   */
+  public [kPatchRelations](data: object): void {
+    this.dropChangedRelations(data, GuildChannelFields);
   }
 
   /**
@@ -290,56 +398,56 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * The custom emojis of the guild.
    */
   public get emojis(): GuildEmojiManager {
-    return getGatewayClient().guilds.emojis(this.id);
+    return this.client.guilds.emojis(this.id);
   }
 
   /**
    * The custom stickers of the guild.
    */
   public get stickers(): GuildStickerManager {
-    return getGatewayClient().guilds.stickers(this.id);
+    return this.client.guilds.stickers(this.id);
   }
 
   /**
    * Fetches the active threads of the guild, and caches them.
    */
   public fetchActiveThreads(): Promise<FetchedThreads> {
-    return getGatewayClient().threads.fetchActive(this.id);
+    return this.client.threads.fetchActive(this.id);
   }
 
   /**
    * Fetches the webhooks of the guild.
    */
   public fetchWebhooks(): Promise<Webhook[]> {
-    return getGatewayClient().webhooks.fetchGuild(this.id);
+    return this.client.webhooks.fetchGuild(this.id);
   }
 
   /**
    * The scheduled events of the guild.
    */
   public get scheduledEvents(): GuildScheduledEventManager {
-    return getGatewayClient().guilds.scheduledEvents(this.id);
+    return this.client.guilds.scheduledEvents(this.id);
   }
 
   /**
    * The live stages of the guild.
    */
   public get stageInstances(): StageInstanceManager {
-    return getGatewayClient().guilds.stageInstances(this.id);
+    return this.client.guilds.stageInstances(this.id);
   }
 
   /**
    * The soundboard sounds of the guild.
    */
   public get soundboardSounds(): GuildSoundboardSoundManager {
-    return getGatewayClient().guilds.soundboardSounds(this.id);
+    return this.client.guilds.soundboardSounds(this.id);
   }
 
   /**
    * The integrations of the guild.
    */
   public get integrations(): GuildIntegrationManager {
-    return getGatewayClient().guilds.integrations(this.id);
+    return this.client.guilds.integrations(this.id);
   }
 
   /**
@@ -353,7 +461,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Fetches the templates of the guild.
    */
   public fetchTemplates(): Promise<GuildTemplate[]> {
-    return getGatewayClient().templates.list(this.id);
+    return this.client.templates.list(this.id);
   }
 
   /**
@@ -364,14 +472,14 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public createTemplate(name: string, description?: string | null): Promise<GuildTemplate> {
     const options: GuildTemplateCreateOptions = { name, description };
-    return getGatewayClient().templates.create(this.id, options);
+    return this.client.templates.create(this.id, options);
   }
 
   /**
    * Fetches the welcome screen of the guild.
    */
   public fetchWelcomeScreen(): Promise<WelcomeScreen> {
-    return getGatewayClient().guilds.fetchWelcomeScreen(this.id);
+    return this.client.guilds.fetchWelcomeScreen(this.id);
   }
 
   /**
@@ -380,21 +488,21 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options The changes to apply.
    */
   public editWelcomeScreen(options: GuildWelcomeScreenEditOptions): Promise<WelcomeScreen> {
-    return getGatewayClient().guilds.editWelcomeScreen(this.id, options);
+    return this.client.guilds.editWelcomeScreen(this.id, options);
   }
 
   /**
    * Fetches the public widget of the guild, which must be enabled.
    */
   public fetchWidget(): Promise<Widget> {
-    return getGatewayClient().fetchGuildWidget(this.id);
+    return this.client.fetchGuildWidget(this.id);
   }
 
   /**
    * Fetches whether the widget of the guild is enabled, and its channel.
    */
   public fetchWidgetSettings(): Promise<GuildWidgetSettings> {
-    return getGatewayClient().guilds.fetchWidgetSettings(this.id);
+    return this.client.guilds.fetchWidgetSettings(this.id);
   }
 
   /**
@@ -404,7 +512,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options Whether to enable the widget, and its channel.
    */
   public async setWidgetSettings(options: GuildWidgetSettingsEditOptions): Promise<this> {
-    const settings = await getGatewayClient().guilds.editWidgetSettings(this.id, options);
+    const settings = await this.client.guilds.editWidgetSettings(this.id, options);
     return this[kPatch]({
       widget_enabled: settings.enabled,
       widget_channel_id: settings.channelId,
@@ -415,7 +523,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Fetches the onboarding of the guild.
    */
   public fetchOnboarding(): Promise<GuildOnboarding> {
-    return getGatewayClient().guilds.fetchOnboarding(this.id);
+    return this.client.guilds.fetchOnboarding(this.id);
   }
 
   /**
@@ -424,21 +532,21 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options The changes to apply. The prompts replace every existing one.
    */
   public editOnboarding(options: GuildOnboardingEditOptions): Promise<GuildOnboarding> {
-    return getGatewayClient().guilds.editOnboarding(this.id, options);
+    return this.client.guilds.editOnboarding(this.id, options);
   }
 
   /**
    * The bans of the guild.
    */
   public get bans(): GuildBanManager {
-    return getGatewayClient().guilds.bans(this.id);
+    return this.client.guilds.bans(this.id);
   }
 
   /**
    * The auto moderation rules of the guild.
    */
   public get autoModerationRules(): AutoModerationRuleManager {
-    return getGatewayClient().guilds.autoModerationRules(this.id);
+    return this.client.guilds.autoModerationRules(this.id);
   }
 
   /**
@@ -447,21 +555,21 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options Which user and action to filter by, and the page.
    */
   public fetchAuditLogs(options?: GuildAuditLogsFetchOptions): Promise<GuildAuditLogs> {
-    return getGatewayClient().guilds.fetchAuditLogs(this.id, options);
+    return this.client.guilds.fetchAuditLogs(this.id, options);
   }
 
   /**
    * The channels of the guild.
    */
   public get channels(): GuildChannelManager {
-    return getGatewayClient().guilds.channels(this.id);
+    return this.client.guilds.channels(this.id);
   }
 
   /**
    * The invites of the guild.
    */
   public get invites(): GuildInviteManager {
-    return getGatewayClient().guilds.invites(this.id);
+    return this.client.guilds.invites(this.id);
   }
 
   /**
@@ -477,7 +585,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Fetches this guild from the API, with its approximate counts, and patches it in place.
    */
   public async fetch(): Promise<this> {
-    const guild = await getGatewayClient().guilds.fetch(this.id, { force: true });
+    const guild = await this.client.guilds.fetch(this.id, { force: true });
     return this[kPatch](guild.toJSON());
   }
 
@@ -485,7 +593,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Fetches the member owning this guild.
    */
   public fetchOwner(): Promise<GuildMember> {
-    return getGatewayClient().members.fetch(this.id, this.ownerId);
+    return this.client.members.fetch(this.id, this.ownerId);
   }
 
   /**
@@ -495,7 +603,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options Which members to request.
    */
   public requestMembers(options?: GuildMembersRequestOptions): Promise<GuildMember[]> {
-    return getGatewayClient().members.request(this.id, options);
+    return this.client.members.request(this.id, options);
   }
 
   /**
@@ -509,21 +617,21 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Fetches the public preview of this guild.
    */
   public fetchPreview(): Promise<GuildPreview> {
-    return getGatewayClient().guilds.fetchPreview(this.id);
+    return this.client.guilds.fetchPreview(this.id);
   }
 
   /**
    * Fetches the voice regions available to this guild.
    */
   public fetchVoiceRegions(): Promise<APIVoiceRegion[]> {
-    return getGatewayClient().guilds.fetchVoiceRegions(this.id);
+    return this.client.guilds.fetchVoiceRegions(this.id);
   }
 
   /**
    * Fetches the vanity URL of this guild, patching {@link AnonymousGuild.vanityURLCode} in place.
    */
   public async fetchVanityData(): Promise<RESTGetAPIGuildVanityUrlResult> {
-    const data = await getGatewayClient().guilds.fetchVanityData(this.id);
+    const data = await this.client.guilds.fetchVanityData(this.id);
     this[kPatch]({ vanity_url_code: data.code });
     return data;
   }
@@ -534,7 +642,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options The changes to apply.
    */
   public async edit(options: GuildEditOptions): Promise<this> {
-    const guild = await getGatewayClient().guilds.edit(this.id, options);
+    const guild = await this.client.guilds.edit(this.id, options);
     return this[kPatch](guild.toJSON());
   }
 
@@ -670,7 +778,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * @param options Until when to pause each, `null` to resume.
    */
   public async setIncidentActions(options: GuildIncidentActionsOptions): Promise<APIIncidentsData> {
-    const incidents = await getGatewayClient().guilds.setIncidentActions(this.id, options);
+    const incidents = await this.client.guilds.setIncidentActions(this.id, options);
     this[kPatch]({ incidents_data: incidents });
     return incidents;
   }
@@ -679,7 +787,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Makes the client user leave this guild.
    */
   public async leave(): Promise<this> {
-    await getGatewayClient().guilds.leave(this.id);
+    await this.client.guilds.leave(this.id);
     return this;
   }
 
@@ -687,7 +795,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    * Deletes this guild. The client user must own it.
    */
   public async delete(): Promise<this> {
-    await getGatewayClient().guilds.delete(this.id);
+    await this.client.guilds.delete(this.id);
     return this;
   }
 

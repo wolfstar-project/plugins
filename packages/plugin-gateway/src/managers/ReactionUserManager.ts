@@ -29,7 +29,7 @@ export class ReactionUserManager {
   public async fetch(
     options: { limit?: number; after?: string; type?: ReactionType } = {},
   ): Promise<User[]> {
-    const users = await this.client.core.api.channels.getMessageReactions(
+    const users = await this.client.api.channels.getMessageReactions(
       this.channelId,
       this.messageId,
       this.emoji,
@@ -45,13 +45,13 @@ export class ReactionUserManager {
    */
   public async remove(userId = "@me"): Promise<void> {
     if (userId === "@me" || userId === this.client.user?.id) {
-      await this.client.core.api.channels.deleteOwnMessageReaction(
+      await this.client.api.channels.deleteOwnMessageReaction(
         this.channelId,
         this.messageId,
         this.emoji,
       );
     } else {
-      await this.client.core.api.channels.deleteUserMessageReaction(
+      await this.client.api.channels.deleteUserMessageReaction(
         this.channelId,
         this.messageId,
         this.emoji,

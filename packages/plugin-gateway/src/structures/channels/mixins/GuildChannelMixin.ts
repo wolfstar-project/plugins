@@ -9,7 +9,6 @@ import type {
   VideoQualityMode,
 } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
-import { getGatewayClient } from "../../../util/container.js";
 import type { Guild } from "../../guilds/Guild.js";
 import { kData, kRelations } from "../../Structure.js";
 import type { GuildChannelCreateOptions, GuildChannelEditOptions } from "../../../util/channels.js";
@@ -64,7 +63,7 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public async fetchGuild(): Promise<Guild | null> {
     const { guildId } = this;
-    return guildId ? getGatewayClient().guilds.fetch(guildId) : null;
+    return guildId ? this.client.guilds.fetch(guildId) : null;
   }
 
   public get name(): string {
@@ -94,33 +93,31 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
     if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
 
     const data = this[kData] as CloneableData;
-    return getGatewayClient()
-      .guilds.channels(guildId)
-      .create({
-        name: data.name ?? "",
-        type: this.type,
-        topic: data.topic,
-        nsfw: data.nsfw,
-        bitrate: data.bitrate,
-        userLimit: data.user_limit,
-        rateLimitPerUser: data.rate_limit_per_user,
-        parent: data.parent_id,
-        position: data.position,
-        rtcRegion: data.rtc_region,
-        videoQualityMode: data.video_quality_mode,
-        defaultAutoArchiveDuration: data.default_auto_archive_duration,
-        availableTags: data.available_tags,
-        defaultReactionEmoji: data.default_reaction_emoji,
-        defaultThreadRateLimitPerUser: data.default_thread_rate_limit_per_user,
-        defaultSortOrder: data.default_sort_order,
-        defaultForumLayout: data.default_forum_layout,
-        permissionOverwrites: data.permission_overwrites?.map((overwrite) => ({
-          id: overwrite.id,
-          type: overwrite.type,
-          allow: BigInt(overwrite.allow),
-          deny: BigInt(overwrite.deny),
-        })),
-        ...options,
-      });
+    return this.client.guilds.channels(guildId).create({
+      name: data.name ?? "",
+      type: this.type,
+      topic: data.topic,
+      nsfw: data.nsfw,
+      bitrate: data.bitrate,
+      userLimit: data.user_limit,
+      rateLimitPerUser: data.rate_limit_per_user,
+      parent: data.parent_id,
+      position: data.position,
+      rtcRegion: data.rtc_region,
+      videoQualityMode: data.video_quality_mode,
+      defaultAutoArchiveDuration: data.default_auto_archive_duration,
+      availableTags: data.available_tags,
+      defaultReactionEmoji: data.default_reaction_emoji,
+      defaultThreadRateLimitPerUser: data.default_thread_rate_limit_per_user,
+      defaultSortOrder: data.default_sort_order,
+      defaultForumLayout: data.default_forum_layout,
+      permissionOverwrites: data.permission_overwrites?.map((overwrite) => ({
+        id: overwrite.id,
+        type: overwrite.type,
+        allow: BigInt(overwrite.allow),
+        deny: BigInt(overwrite.deny),
+      })),
+      ...options,
+    });
   }
 }

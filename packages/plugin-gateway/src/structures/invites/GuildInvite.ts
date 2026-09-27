@@ -1,4 +1,3 @@
-import { getGatewayClient } from "../../util/container.js";
 import { BaseInvite } from "./BaseInvite.js";
 import { InviteGuild } from "../guilds/InviteGuild.js";
 import type { Guild } from "../guilds/Guild.js";
@@ -25,7 +24,7 @@ export class GuildInvite extends BaseInvite {
    * Whether the bot can delete the invite: it created it, or it has `ManageGuild` (or `ManageChannels`).
    */
   public async fetchDeletable(): Promise<boolean> {
-    const client = getGatewayClient();
+    const client = this.client;
     const { guildId } = this;
     if (!guildId) return false;
     if (this.inviterId === (client.user?.id ?? client.id)) return true;
@@ -43,7 +42,7 @@ export class GuildInvite extends BaseInvite {
   public async delete(reason?: string): Promise<this> {
     const { guildId } = this;
     if (!guildId) throw new Error(`Invite ${this.code} has no known guild`);
-    await getGatewayClient().guilds.invites(guildId).delete(this.code, reason);
+    await this.client.guilds.invites(guildId).delete(this.code, reason);
     return this;
   }
 }

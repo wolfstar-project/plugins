@@ -72,7 +72,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
    * @param options How many bans, and around which user ID.
    */
   public async list(options: GuildBanListOptions = {}): Promise<GuildBan[]> {
-    const bans = await this.client.core.api.guilds.getMemberBans(this.guildId, options);
+    const bans = await this.client.api.guilds.getMemberBans(this.guildId, options);
     return Promise.all(bans.map((ban) => this._add(this.toData(ban))));
   }
 
@@ -112,7 +112,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
   }
 
   protected async fetchRaw(userId: string) {
-    const ban = await this.client.core.api.guilds.getMemberBan(this.guildId, userId);
+    const ban = await this.client.api.guilds.getMemberBan(this.guildId, userId);
     return this.toData(ban);
   }
 

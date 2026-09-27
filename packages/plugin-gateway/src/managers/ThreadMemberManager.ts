@@ -75,8 +75,15 @@ export class ThreadMemberManager extends CachedManager<
           : guildId && userId
             ? this.client.members._get(guildId, userId)
             : null,
+        data.id ? this.client.threads._get(data.id) : undefined,
+        userId ? this.client.users._get(userId) : undefined,
       ],
-      ([guildMember]) => new ThreadMember(data, { guildMember: guildMember ?? null }),
+      ([guildMember, thread, user]) =>
+        new ThreadMember(data, {
+          guildMember: guildMember ?? null,
+          thread: thread ?? null,
+          user: user ?? null,
+        }),
     );
   }
 
@@ -93,10 +100,10 @@ export class ThreadMemberManager extends CachedManager<
     options: { withMember?: boolean } = {},
   ): Promise<ThreadMember> {
     const member = options.withMember
-      ? ((await this.client.core.api.rest.get(Routes.threadMembers(threadId, userId), {
+      ? ((await this.client.api.rest.get(Routes.threadMembers(threadId, userId), {
           query: new URLSearchParams({ with_member: "true" }),
         })) as APIThreadMember)
-      : await this.client.core.api.threads.getMember(threadId, userId);
+      : await this.client.api.threads.getMember(threadId, userId);
     return this._add(await this.withGuildId(threadId, member));
   }
 
@@ -112,14 +119,14 @@ export class ThreadMemberManager extends CachedManager<
   ): Promise<ThreadMember[]> {
     const members =
       options.withMember || options.limit || options.after
-        ? ((await this.client.core.api.rest.get(Routes.threadMembers(threadId), {
+        ? ((await this.client.api.rest.get(Routes.threadMembers(threadId), {
             query: new URLSearchParams({
               with_member: String(options.withMember ?? false),
               ...(options.limit && { limit: String(options.limit) }),
               ...(options.after && { after: options.after }),
             }),
           })) as APIThreadMember[])
-        : await this.client.core.api.threads.getAllMembers(threadId);
+        : await this.client.api.threads.getAllMembers(threadId);
     const guildId = await this.guildIdOf(threadId);
     return Promise.all(
       members.map((member) => this._add(guildId ? { ...member, guild_id: guildId } : member)),
@@ -133,8 +140,8 @@ export class ThreadMemberManager extends CachedManager<
    * @param userId The ID of the user, `"@me"` (the default) to join it.
    */
   public async add(threadId: string, userId = "@me"): Promise<void> {
-    if (userId === "@me") await this.client.core.api.threads.join(threadId);
-    else await this.client.core.api.threads.addMember(threadId, userId);
+    if (userId === "@me") await this.client.api.threads.join(threadId);
+    else await this.client.api.threads.addMember(threadId, userId);
   }
 
   /**
@@ -144,14 +151,14 @@ export class ThreadMemberManager extends CachedManager<
    * @param userId The ID of the user, `"@me"` (the default) to leave it.
    */
   public async remove(threadId: string, userId = "@me"): Promise<void> {
-    if (userId === "@me") await this.client.core.api.threads.leave(threadId);
-    else await this.client.core.api.threads.removeMember(threadId, userId);
+    if (userId === "@me") await this.client.api.threads.leave(threadId);
+    else await this.client.api.threads.removeMember(threadId, userId);
     const cachedId = userId === "@me" ? (this.client.user?.id ?? this.client.id) : userId;
     await this.cache?.delete(this.resolveKey(threadId, cachedId));
   }
 
   protected async fetchRaw(threadId: string, userId: string) {
-    const member = await this.client.core.api.threads.getMember(threadId, userId);
+    const member = await this.client.api.threads.getMember(threadId, userId);
     return this.withGuildId(threadId, member);
   }
 

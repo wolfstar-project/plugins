@@ -1,6 +1,7 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { getGatewayClient } from "../../util/container.js";
+import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
+import type { User } from "../users/User.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 
 /**
@@ -11,6 +12,8 @@ export interface ThreadMemberRelations {
    * The member of the thread's guild, when the payload included it or the cache holds it.
    */
   guildMember?: GuildMember | null;
+  thread?: AnyThreadChannel | null;
+  user?: User | null;
 }
 
 /**
@@ -25,7 +28,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
 
   /**
    * @param data The raw thread member.
-   * @param relations The guild member as resolved from the cache, by `client.threadMembers`.
+   * @param relations The guild member, thread, and user as resolved from the cache, by `client.threadMembers`.
    */
   public constructor(
     data: CacheEntityTypes["threadMembers"],
@@ -48,6 +51,26 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
 
   public get threadId(): string | null {
     return this[kData].id ?? null;
+  }
+
+  /**
+   * Whether the thread member is partial: built from its IDs alone for an event about an uncached thread member, see
+   * `Partials.ThreadMember`. Only `id`, `threadId`, and `guildId` are reliable then, and {@link ThreadMember.fetch}
+   * completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].flags === undefined;
+  }
+
+  /**
+   * Fetches the thread member from the API and patches this structure with the result.
+   */
+  public async fetch(): Promise<this> {
+    const { threadId, id } = this;
+    if (!threadId || !id)
+      throw new Error("A thread member without a thread or user ID cannot be fetched");
+    const member = await this.client.threadMembers.fetch(threadId, id, { force: true });
+    return this[kPatch](member.toJSON());
   }
 
   public get joinedTimestamp(): number {
@@ -73,12 +96,27 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
   }
 
   /**
+   * The thread, from the cache, like discord.js's `ThreadMember#thread`. `null` when it is not cached, or when the
+   * thread member was not built by a manager.
+   */
+  public get thread(): AnyThreadChannel | null {
+    return this[kRelations].thread ?? null;
+  }
+
+  /**
+   * The user, from the cache, like discord.js's `ThreadMember#user`, else the user of the guild member.
+   */
+  public get user(): User | null {
+    return this[kRelations].user ?? this.guildMember?.user ?? null;
+  }
+
+  /**
    * Removes the member from the thread.
    */
   public async remove(): Promise<this> {
     const { id, threadId } = this;
     if (!id || !threadId) throw new Error("Cannot remove a thread member without its IDs");
-    await getGatewayClient().threadMembers.remove(threadId, id);
+    await this.client.threadMembers.remove(threadId, id);
     return this;
   }
 }

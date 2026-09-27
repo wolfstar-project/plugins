@@ -3,7 +3,6 @@ import {
   type ChannelType,
   type RESTPostAPISoundboardSendSoundJSONBody,
 } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import type { SoundboardSound } from "../soundboards/SoundboardSound.js";
 import type { ChannelDataType, ChannelRelations } from "./Channel.js";
 import { Mixin, type MixinTypes } from "../Mixin.js";
@@ -62,7 +61,7 @@ export class VoiceChannel extends BaseVoiceChannel {
       sound_id: sound.soundId,
       source_guild_id: sound.guildId ?? undefined,
     };
-    await getGatewayClient().core.api.channels.sendSoundboardSound(this.id, body);
+    await this.client.api.channels.sendSoundboardSound(this.id, body);
   }
 }
 

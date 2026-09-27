@@ -5,7 +5,6 @@ import {
   type APIGuildWidget,
   type APIGuildWidgetMember,
 } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import { kData, Structure } from "../Structure.js";
 
 /**
@@ -94,6 +93,6 @@ export class Widget extends Structure<APIGuildWidget> {
    * Fetches the current state of the widget.
    */
   public fetch(): Promise<Widget> {
-    return getGatewayClient().fetchGuildWidget(this.id);
+    return this.client.fetchGuildWidget(this.id);
   }
 }

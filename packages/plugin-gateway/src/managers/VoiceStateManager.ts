@@ -43,8 +43,10 @@ export class VoiceStateManager extends CachedManager<
             ? this.client.members._get(guildId, userId)
             : null,
         this.cachedGuild(guildId),
+        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
       ],
-      ([resolvedMember, guild]) => new VoiceState(data, { member: resolvedMember ?? null, guild }),
+      ([resolvedMember, guild, channel]) =>
+        new VoiceState(data, { member: resolvedMember ?? null, guild, channel: channel ?? null }),
     );
   }
 
@@ -67,8 +69,8 @@ export class VoiceStateManager extends CachedManager<
     const target = (client.user?.id ?? client.id) === userId ? "@me" : userId;
     const state =
       target === "@me"
-        ? await client.core.api.voice.getVoiceState(guildId)
-        : await client.core.api.voice.getUserVoiceState(guildId, target);
+        ? await client.api.voice.getVoiceState(guildId)
+        : await client.api.voice.getUserVoiceState(guildId, target);
     return { ...state, guild_id: guildId };
   }
 }

@@ -68,6 +68,9 @@ export interface MessageReactionEventDetails {
  * Update events receive the previous state of the entity as read from the cache before the dispatch was applied, or
  * `null` when it was not cached. Delete events receive the cached entity (or `null`) alongside the raw dispatch data,
  * which always identifies the deleted entity.
+ *
+ * With the matching `Partials` enabled, uncached messages, users, members, thread members, scheduled events,
+ * soundboard sounds, polls, and direct messages are partial structures (`partial` is `true`) instead of `null`.
  */
 export interface GatewayEventMap {
   /**

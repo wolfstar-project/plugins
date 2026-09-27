@@ -2,10 +2,9 @@ import type { ChannelType } from "discord-api-types/v10";
 import type { Channel, ChannelDataType } from "../Channel.js";
 import type { ThreadAutoArchiveDuration } from "discord-api-types/v10";
 import { ThreadChannelMemberManager } from "../../../managers/ThreadChannelMemberManager.js";
-import { getGatewayClient } from "../../../util/container.js";
 import type { Message } from "../../messages/Message.js";
 import type { ThreadMember } from "../ThreadMember.js";
-import { kData } from "../../Structure.js";
+import { kData, kRelations } from "../../Structure.js";
 import { editChannel } from "./edit.js";
 import type { APIThreadMetadata } from "discord-api-types/v10";
 
@@ -15,6 +14,7 @@ type Data = {
   thread_metadata?: APIThreadMetadata;
   message_count?: number;
   member_count?: number;
+  member?: object;
 };
 const kArchiveTimestamp: unique symbol = Symbol.for(
   "wolfstar.structures.archiveTimestamp",
@@ -72,10 +72,18 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
+   * Whether the bot is a member of the thread, like discord.js's `ThreadChannel#joined`: from the thread member cache
+   * when the thread was built by a manager, else whether the payload carries the bot's thread member.
+   */
+  public get joined(): boolean {
+    return this[kRelations].joined ?? (this[kData] as Data).member !== undefined;
+  }
+
+  /**
    * The members of the thread.
    */
   public get members(): ThreadChannelMemberManager {
-    return new ThreadChannelMemberManager(getGatewayClient(), this.id);
+    return new ThreadChannelMemberManager(this.client, this.id);
   }
 
   public setArchived(archived = true, reason?: string): Promise<this> {
@@ -104,7 +112,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    * Joins the thread.
    */
   public async join(): Promise<this> {
-    await getGatewayClient().threadMembers.add(this.id);
+    await this.client.threadMembers.add(this.id);
     return this;
   }
 
@@ -112,7 +120,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    * Leaves the thread.
    */
   public async leave(): Promise<this> {
-    await getGatewayClient().threadMembers.remove(this.id);
+    await this.client.threadMembers.remove(this.id);
     return this;
   }
 
@@ -122,7 +130,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
   public fetchStarterMessage(): Promise<Message> {
     const { parent_id: parentId } = this[kData] as Data;
     if (!parentId) throw new Error(`Thread ${this.id} has no known parent`);
-    return getGatewayClient().messages.fetch(parentId, this.id);
+    return this.client.messages.fetch(parentId, this.id);
   }
 
   /**
@@ -131,6 +139,6 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
   public fetchOwner(): Promise<ThreadMember> {
     const { owner_id: ownerId } = this[kData] as Data;
     if (!ownerId) throw new Error(`Thread ${this.id} has no known owner`);
-    return getGatewayClient().threadMembers.fetch(this.id, ownerId);
+    return this.client.threadMembers.fetch(this.id, ownerId);
   }
 }

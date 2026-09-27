@@ -1,4 +1,4 @@
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
@@ -16,6 +16,7 @@ import {
   type GuildOnboardingMode,
   type GuildOnboardingPromptType,
   type APIGuildWelcomeScreen,
+  type APIGuildOnboarding,
   type RESTPatchAPIGuildWelcomeScreenJSONBody,
   type RESTPatchAPIGuildWidgetSettingsJSONBody,
   type RESTPutAPIGuildOnboardingJSONBody,
@@ -23,7 +24,15 @@ import {
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnonymousGuild } from "../structures/guilds/AnonymousGuild.js";
-import { Guild, type GuildEditOptions } from "../structures/guilds/Guild.js";
+import {
+  Guild,
+  GuildChannelFields,
+  type GuildEditOptions,
+  type GuildRelations,
+} from "../structures/guilds/Guild.js";
+import { bindClient } from "../structures/Structure.js";
+import { resolveAuditLogTarget, type AuditLogEntities } from "../util/auditLogs.js";
+import { whenAll } from "../util/cache.js";
 import { GuildPreview } from "../structures/guilds/GuildPreview.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { GuildOnboarding } from "../structures/guilds/GuildOnboarding.js";
@@ -35,7 +44,7 @@ import {
 import { WelcomeScreen } from "../structures/guilds/WelcomeScreen.js";
 import type { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import type { User } from "../structures/users/User.js";
-import { Webhook } from "../structures/webhooks/Webhook.js";
+import type { Webhook } from "../structures/webhooks/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
@@ -190,6 +199,42 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     return data.id;
   }
 
+  /**
+   * Builds a guild, resolving its AFK, system, widget, rules, public updates, and safety alerts channels from the
+   * cache.
+   *
+   * @internal
+   */
+  public override _hydrate(data: CacheEntityTypes["guilds"]): Awaitable<Guild> {
+    const relations: GuildRelations = {};
+    // The channels resolve their guild to this very structure, rather than reading it again.
+    const guild = bindClient(new Guild(data, relations), this.client);
+    const fields = Object.entries(GuildChannelFields) as [keyof GuildRelations, string][];
+    return whenAll(
+      fields.map(([, key]) => {
+        const channelId = (data as unknown as Record<string, string | null | undefined>)[key];
+        return channelId ? this.client.channels._getInGuild(channelId, guild) : null;
+      }),
+      (channels) => {
+        for (const [index, [name]] of fields.entries()) relations[name] = channels[index] ?? null;
+        return guild;
+      },
+    );
+  }
+
+  /**
+   * Gets a guild from the cache without resolving its channels, for the relations of other structures: a message
+   * resolving its guild should not read six more channels. Its channel getters fall back to a synchronous cache.
+   *
+   * @param guildId The ID of the guild.
+   * @internal
+   */
+  public _getShallow(guildId: string): Awaitable<Guild | undefined> {
+    return whenAll([this.cache?.get(guildId)], ([raw]) =>
+      raw === undefined ? undefined : bindClient(this.createStructure(raw), this.client),
+    );
+  }
+
   public resolveKey(guildId: string): string {
     return guildId;
   }
@@ -236,7 +281,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWelcomeScreen(guildId: string): Promise<WelcomeScreen> {
-    const screen = await this.client.core.api.guilds.getWelcomeScreen(guildId);
+    const screen = await this.client.api.guilds.getWelcomeScreen(guildId);
     return this.welcomeScreen(guildId, screen);
   }
 
@@ -263,7 +308,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
         };
       }),
     };
-    const screen = await this.client.core.api.guilds.editWelcomeScreen(guildId, body, {
+    const screen = await this.client.api.guilds.editWelcomeScreen(guildId, body, {
       reason: options.reason,
     });
     return this.welcomeScreen(guildId, screen);
@@ -275,7 +320,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWidgetSettings(guildId: string): Promise<GuildWidgetSettings> {
-    const settings = await this.client.core.api.guilds.getWidgetSettings(guildId);
+    const settings = await this.client.api.guilds.getWidgetSettings(guildId);
     return { enabled: settings.enabled, channelId: settings.channel_id };
   }
 
@@ -294,7 +339,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       channel_id:
         options.channel === undefined ? undefined : options.channel && resolveId(options.channel),
     };
-    const settings = await this.client.core.api.guilds.editWidgetSettings(guildId, body, {
+    const settings = await this.client.api.guilds.editWidgetSettings(guildId, body, {
       reason: options.reason,
     });
     const cached = await this.cache?.get(guildId);
@@ -315,8 +360,8 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchOnboarding(guildId: string): Promise<GuildOnboarding> {
-    const onboarding = await this.client.core.api.guilds.getOnboarding(guildId);
-    return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
+    const onboarding = await this.client.api.guilds.getOnboarding(guildId);
+    return this.onboarding(guildId, onboarding);
   }
 
   /**
@@ -355,10 +400,10 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       enabled: options.enabled,
       mode: options.mode,
     };
-    const onboarding = await this.client.core.api.guilds.editOnboarding(guildId, body, {
+    const onboarding = await this.client.api.guilds.editOnboarding(guildId, body, {
       reason: options.reason,
     });
-    return new GuildOnboarding(onboarding, { guild: await this.cachedGuild(guildId) });
+    return this.onboarding(guildId, onboarding);
   }
 
   /**
@@ -389,7 +434,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     guildId: string,
     options: GuildAuditLogsFetchOptions = {},
   ): Promise<GuildAuditLogs> {
-    const log = await this.client.core.api.guilds.getAuditLogs(guildId, {
+    const log = await this.client.api.guilds.getAuditLogs(guildId, {
       user_id: options.user && resolveId(options.user),
       action_type: options.type,
       before: options.before && resolveId(options.before),
@@ -403,26 +448,47 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     const usersById = new Map(users.map((user) => [user.id, user]));
     const rules = this.autoModerationRules(guildId);
     const integrations = this.integrations(guildId);
-
-    return {
-      entries: log.audit_log_entries.map(
-        (entry) =>
-          new GuildAuditLogsEntry(
-            { ...entry, guild_id: guildId },
-            { executor: (entry.user_id && usersById.get(entry.user_id)) || null, guild },
-          ),
-      ),
-      users,
-      webhooks: log.webhooks.map((webhook) => new Webhook(webhook)),
-      autoModerationRules: await Promise.all(
-        log.auto_moderation_rules.map((rule) => rules.hydrate(rule)),
-      ),
-      threads: await Promise.all(
+    const [webhooks, autoModerationRules, threads, pageIntegrations] = await Promise.all([
+      Promise.all(log.webhooks.map((webhook) => this.client.webhooks.hydrate(webhook))),
+      Promise.all(log.auto_moderation_rules.map((rule) => rules.hydrate(rule))),
+      Promise.all(
         log.threads.map((thread) => this.client.threads.hydrate(thread as APIThreadChannel)),
       ),
-      integrations: log.integrations.map((integration) =>
-        integrations.createStructure({ ...integration, guild_id: guildId }),
+      // Partial: the page only holds an ID, a name, a type, and an account.
+      Promise.all(
+        log.integrations.map((integration) =>
+          integrations.hydrate({ ...integration, guild_id: guildId } as never),
+        ),
       ),
+    ]);
+    const entities: AuditLogEntities = {
+      users: usersById,
+      webhooks: new Map(webhooks.map((webhook) => [webhook.id, webhook])),
+      integrations: new Map(pageIntegrations.map((integration) => [integration.id, integration])),
+      applicationCommands: new Map(
+        log.application_commands.map((command) => [command.id, command]),
+      ),
+    };
+
+    return {
+      entries: await Promise.all(
+        log.audit_log_entries.map(async (raw) => {
+          const entry = { ...raw, guild_id: guildId };
+          return bindClient(
+            new GuildAuditLogsEntry(entry, {
+              executor: (entry.user_id && usersById.get(entry.user_id)) || null,
+              guild,
+              target: await resolveAuditLogTarget(this.client, entry, entities),
+            }),
+            this.client,
+          );
+        }),
+      ),
+      users,
+      webhooks,
+      autoModerationRules,
+      threads,
+      integrations: pageIntegrations,
       applicationCommands: log.application_commands,
       guildScheduledEvents: log.guild_scheduled_events,
     };
@@ -472,7 +538,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   public async fetchPartials(
     options: { limit?: number; before?: string; after?: string; withCounts?: boolean } = {},
   ): Promise<AnonymousGuild[]> {
-    const guilds = await this.client.core.api.users.getGuilds({
+    const guilds = await this.client.api.users.getGuilds({
       limit: options.limit,
       before: options.before,
       after: options.after,
@@ -487,7 +553,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param options The guild's name and initial setup.
    */
   public async create(options: RESTPostAPIGuildsJSONBody): Promise<Guild> {
-    const guild = await this.client.core.api.guilds.create(options);
+    const guild = await this.client.api.guilds.create(options);
     return this.store(guild);
   }
 
@@ -523,7 +589,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       premium_progress_bar_enabled: options.premiumProgressBarEnabled,
       safety_alerts_channel_id: options.safetyAlertsChannel,
     };
-    const guild = await this.client.core.api.guilds.edit(guildId, body, {
+    const guild = await this.client.api.guilds.edit(guildId, body, {
       reason: options.reason,
     });
     return this.store(guild);
@@ -535,7 +601,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async leave(guildId: string): Promise<void> {
-    await this.client.core.api.users.leaveGuild(guildId);
+    await this.client.api.users.leaveGuild(guildId);
     await this.forget(guildId);
   }
 
@@ -545,7 +611,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async delete(guildId: string): Promise<void> {
-    await this.client.core.api.guilds.delete(guildId);
+    await this.client.api.guilds.delete(guildId);
     await this.forget(guildId);
   }
 
@@ -555,7 +621,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchPreview(guildId: string): Promise<GuildPreview> {
-    return new GuildPreview(await this.client.core.api.guilds.getPreview(guildId));
+    return new GuildPreview(await this.client.api.guilds.getPreview(guildId));
   }
 
   /**
@@ -564,7 +630,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVoiceRegions(guildId: string): Promise<APIVoiceRegion[]> {
-    return this.client.core.api.guilds.getVoiceRegions(guildId);
+    return this.client.api.guilds.getVoiceRegions(guildId);
   }
 
   /**
@@ -573,7 +639,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVanityData(guildId: string): Promise<RESTGetAPIGuildVanityUrlResult> {
-    return this.client.core.api.guilds.getVanityURL(guildId);
+    return this.client.api.guilds.getVanityURL(guildId);
   }
 
   /**
@@ -590,27 +656,70 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       invites_disabled_until: toISO(options.invitesDisabledUntil),
       dms_disabled_until: toISO(options.dmsDisabledUntil),
     };
-    const incidents = await this.client.core.api.guilds.editIncidentActions(guildId, body);
+    const incidents = await this.client.api.guilds.editIncidentActions(guildId, body);
     const cached = await this.cache?.get(guildId);
     if (cached) await this.cache!.set(guildId, { ...cached, incidents_data: incidents });
     return incidents;
   }
 
   protected async fetchRaw(guildId: string) {
-    return this.client.core.api.guilds.get(guildId, { with_counts: true });
+    return this.client.api.guilds.get(guildId, { with_counts: true });
   }
 
   private store(guild: APIGuild): Promise<Guild> {
     return this._add(guild);
   }
 
+  // Resolves the guild of a welcome screen, and the channels and custom emojis of its welcome channels.
   private async welcomeScreen(
     guildId: string,
     screen: APIGuildWelcomeScreen,
   ): Promise<WelcomeScreen> {
-    return new WelcomeScreen(
-      { ...screen, guild_id: guildId },
-      { guild: await this.cachedGuild(guildId) },
+    const channels = screen.welcome_channels;
+    const [guild, cachedChannels, emojis] = await Promise.all([
+      this.cachedGuild(guildId),
+      cachedMap(
+        channels.map((channel) => channel.channel_id),
+        (id) => this.client.channels.get(id),
+      ),
+      cachedMap(
+        channels.flatMap((channel) => (channel.emoji_id ? [channel.emoji_id] : [])),
+        (id) => this.emojis(guildId).get(id),
+      ),
+    ]);
+    return bindClient(
+      new WelcomeScreen(
+        { ...screen, guild_id: guildId },
+        { guild, channels: cachedChannels, emojis },
+      ),
+      this.client,
+    );
+  }
+
+  // Resolves the guild of an onboarding, and the channels, roles, and custom emojis its prompts refer to.
+  private async onboarding(
+    guildId: string,
+    onboarding: APIGuildOnboarding,
+  ): Promise<GuildOnboarding> {
+    const options = onboarding.prompts.flatMap((prompt) => prompt.options);
+    const [guild, channels, roles, emojis] = await Promise.all([
+      this.cachedGuild(guildId),
+      cachedMap(
+        [...onboarding.default_channel_ids, ...options.flatMap((option) => option.channel_ids)],
+        (id) => this.client.channels.get(id),
+      ),
+      cachedMap(
+        options.flatMap((option) => option.role_ids),
+        (id) => this.client.roles.get(guildId, id),
+      ),
+      cachedMap(
+        options.flatMap((option) => (option.emoji?.id ? [option.emoji.id] : [])),
+        (id) => this.emojis(guildId).get(id),
+      ),
+    ]);
+    return bindClient(
+      new GuildOnboarding(onboarding, { guild, channels, roles, emojis }),
+      this.client,
     );
   }
 
@@ -628,6 +737,18 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       }),
     );
   }
+}
+
+// Reads the cached structures of some IDs, skipping the ones that are not cached (or whose read fails).
+async function cachedMap<Value>(
+  ids: readonly string[],
+  get: (id: string) => Promise<Value | undefined>,
+): Promise<Map<string, Value>> {
+  const unique = [...new Set(ids)];
+  const values = await Promise.all(unique.map((id) => get(id).catch(() => undefined)));
+  const map = new Map<string, Value>();
+  for (const [index, value] of values.entries()) if (value) map.set(unique[index]!, value);
+  return map;
 }
 
 // Discord requires an ID on every prompt and option, and takes any snowflake for the new ones.
