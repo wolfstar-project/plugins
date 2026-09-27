@@ -41,7 +41,6 @@ jobs:
             revert
           scopes: |
             plugin-api
-            plugin-broker
             plugin-i18next
             plugin-logger
             plugin-gateway
