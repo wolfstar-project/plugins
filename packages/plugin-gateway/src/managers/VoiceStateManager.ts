@@ -43,8 +43,10 @@ export class VoiceStateManager extends CachedManager<
             ? this.client.members._get(guildId, userId)
             : null,
         this.cachedGuild(guildId),
+        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
       ],
-      ([resolvedMember, guild]) => new VoiceState(data, { member: resolvedMember ?? null, guild }),
+      ([resolvedMember, guild, channel]) =>
+        new VoiceState(data, { member: resolvedMember ?? null, guild, channel: channel ?? null }),
     );
   }
 

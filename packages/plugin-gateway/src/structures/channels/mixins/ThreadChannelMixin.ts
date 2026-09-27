@@ -4,7 +4,7 @@ import type { ThreadAutoArchiveDuration } from "discord-api-types/v10";
 import { ThreadChannelMemberManager } from "../../../managers/ThreadChannelMemberManager.js";
 import type { Message } from "../../messages/Message.js";
 import type { ThreadMember } from "../ThreadMember.js";
-import { kData } from "../../Structure.js";
+import { kData, kRelations } from "../../Structure.js";
 import { editChannel } from "./edit.js";
 import type { APIThreadMetadata } from "discord-api-types/v10";
 
@@ -14,6 +14,7 @@ type Data = {
   thread_metadata?: APIThreadMetadata;
   message_count?: number;
   member_count?: number;
+  member?: object;
 };
 const kArchiveTimestamp: unique symbol = Symbol.for(
   "wolfstar.structures.archiveTimestamp",
@@ -68,6 +69,14 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public get invitable(): boolean | null {
     return (this[kData] as Data).thread_metadata?.invitable ?? null;
+  }
+
+  /**
+   * Whether the bot is a member of the thread, like discord.js's `ThreadChannel#joined`: from the thread member cache
+   * when the thread was built by a manager, else whether the payload carries the bot's thread member.
+   */
+  public get joined(): boolean {
+    return this[kRelations].joined ?? (this[kData] as Data).member !== undefined;
   }
 
   /**

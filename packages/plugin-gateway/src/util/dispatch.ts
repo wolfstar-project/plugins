@@ -9,7 +9,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
 import { ClientUser } from "../structures/users/ClientUser.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
-import { kPatch } from "../structures/Structure.js";
+import { bindClient, kPatch } from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import type { Sticker } from "../structures/stickers/Sticker.js";
@@ -353,7 +353,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.TypingStart]: {
     event: "typingStart",
-    build: (_client, data) => [new Typing(data)],
+    build: async (client, data) => [await typingOf(client, data)],
   },
   [GatewayDispatchEvents.VoiceStateUpdate]: {
     event: "voiceStateUpdate",
@@ -673,6 +673,37 @@ async function pollAnswerOf(
       channel_id: data.channel_id,
       message_id: data.message_id,
     })
+  );
+}
+
+// The typing user, as the cache knows them and their channel.
+async function typingOf(
+  client: GatewayClient,
+  data: DispatchData<GatewayDispatchEvents.TypingStart>,
+): Promise<Typing> {
+  const { guild_id: guildId, member, user_id: userId } = data;
+  const [channel, user, guild, resolvedMember] = await Promise.all([
+    cachedOrUndefined(client.channels.get(data.channel_id)),
+    cachedOrUndefined(
+      member?.user ? client.users.resolveData(member.user) : client.users.get(userId),
+    ),
+    guildId ? cachedOrUndefined(Promise.resolve(client.guilds._getShallow(guildId))) : undefined,
+    guildId
+      ? cachedOrUndefined(
+          member?.user
+            ? client.members.resolveData({ ...member, guild_id: guildId })
+            : client.members.get(guildId, userId),
+        )
+      : undefined,
+  ]);
+  return bindClient(
+    new Typing(data, {
+      channel: channel ?? null,
+      user: user ?? null,
+      guild: guild ?? null,
+      member: resolvedMember ?? null,
+    }),
+    client,
   );
 }
 

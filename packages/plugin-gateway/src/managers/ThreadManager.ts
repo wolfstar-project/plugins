@@ -109,7 +109,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
   public override _hydrate(data: CacheEntityTypes["threads"]): Awaitable<AnyThreadChannel> {
     return whenAll(
       [this.cachedGuild(data.guild_id)],
-      ([guild]) => createChannel(data, { guild }) as AnyThreadChannel,
+      ([guild]) => this.client.channels._hydrateInGuild(data, guild) as Awaitable<AnyThreadChannel>,
     );
   }
 

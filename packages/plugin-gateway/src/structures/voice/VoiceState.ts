@@ -27,6 +27,7 @@ export interface VoiceStateEditOptions {
 export interface VoiceStateRelations {
   member?: GuildMember | null;
   guild?: Guild | null;
+  channel?: AnyChannel | null;
 }
 
 export interface VoiceState extends StructureMixin<
@@ -58,6 +59,7 @@ export class VoiceState extends BaseVoiceState {
 
   public [kPatch](data: Readonly<Partial<CacheEntityTypes["voiceStates"]>>): this {
     if (data.member) this.dropRelations("member");
+    this.dropChangedRelations(data, { channel: "channel_id" });
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
@@ -117,6 +119,14 @@ export class VoiceState extends BaseVoiceState {
    */
   public get guild(): Guild | null {
     return this[kRelations].guild ?? null;
+  }
+
+  /**
+   * The channel the member is connected to, from the cache, like discord.js's `VoiceState#channel`. `null` when they
+   * are disconnected, when the channel is not cached, or when the voice state was not built by a manager.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
   }
 
   public fetchMember(): Promise<GuildMember> {

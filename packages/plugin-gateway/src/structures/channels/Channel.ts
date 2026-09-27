@@ -1,6 +1,9 @@
 import { Channel as BaseChannelStructure } from "@discordjs/structures";
 import { ChannelType, type APIChannel, type Snowflake } from "discord-api-types/v10";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
+import type { StageInstance } from "../stageInstances/StageInstance.js";
+import type { User } from "../users/User.js";
 import { Mixin, type MixinTypes } from "../Mixin.js";
 import { initStructure, kRelations, StructureMixin } from "../Structure.js";
 import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
@@ -18,6 +21,22 @@ export type ChannelDataType<Type extends ChannelType = ChannelType> = Extract<
  */
 export interface ChannelRelations {
   guild?: Guild | null;
+  /**
+   * The parent of a guild channel: its category, or the channel a thread belongs to.
+   */
+  parent?: AnyChannel | null;
+  /**
+   * The user a direct message is with.
+   */
+  recipient?: User | null;
+  /**
+   * The live stage of a stage channel.
+   */
+  stageInstance?: StageInstance | null;
+  /**
+   * Whether the bot is a member of a thread, as the thread member cache knows it.
+   */
+  joined?: boolean;
 }
 
 const ThreadTypes: readonly ChannelType[] = [

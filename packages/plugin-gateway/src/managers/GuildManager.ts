@@ -1,4 +1,4 @@
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
@@ -23,7 +23,14 @@ import {
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnonymousGuild } from "../structures/guilds/AnonymousGuild.js";
-import { Guild, type GuildEditOptions } from "../structures/guilds/Guild.js";
+import {
+  Guild,
+  GuildChannelFields,
+  type GuildEditOptions,
+  type GuildRelations,
+} from "../structures/guilds/Guild.js";
+import { bindClient } from "../structures/Structure.js";
+import { whenAll } from "../util/cache.js";
 import { GuildPreview } from "../structures/guilds/GuildPreview.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { GuildOnboarding } from "../structures/guilds/GuildOnboarding.js";
@@ -188,6 +195,42 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 
   public keyOf(data: CacheEntityTypes["guilds"]): string {
     return data.id;
+  }
+
+  /**
+   * Builds a guild, resolving its AFK, system, widget, rules, public updates, and safety alerts channels from the
+   * cache.
+   *
+   * @internal
+   */
+  public override _hydrate(data: CacheEntityTypes["guilds"]): Awaitable<Guild> {
+    const relations: GuildRelations = {};
+    // The channels resolve their guild to this very structure, rather than reading it again.
+    const guild = bindClient(new Guild(data, relations), this.client);
+    const fields = Object.entries(GuildChannelFields) as [keyof GuildRelations, string][];
+    return whenAll(
+      fields.map(([, key]) => {
+        const channelId = (data as unknown as Record<string, string | null | undefined>)[key];
+        return channelId ? this.client.channels._getInGuild(channelId, guild) : null;
+      }),
+      (channels) => {
+        for (const [index, [name]] of fields.entries()) relations[name] = channels[index] ?? null;
+        return guild;
+      },
+    );
+  }
+
+  /**
+   * Gets a guild from the cache without resolving its channels, for the relations of other structures: a message
+   * resolving its guild should not read six more channels. Its channel getters fall back to a synchronous cache.
+   *
+   * @param guildId The ID of the guild.
+   * @internal
+   */
+  public _getShallow(guildId: string): Awaitable<Guild | undefined> {
+    return whenAll([this.cache?.get(guildId)], ([raw]) =>
+      raw === undefined ? undefined : bindClient(this.createStructure(raw), this.client),
+    );
   }
 
   public resolveKey(guildId: string): string {

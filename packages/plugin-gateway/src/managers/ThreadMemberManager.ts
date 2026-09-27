@@ -75,8 +75,15 @@ export class ThreadMemberManager extends CachedManager<
           : guildId && userId
             ? this.client.members._get(guildId, userId)
             : null,
+        data.id ? this.client.threads._get(data.id) : undefined,
+        userId ? this.client.users._get(userId) : undefined,
       ],
-      ([guildMember]) => new ThreadMember(data, { guildMember: guildMember ?? null }),
+      ([guildMember, thread, user]) =>
+        new ThreadMember(data, {
+          guildMember: guildMember ?? null,
+          thread: thread ?? null,
+          user: user ?? null,
+        }),
     );
   }
 

@@ -47,7 +47,34 @@ import type { GuildTemplate } from "./GuildTemplate.js";
 import type { Integration } from "./Integration.js";
 import type { WelcomeScreen } from "./WelcomeScreen.js";
 import type { Widget } from "./Widget.js";
-import { kData, kPatch } from "../Structure.js";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import { kData, kPatch, kPatchRelations, kRelations } from "../Structure.js";
+
+/**
+ * The relations of a {@link Guild}: its special channels, resolved from the cache by `client.guilds`.
+ */
+export interface GuildRelations {
+  afkChannel?: AnyChannel | null;
+  systemChannel?: AnyChannel | null;
+  widgetChannel?: AnyChannel | null;
+  rulesChannel?: AnyChannel | null;
+  publicUpdatesChannel?: AnyChannel | null;
+  safetyAlertsChannel?: AnyChannel | null;
+}
+
+/**
+ * The raw field holding the ID of each channel of {@link GuildRelations}.
+ *
+ * @internal
+ */
+export const GuildChannelFields = {
+  afkChannel: "afk_channel_id",
+  systemChannel: "system_channel_id",
+  widgetChannel: "widget_channel_id",
+  rulesChannel: "rules_channel_id",
+  publicUpdatesChannel: "public_updates_channel_id",
+  safetyAlertsChannel: "safety_alerts_channel_id",
+} as const satisfies Record<keyof GuildRelations, string>;
 
 /**
  * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`), channels are IDs.
@@ -88,6 +115,16 @@ export interface GuildEditOptions {
  * guild-scoped ones discord.js exposes on the guild itself (`emojis`, `stickers`, `invites`) are here too.
  */
 export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
+  declare public [kRelations]: GuildRelations;
+
+  /**
+   * @param data The raw guild.
+   * @param relations The channels of the guild, as resolved from the cache by `client.guilds`.
+   */
+  public constructor(data: CacheEntityTypes["guilds"], relations: GuildRelations = {}) {
+    super(data, relations);
+  }
+
   protected override optimizeData(data: Partial<CacheEntityTypes["guilds"]>): void {
     super.optimizeData(data);
     this.optimizeTimestamp("joined_at", data.joined_at);
@@ -164,6 +201,78 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
 
   public get safetyAlertsChannelId() {
     return this[kData].safety_alerts_channel_id;
+  }
+
+  /**
+   * The channel members are moved to when idle, from the cache, like discord.js's `Guild#afkChannel`. `null` when
+   * the guild has none, when it is not cached, or when the guild was not built by a manager.
+   */
+  public get afkChannel(): AnyChannel | null {
+    return this.relatedChannel("afkChannel");
+  }
+
+  /**
+   * The channel system messages are sent to, from the cache.
+   */
+  public get systemChannel(): AnyChannel | null {
+    return this.relatedChannel("systemChannel");
+  }
+
+  /**
+   * The channel the widget's invite leads to, from the cache.
+   */
+  public get widgetChannel(): AnyChannel | null {
+    return this.relatedChannel("widgetChannel");
+  }
+
+  /**
+   * The rules channel of a community guild, from the cache.
+   */
+  public get rulesChannel(): AnyChannel | null {
+    return this.relatedChannel("rulesChannel");
+  }
+
+  /**
+   * The channel Discord sends community updates to, from the cache.
+   */
+  public get publicUpdatesChannel(): AnyChannel | null {
+    return this.relatedChannel("publicUpdatesChannel");
+  }
+
+  /**
+   * The channel Discord sends safety alerts to, from the cache.
+   */
+  public get safetyAlertsChannel(): AnyChannel | null {
+    return this.relatedChannel("safetyAlertsChannel");
+  }
+
+  /**
+   * Gets one of the channels of {@link GuildRelations}: the one `client.guilds` resolved, else, for guilds built
+   * without their channels (e.g. `message.guild`), a lookup in a synchronous cache.
+   */
+  private relatedChannel(name: keyof GuildRelations): AnyChannel | null {
+    const resolved = this[kRelations][name];
+    if (resolved !== undefined) return resolved;
+
+    const channelId = (this[kData] as unknown as Record<string, string | null | undefined>)[
+      GuildChannelFields[name]
+    ];
+    if (!channelId || this.client.cache?.channels.synchronous !== true) return null;
+    try {
+      return this.client.channels.cached(channelId) ?? null;
+    } catch {
+      // A relation of the channel is read from an asynchronous cache.
+      return null;
+    }
+  }
+
+  /**
+   * Forgets the channels a patch changes.
+   *
+   * @internal
+   */
+  public [kPatchRelations](data: object): void {
+    this.dropChangedRelations(data, GuildChannelFields);
   }
 
   /**

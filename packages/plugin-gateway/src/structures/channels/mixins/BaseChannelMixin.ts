@@ -2,7 +2,13 @@ import type { Channel as BaseChannelStructure } from "@discordjs/structures";
 import { type ChannelType } from "discord-api-types/v10";
 import { ChannelFlagsBitField } from "../../../util/flags.js";
 import type { ChannelDataType, ChannelRelations } from "../Channel.js";
-import { kData, kPatch, snowflakeTimestamp, type StructureMixin } from "../../Structure.js";
+import {
+  kData,
+  kPatch,
+  kPatchRelations,
+  snowflakeTimestamp,
+  type StructureMixin,
+} from "../../Structure.js";
 
 export interface BaseChannelMixin<Type extends ChannelType = ChannelType>
   extends BaseChannelStructure<Type>, StructureMixin<ChannelDataType<Type>, ChannelRelations> {}
@@ -12,6 +18,15 @@ export interface BaseChannelMixin<Type extends ChannelType = ChannelType>
  * every channel supports.
  */
 export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
+  /**
+   * Forgets the parent when a patch moves the channel.
+   *
+   * @internal
+   */
+  public [kPatchRelations](data: object): void {
+    this.dropChangedRelations(data, { parent: "parent_id" });
+  }
+
   /**
    * The flags of the channel.
    */

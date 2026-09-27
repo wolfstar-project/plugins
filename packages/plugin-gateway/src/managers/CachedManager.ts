@@ -208,10 +208,15 @@ export abstract class CachedManager<
    * Gets a guild from the cache, to resolve the `guild` of a structure. Synchronous when the guild cache is.
    *
    * @param guildId The ID of the guild, if the structure belongs to one.
+   * @remarks
+   * The guild does not resolve its own channel relations, see `GuildManager._getShallow`.
+   *
    * @returns The guild, or `null` when there is no ID or the guild is not cached.
    */
   protected cachedGuild(guildId: string | null | undefined): Awaitable<Guild | null> {
-    return guildId ? whenAll([this.client.guilds._get(guildId)], ([guild]) => guild ?? null) : null;
+    return guildId
+      ? whenAll([this.client.guilds._getShallow(guildId)], ([guild]) => guild ?? null)
+      : null;
   }
 
   /**

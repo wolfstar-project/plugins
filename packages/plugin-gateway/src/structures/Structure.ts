@@ -34,6 +34,17 @@ export const kRelations: unique symbol = Symbol.for("wolfstar.structures.relatio
 export const kClient: unique symbol = Symbol.for("wolfstar.structures.client") as never;
 
 /**
+ * The symbol of the optional method a mixin defines to drop the relations a patch invalidates, called by
+ * {@link StructureMixin}'s patch before the data is patched. Mixins cannot override the patch itself: the first mixin
+ * defining a member wins, and {@link StructureMixin} comes first.
+ *
+ * @internal
+ */
+export const kPatchRelations: unique symbol = Symbol.for(
+  "wolfstar.structures.patchRelations",
+) as never;
+
+/**
  * The Discord epoch, used to extract timestamps from snowflakes.
  */
 const DiscordEpoch = 1_420_070_400_000n;
@@ -105,6 +116,7 @@ export class StructureMixin<Data extends object, Relations extends object = obje
    * @returns This structure.
    */
   public [kPatch](data: Readonly<Partial<Data>>): this {
+    (this as { [kPatchRelations]?: (data: object) => void })[kPatchRelations]?.(data);
     (BaseStructure.prototype as unknown as Record<typeof kPatch, Patch<Data>>)[kPatch].call(
       this,
       data,
@@ -148,6 +160,25 @@ export class StructureMixin<Data extends object, Relations extends object = obje
     const relations: Record<string, unknown> = { ...(this[kRelations] as object) };
     for (const name of names) delete relations[name];
     this[kRelations] = relations as Relations;
+  }
+
+  /**
+   * Forgets the relations whose ID a patch changes, e.g. a channel's parent when the patch moves it to another
+   * category. A patch carrying the same ID keeps the relation.
+   *
+   * @param data The patch.
+   * @param fields The names of the relations, mapped to the raw field holding their ID.
+   */
+  protected dropChangedRelations(
+    data: object,
+    fields: Partial<Record<keyof Relations & string, string>>,
+  ): void {
+    const current = this[kData] as Record<string, unknown>;
+    const patch = data as Record<string, unknown>;
+    const names = Object.entries(fields as Record<string, string>)
+      .filter(([, key]) => key in patch && patch[key] !== current[key])
+      .map(([name]) => name);
+    if (names.length > 0) this.dropRelations(...(names as never[]));
   }
 }
 

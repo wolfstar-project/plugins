@@ -1,5 +1,5 @@
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
+import { applyGatewayDispatch, stageInstanceKey, threadMemberKey } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   GatewayDispatchEvents,
@@ -22,6 +22,9 @@ import { PublicThreadChannel } from "../structures/channels/PublicThreadChannel.
 import { StageChannel } from "../structures/channels/StageChannel.js";
 import { TextChannel } from "../structures/channels/TextChannel.js";
 import { VoiceChannel } from "../structures/channels/VoiceChannel.js";
+import type { Guild } from "../structures/guilds/Guild.js";
+import { StageInstance } from "../structures/stageInstances/StageInstance.js";
+import { bindClient } from "../structures/Structure.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
@@ -93,6 +96,9 @@ function overwriteHolder(channel: AnyChannel): {
   return channel.toJSON() as never;
 }
 
+// A thread, its channel, and the channel's category: no parent chain is any longer.
+const MaxParentDepth = 2;
+
 // Guild channels carry their guild's ID, except inside a `GUILD_CREATE`, where the cache adds it.
 function channelGuildId(data: CacheEntityTypes["channels"]): string | undefined {
   return "guild_id" in data ? (data.guild_id ?? undefined) : undefined;
@@ -120,7 +126,74 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
 
   public override _hydrate(data: CacheEntityTypes["channels"]): Awaitable<AnyChannel> {
     return whenAll([this.cachedGuild(channelGuildId(data))], ([guild]) =>
-      createChannel(data, { guild }),
+      this._hydrateInGuild(data, guild),
+    );
+  }
+
+  /**
+   * Builds a channel (or a thread) whose guild is already resolved, resolving its other relations from the cache: its
+   * parent, within the same guild, the recipient of a direct message, the live stage of a stage channel, and whether
+   * the bot joined a thread. Used by
+   * `client.threads` and by the guild's own channel relations, which must not resolve the guild again.
+   *
+   * @param data The raw channel.
+   * @param guild The guild of the channel, `null` outside of guilds or when it is not cached.
+   * @param depth How many parents deep the channel is, which bounds the parent chain (a thread, its channel, and its
+   * category) against a corrupted cache.
+   * @internal
+   */
+  public _hydrateInGuild(
+    data: CacheEntityTypes["channels"],
+    guild: Guild | null,
+    depth = 0,
+  ): Awaitable<AnyChannel> {
+    const { client } = this;
+    const parentId = "parent_id" in data ? data.parent_id : null;
+    const recipient = data.type === ChannelType.DM ? data.recipients?.[0] : undefined;
+    const guildId = channelGuildId(data) ?? guild?.id;
+    const thread = isThreadChannelType(data.type);
+    return whenAll(
+      [
+        parentId && depth < MaxParentDepth ? this.cache?.get(parentId) : undefined,
+        recipient ? client.users._resolveData(recipient) : undefined,
+        data.type === ChannelType.GuildStageVoice && guildId
+          ? client.cache?.stageInstances.get(stageInstanceKey(guildId, data.id))
+          : undefined,
+        thread
+          ? client.cache?.threadMembers.get(threadMemberKey(data.id, client.user?.id ?? client.id))
+          : undefined,
+      ],
+      ([parentData, resolvedRecipient, stageData, me]) =>
+        whenAll(
+          [parentData ? this._hydrateInGuild(parentData, guild, depth + 1) : null],
+          ([parent]) => {
+            const relations: ChannelRelations = { guild, parent };
+            if (recipient) relations.recipient = resolvedRecipient ?? null;
+            if (thread && client.cache) relations.joined = me !== undefined;
+            const channel = bindClient(createChannel(data, relations), client);
+            if (data.type === ChannelType.GuildStageVoice) {
+              // Built here rather than by the stage instance manager, whose relations lead back to this channel.
+              relations.stageInstance = stageData
+                ? bindClient(new StageInstance(stageData, { guild, channel }), client)
+                : null;
+            }
+
+            return channel;
+          },
+        ),
+    );
+  }
+
+  /**
+   * Gets a channel of a guild whose structure is already built, for the guild's own channel relations.
+   *
+   * @param channelId The ID of the channel.
+   * @param guild The guild.
+   * @internal
+   */
+  public _getInGuild(channelId: string, guild: Guild): Awaitable<AnyChannel | null> {
+    return whenAll([this.cache?.get(channelId)], ([data]) =>
+      data ? this._hydrateInGuild(data, guild) : null,
     );
   }
 

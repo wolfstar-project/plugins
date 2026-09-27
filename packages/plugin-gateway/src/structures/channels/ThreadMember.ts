@@ -1,5 +1,7 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
+import type { User } from "../users/User.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 
 /**
@@ -10,6 +12,8 @@ export interface ThreadMemberRelations {
    * The member of the thread's guild, when the payload included it or the cache holds it.
    */
   guildMember?: GuildMember | null;
+  thread?: AnyThreadChannel | null;
+  user?: User | null;
 }
 
 /**
@@ -24,7 +28,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
 
   /**
    * @param data The raw thread member.
-   * @param relations The guild member as resolved from the cache, by `client.threadMembers`.
+   * @param relations The guild member, thread, and user as resolved from the cache, by `client.threadMembers`.
    */
   public constructor(
     data: CacheEntityTypes["threadMembers"],
@@ -69,6 +73,21 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
    */
   public get guildMember(): GuildMember | null {
     return this[kRelations].guildMember ?? null;
+  }
+
+  /**
+   * The thread, from the cache, like discord.js's `ThreadMember#thread`. `null` when it is not cached, or when the
+   * thread member was not built by a manager.
+   */
+  public get thread(): AnyThreadChannel | null {
+    return this[kRelations].thread ?? null;
+  }
+
+  /**
+   * The user, from the cache, like discord.js's `ThreadMember#user`, else the user of the guild member.
+   */
+  public get user(): User | null {
+    return this[kRelations].user ?? this.guildMember?.user ?? null;
   }
 
   /**

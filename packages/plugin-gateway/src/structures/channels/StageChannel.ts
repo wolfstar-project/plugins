@@ -5,7 +5,7 @@ import type { StageInstanceCreateOptions } from "../../managers/StageInstanceMan
 import type { StageInstance } from "../stageInstances/StageInstance.js";
 import type { ChannelDataType, ChannelRelations } from "./Channel.js";
 import { Mixin, type MixinTypes } from "../Mixin.js";
-import { initStructure, StructureMixin } from "../Structure.js";
+import { initStructure, kRelations, StructureMixin } from "../Structure.js";
 import { BaseChannelMixin } from "./mixins/BaseChannelMixin.js";
 import { ChannelParentMixin } from "./mixins/ChannelParentMixin.js";
 import { ChannelPermissionMixin } from "./mixins/ChannelPermissionMixin.js";
@@ -46,6 +46,18 @@ export class StageChannel extends BaseStageChannel {
   ) {
     super(data);
     initStructure(this, data, relations);
+  }
+
+  /**
+   * The live stage of the channel, from the cache, like discord.js's `StageChannel#stageInstance`: `null` when the
+   * stage is not live, when it is not cached, or when the channel was not built by a manager.
+   *
+   * @remarks
+   * Its own `channel` is this channel, and its scheduled event is not resolved: use
+   * {@link StageChannel.fetchStageInstance} for the stage with every relation.
+   */
+  public get stageInstance(): StageInstance | null {
+    return this[kRelations].stageInstance ?? null;
   }
 
   /**
