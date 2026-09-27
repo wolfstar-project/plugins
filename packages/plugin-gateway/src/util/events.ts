@@ -304,6 +304,95 @@ export interface GatewayEventMap {
  */
 export type GatewayEventName = keyof GatewayEventMap;
 
+/**
+ * The name of every event a {@link GatewayClient} emits, mirroring the keys of {@link GatewayEventMap}, like
+ * `@wolfstar/http-framework`'s own `Events`.
+ *
+ * @remarks
+ * Each member's value is the plain event name, so they are interchangeable with the string literals accepted by
+ * `GatewayClient#on`, `GatewayClient#emit`, and `Listener.Options.event`.
+ *
+ * @example
+ * ```typescript
+ * client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
+ * ```
+ */
+export enum GatewayEvents {
+  Raw = "raw",
+  ShardReady = "shardReady",
+  ShardResume = "shardResume",
+  ShardClose = "shardClose",
+  ShardError = "shardError",
+  GuildCreate = "guildCreate",
+  GuildUpdate = "guildUpdate",
+  GuildDelete = "guildDelete",
+  ChannelCreate = "channelCreate",
+  ChannelUpdate = "channelUpdate",
+  ChannelDelete = "channelDelete",
+  ChannelPinsUpdate = "channelPinsUpdate",
+  WebhooksUpdate = "webhooksUpdate",
+  ThreadCreate = "threadCreate",
+  ThreadUpdate = "threadUpdate",
+  ThreadDelete = "threadDelete",
+  ThreadListSync = "threadListSync",
+  ThreadMemberUpdate = "threadMemberUpdate",
+  ThreadMembersUpdate = "threadMembersUpdate",
+  MessageCreate = "messageCreate",
+  MessageUpdate = "messageUpdate",
+  MessageDelete = "messageDelete",
+  MessageDeleteBulk = "messageDeleteBulk",
+  MessageReactionAdd = "messageReactionAdd",
+  MessageReactionRemove = "messageReactionRemove",
+  MessageReactionRemoveAll = "messageReactionRemoveAll",
+  MessageReactionRemoveEmoji = "messageReactionRemoveEmoji",
+  MessagePollVoteAdd = "messagePollVoteAdd",
+  MessagePollVoteRemove = "messagePollVoteRemove",
+  GuildMemberAdd = "guildMemberAdd",
+  GuildMemberUpdate = "guildMemberUpdate",
+  GuildMemberRemove = "guildMemberRemove",
+  GuildMembersChunk = "guildMembersChunk",
+  GuildRoleCreate = "guildRoleCreate",
+  GuildRoleUpdate = "guildRoleUpdate",
+  GuildRoleDelete = "guildRoleDelete",
+  UserUpdate = "userUpdate",
+  EmojiCreate = "emojiCreate",
+  EmojiUpdate = "emojiUpdate",
+  EmojiDelete = "emojiDelete",
+  StickerCreate = "stickerCreate",
+  StickerUpdate = "stickerUpdate",
+  StickerDelete = "stickerDelete",
+  InviteCreate = "inviteCreate",
+  InviteDelete = "inviteDelete",
+  TypingStart = "typingStart",
+  VoiceServerUpdate = "voiceServerUpdate",
+  GuildScheduledEventCreate = "guildScheduledEventCreate",
+  GuildScheduledEventUpdate = "guildScheduledEventUpdate",
+  GuildScheduledEventDelete = "guildScheduledEventDelete",
+  GuildScheduledEventUserAdd = "guildScheduledEventUserAdd",
+  GuildScheduledEventUserRemove = "guildScheduledEventUserRemove",
+  StageInstanceCreate = "stageInstanceCreate",
+  StageInstanceUpdate = "stageInstanceUpdate",
+  StageInstanceDelete = "stageInstanceDelete",
+  GuildSoundboardSoundCreate = "guildSoundboardSoundCreate",
+  GuildSoundboardSoundUpdate = "guildSoundboardSoundUpdate",
+  GuildSoundboardSoundDelete = "guildSoundboardSoundDelete",
+  GuildSoundboardSoundsUpdate = "guildSoundboardSoundsUpdate",
+  SoundboardSounds = "soundboardSounds",
+  GuildBanAdd = "guildBanAdd",
+  GuildBanRemove = "guildBanRemove",
+  GuildAuditLogEntryCreate = "guildAuditLogEntryCreate",
+  AutoModerationRuleCreate = "autoModerationRuleCreate",
+  AutoModerationRuleUpdate = "autoModerationRuleUpdate",
+  AutoModerationRuleDelete = "autoModerationRuleDelete",
+  AutoModerationActionExecution = "autoModerationActionExecution",
+  GuildIntegrationsUpdate = "guildIntegrationsUpdate",
+  IntegrationCreate = "integrationCreate",
+  IntegrationUpdate = "integrationUpdate",
+  IntegrationDelete = "integrationDelete",
+  VoiceStateUpdate = "voiceStateUpdate",
+  PresenceUpdate = "presenceUpdate",
+}
+
 declare module "@wolfstar/http-framework" {
   interface ClientEvents extends GatewayEventMap {}
 }

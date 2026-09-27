@@ -99,6 +99,13 @@ client.on("messageDelete", async (message) => {
 
 ## Events
 
+`GatewayEvents` mirrors the keys of the table below, like `@wolfstar/http-framework`'s own `Events`: each member's
+value is the plain event name, so it is interchangeable with the string literal.
+
+```ts
+client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
+```
+
 | Event                                                     | Arguments                                      |
 | --------------------------------------------------------- | ---------------------------------------------- |
 | `raw`                                                     | `payload`, `shardId` — every dispatch          |
