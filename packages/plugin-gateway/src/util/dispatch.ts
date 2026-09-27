@@ -13,6 +13,7 @@ import { bindClient, kPatch } from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import type { Sticker } from "../structures/stickers/Sticker.js";
+import type { Message } from "../structures/messages/Message.js";
 import { MessageReaction } from "../structures/messages/MessageReaction.js";
 import { PollAnswer } from "../structures/polls/PollAnswer.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
@@ -268,8 +269,8 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       (await client.messages.get(data.channel_id, data.message_id))?.reactions.resolve(
         data.emoji,
       ) ?? undefined,
-    build: (_client, data, previous: MessageReaction | undefined) => [
-      previous ?? partialReaction(data),
+    build: async (client, data, previous: MessageReaction | undefined) => [
+      previous ?? (await partialReaction(client, data)),
     ],
   },
   [GatewayDispatchEvents.MessagePollVoteAdd]: {
@@ -663,6 +664,7 @@ function diff<Value extends Diffable>(
 type ReactionData = {
   channel_id: string;
   message_id: string;
+  guild_id?: string;
   emoji: APIPartialEmoji;
   burst_colors?: string[];
 };
@@ -671,20 +673,38 @@ type ReactionData = {
 // last user removed it), the counts are known to be zero; only an uncached message leaves them unknown.
 async function reactionOf(client: GatewayClient, data: ReactionData): Promise<MessageReaction> {
   const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
-  if (!message) return partialReaction(data);
-  return message.reactions.resolve(data.emoji) ?? partialReaction(data, true);
+  if (!message) return partialReaction(client, data);
+  return message.reactions.resolve(data.emoji) ?? partialReaction(client, data, true, message);
 }
 
-function partialReaction(data: ReactionData, emptied = false): MessageReaction {
-  return new MessageReaction({
-    channel_id: data.channel_id,
-    message_id: data.message_id,
-    emoji: data.emoji,
-    me: false,
-    me_burst: false,
-    burst_colors: data.burst_colors ?? [],
-    ...(emptied && { count: 0, count_details: { normal: 0, burst: 0 } }),
-  });
+// A reaction the cached message does not hold, with the message when it is cached, and the cached custom emoji of the
+// message's guild.
+async function partialReaction(
+  client: GatewayClient,
+  data: ReactionData,
+  emptied = false,
+  message: Message | null = null,
+): Promise<MessageReaction> {
+  const { guild_id: guildId, emoji } = data;
+  const cachedEmoji =
+    guildId && emoji.id
+      ? await cachedOrUndefined(client.guilds.emojis(guildId).get(emoji.id))
+      : undefined;
+  return bindClient(
+    new MessageReaction(
+      {
+        channel_id: data.channel_id,
+        message_id: data.message_id,
+        emoji,
+        me: false,
+        me_burst: false,
+        burst_colors: data.burst_colors ?? [],
+        ...(emptied && { count: 0, count_details: { normal: 0, burst: 0 } }),
+      },
+      { message, emoji: cachedEmoji ?? null },
+    ),
+    client,
+  );
 }
 
 // The answer as the cache holds it after the dispatch, else one with only its ID.

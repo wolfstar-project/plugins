@@ -1,5 +1,6 @@
 import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
+  MessageFlags,
   Routes,
   type APIMessage,
   type RESTGetAPIChannelMessagesPinsResult,
@@ -14,7 +15,12 @@ import {
   type EmojiIdentifierResolvable,
 } from "../structures/emojis/ReactionEmoji.js";
 import { type User } from "../structures/users/User.js";
-import { whenAll } from "../util/cache.js";
+import { whenAll, whenCachedMap } from "../util/cache.js";
+import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import {
+  MessageMentions,
+  type MessageMentionsRelations,
+} from "../structures/messages/MessageMentions.js";
 import {
   MessagePayload,
   type MessageCreateOptions,
@@ -115,15 +121,67 @@ export class MessageManager extends CachedManager<
           : null,
         this.cachedGuild(guildId),
         this.client.channels._get(data.channel_id),
+        (data as { thread?: unknown }).thread !== undefined ||
+        ((data.flags ?? 0) & MessageFlags.HasThread) !== 0
+          ? this.client.threads._get(data.id)
+          : undefined,
+        this.resolveMentions(data),
+        guildId ? this.resolveEmojis(guildId, data) : undefined,
       ],
-      ([resolvedAuthor, resolvedMember, guild, channel]) =>
+      ([resolvedAuthor, resolvedMember, guild, channel, thread, mentions, emojis]) =>
         new Message(data, {
           author: resolvedAuthor,
           member: resolvedMember,
           guild,
           channel: channel ?? null,
+          thread: thread ?? null,
+          mentions,
+          emojis,
         }),
     );
+  }
+
+  // The cached copies of the users, members, roles, and channels a message mentions, like discord.js's mentions.
+  private resolveMentions(data: CacheEntityTypes["messages"]): Awaitable<MessageMentionsRelations> {
+    const { client } = this;
+    const { guild_id: guildId, content = "" } = data;
+    const users = [
+      ...data.mentions.map((user) => user.id),
+      ...MessageMentions.parseIds(content, MessageMentions.UsersPattern),
+      ...(data.referenced_message ? [data.referenced_message.author.id] : []),
+    ];
+    const members = data.mentions.filter((user) => "member" in user).map((user) => user.id);
+    return whenAll(
+      [
+        whenCachedMap(users, (id) => client.users._get(id)),
+        guildId ? whenCachedMap(members, (id) => client.members._get(guildId, id)) : undefined,
+        guildId
+          ? whenCachedMap(data.mention_roles, (id) => client.roles._get(guildId, id))
+          : undefined,
+        whenCachedMap(MessageMentions.parseIds(content, MessageMentions.ChannelsPattern), (id) =>
+          client.channels._get(id),
+        ),
+      ],
+      ([resolvedUsers, resolvedMembers, roles, channels]) => ({
+        users: resolvedUsers,
+        members: resolvedMembers,
+        roles,
+        channels,
+      }),
+    );
+  }
+
+  // The cached custom emojis of a message's reactions and poll answers, from its own guild.
+  private resolveEmojis(
+    guildId: string,
+    data: CacheEntityTypes["messages"],
+  ): Awaitable<Map<string, GuildEmoji>> {
+    const ids = [
+      ...(data.reactions ?? []).map((reaction) => reaction.emoji.id),
+      ...(data.poll?.answers ?? []).map((answer) => answer.poll_media.emoji?.id),
+    ].filter((id): id is string => Boolean(id));
+    const emojis = this.client.guilds.emojis(guildId);
+    return whenCachedMap(ids, (id) => emojis._get(id));
   }
 
   public resolveKey(channelId: string, messageId: string): string {

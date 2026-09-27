@@ -3,7 +3,9 @@ import type { APIReaction } from "discord-api-types/v10";
 import { ReactionUserManager } from "../../managers/ReactionUserManager.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kPatch, StructureMixin } from "../Structure.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
+import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
+import type { Message } from "./Message.js";
 
 /**
  * The raw data of a reaction, with the message it belongs to. The counts are absent when the reaction was built from
@@ -15,7 +17,21 @@ export type MessageReactionData = Omit<APIReaction, "count" | "count_details"> &
     message_id: string;
   };
 
-export interface MessageReaction extends StructureMixin<MessageReactionData> {}
+/**
+ * The relations of a {@link MessageReaction}: its message, and its cached custom emoji.
+ */
+export interface MessageReactionRelations {
+  message?: Message | null;
+  /**
+   * The cached custom emoji, when it belongs to the message's guild.
+   */
+  emoji?: GuildEmoji | null;
+}
+
+export interface MessageReaction extends StructureMixin<
+  MessageReactionData,
+  MessageReactionRelations
+> {}
 
 /**
  * A reaction on a message, an emoji, how many users reacted with it, and whether the bot did: `@discordjs/structures`'
@@ -36,7 +52,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * @param data The raw reaction, with the message it belongs to.
    * @param relations The related structures, resolved from the cache.
    */
-  public constructor(data: MessageReactionData, relations: object = {}) {
+  public constructor(data: MessageReactionData, relations: MessageReactionRelations = {}) {
     super(data);
     initStructure(this, data, relations);
   }
@@ -49,7 +65,26 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
     return this[kData].message_id;
   }
 
-  public get emoji(): ReactionEmoji {
+  /**
+   * The message the reaction is on, like discord.js's `MessageReaction#message`: the message it was read from, else
+   * the cached one. `null` when the message is not cached.
+   */
+  public get message(): Message | null {
+    return this[kRelations].message ?? null;
+  }
+
+  /**
+   * The emoji, like discord.js's `MessageReaction#emoji`: the cached custom emoji of the message's guild, else the
+   * emoji of the payload.
+   */
+  public get emoji(): GuildEmoji | ReactionEmoji {
+    return this[kRelations].emoji ?? this.reactionEmoji;
+  }
+
+  /**
+   * The emoji as the payload describes it, which the reaction routes are keyed by.
+   */
+  private get reactionEmoji(): ReactionEmoji {
     return new ReactionEmoji(this[kData].emoji);
   }
 
@@ -83,7 +118,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
       this.client,
       this.channelId,
       this.messageId,
-      this.emoji.identifier,
+      this.reactionEmoji.identifier,
     );
   }
 
@@ -91,7 +126,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * Reacts with this emoji as the bot.
    */
   public async react(): Promise<this> {
-    await this.client.messages.react(this.channelId, this.messageId, this.emoji.identifier);
+    await this.client.messages.react(this.channelId, this.messageId, this.reactionEmoji.identifier);
     return this[kPatch]({ me: true });
   }
 
@@ -102,7 +137,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
     await this.client.messages.removeReactionEmoji(
       this.channelId,
       this.messageId,
-      this.emoji.identifier,
+      this.reactionEmoji.identifier,
     );
     return this;
   }
@@ -114,9 +149,9 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
     const message = await this.client.messages.fetch(this.channelId, this.messageId, {
       force: true,
     });
-    const identifier = this.emoji.identifier;
+    const identifier = this.reactionEmoji.identifier;
     const current = message.reactions.cache.find(
-      (reaction) => reaction.emoji.identifier === identifier,
+      (reaction) => ReactionEmoji.resolveIdentifier(reaction.toJSON().emoji) === identifier,
     );
     return current
       ? this[kPatch](current.toJSON())
@@ -130,7 +165,8 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
   }
 
   public valueOf(): string {
-    return this.emoji.id ?? this.emoji.name ?? "";
+    const { id, name } = this[kData].emoji;
+    return id ?? name ?? "";
   }
 
   /**

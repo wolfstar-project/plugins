@@ -9,6 +9,7 @@ import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import type { Guild } from "./Guild.js";
 import type { Role } from "./Role.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
+import { pickCached as pick } from "../../util/cache.js";
 import { bindClient, kData, kPatch, kRelations, Structure } from "../Structure.js";
 
 /**
@@ -20,17 +21,6 @@ export interface GuildOnboardingRelations {
   channels?: ReadonlyMap<string, AnyChannel>;
   roles?: ReadonlyMap<string, Role>;
   emojis?: ReadonlyMap<string, GuildEmoji>;
-}
-
-// Picks the cached structures of some IDs, like discord.js's collections of a guild's cached entities.
-function pick<Value>(ids: readonly string[], cached: ReadonlyMap<string, Value> | undefined) {
-  const picked = new Map<string, Value>();
-  for (const id of ids) {
-    const value = cached?.get(id);
-    if (value) picked.set(id, value);
-  }
-
-  return picked;
 }
 
 /**

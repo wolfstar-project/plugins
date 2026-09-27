@@ -4,14 +4,28 @@ import type { Message } from "../messages/Message.js";
 import { PollAnswer } from "./PollAnswer.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, StructureMixin } from "../Structure.js";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
+import { bindClient, initStructure, kData, kRelations, StructureMixin } from "../Structure.js";
 
 /**
  * The raw data of a poll, with the message it belongs to.
  */
 export type PollData = APIPoll & { channel_id: string; message_id: string };
 
-export interface Poll extends StructureMixin<PollData> {}
+/**
+ * The relations of a {@link Poll}: the message it belongs to, and that message's channel and cached custom emojis.
+ */
+export interface PollRelations {
+  message?: Message | null;
+  channel?: AnyChannel | null;
+  /**
+   * The cached custom emojis of the answers, by ID, when they belong to the message's guild.
+   */
+  emojis?: ReadonlyMap<string, GuildEmoji>;
+}
+
+export interface Poll extends StructureMixin<PollData, PollRelations> {}
 
 /**
  * The poll of a message: `@discordjs/structures`' `Poll`, with its answers, results, and the message it belongs to.
@@ -27,7 +41,7 @@ export class Poll extends BasePoll<""> {
    * @param data The raw poll, with the message it belongs to.
    * @param relations The related structures, resolved from the cache.
    */
-  public constructor(data: PollData, relations: object = {}) {
+  public constructor(data: PollData, relations: PollRelations = {}) {
     super(data);
     initStructure(this, data, relations);
   }
@@ -38,6 +52,21 @@ export class Poll extends BasePoll<""> {
 
   public get messageId() {
     return this[kData].message_id;
+  }
+
+  /**
+   * The message the poll belongs to, like discord.js's `Poll#message`: `null` when the poll was not read from a
+   * message.
+   */
+  public get message(): Message | null {
+    return this[kRelations].message ?? null;
+  }
+
+  /**
+   * The channel of the poll's message, from the cache, like discord.js's `Poll#channel`.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
   }
 
   public get question(): { text: string | null; emoji: ReactionEmoji | null } {
@@ -54,13 +83,24 @@ export class Poll extends BasePoll<""> {
     );
     return this[kData].answers.map((answer) => {
       const count = counts.get(answer.answer_id);
-      return new PollAnswer({
-        ...answer,
-        channel_id: this.channelId,
-        message_id: this.messageId,
-        count: count?.count,
-        me_voted: count?.me_voted,
-      });
+      const emojiId = answer.poll_media.emoji?.id;
+      const relations = {
+        poll: this,
+        emoji: (emojiId && this[kRelations].emojis?.get(emojiId)) || null,
+      };
+      return bindClient(
+        new PollAnswer(
+          {
+            ...answer,
+            channel_id: this.channelId,
+            message_id: this.messageId,
+            count: count?.count,
+            me_voted: count?.me_voted,
+          },
+          relations,
+        ),
+        this.client,
+      );
     });
   }
 

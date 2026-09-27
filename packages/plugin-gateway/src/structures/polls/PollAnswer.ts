@@ -2,7 +2,9 @@ import { PollAnswer as BasePollAnswer } from "@discordjs/structures";
 import type { APIPollAnswer } from "discord-api-types/v10";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, StructureMixin } from "../Structure.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
+import { initStructure, kData, kRelations, StructureMixin } from "../Structure.js";
+import type { Poll } from "./Poll.js";
 import type { User } from "../users/User.js";
 
 /**
@@ -18,7 +20,15 @@ export type PollAnswerData = APIPollAnswer & {
   me_voted?: boolean;
 };
 
-export interface PollAnswer extends StructureMixin<PollAnswerData> {}
+/**
+ * The relations of a {@link PollAnswer}: its poll, and its cached custom emoji.
+ */
+export interface PollAnswerRelations {
+  poll?: Poll | null;
+  emoji?: GuildEmoji | null;
+}
+
+export interface PollAnswer extends StructureMixin<PollAnswerData, PollAnswerRelations> {}
 
 /**
  * An answer of a {@link Poll}: `@discordjs/structures`' `PollAnswer`, with its vote count and the message it belongs to.
@@ -28,7 +38,7 @@ export class PollAnswer extends BasePollAnswer {
    * @param data The raw answer, with its vote count and the message it belongs to.
    * @param relations The related structures, resolved from the cache.
    */
-  public constructor(data: PollAnswerData, relations: object = {}) {
+  public constructor(data: PollAnswerData, relations: PollAnswerRelations = {}) {
     super(data);
     initStructure(this, data, relations);
   }
@@ -52,9 +62,21 @@ export class PollAnswer extends BasePollAnswer {
     return this[kData].poll_media.text ?? null;
   }
 
-  public get emoji(): ReactionEmoji | null {
+  /**
+   * The poll the answer belongs to, like discord.js's `PollAnswer#poll`: `null` when the answer was not read from a
+   * poll.
+   */
+  public get poll(): Poll | null {
+    return this[kRelations].poll ?? null;
+  }
+
+  /**
+   * The emoji of the answer, like discord.js's `PollAnswer#emoji`: the cached custom emoji of the message's guild,
+   * else the payload's.
+   */
+  public get emoji(): GuildEmoji | ReactionEmoji | null {
     const { emoji } = this[kData].poll_media;
-    return emoji ? new ReactionEmoji(emoji) : null;
+    return this[kRelations].emoji ?? (emoji?.id || emoji?.name ? new ReactionEmoji(emoji) : null);
   }
 
   /**

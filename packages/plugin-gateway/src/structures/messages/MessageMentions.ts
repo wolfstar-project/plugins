@@ -1,6 +1,27 @@
 import type { APIChannelMention, APIGuildMember, APIMessage, APIUser } from "discord-api-types/v10";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
+import type { Role } from "../guilds/Role.js";
 import { User } from "../users/User.js";
+import { pickCached as pick } from "../../util/cache.js";
+
+/**
+ * The mentioned entities, resolved from the cache by `client.messages`, each by ID.
+ */
+export interface MessageMentionsRelations {
+  /**
+   * The mentioned users and the ones parsed from the content, and the author of the replied message.
+   */
+  users?: ReadonlyMap<string, User>;
+  members?: ReadonlyMap<string, GuildMember>;
+  roles?: ReadonlyMap<string, Role>;
+  /**
+   * The channels mentioned in the content.
+   */
+  channels?: ReadonlyMap<string, AnyChannel>;
+  guild?: Guild | null;
+}
 
 /**
  * The raw fields of a message the mentions are read from.
@@ -43,8 +64,8 @@ export interface MentionsHasOptions {
  * The users, roles, and channels a message mentions.
  *
  * @remarks
- * Users and members come with the message payload. Roles and channels are IDs: resolve them with `client.roles` and
- * `client.channels`, since discord.js's synchronous cache lookups have no equivalent here.
+ * Users and members come with the message payload, and are replaced by their cached copies when the message was built
+ * by `client.messages`, which also resolves the mentioned roles and channels from the cache, like discord.js.
  */
 export class MessageMentions {
   /**
@@ -69,8 +90,44 @@ export class MessageMentions {
 
   readonly #data: MessageMentionsData;
 
-  public constructor(data: MessageMentionsData) {
+  readonly #relations: MessageMentionsRelations;
+
+  /**
+   * @param data The raw fields of the message.
+   * @param relations The mentioned entities, as resolved from the cache.
+   */
+  public constructor(data: MessageMentionsData, relations: MessageMentionsRelations = {}) {
     this.#data = data;
+    this.#relations = relations;
+  }
+
+  /**
+   * The guild of the message, from the cache, like discord.js's `MessageMentions#guild`.
+   */
+  public get guild(): Guild | null {
+    return this.#relations.guild ?? null;
+  }
+
+  /**
+   * The cached roles the message mentions, by ID, like discord.js's `MessageMentions#roles`.
+   */
+  public get roles(): Map<string, Role> {
+    return pick(this.#data.mention_roles, this.#relations.roles);
+  }
+
+  /**
+   * The cached channels the content mentions, by ID, like discord.js's `MessageMentions#channels`.
+   */
+  public get channels(): Map<string, AnyChannel> {
+    return pick(this.parsedChannelIds, this.#relations.channels);
+  }
+
+  /**
+   * The cached users the content mentions, by ID, like discord.js's `MessageMentions#parsedUsers`, which also
+   * counts the users the message does not ping.
+   */
+  public get parsedUsers(): Map<string, User> {
+    return pick(this.parsedUserIds, this.#relations.users);
   }
 
   /**
@@ -80,8 +137,12 @@ export class MessageMentions {
     return this.#data.mention_everyone;
   }
 
+  /**
+   * The mentioned users: their cached copies, else the payload's.
+   */
   public get users(): User[] {
-    return this.#data.mentions.map((user) => new User(user));
+    const cached = this.#relations.users;
+    return this.#data.mentions.map((user) => cached?.get(user.id) ?? new User(user));
   }
 
   /**
@@ -91,9 +152,11 @@ export class MessageMentions {
     const guildId = this.#data.guild_id;
     if (!guildId) return [];
 
-    return this.#data.mentions.flatMap(({ member, ...user }) =>
-      member ? [new GuildMember({ ...member, user, guild_id: guildId })] : [],
-    );
+    const cached = this.#relations.members;
+    return this.#data.mentions.flatMap(({ member, ...user }) => {
+      if (!member) return [];
+      return [cached?.get(user.id) ?? new GuildMember({ ...member, user, guild_id: guildId })];
+    });
   }
 
   public get roleIds(): readonly string[] {
@@ -104,12 +167,19 @@ export class MessageMentions {
    * The IDs of the channels mentioned in the content, and of the crossposted channels.
    */
   public get channelIds(): string[] {
-    const ids = new Set(this.crosspostedChannels.map((channel) => channel.id));
-    for (const match of this.#data.content.matchAll(MessageMentions.ChannelsPattern)) {
-      ids.add(match.groups!.id!);
-    }
+    return [
+      ...new Set([
+        ...this.crosspostedChannels.map((channel) => channel.id),
+        ...this.parsedChannelIds,
+      ]),
+    ];
+  }
 
-    return [...ids];
+  /**
+   * The IDs of the channels mentioned in the content.
+   */
+  public get parsedChannelIds(): string[] {
+    return MessageMentions.parseIds(this.#data.content, MessageMentions.ChannelsPattern);
   }
 
   /**
@@ -124,20 +194,24 @@ export class MessageMentions {
    */
   public get repliedUser(): User | null {
     const author = this.#data.referenced_message?.author;
-    return author ? new User(author) : null;
+    return author ? (this.#relations.users?.get(author.id) ?? new User(author)) : null;
   }
 
   /**
    * The IDs of the users mentioned in the content, including the ones Discord did not resolve.
    */
   public get parsedUserIds(): string[] {
-    return [
-      ...new Set(
-        [...this.#data.content.matchAll(MessageMentions.UsersPattern)].map(
-          (match) => match.groups!.id!,
-        ),
-      ),
-    ];
+    return MessageMentions.parseIds(this.#data.content, MessageMentions.UsersPattern);
+  }
+
+  /**
+   * Lists the unique IDs a mention pattern matches in a content.
+   *
+   * @param content The content.
+   * @param pattern One of the global mention patterns, e.g. {@link MessageMentions.ChannelsPattern}.
+   */
+  public static parseIds(content: string, pattern: RegExp): string[] {
+    return [...new Set([...content.matchAll(pattern)].map((match) => match.groups!.id!))];
   }
 
   /**
