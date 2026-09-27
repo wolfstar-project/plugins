@@ -21,6 +21,7 @@ import type {
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
+import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
 import type { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
@@ -81,6 +82,12 @@ export interface GatewayEventMap {
    * Emitted when a shard receives `READY`.
    */
   shardReady: [shardId: number, user: User];
+  /**
+   * Emitted once, when every shard this client manages has connected and every guild `READY` listed as initially
+   * unavailable became available, or {@link GatewayClientOptions.waitGuildTimeout} elapsed, like discord.js's
+   * `Client#clientReady` (`ready` before discord.js deprecated it).
+   */
+  clientReady: [client: GatewayClient];
   /**
    * Emitted when a shard resumes its session.
    */
@@ -320,6 +327,7 @@ export type GatewayEventName = keyof GatewayEventMap;
 export enum GatewayEvents {
   Raw = "raw",
   ShardReady = "shardReady",
+  ClientReady = "clientReady",
   ShardResume = "shardResume",
   ShardClose = "shardClose",
   ShardError = "shardError",
