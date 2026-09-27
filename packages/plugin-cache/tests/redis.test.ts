@@ -134,6 +134,75 @@ describe("RedisEntityCache", () => {
     expect(await customCodecCache.get("legacy")).toEqual({ id: "legacy" });
   });
 
+  test("GIVEN a value written by a non-default codec THEN switching away from it fails without legacyCodecs", async () => {
+    const writer = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      codec: msgpackCodec(),
+    });
+    const reader = new RedisEntityCache<{ id: string }>(redis, { prefix: "test" });
+
+    await writer.set("a", { id: "1" });
+
+    await expect(reader.get("a")).rejects.toBeInstanceOf(CacheValueError);
+  });
+
+  test("GIVEN legacyCodecs THEN switching away from a non-default codec still reads its entries", async () => {
+    const writer = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      codec: msgpackCodec(),
+    });
+    const reader = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      legacyCodecs: [msgpackCodec()],
+    });
+
+    await writer.set("a", { id: "1" });
+
+    expect(await reader.get("a")).toEqual({ id: "1" });
+  });
+
+  test("GIVEN legacyCodecs THEN switching between two non-default codecs reads entries written by either", async () => {
+    const codecA: CacheCodec = {
+      name: "codec-a",
+      encode: (value) => JSON.stringify(value),
+      decode: (data) =>
+        JSON.parse(typeof data === "string" ? data : data.toString("utf8")) as unknown,
+    };
+    const writerA = new RedisEntityCache<{ id: string }>(redis, { prefix: "test", codec: codecA });
+    const readerB = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      codec: msgpackCodec(),
+      legacyCodecs: [codecA],
+    });
+
+    await writerA.set("a", { id: "1" });
+
+    expect(await readerB.get("a")).toEqual({ id: "1" });
+  });
+
+  test.each(["gz", "br", "b64"])(
+    "GIVEN a codec named %s THEN the cache rejects it as a reserved name",
+    (name) => {
+      const codec: CacheCodec = {
+        name,
+        encode: (value) => JSON.stringify(value),
+        decode: JSON.parse,
+      };
+      expect(() => new RedisEntityCache(redis, { prefix: "test", codec })).toThrow(RangeError);
+    },
+  );
+
+  test("GIVEN a legacyCodec named gz THEN the cache rejects it as a reserved name", () => {
+    const codec: CacheCodec = {
+      name: "gz",
+      encode: (value) => JSON.stringify(value),
+      decode: JSON.parse,
+    };
+    expect(() => new RedisEntityCache(redis, { prefix: "test", legacyCodecs: [codec] })).toThrow(
+      RangeError,
+    );
+  });
+
   test("GIVEN msgpackCodec THEN values round-trip, including bigint, compressed or not", async () => {
     const cache = new RedisEntityCache<{ id: bigint; content: string }>(redis, {
       prefix: "test",

@@ -38,7 +38,7 @@ Current format: `<compressionMarker><base64>` or raw JSON text, where `compressi
 - If the encoded value is **not** compressed and `codec.encode` returned a `Buffer` (e.g. msgpack), a new `"b64:"` marker is used and `payload` is base64 of the raw bytes — Redis string values must be safe UTF-8, so raw binary can't be stored unescaped.
 - If the encoded value is not compressed and `codec.encode` returned a `string` (the `jsonCodec` case), `payload` is that string verbatim, no marker — identical to today's uncompressed path.
 
-Decoding strips the codec marker first. If the stored value isn't tagged for the _configured_ codec, it's decoded with `jsonCodec()` as a fallback — this is what makes switching a cache's `codec` option safe for entries already written under the old codec (mirrors how mixing compression settings already works today).
+Decoding tries the `codec` marker, then each `legacyCodecs` marker in order, then falls back to `jsonCodec()` for untagged values. This makes switching _to_ a codec always safe (untagged, `jsonCodec()`-written entries keep decoding). Switching _away_ from a previously configured non-default codec is not automatic — nothing else records which codec wrote which entry — so that codec must be listed in `legacyCodecs` to keep reading its entries. (An earlier version of this design claimed unconditional bidirectional safety via an implicit `jsonCodec()` fallback; that was wrong; caught in review on #139 before merging.)
 
 ## Non-goals (deferred, follow-up issues)
 
