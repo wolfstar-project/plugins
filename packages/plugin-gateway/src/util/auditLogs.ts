@@ -70,7 +70,7 @@ export type AuditLogEntryTarget =
 /**
  * A target known only by the entry: its ID, and the fields the entry changed.
  */
-export interface AuditLogPartialTarget {
+interface AuditLogPartialTarget {
   id: string | null;
   [key: string]: unknown;
 }
