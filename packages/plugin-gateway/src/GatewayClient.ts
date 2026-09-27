@@ -14,8 +14,6 @@ import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wol
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
-  Routes,
-  type APIGatewayBotInfo,
   type APIVoiceRegion,
   type GatewayDispatchPayload,
   type GatewayReadyDispatchData,
@@ -217,6 +215,10 @@ export class GatewayClient extends Client {
 
   readonly #shardCount: number | null;
 
+  // Resolved once from the options (or the environment) and kept private, rather than read again from `this.options`,
+  // which the base client scrubs it from.
+  readonly #token: string;
+
   #sessions: GatewaySessionMirror | null = null;
 
   // Set while a resumable `destroy` runs, see `sessionCallbacks`.
@@ -235,6 +237,8 @@ export class GatewayClient extends Client {
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
     this.#shardCount = options.shardCount ?? null;
+    // The base client validated it already, and scrubs it from `this.options`.
+    this.#token = (options.discordToken ?? process.env.DISCORD_TOKEN)!;
     this.users = new UserManager(this);
     this.guilds = new GuildManager(this);
     this.channels = new ChannelManager(this);
@@ -251,8 +255,7 @@ export class GatewayClient extends Client {
     this.gateway = new WebSocketManager({
       ...options.gateway,
       ...this.sessionCallbacks(options),
-      // The base client validated the token already, and scrubs it from `this.options`.
-      token: (options.discordToken ?? process.env.DISCORD_TOKEN)!,
+      token: this.#token,
       intents: options.intents as GatewayIntentBits,
       rest: this.rest,
       shardCount: options.shardCount ?? null,
@@ -284,19 +287,6 @@ export class GatewayClient extends Client {
    */
   public async connect(): Promise<void> {
     await this.gateway.connect();
-  }
-
-  /**
-   * Fetches the gateway's connection info: the WebSocket URL, the recommended shard count, and the identify rate
-   * limit remaining for the current session.
-   *
-   * @remarks
-   * `@discordjs/ws` already calls this (cached, and re-fetched as the identify rate limit runs out) to size and
-   * spread the shards {@link GatewayClient.connect} spawns, so this is only needed to inspect that info directly,
-   * e.g. to log the recommended shard count before overriding it.
-   */
-  public fetchGatewayInformation(): Promise<APIGatewayBotInfo> {
-    return this.rest.get(Routes.gatewayBot()) as Promise<APIGatewayBotInfo>;
   }
 
   /** Loads pieces, starts the interaction endpoint, then connects gateway shards. */
