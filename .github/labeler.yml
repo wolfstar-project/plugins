@@ -3,6 +3,11 @@ packages:plugin-api:
       - any-glob-to-any-file:
           - packages/plugin-api/*
           - packages/plugin-api/**/*
+packages:plugin-broker:
+  - changed-files:
+      - any-glob-to-any-file:
+          - packages/plugin-broker/*
+          - packages/plugin-broker/**/*
 packages:plugin-cache:
   - changed-files:
       - any-glob-to-any-file:
