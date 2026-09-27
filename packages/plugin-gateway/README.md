@@ -169,7 +169,8 @@ which always identifies the deleted entity.
 
 `clientReady` is emitted once, like discord.js's `Client#clientReady`: after every shard this client manages has
 connected, and every guild `READY` listed as initially unavailable became available (or `waitGuildTimeout`, `15_000`
-by default, elapsed). `client.isClientReady()` and `client.clientReadyAt` report it after the fact.
+by default, elapsed — that timeout only bounds the wait on guilds, never on shards connecting).
+`client.isClientReady()` and `client.clientReadyAt` report it after the fact.
 
 ```ts
 client.on(GatewayEvents.ClientReady, (client) =>

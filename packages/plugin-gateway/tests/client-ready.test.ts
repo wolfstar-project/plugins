@@ -1,4 +1,4 @@
-import { WebSocketShardEvents } from "@discordjs/ws";
+import { WebSocketShardEvents, WebSocketShardStatus } from "@discordjs/ws";
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
@@ -147,6 +147,79 @@ describe("GatewayClient#clientReady", () => {
       soundboard_sounds: [],
     });
 
+    expect(calls).toHaveLength(1);
+  });
+
+  test("GIVEN a shard still connecting THEN clientReady waits for it, even with no guilds pending", async () => {
+    const client = createClient();
+    const statuses = vi.spyOn(client.gateway, "fetchStatus").mockResolvedValue(
+      new Map([
+        [0, WebSocketShardStatus.Ready],
+        [1, WebSocketShardStatus.Connecting],
+      ]) as never,
+    );
+    const calls: unknown[][] = [];
+    client.on(GatewayEvents.ClientReady, (...args) => calls.push(args));
+
+    await dispatch(client, GatewayDispatchEvents.Ready, ready(), 0);
+    expect(calls).toHaveLength(0);
+
+    statuses.mockResolvedValue(
+      new Map([
+        [0, WebSocketShardStatus.Ready],
+        [1, WebSocketShardStatus.Ready],
+      ]) as never,
+    );
+    await dispatch(client, GatewayDispatchEvents.Ready, ready(), 1);
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test("GIVEN waitGuildTimeout elapses on one shard THEN it forgets that shard's guilds but still waits for the others", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    const client = createClient({ waitGuildTimeout: 1_000 });
+    const statuses = vi.spyOn(client.gateway, "fetchStatus").mockResolvedValue(
+      new Map([
+        [0, WebSocketShardStatus.Ready],
+        [1, WebSocketShardStatus.Connecting],
+      ]) as never,
+    );
+    const calls: unknown[][] = [];
+    client.on(GatewayEvents.ClientReady, (...args) => calls.push(args));
+
+    await dispatch(
+      client,
+      GatewayDispatchEvents.Ready,
+      ready([{ id: "10", unavailable: true }]),
+      0,
+    );
+    await vi.advanceTimersByTimeAsync(1_000);
+    // The guild's wait timed out, but shard 1 is still connecting: clientReady must not fire yet.
+    expect(calls).toHaveLength(0);
+
+    statuses.mockResolvedValue(
+      new Map([
+        [0, WebSocketShardStatus.Ready],
+        [1, WebSocketShardStatus.Ready],
+      ]) as never,
+    );
+    await dispatch(client, GatewayDispatchEvents.Ready, ready(), 1);
+
+    expect(calls).toHaveLength(1);
+
+    // The forgotten guild's late GUILD_CREATE does not fire it a second time.
+    await dispatch(client, GatewayDispatchEvents.GuildCreate, {
+      id: "10",
+      name: "Late",
+      channels: [],
+      threads: [],
+      members: [],
+      presences: [],
+      voice_states: [],
+      stage_instances: [],
+      guild_scheduled_events: [],
+      soundboard_sounds: [],
+    });
     expect(calls).toHaveLength(1);
   });
 });

@@ -130,6 +130,9 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    * available (its `GUILD_CREATE`) before emitting `clientReady` anyway, like discord.js's `waitGuildTimeout`.
    *
    * @remarks
+   * It only bounds the wait on guild availability: `clientReady` still never fires before every shard this client
+   * manages has connected, however long that takes, even past this timeout.
+   *
    * Skipped (waits `0` ms) when `intents` does not include `GatewayIntentBits.Guilds`, since without it Discord never
    * sends the guilds' data, so no `GUILD_CREATE` for them ever arrives.
    *
@@ -591,8 +594,12 @@ export class GatewayClient extends Client {
    * discord.js's `Client#_checkReady`.
    *
    * @remarks
-   * Unlike discord.js, it only ever runs (and `clientReady` only ever fires) once: subsequent guild or shard activity
-   * does not re-trigger it.
+   * `waitGuildTimeout` bounds the wait on guild availability only: once it elapses, the still-unavailable guilds are
+   * forgotten (so a later `GUILD_CREATE`/`GUILD_DELETE` for one of them does not spuriously re-run this), but every
+   * shard connecting is never skipped, however long that takes — there is no such timeout for it, matching
+   * `@discordjs/ws`, which waits for the network rather than giving up.
+   *
+   * Unlike discord.js, `clientReady` only ever fires once: subsequent guild or shard activity does not re-trigger it.
    */
   async #checkClientReady(): Promise<void> {
     // A concurrent shard's call already triggered it.
@@ -603,29 +610,33 @@ export class GatewayClient extends Client {
       this.#clientReadyTimer = null;
     }
 
+    if (this.#expectedGuilds.size > 0) {
+      // Without the `Guilds` intent, Discord never sends the unavailable guilds' data, so no `GUILD_CREATE` for them
+      // ever arrives: there is nothing to wait for.
+      const hasGuildsIntent = (this.#intents & GatewayIntentBits.Guilds) !== 0;
+      this.#clientReadyTimer = setTimeout(
+        () => {
+          this.#clientReadyTimer = null;
+          this.#expectedGuilds.clear();
+          void this.#checkClientReady();
+        },
+        hasGuildsIntent ? this.waitGuildTimeout : 0,
+      );
+      this.#clientReadyTimer.unref?.();
+      return;
+    }
+
     const statuses = await this.gateway.fetchStatus();
-    // Re-check: a concurrent call may have triggered it while this one awaited the shards' statuses.
-    if (this.clientReadyTimestamp !== null) return;
+    // Re-check: a concurrent call may have triggered it, or a shard may have disconnected, while this one awaited
+    // the shards' statuses.
+    if (this.clientReadyTimestamp !== null || this.#expectedGuilds.size > 0) return;
 
     const everyShardReady = [...statuses.values()].every(
       (status) => status === WebSocketShardStatus.Ready,
     );
-    if (this.#expectedGuilds.size === 0 && everyShardReady) {
-      this.#triggerClientReady();
-      return;
-    }
-
-    // Without the `Guilds` intent, Discord never sends the unavailable guilds' data, so no `GUILD_CREATE` for them
-    // ever arrives: there is nothing to wait for.
-    const hasGuildsIntent = (this.#intents & GatewayIntentBits.Guilds) !== 0;
-    this.#clientReadyTimer = setTimeout(
-      () => {
-        this.#clientReadyTimer = null;
-        this.#triggerClientReady();
-      },
-      hasGuildsIntent ? this.waitGuildTimeout : 0,
-    );
-    this.#clientReadyTimer.unref?.();
+    if (everyShardReady) this.#triggerClientReady();
+    // Otherwise, nothing left to bound with a timer: the next shard to connect re-enters here through its own
+    // `READY`.
   }
 
   // Sets `clientReadyTimestamp` and emits `clientReady`, guarding against a concurrent call (a racing shard, or the
