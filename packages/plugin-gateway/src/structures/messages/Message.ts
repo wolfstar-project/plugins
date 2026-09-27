@@ -3,7 +3,6 @@ import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   MessageFlags,
-  MessageReferenceType,
   MessageType,
   type APIMessage,
   type APIThreadChannel,
@@ -14,11 +13,13 @@ import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import { isDeepEqual } from "../../util/equal.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
-import type {
-  MessageCreateOptions,
-  MessageEditOptions,
-  MessagePayloadResolvable,
-} from "../../util/messages.js";
+import {
+  MessagePayload,
+  type GatewayClientMessageDefaults,
+  type MessageCreateOptions,
+  type MessageEditOptions,
+  type MessagePayloadResolvable,
+} from "./MessagePayload.js";
 import type { PermissionsString } from "../../util/PermissionsBitField.js";
 import { Attachment } from "./Attachment.js";
 import { Embed } from "./Embed.js";
@@ -377,7 +378,11 @@ export class Message extends BaseMessage<""> {
    * @param options The changes, or the new content.
    */
   public async edit(options: MessagePayloadResolvable<MessageEditOptions>): Promise<this> {
-    const message = await this.client.messages.edit(this.channelId, this.id, options);
+    const message = await this.client.messages.edit(
+      this.channelId,
+      this.id,
+      MessagePayload.create(this, options, { edit: true }),
+    );
     return this[kPatch](message.toJSON());
   }
 
@@ -387,16 +392,16 @@ export class Message extends BaseMessage<""> {
    * @param options The reply, or its content.
    */
   public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    const payload = typeof options === "string" ? { content: options } : options;
-    return this.client.messages.send(this.channelId, {
-      ...payload,
-      message_reference: {
-        type: MessageReferenceType.Default,
-        message_id: this.id,
-        channel_id: this.channelId,
-        fail_if_not_exists: false,
-      },
-    });
+    const payload = MessagePayload.create(this, options);
+    const failIfNotExists =
+      (this.client.options as GatewayClientMessageDefaults).failIfNotExists ?? false;
+    return this.client.messages.send(
+      this.channelId,
+      MessagePayload.create(this, {
+        ...payload.options,
+        reply: { messageReference: this, failIfNotExists },
+      }),
+    );
   }
 
   /**

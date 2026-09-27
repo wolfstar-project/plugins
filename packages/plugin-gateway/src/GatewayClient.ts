@@ -42,9 +42,10 @@ import { StickerPack } from "./structures/stickers/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
+import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import { GatewaySessionMirror } from "./util/sessions.js";
 
-export interface GatewayClientOptions extends ClientOptions {
+export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
   /**
    * The gateway intents to identify with, e.g. `GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages`.
    */

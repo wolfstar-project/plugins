@@ -17,7 +17,7 @@ import type { PublicThreadChannel } from "../structures/channels/PublicThreadCha
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import {
-  resolveMessageOptions,
+  MessagePayload,
   type MessageCreateOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
@@ -136,7 +136,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
       const type = options.type ?? (await this.defaultThreadType(channelId));
       body = { ...common, type, invitable: options.invitable };
     } else {
-      const message = resolveMessageOptions(options.message);
+      const message = await MessagePayload.create(this.client, options.message).resolve();
       body = { ...common, message: message.body, applied_tags: options.appliedTags?.slice() };
       files = message.files;
     }

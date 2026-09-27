@@ -1,9 +1,9 @@
 import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
-  MessageReferenceType,
   Routes,
   type APIMessage,
   type RESTGetAPIChannelMessagesPinsResult,
+  type RESTPatchAPIChannelMessageJSONBody,
   type RESTPostAPIChannelMessagesThreadsJSONBody,
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
@@ -16,7 +16,7 @@ import {
 import { type User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import {
-  resolveMessageOptions,
+  MessagePayload,
   type MessageCreateOptions,
   type MessageEditOptions,
   type MessagePayloadResolvable,
@@ -156,7 +156,7 @@ export class MessageManager extends CachedManager<
     channelId: string,
     options: MessagePayloadResolvable<MessageCreateOptions>,
   ): Promise<Message> {
-    const { body, files } = resolveMessageOptions(options);
+    const { body, files } = await MessagePayload.create(this.client, options).resolve();
     const message = await this.client.core.api.channels.createMessage(channelId, {
       ...body,
       files,
@@ -173,11 +173,7 @@ export class MessageManager extends CachedManager<
    */
   public forward(channelId: string, messageId: string, targetChannelId: string): Promise<Message> {
     return this.send(targetChannelId, {
-      message_reference: {
-        type: MessageReferenceType.Forward,
-        channel_id: channelId,
-        message_id: messageId,
-      },
+      forward: { message: messageId, channel: channelId },
     });
   }
 
@@ -193,7 +189,9 @@ export class MessageManager extends CachedManager<
     messageId: string,
     options: MessagePayloadResolvable<MessageEditOptions>,
   ): Promise<Message> {
-    const { body, files } = resolveMessageOptions(options);
+    const { body, files } = await MessagePayload.create(this.client, options, {
+      edit: true,
+    }).resolve<RESTPatchAPIChannelMessageJSONBody>();
     const message = await this.client.core.api.channels.editMessage(channelId, messageId, {
       ...body,
       files,

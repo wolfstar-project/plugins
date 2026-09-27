@@ -1,6 +1,10 @@
 import type { ChannelType } from "discord-api-types/v10";
 import { ChannelMessageManager } from "../../../managers/ChannelMessageManager.js";
-import type { MessageCreateOptions, MessagePayloadResolvable } from "../../../util/messages.js";
+import {
+  MessagePayload,
+  type MessageCreateOptions,
+  type MessagePayloadResolvable,
+} from "../../messages/MessagePayload.js";
 import type { Channel, ChannelDataType } from "../Channel.js";
 import type { Message } from "../../messages/Message.js";
 import { kData } from "../../Structure.js";
@@ -63,7 +67,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * @param options The message, or its content.
    */
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return this.client.messages.send(this.id, options);
+    return this.client.messages.send(this.id, MessagePayload.create(this, options));
   }
 
   /**

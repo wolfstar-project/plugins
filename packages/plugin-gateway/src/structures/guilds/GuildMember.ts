@@ -5,7 +5,11 @@ import type { BanOptions, GuildMemberEditOptions } from "../../managers/GuildMem
 import { GuildMemberRoleManager } from "../../managers/GuildMemberRoleManager.js";
 import { cdn } from "../../util/cdn.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../../util/flags.js";
-import type { MessageCreateOptions, MessagePayloadResolvable } from "../../util/messages.js";
+import {
+  MessagePayload,
+  type MessageCreateOptions,
+  type MessagePayloadResolvable,
+} from "../messages/MessagePayload.js";
 import { computeGuildPermissions, computePermissionsIn } from "../../util/permissions.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { PermissionsBitField } from "../../util/PermissionsBitField.js";
@@ -400,7 +404,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return this.client.users.send(this.requireId(), options);
+    return this.client.users.send(this.requireId(), MessagePayload.create(this, options));
   }
 
   /**

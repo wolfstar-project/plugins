@@ -1,5 +1,5 @@
-import type { RawFile } from "@discordjs/rest";
 import {
+  type APIWebhook,
   type RESTPatchAPIWebhookJSONBody,
   type RESTPatchAPIWebhookWithTokenMessageJSONBody,
   type RESTPostAPIChannelWebhookJSONBody,
@@ -7,9 +7,18 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Message } from "../structures/messages/Message.js";
+import { bindClient } from "../structures/Structure.js";
 import { Webhook } from "../structures/webhooks/Webhook.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
-import { resolveMessageOptions, type MessagePayloadResolvable } from "../util/messages.js";
+import {
+  MessagePayload,
+  type MessagePayloadResolvable,
+  type WebhookMessageCreateOptions,
+  type WebhookMessageEditOptions,
+  type WebhookThreadOptions,
+} from "../util/messages.js";
+
+export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThreadOptions };
 
 /**
  * The options to create a webhook with.
@@ -40,27 +49,6 @@ export interface WebhookEditOptions {
 }
 
 /**
- * The options to send a message through a webhook with: the REST body, plus the files to attach.
- */
-export type WebhookMessageCreateOptions = RESTPostAPIWebhookWithTokenJSONBody & {
-  files?: RawFile[];
-};
-
-/**
- * The options to edit a message sent by a webhook with: the REST body, plus the files to attach.
- */
-export type WebhookMessageEditOptions = RESTPatchAPIWebhookWithTokenMessageJSONBody & {
-  files?: RawFile[];
-};
-
-/**
- * The thread a webhook message is in, for webhooks of forum and media channels, or of a thread's parent.
- */
-export interface WebhookThreadOptions {
-  threadId?: string;
-}
-
-/**
  * Manages webhooks. Discord does not send them over the gateway, so they are never cached.
  *
  * @remarks
@@ -82,7 +70,7 @@ export class WebhookManager {
    */
   public async fetch(webhookId: string, token?: string): Promise<Webhook> {
     const webhook = await this.client.core.api.webhooks.get(webhookId, { token });
-    return new Webhook(webhook);
+    return this.hydrate(webhook);
   }
 
   /**
@@ -92,7 +80,7 @@ export class WebhookManager {
    */
   public async fetchChannel(channelId: string): Promise<Webhook[]> {
     const webhooks = await this.client.core.api.channels.getWebhooks(channelId);
-    return webhooks.map((webhook) => new Webhook(webhook));
+    return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
   /**
@@ -102,7 +90,7 @@ export class WebhookManager {
    */
   public async fetchGuild(guildId: string): Promise<Webhook[]> {
     const webhooks = await this.client.core.api.guilds.getWebhooks(guildId);
-    return webhooks.map((webhook) => new Webhook(webhook));
+    return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
   /**
@@ -116,7 +104,7 @@ export class WebhookManager {
     const webhook = await this.client.core.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
     });
-    return new Webhook(webhook);
+    return this.hydrate(webhook);
   }
 
   /**
@@ -140,7 +128,7 @@ export class WebhookManager {
       token,
       reason: options.reason,
     });
-    return new Webhook(webhook);
+    return this.hydrate(webhook);
   }
 
   /**
@@ -166,11 +154,11 @@ export class WebhookManager {
   public async send(
     webhookId: string,
     token: string,
-    options: MessagePayloadResolvable<WebhookMessageCreateOptions> & WebhookThreadOptions,
+    options: MessagePayloadResolvable<WebhookMessageCreateOptions>,
   ): Promise<Message> {
-    const { threadId, ...payload } =
-      typeof options === "string" ? { content: options, threadId: undefined } : options;
-    const { body, files } = resolveMessageOptions<WebhookMessageCreateOptions>(payload);
+    const payload = MessagePayload.create(this.client, options, { webhook: true });
+    const { threadId } = payload.options as WebhookThreadOptions;
+    const { body, files } = await payload.resolve<RESTPostAPIWebhookWithTokenJSONBody>();
     const message = await this.client.core.api.webhooks.execute(webhookId, token, {
       ...body,
       files,
@@ -212,11 +200,11 @@ export class WebhookManager {
     webhookId: string,
     token: string,
     messageId: string,
-    options: MessagePayloadResolvable<WebhookMessageEditOptions> & WebhookThreadOptions,
+    options: MessagePayloadResolvable<WebhookMessageEditOptions>,
   ): Promise<Message> {
-    const { threadId, ...payload } =
-      typeof options === "string" ? { content: options, threadId: undefined } : options;
-    const { body, files } = resolveMessageOptions<WebhookMessageEditOptions>(payload);
+    const payload = MessagePayload.create(this.client, options, { webhook: true, edit: true });
+    const { threadId } = payload.options as WebhookThreadOptions;
+    const { body, files } = await payload.resolve<RESTPatchAPIWebhookWithTokenMessageJSONBody>();
     const message = await this.client.core.api.webhooks.editMessage(webhookId, token, messageId, {
       ...body,
       files,
@@ -242,5 +230,31 @@ export class WebhookManager {
     await this.client.core.api.webhooks.deleteMessage(webhookId, token, messageId, {
       thread_id: options.threadId,
     });
+  }
+
+  /**
+   * Builds the structure of a raw webhook, resolving its guild, channel, source guild, source channel, and owner from
+   * the cache.
+   *
+   * @param data The raw webhook.
+   */
+  public async hydrate(data: APIWebhook): Promise<Webhook> {
+    const [guild, channel, sourceGuild, sourceChannel, owner] = await Promise.all([
+      data.guild_id ? this.client.guilds.get(data.guild_id) : undefined,
+      data.channel_id ? this.client.channels.get(data.channel_id) : undefined,
+      data.source_guild ? this.client.guilds.get(data.source_guild.id) : undefined,
+      data.source_channel ? this.client.channels.get(data.source_channel.id) : undefined,
+      data.user ? this.client.users.resolveData(data.user) : undefined,
+    ]);
+    return bindClient(
+      new Webhook(data, {
+        guild: guild ?? null,
+        channel: channel ?? null,
+        sourceGuild: sourceGuild ?? null,
+        sourceChannel: sourceChannel ?? null,
+        owner,
+      }),
+      this.client,
+    );
   }
 }

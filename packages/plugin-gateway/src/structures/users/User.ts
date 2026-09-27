@@ -8,7 +8,11 @@ import type {
 } from "discord-api-types/v10";
 import { cdn } from "../../util/cdn.js";
 import { UserFlagsBitField } from "../../util/flags.js";
-import type { MessageCreateOptions, MessagePayloadResolvable } from "../../util/messages.js";
+import {
+  MessagePayload,
+  type MessageCreateOptions,
+  type MessagePayloadResolvable,
+} from "../messages/MessagePayload.js";
 import type { DMChannel } from "../channels/DMChannel.js";
 import type { Message } from "../messages/Message.js";
 import { Mixin } from "../Mixin.js";
@@ -157,7 +161,7 @@ export class User extends BaseUser {
    * @param options The message, or its content.
    */
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return this.client.users.send(this.id, options);
+    return this.client.users.send(this.id, MessagePayload.create(this, options));
   }
 
   /**
