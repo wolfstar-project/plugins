@@ -79,6 +79,16 @@ export interface GatewayEventMap {
    */
   raw: [payload: GatewayDispatchPayload, shardId: number];
   /**
+   * Emitted for every gateway dispatch once it has been written to the cache (right away without one), before the
+   * matching event, with the raw payload. Unlike `raw`, a listener reading the cache sees the dispatch applied, which
+   * is what forwarding it to other processes sharing the cache needs.
+   *
+   * @remarks
+   * Not emitted for `INTERACTION_CREATE`, served by the HTTP endpoint, nor for a dispatch dropped because its cache
+   * write failed with {@link GatewayClientOptions.cacheFailure} set to `"skip"`.
+   */
+  dispatch: [payload: GatewayDispatchPayload, shardId: number];
+  /**
    * Emitted when a shard receives `READY`.
    */
   shardReady: [shardId: number, user: User];
@@ -326,6 +336,7 @@ export type GatewayEventName = keyof GatewayEventMap;
  */
 export enum GatewayEvents {
   Raw = "raw",
+  Dispatch = "dispatch",
   ShardReady = "shardReady",
   ClientReady = "clientReady",
   ShardResume = "shardResume",

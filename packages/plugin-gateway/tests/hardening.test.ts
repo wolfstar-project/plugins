@@ -245,12 +245,14 @@ describe("GatewayClient dispatch hardening", () => {
     const client = createClient(cache);
     const errors = record(client, "error");
     const created = record(client, "messageCreate");
+    const dispatched = record(client, "dispatch");
 
     send(client, GatewayDispatchEvents.MessageCreate, message("1", "20", "10", "lost"));
     await client.idle();
 
     expect(errors).toHaveLength(1);
     expect(created).toHaveLength(0);
+    expect(dispatched).toHaveLength(0);
   });
 
   test("GIVEN cacheFailure emitUncached THEN the event is still emitted, built from the payload", async () => {
