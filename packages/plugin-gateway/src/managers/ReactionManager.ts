@@ -1,7 +1,10 @@
 import type { APIReaction } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { MessageReaction } from "../structures/MessageReaction.js";
-import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
+import { MessageReaction } from "../structures/messages/MessageReaction.js";
+import {
+  ReactionEmoji,
+  type EmojiIdentifierResolvable,
+} from "../structures/emojis/ReactionEmoji.js";
 
 /**
  * Manages the reactions of one message, as they were in the message's payload.

@@ -1,6 +1,6 @@
 import type { ReactionType } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { type User } from "../structures/User.js";
+import { type User } from "../structures/users/User.js";
 
 /**
  * Manages the users who reacted to a message with one emoji.

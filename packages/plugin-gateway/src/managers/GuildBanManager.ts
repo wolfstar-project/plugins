@@ -1,7 +1,7 @@
 import { banKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIBan } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { GuildBan, type GuildBanData } from "../structures/GuildBan.js";
+import { GuildBan, type GuildBanData } from "../structures/guilds/GuildBan.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";

@@ -1,7 +1,40 @@
+import type { StructureMixin } from "./Structure.js";
+
 /**
  * Any class, abstract or not.
  */
 export type MixinBase = abstract new (...args: any[]) => object;
+
+type UnionToIntersection<Union> = (Union extends unknown ? (value: Union) => void : never) extends (
+  value: infer Intersection,
+) => void
+  ? Intersection
+  : never;
+
+/**
+ * The members `Mixins` add to a class extending `Base`, for the interface declaring them.
+ *
+ * @remarks
+ * Following `@discordjs/structures`' `MixinTypes`, the members `Base` already declares are left out: `Base` keeps typing
+ * them, even though the mixins' implementations win at runtime, which must therefore stay assignable to `Base`'s types.
+ * {@link StructureMixin}'s members are left out too: the interface extends it directly, so they keep their `this` type.
+ *
+ * ```typescript
+ * export interface TextChannel
+ *   extends
+ *     StructureMixin<ChannelDataType<ChannelType.GuildText>>,
+ *     MixinTypes<BaseTextChannel, [TextChannelMixin<ChannelType.GuildText>]> {}
+ * export class TextChannel extends BaseTextChannel {}
+ * Mixin(TextChannel, [TextChannelMixin]);
+ * ```
+ *
+ * @typeParam Base The class the mixins are mixed into.
+ * @typeParam Mixins The instance types of the mixins.
+ */
+export type MixinTypes<Base extends object, Mixins extends readonly object[]> = Omit<
+  UnionToIntersection<Mixins[number]>,
+  keyof Base | keyof StructureMixin<object>
+>;
 
 /**
  * Copies the members of every mixin onto the prototype of `target`, the way `@discordjs/structures`' `Mixin` does.

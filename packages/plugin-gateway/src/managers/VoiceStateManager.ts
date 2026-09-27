@@ -1,6 +1,6 @@
 import { voiceStateKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import { VoiceState } from "../structures/VoiceState.js";
+import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
 

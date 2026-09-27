@@ -7,8 +7,8 @@ import {
   type RESTPostAPITemplateCreateGuildJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Guild } from "../structures/Guild.js";
-import { GuildTemplate } from "../structures/GuildTemplate.js";
+import type { Guild } from "../structures/guilds/Guild.js";
+import { GuildTemplate } from "../structures/guilds/GuildTemplate.js";
 
 /**
  * The options to create a template with.

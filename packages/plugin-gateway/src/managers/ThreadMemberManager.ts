@@ -1,7 +1,7 @@
 import { threadMemberKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { Routes, type APIThreadMember } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { ThreadMember } from "../structures/ThreadMember.js";
+import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

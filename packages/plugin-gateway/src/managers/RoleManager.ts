@@ -5,7 +5,7 @@ import {
   type RESTPatchAPIGuildRolePositionsJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Role, type RoleColors } from "../structures/Role.js";
+import { Role, type RoleColors } from "../structures/guilds/Role.js";
 import { whenAll } from "../util/cache.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import { CachedManager } from "./CachedManager.js";

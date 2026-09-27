@@ -1,8 +1,8 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { DMChannel } from "../structures/DMChannel.js";
-import type { Message } from "../structures/Message.js";
-import { User } from "../structures/User.js";
+import type { DMChannel } from "../structures/channels/DMChannel.js";
+import type { Message } from "../structures/messages/Message.js";
+import { User } from "../structures/users/User.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../util/messages.js";
 import { CachedManager } from "./CachedManager.js";
 

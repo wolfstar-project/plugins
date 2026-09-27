@@ -1,5 +1,5 @@
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Role } from "../structures/Role.js";
+import type { Role } from "../structures/guilds/Role.js";
 
 /**
  * Manages the roles of one {@link GuildMember}, reading them through the client's role manager.

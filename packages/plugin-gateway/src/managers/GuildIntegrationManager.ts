@@ -1,6 +1,6 @@
 import { integrationKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Integration } from "../structures/Integration.js";
+import { Integration } from "../structures/guilds/Integration.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 

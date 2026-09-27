@@ -5,8 +5,8 @@ import type {
   EntityCache,
 } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Guild } from "../structures/Guild.js";
-import type { Structure } from "../structures/Structure.js";
+import type { Guild } from "../structures/guilds/Guild.js";
+import type { StructureMixin } from "../structures/Structure.js";
 import { isPromiseLike, whenAll } from "../util/cache.js";
 
 /**
@@ -39,7 +39,7 @@ export interface AddOptions {
 
 /**
  * The base class of every manager: it reads raw data from one of the client's entity caches, falls back to the REST
- * API when asked to, and wraps the result in a {@link Structure}.
+ * API when asked to, and wraps the result in a {@link StructureMixin | structure}.
  *
  * @remarks
  * The cache only ever holds raw API data, building structures is always the manager's job. Without a cache, `get`
@@ -59,7 +59,7 @@ export interface AddOptions {
  */
 export abstract class CachedManager<
   Name extends CacheEntityName,
-  Value extends Structure<object>,
+  Value extends StructureMixin<object>,
   Args extends readonly string[],
 > {
   /**

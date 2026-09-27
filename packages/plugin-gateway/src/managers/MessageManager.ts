@@ -8,9 +8,12 @@ import {
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Message } from "../structures/Message.js";
-import { ReactionEmoji, type EmojiIdentifierResolvable } from "../structures/ReactionEmoji.js";
-import { type User } from "../structures/User.js";
+import { Message } from "../structures/messages/Message.js";
+import {
+  ReactionEmoji,
+  type EmojiIdentifierResolvable,
+} from "../structures/emojis/ReactionEmoji.js";
+import { type User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import {
   resolveMessageOptions,

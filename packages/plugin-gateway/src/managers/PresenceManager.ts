@@ -1,6 +1,6 @@
 import { presenceKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Presence } from "../structures/Presence.js";
+import { Presence } from "../structures/presences/Presence.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
 

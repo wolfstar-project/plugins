@@ -12,7 +12,7 @@ import {
   type RESTPostAPIAutoModerationRuleJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { AutoModerationRule } from "../structures/AutoModerationRule.js";
+import { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import { CachedManager } from "./CachedManager.js";
