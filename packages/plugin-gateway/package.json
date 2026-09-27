@@ -40,18 +40,6 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
-    },
-    "./rest": {
-      "import": {
-        "types": "./dist/esm/rest.d.ts",
-        "default": "./dist/esm/rest.js"
-      }
-    },
-    "./ws": {
-      "import": {
-        "types": "./dist/esm/ws.d.ts",
-        "default": "./dist/esm/ws.js"
-      }
     }
   },
   "publishConfig": {
