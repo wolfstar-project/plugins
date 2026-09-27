@@ -1,4 +1,5 @@
 export * from "./lib/keys.js";
+export { jsonCodec, type CacheCodec } from "./lib/codec.js";
 export {
   attachCacheToGateway,
   type CacheGatewayOptions,

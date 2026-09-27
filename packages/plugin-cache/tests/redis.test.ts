@@ -8,7 +8,9 @@ import {
   memberKey,
   messageKey,
   RedisEntityCache,
+  type CacheCodec,
 } from "../src/index.js";
+import { msgpackCodec } from "../src/msgpack.js";
 import { FakeRedis } from "../../../tests/fixtures/FakeRedis.js";
 
 describe("RedisEntityCache", () => {
@@ -97,6 +99,58 @@ describe("RedisEntityCache", () => {
 
     expect(await compressed.get("a")).toBe("plain");
     expect(await plain.get("b")).toBe("compressed");
+  });
+
+  test("GIVEN a custom codec THEN values are tagged with its name and round-trip", async () => {
+    const codec: CacheCodec = {
+      name: "buffer-test",
+      encode: (value) => Buffer.from(JSON.stringify(value), "utf8"),
+      decode: (data) =>
+        JSON.parse(typeof data === "string" ? data : data.toString("utf8")) as unknown,
+    };
+    const cache = new RedisEntityCache<{ id: string }>(redis, { prefix: "test", codec });
+
+    await cache.set("a", { id: "1" });
+
+    expect(redis.strings.get("test:a")!.value.startsWith("buffer-test:b64:")).toBe(true);
+    expect(await cache.get("a")).toEqual({ id: "1" });
+  });
+
+  test("GIVEN a value written by the default codec THEN a differently-codec-configured cache still reads it", async () => {
+    const codec: CacheCodec = {
+      name: "buffer-test",
+      encode: (value) => Buffer.from(JSON.stringify(value), "utf8"),
+      decode: (data) =>
+        JSON.parse(typeof data === "string" ? data : data.toString("utf8")) as unknown,
+    };
+    const jsonCache = new RedisEntityCache<{ id: string }>(redis, { prefix: "test" });
+    const customCodecCache = new RedisEntityCache<{ id: string }>(redis, {
+      prefix: "test",
+      codec,
+    });
+
+    await jsonCache.set("legacy", { id: "legacy" });
+
+    expect(await customCodecCache.get("legacy")).toEqual({ id: "legacy" });
+  });
+
+  test("GIVEN msgpackCodec THEN values round-trip, including bigint, compressed or not", async () => {
+    const cache = new RedisEntityCache<{ id: bigint; content: string }>(redis, {
+      prefix: "test",
+      codec: msgpackCodec(),
+      compression: "gzip",
+      compressionThreshold: 1024,
+    });
+    const small = { id: 1n, content: "a" };
+    const large = { id: 2n, content: "a".repeat(4096) };
+
+    await cache.set("small", small);
+    await cache.set("large", large);
+
+    expect(redis.strings.get("test:small")!.value.startsWith("msgpack:b64:")).toBe(true);
+    expect(redis.strings.get("test:large")!.value.startsWith("msgpack:gz:")).toBe(true);
+    expect(await cache.get("small")).toEqual(small);
+    expect(await cache.get("large")).toEqual(large);
   });
 });
 
@@ -356,5 +410,23 @@ describe("createRedisCache", () => {
     expect(createRedisCache({ redis: new FakeRedis() }).messages.prefix).toBe(
       "wolfstar:cache:messages",
     );
+  });
+
+  test("GIVEN a codec THEN every entity cache is configured with it", async () => {
+    const codec: CacheCodec = {
+      name: "buffer-test",
+      encode: (value) => Buffer.from(JSON.stringify(value), "utf8"),
+      decode: (data) =>
+        JSON.parse(typeof data === "string" ? data : data.toString("utf8")) as unknown,
+    };
+    const redis = new FakeRedis();
+    const cache = createRedisCache({ redis, codec });
+
+    await cache.users.set("1", { id: "1" } as never);
+
+    expect(redis.strings.get("wolfstar:cache:users:1")!.value.startsWith("buffer-test:")).toBe(
+      true,
+    );
+    expect(await cache.users.get("1")).toEqual({ id: "1" });
   });
 });
