@@ -13,6 +13,7 @@ import { GatewayClient, GatewayEvents, type GatewayEventName } from "../src/inde
 const eventMapKeys: Record<GatewayEventName, true> = {
   raw: true,
   shardReady: true,
+  clientReady: true,
   shardResume: true,
   shardClose: true,
   shardError: true,

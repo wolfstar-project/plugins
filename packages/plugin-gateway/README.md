@@ -74,6 +74,7 @@ On top of the `Client` options:
 | `sessionStore`        | `undefined` | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
 | `sessionStoreTimeout` | `5_000`     | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
 | `partials`            | `[]`        | The structures to build partially for uncached entities, see [Partials](#partials).                                                |
+| `waitGuildTimeout`    | `15_000`    | Milliseconds `clientReady` waits for initially unavailable guilds before emitting anyway, see [Events](#events).                   |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
 
@@ -110,6 +111,7 @@ client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content)
 | --------------------------------------------------------- | ---------------------------------------------- |
 | `raw`                                                     | `payload`, `shardId` — every dispatch          |
 | `shardReady`                                              | `shardId`, `user`                              |
+| `clientReady`                                             | `client` — once, see below                     |
 | `shardResume` / `shardClose` / `shardError`               | `shardId` / `shardId, code` / `error, shardId` |
 | `guildCreate`                                             | `guild`                                        |
 | `guildUpdate`                                             | `oldGuild \| null`, `newGuild`                 |
@@ -164,6 +166,16 @@ client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content)
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
 which always identifies the deleted entity.
+
+`clientReady` is emitted once, like discord.js's `Client#clientReady`: after every shard this client manages has
+connected, and every guild `READY` listed as initially unavailable became available (or `waitGuildTimeout`, `15_000`
+by default, elapsed). `client.isClientReady()` and `client.clientReadyAt` report it after the fact.
+
+```ts
+client.on(GatewayEvents.ClientReady, (client) =>
+  console.log(`Logged in as ${client.user!.username}`),
+);
+```
 
 `client.actions` holds an `Action` for each handled gateway dispatch. Each action captures the
 previous state, then builds and emits events after the cache has been updated. The built-in actions
