@@ -1,26 +1,34 @@
-import type { BrokerRedisClientLike } from "../../src/lib/redis.js";
+import type { BrokerRedisClientLike, StreamEntry } from "../../src/lib/redis.js";
 
-interface StreamEntry {
+interface Entry {
   id: string;
   fields: string[];
 }
 
+interface PendingEntry {
+  consumer: string;
+  deliveries: number;
+  deliveredAt: number;
+}
+
 interface Group {
   lastDeliveredId: string;
-  /** Entry ID -> the consumer it is currently pending for. */
-  pending: Map<string, string>;
+  /** Entry ID -> its pending state (PEL). */
+  pending: Map<string, PendingEntry>;
 }
 
 interface Stream {
-  entries: StreamEntry[];
+  entries: Entry[];
   groups: Map<string, Group>;
 }
 
 /**
  * A minimal in-memory Redis Streams server, enough to exercise consumer-group semantics: `XGROUP CREATE` throws a
- * `BUSYGROUP` error on a pre-existing group, `XREADGROUP 0` returns a consumer's own pending entries (its PEL)
- * without claiming new ones, `XREADGROUP >` claims new entries past the group's last-delivered ID, and `XACK`
- * removes an entry from the PEL.
+ * `BUSYGROUP` error on a pre-existing group, `XREADGROUP <id>` returns a consumer's own pending entries after `<id>`
+ * (its PEL, an empty list once exhausted) without claiming new ones, `XREADGROUP >` claims new entries past the
+ * group's last-delivered ID, `XAUTOCLAIM` transfers idle pending entries, `XPENDING` reports delivery counts, and
+ * `XACK` removes an entry from the PEL. Like Redis, every delivery of a pending entry increments its counter, and an
+ * entry trimmed while pending is returned with `null` fields.
  */
 export class FakeStreamRedis implements BrokerRedisClientLike {
   private readonly streams = new Map<string, Stream>();
@@ -69,7 +77,7 @@ export class FakeStreamRedis implements BrokerRedisClientLike {
 
   public async xreadgroup(
     ...args: readonly unknown[]
-  ): Promise<[key: string, entries: [id: string, fields: string[] | null][]][] | null> {
+  ): Promise<[key: string, entries: StreamEntry[]][] | null> {
     const [, group, consumer, , count] = args as [string, string, string, string, number];
     const streamsIndex = args.indexOf("STREAMS");
     const [key, cursor] = args.slice(streamsIndex + 1) as [string, string];
@@ -77,14 +85,13 @@ export class FakeStreamRedis implements BrokerRedisClientLike {
     const blockMs = blockIndex === -1 ? undefined : Number(args[blockIndex + 1]);
 
     const stream = this.streamOf(key);
-    const groupState = stream.groups.get(group);
-    if (!groupState)
-      throw new Error(`NOGROUP No such consumer group '${group}' for key name '${key}'`);
+    const groupState = this.groupOf(stream, key, group);
 
-    const entries =
-      cursor === "0"
-        ? this.readPending(stream, groupState, consumer)
-        : this.readNew(stream, groupState, consumer, count);
+    // Reading a consumer's history never blocks, and resolves to the stream with no entries once exhausted.
+    if (cursor !== ">")
+      return [[key, this.readPending(stream, groupState, consumer, cursor, count)]];
+
+    const entries = this.readNew(stream, groupState, consumer, count);
 
     // Mimics real BLOCK latency (capped, so idle tests don't wait the full configured duration) rather than
     // resolving instantly, which would otherwise turn the consumer's read loop into a CPU-spinning busy loop.
@@ -92,7 +99,7 @@ export class FakeStreamRedis implements BrokerRedisClientLike {
       await new Promise((resolve) => setTimeout(resolve, Math.min(blockMs, 20)));
     }
 
-    return entries.length === 0 ? null : [[key, entries.map((entry) => [entry.id, entry.fields])]];
+    return entries.length === 0 ? null : [[key, entries]];
   }
 
   public async xack(key: string, group: string, ...ids: string[]): Promise<number> {
@@ -106,17 +113,115 @@ export class FakeStreamRedis implements BrokerRedisClientLike {
     return acked;
   }
 
+  public async xautoclaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    start: string,
+    _countToken: "COUNT",
+    count: number,
+  ): Promise<unknown[]> {
+    const stream = this.streamOf(key);
+    const groupState = this.groupOf(stream, key, group);
+    const now = Date.now();
+    const ids = this.sortedPending(groupState).filter((id) => compareIds(id, start) >= 0);
+
+    const claimed: StreamEntry[] = [];
+    const deleted: string[] = [];
+    let next = "0-0";
+    for (const [index, id] of ids.entries()) {
+      if (claimed.length + deleted.length === count) {
+        next = ids[index]!;
+        break;
+      }
+
+      const state = groupState.pending.get(id)!;
+      if (now - state.deliveredAt < minIdleTime) continue;
+
+      const entry = stream.entries.find((candidate) => candidate.id === id);
+      if (!entry) {
+        // Redis 7 drops deleted entries from the PEL and reports them separately.
+        groupState.pending.delete(id);
+        deleted.push(id);
+        continue;
+      }
+
+      groupState.pending.set(id, { consumer, deliveries: state.deliveries + 1, deliveredAt: now });
+      claimed.push([id, entry.fields]);
+    }
+
+    return [next, claimed, deleted];
+  }
+
+  public async xpending(
+    key: string,
+    group: string,
+    start: string,
+    end: string,
+    count: number,
+  ): Promise<unknown[]> {
+    const groupState = this.groupOf(this.streamOf(key), key, group);
+    const now = Date.now();
+
+    return this.sortedPending(groupState)
+      .filter((id) => compareIds(id, start) >= 0 && compareIds(id, end) <= 0)
+      .slice(0, count)
+      .map((id) => {
+        const state = groupState.pending.get(id)!;
+        return [id, state.consumer, now - state.deliveredAt, state.deliveries];
+      });
+  }
+
+  /**
+   * Every entry currently in a stream, for assertions.
+   */
+  public entriesOf(key: string): readonly Entry[] {
+    return this.streams.get(key)?.entries ?? [];
+  }
+
+  /**
+   * Ages every pending entry of a group by `ms`, so tests need not wait out `claimIdle`.
+   */
+  public age(key: string, group: string, ms: number): void {
+    const groupState = this.groupOf(this.streamOf(key), key, group);
+    for (const state of groupState.pending.values()) state.deliveredAt -= ms;
+  }
+
   private streamOf(key: string): Stream {
     let stream = this.streams.get(key);
     if (!stream) this.streams.set(key, (stream = { entries: [], groups: new Map() }));
     return stream;
   }
 
-  private readPending(stream: Stream, group: Group, consumer: string): StreamEntry[] {
-    const ids = [...group.pending.entries()]
-      .filter(([, owner]) => owner === consumer)
-      .map(([id]) => id);
-    return stream.entries.filter((entry) => ids.includes(entry.id));
+  private groupOf(stream: Stream, key: string, group: string): Group {
+    const groupState = stream.groups.get(group);
+    if (!groupState)
+      throw new Error(`NOGROUP No such consumer group '${group}' for key name '${key}'`);
+    return groupState;
+  }
+
+  private sortedPending(group: Group): string[] {
+    return [...group.pending.keys()].toSorted(compareIds);
+  }
+
+  private readPending(
+    stream: Stream,
+    group: Group,
+    consumer: string,
+    cursor: string,
+    count: number,
+  ): StreamEntry[] {
+    const now = Date.now();
+    return this.sortedPending(group)
+      .filter((id) => group.pending.get(id)!.consumer === consumer && compareIds(id, cursor) > 0)
+      .slice(0, count)
+      .map((id) => {
+        const state = group.pending.get(id)!;
+        state.deliveries++;
+        state.deliveredAt = now;
+        return [id, stream.entries.find((entry) => entry.id === id)?.fields ?? null];
+      });
   }
 
   private readNew(stream: Stream, group: Group, consumer: string, count: number): StreamEntry[] {
@@ -124,16 +229,21 @@ export class FakeStreamRedis implements BrokerRedisClientLike {
       .filter((entry) => compareIds(entry.id, group.lastDeliveredId) > 0)
       .slice(0, count);
 
+    const now = Date.now();
     for (const entry of entries) {
-      group.pending.set(entry.id, consumer);
+      group.pending.set(entry.id, { consumer, deliveries: 1, deliveredAt: now });
       group.lastDeliveredId = entry.id;
     }
 
-    return entries;
+    return entries.map((entry) => [entry.id, entry.fields]);
   }
 }
 
 function compareIds(a: string, b: string): number {
+  if (a === b) return 0;
+  if (a === "-" || b === "+") return -1;
+  if (a === "+" || b === "-") return 1;
+
   const [aMillis, aSeq] = a.split("-").map(Number);
   const [bMillis, bSeq] = b.split("-").map(Number);
   return aMillis === bMillis ? aSeq! - bSeq! : aMillis! - bMillis!;

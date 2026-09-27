@@ -223,14 +223,32 @@ describe("GatewayClient", () => {
     expect(current.joinedTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
   });
 
+  test("GIVEN a dispatch THEN dispatch is emitted once the cache holds it, before the matching event", async () => {
+    const client = createClient();
+    const order: string[] = [];
+    let cached: unknown;
+    client.on("dispatch", (payload) => {
+      order.push(`dispatch:${payload.t}`);
+      cached = client.cache!.users.get(user.id);
+    });
+    client.on("userUpdate", () => order.push("userUpdate"));
+
+    await dispatch(client, GatewayDispatchEvents.UserUpdate, user);
+
+    expect(order).toEqual([`dispatch:${GatewayDispatchEvents.UserUpdate}`, "userUpdate"]);
+    expect(await cached).toMatchObject({ id: user.id });
+  });
+
   test("GIVEN INTERACTION_CREATE THEN only raw is emitted", async () => {
     const client = createClient();
     const raw = record(client, "raw");
+    const dispatched = record(client, "dispatch");
     const emit = vi.spyOn(client, "emit");
 
     await dispatch(client, GatewayDispatchEvents.InteractionCreate, { id: "1" });
 
     expect(raw).toHaveLength(1);
+    expect(dispatched).toHaveLength(0);
     expect(emit).toHaveBeenCalledTimes(1);
   });
 

@@ -51,6 +51,6 @@ describe("BrokerPlugin", () => {
     // postListen's `start()` created the group: the same read now resolves instead of rejecting.
     await expect(
       redis.xreadgroup("GROUP", "g", "c1", "COUNT", 1, "STREAMS", "events", "0"),
-    ).resolves.toBeNull();
+    ).resolves.toEqual([["events", []]]);
   });
 });

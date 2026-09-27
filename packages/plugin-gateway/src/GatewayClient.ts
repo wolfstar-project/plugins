@@ -537,8 +537,8 @@ export class GatewayClient extends Client {
   }
 
   /**
-   * Processes a gateway dispatch: emits it as `raw`, writes it into the cache, and emits the matching
-   * {@link GatewayEventMap} event, if any.
+   * Processes a gateway dispatch: emits it as `raw`, writes it into the cache, emits it as `dispatch`, and emits the
+   * matching {@link GatewayEventMap} event, if any.
    *
    * @param payload The dispatch payload.
    * @param shardId The ID of the shard that received it.
@@ -573,6 +573,7 @@ export class GatewayClient extends Client {
       state = undefined;
     }
 
+    this.emit("dispatch", payload, shardId);
     await action?.handle(payload.d, state, shardId);
 
     if (this.clientReadyTimestamp === null) {

@@ -35,7 +35,35 @@ export interface BrokerRedisClientLike {
     cursor: string,
   ): Promise<[key: string, entries: [id: string, fields: string[] | null][]][] | null>;
   xack(key: string, group: string, ...ids: string[]): Promise<number>;
+  /**
+   * Resolves to `[nextCursor, entries, deletedIds]` (`deletedIds` since Redis 7), each entry being `[id, fields]`.
+   */
+  xautoclaim(
+    key: string,
+    group: string,
+    consumer: string,
+    minIdleTime: number,
+    start: string,
+    countToken: "COUNT",
+    count: number,
+  ): Promise<unknown[]>;
+  /**
+   * The extended form, resolving to one `[id, consumer, idleTime, deliveries]` tuple per pending entry.
+   */
+  xpending(
+    key: string,
+    group: string,
+    start: string,
+    end: string,
+    count: number,
+  ): Promise<unknown[]>;
 }
+
+/**
+ * A stream entry as returned by {@link BrokerRedisClientLike.xreadgroup} and {@link BrokerRedisClientLike.xautoclaim}:
+ * its fields are `null` when the entry was deleted (e.g. trimmed by `MAXLEN`) while still pending.
+ */
+export type StreamEntry = [id: string, fields: string[] | null];
 
 /**
  * Thrown by {@link BrokerRedisClientLike.xgroup} when the group already exists (`BUSYGROUP`), which
