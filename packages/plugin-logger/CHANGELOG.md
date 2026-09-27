@@ -1,5 +1,11 @@
 # @wolfstar/plugin-logger
 
+## 0.2.1
+
+### Patch Changes
+
+- [#125](https://github.com/wolfstar-project/plugins/pull/125) [`27f8d59`](https://github.com/wolfstar-project/plugins/commit/27f8d59bec0d0bd193be4ab27f86e893e19afa32) - fix: accept `@wolfstar/http-framework` v5 as a peer dependency (`^3.4.0 || ^5.0.0`), so v5 projects no longer install the plugin with an unmet peer ([#121](https://github.com/wolfstar-project/plugins/issues/121))
+
 ## 0.2.0
 
 ### Minor Changes
