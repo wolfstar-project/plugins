@@ -96,14 +96,16 @@ const cache = createRedisCache({
 });
 ```
 
-| Option                 | Default            | Description                                                           |
-| ---------------------- | ------------------ | --------------------------------------------------------------------- |
-| `redis`                | —                  | The client to use.                                                    |
-| `prefix`               | `"wolfstar:cache"` | Prefix of every key, entries live at `<prefix>:<entity>:<key>`.       |
-| `compression`          | `"none"`           | `"gzip"`, `"brotli"`, or `"none"`.                                    |
-| `compressionThreshold` | `1024`             | Minimum serialized size, in bytes, for a value to be compressed.      |
-| `ttl`                  | `{}`               | Time-to-live in seconds, per entity cache. Omitted ones never expire. |
-| `indexGuilds`          | `true`             | Index guild-scoped entity caches by guild, see below.                 |
+| Option                 | Default            | Description                                                                                         |
+| ---------------------- | ------------------ | --------------------------------------------------------------------------------------------------- |
+| `redis`                | —                  | The client to use.                                                                                  |
+| `prefix`               | `"wolfstar:cache"` | Prefix of every key, entries live at `<prefix>:<entity>:<key>`.                                     |
+| `compression`          | `"none"`           | `"gzip"`, `"brotli"`, or `"none"`.                                                                  |
+| `compressionThreshold` | `1024`             | Minimum serialized size, in bytes, for a value to be compressed.                                    |
+| `codec`                | `jsonCodec()`      | Encodes/decodes values before compression, see below.                                               |
+| `legacyCodecs`         | `[]`               | Former `codec` values still tagging entries, tried before falling back to `jsonCodec()`, see below. |
+| `ttl`                  | `{}`               | Time-to-live in seconds, per entity cache. Omitted ones never expire.                               |
+| `indexGuilds`          | `true`             | Index guild-scoped entity caches by guild, see below.                                               |
 
 Compressed values are tagged, so turning compression on or off never breaks reading the values
 already stored. Each entity cache keeps a sorted set index (`<prefix>:<entity>:@index`) used by
@@ -111,6 +113,31 @@ already stored. Each entity cache keeps a sorted set index (`<prefix>:<entity>:@
 one `MULTI` transaction, and with a `ttl` every write also prunes the expired index entries, so the
 index stays bounded even when nothing enumerates it. The client must therefore support `multi()`,
 which `ioredis` does.
+
+By default, values are JSON (`jsonCodec()`), then optionally compressed. A denser, still lossless
+alternative is `msgpackCodec()`, from the `@wolfstar/plugin-cache/msgpack` subpath (backed by the
+optional peer dependency [`msgpackr`](https://github.com/kriszyp/msgpackr), and natively lossless
+for `bigint` and binary values):
+
+```ts
+import { createRedisCache } from "@wolfstar/plugin-cache";
+import { msgpackCodec } from "@wolfstar/plugin-cache/msgpack";
+
+const cache = createRedisCache({ redis, codec: msgpackCodec() });
+```
+
+Like compressed values, encoded values are tagged with the codec's name, so switching _to_ a codec
+never breaks reading entries written under the default `jsonCodec()`. Switching _away_ from a
+previously configured non-default codec is different: nothing else records which codec wrote which
+entry, so list it in `legacyCodecs` to keep reading its entries:
+
+```ts
+const cache = createRedisCache({ redis, codec: jsonCodec(), legacyCodecs: [msgpackCodec()] });
+```
+
+Implement `CacheCodec` (`name`, `encode`, `decode`) for any other format. Codec names `"gz"`, `"br"`,
+and `"b64"` are reserved (they collide with the compression/raw-binary markers); a codec named
+`"json"` is always treated as the untagged default, regardless of its own `encode`/`decode`.
 
 With `indexGuilds`, the entity caches holding guild data (channels, messages, members, roles, ...)
 also keep one sorted set per guild (`<prefix>:<entity>:@guild:<guildId>`). A `GUILD_DELETE` then

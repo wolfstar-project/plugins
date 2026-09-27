@@ -1,6 +1,7 @@
 /// <reference types="node" />
 import { promisify } from "node:util";
 import { brotliCompress, brotliDecompress, gunzip, gzip } from "node:zlib";
+import { jsonCodec, type CacheCodec } from "./codec.js";
 import {
   CacheEntityNames,
   GuildFieldCacheEntityNames,
@@ -106,6 +107,27 @@ export interface RedisEntityCacheOptions<Raw = unknown> {
    * read back.
    */
   guildOf?: (key: string, value?: Raw) => string | undefined;
+  /**
+   * The codec used to encode and decode values.
+   *
+   * @remarks
+   * Values are tagged with {@link CacheCodec.name}, so changing the codec never breaks reading entries written
+   * under the default `jsonCodec()`: untagged entries are decoded with it, regardless of what `codec` is now set to.
+   * Switching *away* from a previously configured non-default codec instead requires listing it in
+   * {@link RedisEntityCacheOptions.legacyCodecs}, since nothing else records which codec wrote which entry.
+   *
+   * @default jsonCodec()
+   */
+  codec?: CacheCodec;
+  /**
+   * Former {@link RedisEntityCacheOptions.codec} values this cache's entries may still be tagged with, tried in
+   * order (after the current `codec`) before falling back to `jsonCodec()`. Required to keep reading entries
+   * written under a codec you are migrating away from.
+   *
+   * @remarks
+   * Only used for decoding: entries are always written with the current `codec`.
+   */
+  legacyCodecs?: readonly CacheCodec[];
 }
 
 // The most keys a single `DEL`/`ZREM` of `deleteGuild` sends, so a large guild does not make one huge command.
@@ -114,6 +136,27 @@ const DeleteGuildChunkSize = 500;
 // Compressed values are stored as `<marker><base64>`. JSON can never start with either marker, so values written with
 // a different `compression` setting (e.g. before it was turned on) are still read back correctly.
 const CompressionMarkers = { gzip: "gz:", brotli: "br:" } as const;
+
+// A codec that encodes to a Buffer, stored uncompressed, is base64'd under this marker: Redis string values must be
+// safe UTF-8, and raw bytes are not.
+const RawBinaryMarker = "b64:";
+
+// Reserved for the markers above: a `CacheCodec` named one of these would tag its values identically to a
+// compressed or raw-binary one, making them indistinguishable on decode.
+const ReservedCodecNames = new Set(["gz", "br", "b64"]);
+
+function codecMarker(codec: CacheCodec): string {
+  if (ReservedCodecNames.has(codec.name)) {
+    throw new RangeError(
+      `CacheCodec name "${codec.name}" is reserved (collides with a compression or raw-binary marker)`,
+    );
+  }
+
+  // The default codec is never tagged, so values it writes are still readable by every prior version of this class.
+  // A codec named "json" that is not literally the built-in `jsonCodec()` is therefore always treated as it,
+  // regardless of its own `encode`/`decode` — "json" is reserved for the untagged default.
+  return codec.name === "json" ? "" : `${codec.name}:`;
+}
 
 /**
  * An {@link EntityCache} backed by Redis.
@@ -138,6 +181,10 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
 
   readonly #redis: RedisClientLike;
   readonly #guildOf: ((key: string, value?: Raw) => string | undefined) | undefined;
+  readonly #codec: CacheCodec;
+  readonly #codecMarker: string;
+  // Every non-default codec this cache might decode, current one first, keyed by its marker.
+  readonly #codecsByMarker: readonly (readonly [marker: string, codec: CacheCodec])[];
 
   public constructor(redis: RedisClientLike, options: RedisEntityCacheOptions<Raw>) {
     if (options.ttl !== undefined && !(options.ttl > 0)) {
@@ -150,6 +197,11 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
     this.compression = options.compression ?? "none";
     this.compressionThreshold = options.compressionThreshold ?? 1024;
     this.#guildOf = options.guildOf;
+    this.#codec = options.codec ?? jsonCodec();
+    this.#codecMarker = codecMarker(this.#codec);
+    this.#codecsByMarker = [this.#codec, ...(options.legacyCodecs ?? [])]
+      .map((codec) => [codecMarker(codec), codec] as const)
+      .filter(([marker]) => marker !== "");
   }
 
   public async get(key: string): Promise<Raw | undefined> {
@@ -342,30 +394,58 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   }
 
   private async serialize(value: Raw): Promise<string> {
-    const json = JSON.stringify(value);
-    if (this.compression === "none" || Buffer.byteLength(json) < this.compressionThreshold) {
-      return json;
+    const encoded = this.#codec.encode(value);
+    const byteLength =
+      typeof encoded === "string" ? Buffer.byteLength(encoded) : encoded.byteLength;
+
+    if (this.compression !== "none" && byteLength >= this.compressionThreshold) {
+      const bytes = typeof encoded === "string" ? Buffer.from(encoded, "utf8") : encoded;
+      const compressed =
+        this.compression === "gzip" ? await gzipAsync(bytes) : await brotliCompressAsync(bytes);
+      return `${this.#codecMarker}${CompressionMarkers[this.compression]}${compressed.toString("base64")}`;
     }
 
-    const compressed =
-      this.compression === "gzip" ? await gzipAsync(json) : await brotliCompressAsync(json);
-    return `${CompressionMarkers[this.compression]}${compressed.toString("base64")}`;
+    if (typeof encoded === "string") return `${this.#codecMarker}${encoded}`;
+    return `${this.#codecMarker}${RawBinaryMarker}${encoded.toString("base64")}`;
   }
 
   private async deserialize(valueKey: string, value: string): Promise<Raw> {
     try {
-      if (value.startsWith(CompressionMarkers.gzip)) {
-        return JSON.parse((await gunzipAsync(decode(value))).toString("utf8")) as Raw;
+      const [codec, rest] = this.resolveCodec(value);
+
+      if (rest.startsWith(CompressionMarkers.gzip)) {
+        return codec.decode(await gunzipAsync(decode(rest, CompressionMarkers.gzip.length))) as Raw;
       }
 
-      if (value.startsWith(CompressionMarkers.brotli)) {
-        return JSON.parse((await brotliDecompressAsync(decode(value))).toString("utf8")) as Raw;
+      if (rest.startsWith(CompressionMarkers.brotli)) {
+        return codec.decode(
+          await brotliDecompressAsync(decode(rest, CompressionMarkers.brotli.length)),
+        ) as Raw;
       }
 
-      return JSON.parse(value) as Raw;
+      if (rest.startsWith(RawBinaryMarker)) {
+        return codec.decode(decode(rest, RawBinaryMarker.length)) as Raw;
+      }
+
+      return codec.decode(rest) as Raw;
     } catch (error) {
       throw new CacheValueError(valueKey, error);
     }
+  }
+
+  /**
+   * Picks the codec a stored value was tagged for, and strips its marker.
+   *
+   * @remarks
+   * Tries the current `codec` and every `legacyCodecs` entry, in order, then falls back to `jsonCodec()` for
+   * untagged values — those written by the default codec, or before a codec was ever configured.
+   */
+  private resolveCodec(value: string): readonly [codec: CacheCodec, rest: string] {
+    for (const [marker, codec] of this.#codecsByMarker) {
+      if (value.startsWith(marker)) return [codec, value.slice(marker.length)];
+    }
+
+    return [jsonCodec(), value];
   }
 }
 
@@ -382,8 +462,8 @@ async function execute(transaction: RedisTransactionLike): Promise<unknown[]> {
   });
 }
 
-function decode(value: string): Buffer {
-  return Buffer.from(value.slice(3), "base64");
+function decode(value: string, markerLength: number): Buffer {
+  return Buffer.from(value.slice(markerLength), "base64");
 }
 
 /**
@@ -416,6 +496,17 @@ export interface RedisCacheOptions {
    * @default 1024
    */
   compressionThreshold?: number;
+  /**
+   * The codec used to encode and decode values.
+   *
+   * @default jsonCodec()
+   */
+  codec?: CacheCodec;
+  /**
+   * Former {@link RedisCacheOptions.codec} values this cache's entries may still be tagged with. See
+   * {@link RedisEntityCacheOptions.legacyCodecs}.
+   */
+  legacyCodecs?: readonly CacheCodec[];
   /**
    * The time-to-live per entity cache, in seconds. Entity caches left out never expire.
    */
@@ -485,6 +576,8 @@ export function createRedisCache(options: RedisCacheOptions): RedisCache & Cache
     prefix = DefaultRedisCachePrefix,
     compression,
     compressionThreshold,
+    codec,
+    legacyCodecs,
     ttl,
     indexGuilds = true,
   } = options;
@@ -498,6 +591,8 @@ export function createRedisCache(options: RedisCacheOptions): RedisCache & Cache
           ttl: ttl?.[name],
           compression,
           compressionThreshold,
+          codec,
+          legacyCodecs,
           guildOf: indexGuilds ? GuildResolvers[name] : undefined,
         }),
       ]),

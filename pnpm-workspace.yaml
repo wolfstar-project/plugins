@@ -3,5 +3,6 @@ packages:
 allowBuilds:
   "@swc/core": true
   esbuild: true
+  msgpackr-extract: false
 minimumReleaseAgeExclude:
   - "@wolfstar/http-framework@3.4.0"

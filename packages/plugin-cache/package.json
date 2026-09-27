@@ -41,6 +41,12 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
+    },
+    "./msgpack": {
+      "import": {
+        "types": "./dist/esm/msgpack.d.ts",
+        "default": "./dist/esm/msgpack.js"
+      }
     }
   },
   "publishConfig": {
@@ -57,7 +63,16 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "ioredis": "^6.0.0"
+    "ioredis": "^6.0.0",
+    "msgpackr": "^2.1.0"
+  },
+  "peerDependencies": {
+    "msgpackr": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "msgpackr": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"
