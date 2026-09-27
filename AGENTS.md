@@ -56,4 +56,4 @@ The library's core is `ApiServer`, a standalone REST server (default port `4000`
 
 Applies to any agent running in a cloud VM (Cursor Cloud, Claude Code on the web, …), not to local development.
 
-- The VM's default Node is v22.x, first on `PATH`, not the Node 24 pinned by CI and `mise.toml`; it satisfies `engines` and build/test/lint/typecheck all pass on it.
+- The VM's default Node may differ from the Node 24 pinned by CI and `mise.toml` (Cursor Cloud has shipped v22.x first on `PATH`); check `node -v`. Any version in `engines` works for build/test/lint/typecheck.
