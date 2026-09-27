@@ -69,7 +69,7 @@ export class WebhookManager {
    * @param token The webhook's token, to fetch it without the bot's authorization.
    */
   public async fetch(webhookId: string, token?: string): Promise<Webhook> {
-    const webhook = await this.client.core.api.webhooks.get(webhookId, { token });
+    const webhook = await this.client.api.webhooks.get(webhookId, { token });
     return this.hydrate(webhook);
   }
 
@@ -79,7 +79,7 @@ export class WebhookManager {
    * @param channelId The ID of the channel.
    */
   public async fetchChannel(channelId: string): Promise<Webhook[]> {
-    const webhooks = await this.client.core.api.channels.getWebhooks(channelId);
+    const webhooks = await this.client.api.channels.getWebhooks(channelId);
     return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
@@ -89,7 +89,7 @@ export class WebhookManager {
    * @param guildId The ID of the guild.
    */
   public async fetchGuild(guildId: string): Promise<Webhook[]> {
-    const webhooks = await this.client.core.api.guilds.getWebhooks(guildId);
+    const webhooks = await this.client.api.guilds.getWebhooks(guildId);
     return Promise.all(webhooks.map((webhook) => this.hydrate(webhook)));
   }
 
@@ -101,7 +101,7 @@ export class WebhookManager {
    */
   public async create(channelId: string, options: WebhookCreateOptions): Promise<Webhook> {
     const body: RESTPostAPIChannelWebhookJSONBody = { name: options.name, avatar: options.avatar };
-    const webhook = await this.client.core.api.channels.createWebhook(channelId, body, {
+    const webhook = await this.client.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
     });
     return this.hydrate(webhook);
@@ -124,7 +124,7 @@ export class WebhookManager {
       avatar: options.avatar,
       channel_id: options.channel === undefined ? undefined : resolveId(options.channel),
     };
-    const webhook = await this.client.core.api.webhooks.edit(webhookId, body, {
+    const webhook = await this.client.api.webhooks.edit(webhookId, body, {
       token,
       reason: options.reason,
     });
@@ -141,7 +141,7 @@ export class WebhookManager {
     webhookId: string,
     options: { token?: string; reason?: string } = {},
   ): Promise<void> {
-    await this.client.core.api.webhooks.delete(webhookId, options);
+    await this.client.api.webhooks.delete(webhookId, options);
   }
 
   /**
@@ -159,7 +159,7 @@ export class WebhookManager {
     const payload = MessagePayload.create(this.client, options, { webhook: true });
     const { threadId } = payload.options as WebhookThreadOptions;
     const { body, files } = await payload.resolve<RESTPostAPIWebhookWithTokenJSONBody>();
-    const message = await this.client.core.api.webhooks.execute(webhookId, token, {
+    const message = await this.client.api.webhooks.execute(webhookId, token, {
       ...body,
       files,
       thread_id: threadId,
@@ -182,7 +182,7 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<Message> {
-    const message = await this.client.core.api.webhooks.getMessage(webhookId, token, messageId, {
+    const message = await this.client.api.webhooks.getMessage(webhookId, token, messageId, {
       thread_id: options.threadId,
     });
     return this.client.messages._add(message);
@@ -205,7 +205,7 @@ export class WebhookManager {
     const payload = MessagePayload.create(this.client, options, { webhook: true, edit: true });
     const { threadId } = payload.options as WebhookThreadOptions;
     const { body, files } = await payload.resolve<RESTPatchAPIWebhookWithTokenMessageJSONBody>();
-    const message = await this.client.core.api.webhooks.editMessage(webhookId, token, messageId, {
+    const message = await this.client.api.webhooks.editMessage(webhookId, token, messageId, {
       ...body,
       files,
       thread_id: threadId,
@@ -227,7 +227,7 @@ export class WebhookManager {
     messageId: string,
     options: WebhookThreadOptions = {},
   ): Promise<void> {
-    await this.client.core.api.webhooks.deleteMessage(webhookId, token, messageId, {
+    await this.client.api.webhooks.deleteMessage(webhookId, token, messageId, {
       thread_id: options.threadId,
     });
   }

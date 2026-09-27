@@ -69,8 +69,8 @@ export class VoiceStateManager extends CachedManager<
     const target = (client.user?.id ?? client.id) === userId ? "@me" : userId;
     const state =
       target === "@me"
-        ? await client.core.api.voice.getVoiceState(guildId)
-        : await client.core.api.voice.getUserVoiceState(guildId, target);
+        ? await client.api.voice.getVoiceState(guildId)
+        : await client.api.voice.getUserVoiceState(guildId, target);
     return { ...state, guild_id: guildId };
   }
 }

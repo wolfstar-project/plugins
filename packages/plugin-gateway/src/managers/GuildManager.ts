@@ -281,7 +281,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWelcomeScreen(guildId: string): Promise<WelcomeScreen> {
-    const screen = await this.client.core.api.guilds.getWelcomeScreen(guildId);
+    const screen = await this.client.api.guilds.getWelcomeScreen(guildId);
     return this.welcomeScreen(guildId, screen);
   }
 
@@ -308,7 +308,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
         };
       }),
     };
-    const screen = await this.client.core.api.guilds.editWelcomeScreen(guildId, body, {
+    const screen = await this.client.api.guilds.editWelcomeScreen(guildId, body, {
       reason: options.reason,
     });
     return this.welcomeScreen(guildId, screen);
@@ -320,7 +320,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchWidgetSettings(guildId: string): Promise<GuildWidgetSettings> {
-    const settings = await this.client.core.api.guilds.getWidgetSettings(guildId);
+    const settings = await this.client.api.guilds.getWidgetSettings(guildId);
     return { enabled: settings.enabled, channelId: settings.channel_id };
   }
 
@@ -339,7 +339,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       channel_id:
         options.channel === undefined ? undefined : options.channel && resolveId(options.channel),
     };
-    const settings = await this.client.core.api.guilds.editWidgetSettings(guildId, body, {
+    const settings = await this.client.api.guilds.editWidgetSettings(guildId, body, {
       reason: options.reason,
     });
     const cached = await this.cache?.get(guildId);
@@ -360,7 +360,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchOnboarding(guildId: string): Promise<GuildOnboarding> {
-    const onboarding = await this.client.core.api.guilds.getOnboarding(guildId);
+    const onboarding = await this.client.api.guilds.getOnboarding(guildId);
     return this.onboarding(guildId, onboarding);
   }
 
@@ -400,7 +400,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       enabled: options.enabled,
       mode: options.mode,
     };
-    const onboarding = await this.client.core.api.guilds.editOnboarding(guildId, body, {
+    const onboarding = await this.client.api.guilds.editOnboarding(guildId, body, {
       reason: options.reason,
     });
     return this.onboarding(guildId, onboarding);
@@ -434,7 +434,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     guildId: string,
     options: GuildAuditLogsFetchOptions = {},
   ): Promise<GuildAuditLogs> {
-    const log = await this.client.core.api.guilds.getAuditLogs(guildId, {
+    const log = await this.client.api.guilds.getAuditLogs(guildId, {
       user_id: options.user && resolveId(options.user),
       action_type: options.type,
       before: options.before && resolveId(options.before),
@@ -538,7 +538,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   public async fetchPartials(
     options: { limit?: number; before?: string; after?: string; withCounts?: boolean } = {},
   ): Promise<AnonymousGuild[]> {
-    const guilds = await this.client.core.api.users.getGuilds({
+    const guilds = await this.client.api.users.getGuilds({
       limit: options.limit,
       before: options.before,
       after: options.after,
@@ -553,7 +553,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param options The guild's name and initial setup.
    */
   public async create(options: RESTPostAPIGuildsJSONBody): Promise<Guild> {
-    const guild = await this.client.core.api.guilds.create(options);
+    const guild = await this.client.api.guilds.create(options);
     return this.store(guild);
   }
 
@@ -589,7 +589,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       premium_progress_bar_enabled: options.premiumProgressBarEnabled,
       safety_alerts_channel_id: options.safetyAlertsChannel,
     };
-    const guild = await this.client.core.api.guilds.edit(guildId, body, {
+    const guild = await this.client.api.guilds.edit(guildId, body, {
       reason: options.reason,
     });
     return this.store(guild);
@@ -601,7 +601,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async leave(guildId: string): Promise<void> {
-    await this.client.core.api.users.leaveGuild(guildId);
+    await this.client.api.users.leaveGuild(guildId);
     await this.forget(guildId);
   }
 
@@ -611,7 +611,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async delete(guildId: string): Promise<void> {
-    await this.client.core.api.guilds.delete(guildId);
+    await this.client.api.guilds.delete(guildId);
     await this.forget(guildId);
   }
 
@@ -621,7 +621,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchPreview(guildId: string): Promise<GuildPreview> {
-    return new GuildPreview(await this.client.core.api.guilds.getPreview(guildId));
+    return new GuildPreview(await this.client.api.guilds.getPreview(guildId));
   }
 
   /**
@@ -630,7 +630,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVoiceRegions(guildId: string): Promise<APIVoiceRegion[]> {
-    return this.client.core.api.guilds.getVoiceRegions(guildId);
+    return this.client.api.guilds.getVoiceRegions(guildId);
   }
 
   /**
@@ -639,7 +639,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @param guildId The ID of the guild.
    */
   public async fetchVanityData(guildId: string): Promise<RESTGetAPIGuildVanityUrlResult> {
-    return this.client.core.api.guilds.getVanityURL(guildId);
+    return this.client.api.guilds.getVanityURL(guildId);
   }
 
   /**
@@ -656,14 +656,14 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       invites_disabled_until: toISO(options.invitesDisabledUntil),
       dms_disabled_until: toISO(options.dmsDisabledUntil),
     };
-    const incidents = await this.client.core.api.guilds.editIncidentActions(guildId, body);
+    const incidents = await this.client.api.guilds.editIncidentActions(guildId, body);
     const cached = await this.cache?.get(guildId);
     if (cached) await this.cache!.set(guildId, { ...cached, incidents_data: incidents });
     return incidents;
   }
 
   protected async fetchRaw(guildId: string) {
-    return this.client.core.api.guilds.get(guildId, { with_counts: true });
+    return this.client.api.guilds.get(guildId, { with_counts: true });
   }
 
   private store(guild: APIGuild): Promise<Guild> {

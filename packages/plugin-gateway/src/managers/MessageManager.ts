@@ -195,7 +195,7 @@ export class MessageManager extends CachedManager<
    * @param options How many messages, and around which one.
    */
   public async list(channelId: string, options: MessageListOptions = {}): Promise<Message[]> {
-    const messages = await this.client.core.api.channels.getMessages(channelId, {
+    const messages = await this.client.api.channels.getMessages(channelId, {
       limit: options.limit ?? 50,
       before: options.before,
       after: options.after,
@@ -215,7 +215,7 @@ export class MessageManager extends CachedManager<
     options: MessagePayloadResolvable<MessageCreateOptions>,
   ): Promise<Message> {
     const { body, files } = await MessagePayload.create(this.client, options).resolve();
-    const message = await this.client.core.api.channels.createMessage(channelId, {
+    const message = await this.client.api.channels.createMessage(channelId, {
       ...body,
       files,
     });
@@ -250,7 +250,7 @@ export class MessageManager extends CachedManager<
     const { body, files } = await MessagePayload.create(this.client, options, {
       edit: true,
     }).resolve<RESTPatchAPIChannelMessageJSONBody>();
-    const message = await this.client.core.api.channels.editMessage(channelId, messageId, {
+    const message = await this.client.api.channels.editMessage(channelId, messageId, {
       ...body,
       files,
     });
@@ -265,7 +265,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log, when deleting someone else's message.
    */
   public async delete(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.deleteMessage(channelId, messageId, { reason });
+    await this.client.api.channels.deleteMessage(channelId, messageId, { reason });
     await this.cache?.delete(this.resolveKey(channelId, messageId));
   }
 
@@ -296,7 +296,7 @@ export class MessageManager extends CachedManager<
     if (ids.length === 1) {
       await this.delete(channelId, ids[0]!);
     } else {
-      await this.client.core.api.channels.bulkDeleteMessages(channelId, ids);
+      await this.client.api.channels.bulkDeleteMessages(channelId, ids);
       await Promise.all(ids.map((id) => this.cache?.delete(this.resolveKey(channelId, id))));
     }
 
@@ -317,7 +317,7 @@ export class MessageManager extends CachedManager<
     if (options.limit) query.set("limit", String(options.limit));
     if (options.before !== undefined) query.set("before", new Date(options.before).toISOString());
 
-    const result = (await this.client.core.api.rest.get(Routes.channelMessagesPins(channelId), {
+    const result = (await this.client.api.rest.get(Routes.channelMessagesPins(channelId), {
       query,
     })) as RESTGetAPIChannelMessagesPinsResult;
     const items = await Promise.all(
@@ -337,7 +337,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async pin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.pinMessage(channelId, messageId, { reason });
+    await this.client.api.channels.pinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: true });
   }
 
@@ -349,7 +349,7 @@ export class MessageManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unpin(channelId: string, messageId: string, reason?: string): Promise<void> {
-    await this.client.core.api.channels.unpinMessage(channelId, messageId, { reason });
+    await this.client.api.channels.unpinMessage(channelId, messageId, { reason });
     await this.patchCached(channelId, messageId, { pinned: false });
   }
 
@@ -360,7 +360,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async crosspost(channelId: string, messageId: string): Promise<Message> {
-    const message = await this.client.core.api.channels.crosspostMessage(channelId, messageId);
+    const message = await this.client.api.channels.crosspostMessage(channelId, messageId);
     return this.store(message);
   }
 
@@ -376,7 +376,7 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await this.client.core.api.channels.addMessageReaction(
+    await this.client.api.channels.addMessageReaction(
       channelId,
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
@@ -395,7 +395,7 @@ export class MessageManager extends CachedManager<
     messageId: string,
     emoji: EmojiIdentifierResolvable,
   ): Promise<void> {
-    await this.client.core.api.channels.deleteAllMessageReactionsForEmoji(
+    await this.client.api.channels.deleteAllMessageReactionsForEmoji(
       channelId,
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
@@ -409,7 +409,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message.
    */
   public async removeAllReactions(channelId: string, messageId: string): Promise<void> {
-    await this.client.core.api.channels.deleteAllMessageReactions(channelId, messageId);
+    await this.client.api.channels.deleteAllMessageReactions(channelId, messageId);
     await this.patchCached(channelId, messageId, { reactions: [] });
   }
 
@@ -430,7 +430,7 @@ export class MessageManager extends CachedManager<
       auto_archive_duration: options.autoArchiveDuration,
       rate_limit_per_user: options.rateLimitPerUser,
     };
-    const thread = await this.client.core.api.channels.createThread(channelId, body, messageId, {
+    const thread = await this.client.api.channels.createThread(channelId, body, messageId, {
       reason: options.reason,
     });
     return this.client.threads._add(thread);
@@ -443,7 +443,7 @@ export class MessageManager extends CachedManager<
    * @param messageId The ID of the message holding the poll.
    */
   public async endPoll(channelId: string, messageId: string): Promise<Message> {
-    const message = await this.client.core.api.poll.expirePoll(channelId, messageId);
+    const message = await this.client.api.poll.expirePoll(channelId, messageId);
     return this.store(message);
   }
 
@@ -461,7 +461,7 @@ export class MessageManager extends CachedManager<
     answerId: number,
     options: { limit?: number; after?: string } = {},
   ): Promise<User[]> {
-    const { users } = await this.client.core.api.poll.getAnswerVoters(
+    const { users } = await this.client.api.poll.getAnswerVoters(
       channelId,
       messageId,
       answerId,
@@ -471,7 +471,7 @@ export class MessageManager extends CachedManager<
   }
 
   protected async fetchRaw(channelId: string, messageId: string) {
-    return this.client.core.api.channels.getMessage(channelId, messageId);
+    return this.client.api.channels.getMessage(channelId, messageId);
   }
 
   private store(message: APIMessage): Promise<Message> {

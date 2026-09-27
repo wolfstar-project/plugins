@@ -74,7 +74,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * Shows the bot as typing in the channel, for about 10 seconds or until it sends a message.
    */
   public async sendTyping(): Promise<void> {
-    await this.client.core.api.channels.showTyping(this.id);
+    await this.client.api.channels.showTyping(this.id);
   }
 
   /**

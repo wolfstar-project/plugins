@@ -143,13 +143,13 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
 
     const thread = (
       options.message === undefined
-        ? await this.client.core.api.channels.createThread(
+        ? await this.client.api.channels.createThread(
             channelId,
             body as RESTPostAPIChannelThreadsJSONBody,
             undefined,
             { reason: options.reason },
           )
-        : await this.client.core.api.channels.createForumThread(
+        : await this.client.api.channels.createForumThread(
             channelId,
             {
               ...(body as RESTPostAPIGuildForumThreadsJSONBody),
@@ -169,7 +169,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
    * @param guildId The ID of the guild.
    */
   public async fetchActive(guildId: string): Promise<FetchedThreads> {
-    const result = await this.client.core.api.guilds.getActiveThreads(guildId);
+    const result = await this.client.api.guilds.getActiveThreads(guildId);
     return this.storeList(result.threads as APIThreadChannel[], result.members, guildId, false);
   }
 
@@ -193,8 +193,8 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
             : new Date(options.before).toISOString(),
     };
     const result = options.joined
-      ? await this.client.core.api.channels.getJoinedPrivateArchivedThreads(channelId, query)
-      : await this.client.core.api.channels.getArchivedThreads(
+      ? await this.client.api.channels.getJoinedPrivateArchivedThreads(channelId, query)
+      : await this.client.api.channels.getArchivedThreads(
           channelId,
           options.type ?? "public",
           query,
@@ -233,6 +233,6 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
   }
 
   protected async fetchRaw(threadId: string) {
-    return this.client.core.api.channels.get(threadId) as Promise<APIThreadChannel>;
+    return this.client.api.channels.get(threadId) as Promise<APIThreadChannel>;
   }
 }

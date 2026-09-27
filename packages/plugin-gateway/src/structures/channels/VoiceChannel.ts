@@ -61,7 +61,7 @@ export class VoiceChannel extends BaseVoiceChannel {
       sound_id: sound.soundId,
       source_guild_id: sound.guildId ?? undefined,
     };
-    await this.client.core.api.channels.sendSoundboardSound(this.id, body);
+    await this.client.api.channels.sendSoundboardSound(this.id, body);
   }
 }
 

@@ -111,9 +111,8 @@ describe("GatewayClient", () => {
 
     expect(container.client).toBe(client);
     expect(container.gatewayClient).toBe(client);
-    expect(client.core.gateway).toBe(client.gateway);
     expect(client.rest).toBe(container.rest);
-    expect(client.core.rest).toBe(client.rest);
+    expect(client.api.rest).toBe(client.rest);
   });
 
   test("start loads pieces, listens for interactions, then connects shards", async () => {

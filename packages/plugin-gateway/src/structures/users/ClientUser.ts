@@ -81,7 +81,7 @@ export class ClientUser extends User {
    */
   public async edit(options: ClientUserEditOptions): Promise<this> {
     const body: RESTPatchAPICurrentUserJSONBody = options;
-    const user = await this.client.core.api.users.edit(body);
+    const user = await this.client.api.users.edit(body);
     await this.client.users._add(user);
     return this[kPatch](user);
   }

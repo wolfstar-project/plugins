@@ -7,7 +7,7 @@ import {
   type SessionInfo,
   type ShardRange,
 } from "@discordjs/ws";
-import { Client as DiscordCoreClient } from "@discordjs/core";
+import { Client as DiscordCoreClient, type API } from "@discordjs/core";
 import type { REST } from "@discordjs/rest";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
 import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wolfstar/plugin-cache";
@@ -175,8 +175,21 @@ export class GatewayClient extends Client {
    */
   public readonly gateway: WebSocketManager;
 
-  /** The discord.js core client, sharing this client's REST and gateway transports. */
-  public readonly core: DiscordCoreClient;
+  /**
+   * The typed REST API every manager's calls go through, `@discordjs/core`'s `API` built from {@link GatewayClient.rest}.
+   */
+  public readonly api: API;
+
+  /**
+   * The discord.js core client, sharing this client's REST and gateway transports, like the RFC `next` `Client`'s
+   * own `core`.
+   *
+   * @remarks
+   * Kept protected: managers and structures reach its typed REST calls through {@link GatewayClient.api} instead, and
+   * its gateway and REST manager are already {@link GatewayClient.gateway} and {@link GatewayClient.rest}. It is only
+   * needed to build the discord.js core client's own event listeners, if this class ever wraps them.
+   */
+  protected readonly core: DiscordCoreClient;
 
   /** The actions that turn gateway dispatches into public client events. */
   public readonly actions: ActionsManager;
@@ -262,6 +275,7 @@ export class GatewayClient extends Client {
       shardIds: options.shardIds ?? null,
     });
     this.core = new DiscordCoreClient({ gateway: this.gateway, rest: this.rest });
+    this.api = this.core.api;
     this.actions = new ActionsManager(this);
 
     this.gateway.on(WebSocketShardEvents.Dispatch, (payload, shardId) => {
@@ -363,7 +377,7 @@ export class GatewayClient extends Client {
    * Fetches Discord's default soundboard sounds, which every guild can play.
    */
   public async fetchDefaultSoundboardSounds(): Promise<SoundboardSound[]> {
-    const sounds = await this.core.api.soundboardSounds.getSoundboardDefaultSounds();
+    const sounds = await this.api.soundboardSounds.getSoundboardDefaultSounds();
     return sounds.map((sound) => new SoundboardSound(sound));
   }
 
@@ -392,7 +406,7 @@ export class GatewayClient extends Client {
    * @param guildId The ID of the guild.
    */
   public async fetchGuildWidget(guildId: string): Promise<Widget> {
-    return new Widget(await this.core.api.guilds.getWidget(guildId));
+    return new Widget(await this.api.guilds.getWidget(guildId));
   }
 
   /**
@@ -407,7 +421,7 @@ export class GatewayClient extends Client {
   ): Promise<BaseInvite> {
     // Accept `https://discord.gg/code` and `discord.com/invite/code` as well as the bare code.
     const resolved = code.split("/").pop()!;
-    const invite = await this.core.api.invites.get(resolved, {
+    const invite = await this.api.invites.get(resolved, {
       with_counts: options.withCounts ?? true,
       guild_scheduled_event_id: options.guildScheduledEventId,
     });
@@ -429,14 +443,14 @@ export class GatewayClient extends Client {
    * @param stickerId The ID of the sticker.
    */
   public async fetchSticker(stickerId: string): Promise<Sticker> {
-    return new Sticker(await this.core.api.stickers.get(stickerId));
+    return new Sticker(await this.api.stickers.get(stickerId));
   }
 
   /**
    * Fetches the packs of standard stickers.
    */
   public async fetchStickerPacks(): Promise<StickerPack[]> {
-    const { sticker_packs: packs } = await this.core.api.stickers.getStickers();
+    const { sticker_packs: packs } = await this.api.stickers.getStickers();
     return packs.map((pack) => new StickerPack(pack));
   }
 
@@ -444,7 +458,7 @@ export class GatewayClient extends Client {
    * Fetches the voice regions available to the bot.
    */
   public async fetchVoiceRegions(): Promise<APIVoiceRegion[]> {
-    return this.core.api.voice.getVoiceRegions();
+    return this.api.voice.getVoiceRegions();
   }
 
   /**

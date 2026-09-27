@@ -273,7 +273,7 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { limit?: number; after?: string } = {},
   ): Promise<GuildMember[]> {
-    const members = await this.client.core.api.guilds.getMembers(guildId, {
+    const members = await this.client.api.guilds.getMembers(guildId, {
       limit: options.limit ?? 1,
       after: options.after,
     });
@@ -290,7 +290,7 @@ export class GuildMemberManager extends CachedManager<
     guildId: string,
     options: { query: string; limit?: number },
   ): Promise<GuildMember[]> {
-    const members = await this.client.core.api.guilds.searchForMembers(guildId, {
+    const members = await this.client.api.guilds.searchForMembers(guildId, {
       query: options.query,
       limit: options.limit ?? 1,
     });
@@ -418,7 +418,7 @@ export class GuildMemberManager extends CachedManager<
       deaf: options.deaf,
     };
     // The API answers 204 without a body when the user already is a member.
-    const member = await this.client.core.api.guilds.addMember(guildId, userId, body);
+    const member = await this.client.api.guilds.addMember(guildId, userId, body);
     return member ? this.store(guildId, member) : this.fetch(guildId, userId);
   }
 
@@ -448,7 +448,7 @@ export class GuildMemberManager extends CachedManager<
           ? undefined
           : Number(GuildMemberFlagsBitField.resolve(options.flags)),
     };
-    const member = await this.client.core.api.guilds.editMember(guildId, userId, body, {
+    const member = await this.client.api.guilds.editMember(guildId, userId, body, {
       reason: options.reason,
     });
     return this.store(guildId, member);
@@ -462,7 +462,7 @@ export class GuildMemberManager extends CachedManager<
    */
   public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
     const { reason, ...body } = options;
-    const member = await this.client.core.api.users.editCurrentGuildMember(
+    const member = await this.client.api.users.editCurrentGuildMember(
       guildId,
       body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
       { reason },
@@ -478,7 +478,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.removeMember(guildId, userId, { reason });
+    await this.client.api.guilds.removeMember(guildId, userId, { reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -493,7 +493,7 @@ export class GuildMemberManager extends CachedManager<
     const body: RESTPutAPIGuildBanJSONBody = {
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    await this.client.core.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
+    await this.client.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
     await this.cache?.delete(this.resolveKey(guildId, userId));
   }
 
@@ -505,7 +505,7 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async unban(guildId: string, userId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.unbanUser(guildId, userId, { reason });
+    await this.client.api.guilds.unbanUser(guildId, userId, { reason });
   }
 
   /**
@@ -525,7 +525,7 @@ export class GuildMemberManager extends CachedManager<
       user_ids: [...userIds],
       delete_message_seconds: options.deleteMessageSeconds,
     };
-    const result = await this.client.core.api.guilds.bulkBanUsers(guildId, body, {
+    const result = await this.client.api.guilds.bulkBanUsers(guildId, body, {
       reason: options.reason,
     });
     await Promise.all(
@@ -544,14 +544,14 @@ export class GuildMemberManager extends CachedManager<
   public async prune(guildId: string, options: GuildPruneOptions = {}): Promise<number | null> {
     const days = options.days ?? 7;
     if (options.dry) {
-      const result = await this.client.core.api.guilds.getPruneCount(guildId, {
+      const result = await this.client.api.guilds.getPruneCount(guildId, {
         days,
         include_roles: options.roles?.length ? options.roles.join(",") : undefined,
       });
       return result.pruned;
     }
 
-    const result = await this.client.core.api.guilds.beginPrune(
+    const result = await this.client.api.guilds.beginPrune(
       guildId,
       {
         days,
@@ -577,7 +577,7 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await this.client.core.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
+    await this.client.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => [...new Set([...roles, roleId])]);
   }
 
@@ -595,12 +595,12 @@ export class GuildMemberManager extends CachedManager<
     roleId: string,
     reason?: string,
   ): Promise<void> {
-    await this.client.core.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
+    await this.client.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => roles.filter((id) => id !== roleId));
   }
 
   protected async fetchRaw(guildId: string, userId: string) {
-    const member = await this.client.core.api.guilds.getMember(guildId, userId);
+    const member = await this.client.api.guilds.getMember(guildId, userId);
     return { ...member, guild_id: guildId };
   }
 

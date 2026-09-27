@@ -62,7 +62,7 @@ export class WebhookMixin {
    * @param options The thread to send it in.
    */
   public async sendSlackMessage(body: unknown, options: WebhookThreadOptions = {}): Promise<void> {
-    await this.client.core.api.webhooks.executeSlack(this.id, this.requireToken(), body, {
+    await this.client.api.webhooks.executeSlack(this.id, this.requireToken(), body, {
       thread_id: options.threadId,
     });
   }

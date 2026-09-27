@@ -60,7 +60,7 @@ export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
    * Fetches the channel from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const data = await this.client.core.api.channels.get(this.id);
+    const data = await this.client.api.channels.get(this.id);
     if (data.type !== this.type) {
       throw new TypeError(`Channel ${this.id} changed type from ${this.type} to ${data.type}`);
     }

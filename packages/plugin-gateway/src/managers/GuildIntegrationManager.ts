@@ -75,7 +75,7 @@ export class GuildIntegrationManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async delete(integrationId: string, reason?: string): Promise<void> {
-    await this.client.core.api.guilds.deleteIntegration(this.guildId, integrationId, { reason });
+    await this.client.api.guilds.deleteIntegration(this.guildId, integrationId, { reason });
     await this.cache?.delete(this.resolveKey(integrationId));
   }
 
@@ -89,7 +89,7 @@ export class GuildIntegrationManager extends CachedManager<
   }
 
   private async list(): Promise<CacheEntityTypes["integrations"][]> {
-    const integrations = await this.client.core.api.guilds.getIntegrations(this.guildId);
+    const integrations = await this.client.api.guilds.getIntegrations(this.guildId);
     return integrations.map((integration) => ({ ...integration, guild_id: this.guildId }));
   }
 }

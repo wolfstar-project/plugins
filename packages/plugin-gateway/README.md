@@ -25,7 +25,7 @@ sharding, reconnects, and session resumes. Actions turn dispatches into events c
 such as `Message`, `User`, and `Guild`; `EventGatewayListener` lets pieces in the `listeners`
 directory handle those events. Managers such as `client.users` and `client.guilds` read from an
 optional [`@wolfstar/plugin-cache`](../plugin-cache) cache and fetch missing data through
-`@discordjs/core`. The same core API is available as `client.core.api`.
+`@discordjs/core`. The same core API is available as `client.api`.
 
 > [!NOTE]
 > A gateway connection is long-lived: a `GatewayClient` needs a persistent process, unlike a bot
@@ -142,7 +142,7 @@ previous state, then builds and emits events after the cache has been updated. T
 use the `DispatchHandlers` and `MultiDispatchHandlers` tables. Dispatches they do not cover are
 still written to the cache and emitted as `raw`. `INTERACTION_CREATE` is handled by the HTTP endpoint.
 
-REST operations use `client.core.api` from `@discordjs/core`. A few endpoints without a matching
+REST operations use `client.api` from `@discordjs/core`. A few endpoints without a matching
 core method (cursor-based message pins, guild creation from a template, and thread member queries
 with extra parameters) use the same core client's underlying REST transport.
 

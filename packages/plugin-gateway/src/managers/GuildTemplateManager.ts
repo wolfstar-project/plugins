@@ -55,7 +55,7 @@ export class GuildTemplateManager {
   public async fetch(code: string): Promise<GuildTemplate> {
     // Accept `https://discord.new/code` as well as the bare code.
     const resolved = code.split("/").pop()!;
-    return this.build(await this.client.core.api.guilds.getTemplate(resolved));
+    return this.build(await this.client.api.guilds.getTemplate(resolved));
   }
 
   /**
@@ -64,7 +64,7 @@ export class GuildTemplateManager {
    * @param guildId The ID of the guild.
    */
   public async list(guildId: string): Promise<GuildTemplate[]> {
-    const templates = await this.client.core.api.guilds.getTemplates(guildId);
+    const templates = await this.client.api.guilds.getTemplates(guildId);
     return Promise.all(templates.map((template) => this.build(template)));
   }
 
@@ -82,7 +82,7 @@ export class GuildTemplateManager {
       name: options.name,
       description: options.description,
     };
-    const template = await this.client.core.api.guilds.createTemplate(guildId, body);
+    const template = await this.client.api.guilds.createTemplate(guildId, body);
     return this.build(template);
   }
 
@@ -102,7 +102,7 @@ export class GuildTemplateManager {
       name: options.name,
       description: options.description,
     };
-    const template = await this.client.core.api.guilds.editTemplate(guildId, code, body);
+    const template = await this.client.api.guilds.editTemplate(guildId, code, body);
     return this.build(template);
   }
 
@@ -113,7 +113,7 @@ export class GuildTemplateManager {
    * @param code The code of the template.
    */
   public async sync(guildId: string, code: string): Promise<GuildTemplate> {
-    const template = await this.client.core.api.guilds.syncTemplate(guildId, code);
+    const template = await this.client.api.guilds.syncTemplate(guildId, code);
     return this.build(template);
   }
 
@@ -124,7 +124,7 @@ export class GuildTemplateManager {
    * @param code The code of the template.
    */
   public async delete(guildId: string, code: string): Promise<void> {
-    await this.client.core.api.guilds.deleteTemplate(guildId, code);
+    await this.client.api.guilds.deleteTemplate(guildId, code);
   }
 
   /**
@@ -135,7 +135,7 @@ export class GuildTemplateManager {
    */
   public async createGuild(code: string, options: GuildTemplateCreateGuildOptions): Promise<Guild> {
     const body: RESTPostAPITemplateCreateGuildJSONBody = { name: options.name, icon: options.icon };
-    const guild = (await this.client.core.api.rest.post(Routes.template(code), {
+    const guild = (await this.client.api.rest.post(Routes.template(code), {
       body,
     })) as APIGuild;
     return this.client.guilds._add(guild);

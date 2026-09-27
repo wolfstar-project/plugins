@@ -129,7 +129,7 @@ export class PermissionOverwriteManager {
    */
   public async delete(target: IdResolvable, reason?: string): Promise<void> {
     const id = resolveId(target);
-    await this.client.core.api.channels.deletePermissionOverwrite(this.channelId, id, { reason });
+    await this.client.api.channels.deletePermissionOverwrite(this.channelId, id, { reason });
     await this.patchCached((overwrites) => overwrites.filter((overwrite) => overwrite.id !== id));
   }
 
@@ -148,7 +148,7 @@ export class PermissionOverwriteManager {
     });
 
     const overwrite: APIOverwrite = { id, type, allow: String(allow), deny: String(deny) };
-    await this.client.core.api.channels.editPermissionOverwrite(
+    await this.client.api.channels.editPermissionOverwrite(
       this.channelId,
       id,
       {

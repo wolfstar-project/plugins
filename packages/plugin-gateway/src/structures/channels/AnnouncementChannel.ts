@@ -56,11 +56,9 @@ export class AnnouncementChannel extends BaseAnnouncementChannel {
    * @returns The ID of the follower webhook created in the target channel.
    */
   public async addFollower(channel: IdResolvable, reason?: string): Promise<string> {
-    const result = await this.client.core.api.channels.followAnnouncements(
-      this.id,
-      resolveId(channel),
-      { reason },
-    );
+    const result = await this.client.api.channels.followAnnouncements(this.id, resolveId(channel), {
+      reason,
+    });
     return result.webhook_id;
   }
 }

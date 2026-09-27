@@ -205,9 +205,9 @@ export class VoiceState extends BaseVoiceState {
       suppress: options.suppressed,
     };
     if (target === "@me") {
-      await this.client.core.api.voice.editVoiceState(this.requireGuildId(), body);
+      await this.client.api.voice.editVoiceState(this.requireGuildId(), body);
     } else {
-      await this.client.core.api.voice.editUserVoiceState(this.requireGuildId(), target, body);
+      await this.client.api.voice.editUserVoiceState(this.requireGuildId(), target, body);
     }
 
     return this[kPatch]({

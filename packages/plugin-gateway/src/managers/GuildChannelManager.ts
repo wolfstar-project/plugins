@@ -41,7 +41,7 @@ export class GuildChannelManager {
    * Fetches every channel of the guild, threads excluded, and caches them.
    */
   public async fetch(): Promise<AnyChannel[]> {
-    const channels = (await this.client.core.api.guilds.getChannels(this.guildId)) as APIChannel[];
+    const channels = (await this.client.api.guilds.getChannels(this.guildId)) as APIChannel[];
     return Promise.all(
       channels.map((channel) => this.client.channels._add({ ...channel, guild_id: this.guildId })),
     );
@@ -57,7 +57,7 @@ export class GuildChannelManager {
       ...toChannelBody(options),
       type: options.type,
     } as RESTPostAPIGuildChannelJSONBody;
-    const channel = await this.client.core.api.guilds.createChannel(this.guildId, body, {
+    const channel = await this.client.api.guilds.createChannel(this.guildId, body, {
       reason: options.reason,
     });
     return this.client.channels._add(channel);
@@ -101,7 +101,7 @@ export class GuildChannelManager {
             : resolveId(position.parent),
       lock_permissions: position.lockPermissions,
     }));
-    await this.client.core.api.guilds.setChannelPositions(this.guildId, body, { reason });
+    await this.client.api.guilds.setChannelPositions(this.guildId, body, { reason });
 
     // The endpoint answers 204: refetch the moved channels rather than guessing the positions Discord shifted.
     await this.fetch();

@@ -270,7 +270,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
       }
     }
 
-    const channel = await this.client.core.api.channels.edit(channelId, body, {
+    const channel = await this.client.api.channels.edit(channelId, body, {
       reason: options.reason,
     });
     return this._add(channel);
@@ -283,7 +283,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * @param reason The reason for the audit log.
    */
   public async delete(channelId: string, reason?: string): Promise<void> {
-    const channel = await this.client.core.api.channels.delete(channelId, {
+    const channel = await this.client.api.channels.delete(channelId, {
       reason,
     });
     if (!this.client.cache) return;
@@ -315,6 +315,6 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
   }
 
   protected async fetchRaw(channelId: string) {
-    return this.client.core.api.channels.get(channelId);
+    return this.client.api.channels.get(channelId);
   }
 }
