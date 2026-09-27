@@ -67,9 +67,70 @@ const client = new Client({
     consumer: `worker-${process.pid}`, // a name stable across restarts of *this* replica
     batchSize: 10, // COUNT, default 10
     block: 5_000, // BLOCK ms, default 5000
+    claimIdle: 60_000, // XAUTOCLAIM entries idle longer than this, from any consumer
+    maxDeliveries: 5, // after that, move to the dead-letter stream instead of retrying forever
+    deadLetterStream: "wolfstar:events:dead", // default `${stream}:dead`
+    shutdownSignals: ["SIGTERM", "SIGINT"], // stop gracefully on these signals
   },
 });
 ```
+
+### Delivery guarantees
+
+An entry is acknowledged once every listener for its event has resolved. A listener that throws
+leaves it pending, and it is delivered again:
+
+- to a restarted consumer of the same name, which reads its own pending entries first;
+- with `claimIdle` set, to whichever consumer claims (`XAUTOCLAIM`) it once it has been idle that
+  long — including one left behind by a replica that crashed and never came back under the same
+  name, and the consumer's own failed entries, which are then retried in-process.
+
+With `maxDeliveries` set, an entry delivered more than that many times (a count Redis keeps across
+consumers and restarts) is moved to the dead-letter stream instead: it keeps its `event` and
+`payload` fields, plus the original `id`, `stream`, `group`, `consumer`, and `deliveries`. Without
+it, a failing entry is retried forever. An entry trimmed by `maxLength` while pending is acknowledged
+and skipped.
+
+### Graceful shutdown
+
+`container.broker.stop()` stops reading and awaits the in-flight entry before returning; anything
+left unacknowledged stays pending for the next consumer. With `shutdownSignals`, the consumer does so
+on its own when the process receives one of them, then raises the signal again if nothing else
+listens to it, so the process still terminates. If you handle the signal yourself (e.g. to also
+destroy a `GatewayClient`), exiting is left to your handler.
+
+### Forwarding gateway dispatches
+
+`forwardGatewayDispatches` publishes every dispatch a
+[`@wolfstar/plugin-gateway`](https://www.npmjs.com/package/@wolfstar/plugin-gateway) `GatewayClient`
+receives, under its type (e.g. `MESSAGE_CREATE`) with its data as payload. It forwards them on the
+client's `dispatch` event, once they are written to the client's cache, so workers sharing a
+[`@wolfstar/plugin-cache`](https://www.npmjs.com/package/@wolfstar/plugin-cache) Redis cache see the
+state each dispatch left when they receive it:
+
+```ts
+import { createBroker, forwardGatewayDispatches } from "@wolfstar/plugin-broker";
+import {
+  GatewayDispatchEvents,
+  type GatewayMessageCreateDispatchData,
+} from "discord-api-types/v10";
+
+declare module "@wolfstar/plugin-broker" {
+  interface BrokerEvents {
+    MESSAGE_CREATE: GatewayMessageCreateDispatchData;
+  }
+}
+
+const broker = createBroker({ redis, stream: "wolfstar:events", maxLength: 100_000 });
+const stopForwarding = forwardGatewayDispatches(gatewayClient, broker, {
+  events: [GatewayDispatchEvents.MessageCreate], // omit to forward every dispatch
+  onError: (error, payload) => console.error(`Failed to forward ${payload.t}`, error),
+});
+```
+
+With [`@wolfstar/plugin-sharder`](https://www.npmjs.com/package/@wolfstar/plugin-sharder), call it in
+every shard process: they all publish onto the same stream, and the workers share the load through
+their consumer group.
 
 ### `BrokerListener` piece
 
@@ -113,16 +174,3 @@ import { msgpackCodec } from "@wolfstar/plugin-cache/msgpack";
 
 const broker = createBroker({ redis, stream: "wolfstar:events", codec: msgpackCodec() });
 ```
-
-## Not yet implemented
-
-This is the MVP slice of the [RFC](https://github.com/wolfstar-project/plugins/issues/136). Tracked
-as follow-ups:
-
-- `XAUTOCLAIM` of entries left by a consumer that crashed under a _different_ name (this version only
-  redelivers a restarted consumer's own pending entries, under the same name).
-- `maxDeliveries` and a dead-letter stream.
-- A `forwardGatewayDispatches` helper bridging `@wolfstar/plugin-gateway` dispatches straight onto a
-  broker.
-- Signal-driven (`SIGTERM`/`SIGINT`) automatic shutdown — call `container.broker.stop()` yourself,
-  which awaits the in-flight batch before returning.

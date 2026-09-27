@@ -62,6 +62,7 @@
   "devDependencies": {
     "@sapphire/pieces": "^4.4.1",
     "@wolfstar/http-framework": "^5.1.0",
+    "@wolfstar/plugin-gateway": "workspace:^",
     "ioredis": "^6.0.0"
   },
   "peerDependencies": {
