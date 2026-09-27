@@ -1,0 +1,73 @@
+{
+  "name": "@wolfstar/plugin-broker",
+  "version": "0.1.0",
+  "description": "Plugin for @wolfstar/http-framework distributing gateway events across processes over Redis Streams, with at-least-once delivery",
+  "keywords": [
+    "broker",
+    "discord",
+    "gateway",
+    "http-framework",
+    "plugin",
+    "redis",
+    "streams",
+    "wolfstar"
+  ],
+  "homepage": "https://github.com/wolfstar-project/plugins/tree/main/packages/plugin-broker",
+  "bugs": {
+    "url": "https://github.com/wolfstar-project/plugins/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
+    "directory": "packages/plugin-broker"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": [
+    "./dist/esm/register.js"
+  ],
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./register": {
+      "import": {
+        "types": "./dist/esm/register.d.ts",
+        "default": "./dist/esm/register.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "lint": "oxlint src --fix",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@wolfstar/plugin-cache": "workspace:*"
+  },
+  "devDependencies": {
+    "@sapphire/pieces": "^4.4.1",
+    "@wolfstar/http-framework": "^5.1.0",
+    "ioredis": "^6.0.0"
+  },
+  "peerDependencies": {
+    "@wolfstar/http-framework": "^3.4.0 || ^5.0.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
