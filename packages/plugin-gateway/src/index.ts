@@ -15,7 +15,7 @@ export * from "./util/dispatch.js";
 export * from "./util/equal.js";
 export * from "./util/DispatchQueue.js";
 export * from "./util/errors.js";
-export type * from "./util/events.js";
+export * from "./util/events.js";
 export * from "./util/flags.js";
 export * from "./util/messages.js";
 export * from "./util/Partials.js";

@@ -28,7 +28,7 @@ import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { User } from "../structures/users/User.js";
 import { Typing } from "../structures/channels/Typing.js";
 import { resolveAuditLogTarget } from "./auditLogs.js";
-import type { GatewayEventMap, GatewayEventName } from "./events.js";
+import { GatewayEvents, type GatewayEventMap, type GatewayEventName } from "./events.js";
 import { Partials } from "./Partials.js";
 
 /**
@@ -108,7 +108,7 @@ export type AnyDispatchHandler<Type extends GatewayDispatchEvents> = {
  */
 export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHandler<Type> } = {
   [GatewayDispatchEvents.Ready]: {
-    event: "shardReady",
+    event: GatewayEvents.ShardReady,
     build: (client, data, _state, shardId) => {
       const user = new ClientUser(data.user);
       client.user = user;
@@ -117,7 +117,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
 
   [GatewayDispatchEvents.GuildCreate]: {
-    event: "guildCreate",
+    event: GatewayEvents.GuildCreate,
     // The cached entry has the collections stripped, prefer it over the (much larger) payload.
     build: async (client, data) => [
       (await cachedOrUndefined(client.guilds.get(data.id))) ??
@@ -125,22 +125,22 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildUpdate]: {
-    event: "guildUpdate",
+    event: GatewayEvents.GuildUpdate,
     before: (client, data) => client.guilds.get(data.id),
     build: async (client, data, previous) => [previous ?? null, await client.guilds.hydrate(data)],
   },
   [GatewayDispatchEvents.GuildDelete]: {
-    event: "guildDelete",
+    event: GatewayEvents.GuildDelete,
     before: (client, data) => client.guilds.get(data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.ChannelCreate]: {
-    event: "channelCreate",
+    event: GatewayEvents.ChannelCreate,
     build: async (client, data) => [await client.channels.hydrate(data)],
   },
   [GatewayDispatchEvents.ChannelUpdate]: {
-    event: "channelUpdate",
+    event: GatewayEvents.ChannelUpdate,
     before: (client, data) => client.channels.get(data.id),
     build: async (client, data, previous) => [
       previous ?? null,
@@ -148,36 +148,36 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.ChannelDelete]: {
-    event: "channelDelete",
+    event: GatewayEvents.ChannelDelete,
     build: async (client, data) => [await client.channels.hydrate(data)],
   },
 
   [GatewayDispatchEvents.ChannelPinsUpdate]: {
-    event: "channelPinsUpdate",
+    event: GatewayEvents.ChannelPinsUpdate,
     build: (_client, data) => [data],
   },
   [GatewayDispatchEvents.WebhooksUpdate]: {
-    event: "webhooksUpdate",
+    event: GatewayEvents.WebhooksUpdate,
     build: (_client, data) => [data],
   },
 
   [GatewayDispatchEvents.ThreadCreate]: {
-    event: "threadCreate",
+    event: GatewayEvents.ThreadCreate,
     build: async (client, data) => [await client.threads.hydrate(data)],
   },
   [GatewayDispatchEvents.ThreadUpdate]: {
-    event: "threadUpdate",
+    event: GatewayEvents.ThreadUpdate,
     before: (client, data) => client.threads.get(data.id),
     build: async (client, data, previous) => [previous ?? null, await client.threads.hydrate(data)],
   },
   [GatewayDispatchEvents.ThreadDelete]: {
-    event: "threadDelete",
+    event: GatewayEvents.ThreadDelete,
     before: (client, data) => client.threads.get(data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.ThreadListSync]: {
-    event: "threadListSync",
+    event: GatewayEvents.ThreadListSync,
     build: async (client, data) => [
       await Promise.all(data.threads.map((thread) => client.threads.hydrate(thread as never))),
       await Promise.all(
@@ -189,7 +189,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.ThreadMemberUpdate]: {
-    event: "threadMemberUpdate",
+    event: GatewayEvents.ThreadMemberUpdate,
     before: (client, data) =>
       data.id && data.user_id
         ? client.threadMembers.get(data.id, data.user_id)
@@ -203,7 +203,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.ThreadMembersUpdate]: {
-    event: "threadMembersUpdate",
+    event: GatewayEvents.ThreadMembersUpdate,
     before: async (client, data) => {
       const removed = await Promise.all(
         (data.removed_member_ids ?? []).map((userId) => client.threadMembers.get(data.id, userId)),
@@ -225,11 +225,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
 
   [GatewayDispatchEvents.MessageCreate]: {
-    event: "messageCreate",
+    event: GatewayEvents.MessageCreate,
     build: async (client, data) => [await client.messages.hydrate(data)],
   },
   [GatewayDispatchEvents.MessageUpdate]: {
-    event: "messageUpdate",
+    event: GatewayEvents.MessageUpdate,
     before: (client, data) => client.messages.get(data.channel_id, data.id),
     build: async (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
@@ -237,7 +237,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessageDelete]: {
-    event: "messageDelete",
+    event: GatewayEvents.MessageDelete,
     before: (client, data) => client.messages.get(data.channel_id, data.id),
     build: (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
@@ -245,7 +245,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessageDeleteBulk]: {
-    event: "messageDeleteBulk",
+    event: GatewayEvents.MessageDeleteBulk,
     before: async (client, data) => {
       const messages = await Promise.all(
         data.ids.map((id) => client.messages.get(data.channel_id, id)),
@@ -261,7 +261,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
 
   [GatewayDispatchEvents.MessageReactionAdd]: {
-    event: "messageReactionAdd",
+    event: GatewayEvents.MessageReactionAdd,
     build: async (client, data) => [
       await reactionOf(client, data),
       (await cachedOrUndefined(client.users.get(data.user_id))) ??
@@ -270,7 +270,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessageReactionRemove]: {
-    event: "messageReactionRemove",
+    event: GatewayEvents.MessageReactionRemove,
     build: async (client, data) => [
       await reactionOf(client, data),
       (await cachedOrUndefined(client.users.get(data.user_id))) ??
@@ -279,7 +279,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessageReactionRemoveAll]: {
-    event: "messageReactionRemoveAll",
+    event: GatewayEvents.MessageReactionRemoveAll,
     before: async (client, data) =>
       (await client.messages.get(data.channel_id, data.message_id))?.reactions.cache ?? [],
     build: async (client, data, previous: MessageReaction[] | undefined) => [
@@ -290,7 +290,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessageReactionRemoveEmoji]: {
-    event: "messageReactionRemoveEmoji",
+    event: GatewayEvents.MessageReactionRemoveEmoji,
     before: async (client, data) =>
       (await client.messages.get(data.channel_id, data.message_id))?.reactions.resolve(
         data.emoji,
@@ -300,20 +300,20 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.MessagePollVoteAdd]: {
-    event: "messagePollVoteAdd",
+    event: GatewayEvents.MessagePollVoteAdd,
     build: async (client, data) => [await pollAnswerOf(client, data), data.user_id],
   },
   [GatewayDispatchEvents.MessagePollVoteRemove]: {
-    event: "messagePollVoteRemove",
+    event: GatewayEvents.MessagePollVoteRemove,
     build: async (client, data) => [await pollAnswerOf(client, data), data.user_id],
   },
 
   [GatewayDispatchEvents.GuildMemberAdd]: {
-    event: "guildMemberAdd",
+    event: GatewayEvents.GuildMemberAdd,
     build: async (client, data) => [await client.members.hydrate(data)],
   },
   [GatewayDispatchEvents.GuildMemberUpdate]: {
-    event: "guildMemberUpdate",
+    event: GatewayEvents.GuildMemberUpdate,
     before: (client, data) => client.members.get(data.guild_id, data.user.id),
     // The payload is partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
@@ -323,7 +323,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildMemberRemove]: {
-    event: "guildMemberRemove",
+    event: GatewayEvents.GuildMemberRemove,
     before: (client, data) => client.members.get(data.guild_id, data.user.id),
     build: (client, data, previous) => [
       previous ?? partialMember(client, data.guild_id, data.user),
@@ -331,7 +331,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildMembersChunk]: {
-    event: "guildMembersChunk",
+    event: GatewayEvents.GuildMembersChunk,
     build: async (client, data) => {
       const [members, guild] = await Promise.all([
         Promise.all(
@@ -348,13 +348,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
 
   [GatewayDispatchEvents.GuildRoleCreate]: {
-    event: "guildRoleCreate",
+    event: GatewayEvents.GuildRoleCreate,
     build: async (client, data) => [
       await client.roles.hydrate({ ...data.role, guild_id: data.guild_id }),
     ],
   },
   [GatewayDispatchEvents.GuildRoleUpdate]: {
-    event: "guildRoleUpdate",
+    event: GatewayEvents.GuildRoleUpdate,
     before: (client, data) => client.roles.get(data.guild_id, data.role.id),
     build: async (client, data, previous) => [
       previous ?? null,
@@ -362,13 +362,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildRoleDelete]: {
-    event: "guildRoleDelete",
+    event: GatewayEvents.GuildRoleDelete,
     before: (client, data) => client.roles.get(data.guild_id, data.role_id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.InviteCreate]: {
-    event: "inviteCreate",
+    event: GatewayEvents.InviteCreate,
     build: async (client, data) => [
       data.guild_id
         ? await client.guilds.invites(data.guild_id).hydrate(data)
@@ -381,18 +381,18 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.InviteDelete]: {
-    event: "inviteDelete",
+    event: GatewayEvents.InviteDelete,
     before: async (client, data) =>
       data.guild_id ? client.guilds.invites(data.guild_id).get(data.code) : undefined,
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.TypingStart]: {
-    event: "typingStart",
+    event: GatewayEvents.TypingStart,
     build: async (client, data) => [await typingOf(client, data)],
   },
   [GatewayDispatchEvents.VoiceStateUpdate]: {
-    event: "voiceStateUpdate",
+    event: GatewayEvents.VoiceStateUpdate,
     before: async (client, data) =>
       data.guild_id ? client.voiceStates.get(data.guild_id, data.user_id) : undefined,
     build: async (client, data, previous) => [
@@ -401,7 +401,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.PresenceUpdate]: {
-    event: "presenceUpdate",
+    event: GatewayEvents.PresenceUpdate,
     before: (client, data) => client.presences.get(data.guild_id, data.user.id),
     // The payload may be partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
@@ -411,13 +411,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventCreate]: {
-    event: "guildScheduledEventCreate",
+    event: GatewayEvents.GuildScheduledEventCreate,
     build: async (client, data) => [
       await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventUpdate]: {
-    event: "guildScheduledEventUpdate",
+    event: GatewayEvents.GuildScheduledEventUpdate,
     before: (client, data) => client.guilds.scheduledEvents(data.guild_id).get(data.id),
     build: async (client, data, previous) => [
       previous ?? partialScheduledEvent(client, data.guild_id, data.id),
@@ -425,13 +425,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventDelete]: {
-    event: "guildScheduledEventDelete",
+    event: GatewayEvents.GuildScheduledEventDelete,
     build: async (client, data) => [
       await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventUserAdd]: {
-    event: "guildScheduledEventUserAdd",
+    event: GatewayEvents.GuildScheduledEventUserAdd,
     build: async (client, data) => [
       (await cachedOrUndefined(
         client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
@@ -442,7 +442,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventUserRemove]: {
-    event: "guildScheduledEventUserRemove",
+    event: GatewayEvents.GuildScheduledEventUserRemove,
     build: async (client, data) => [
       (await cachedOrUndefined(
         client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
@@ -453,13 +453,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.StageInstanceCreate]: {
-    event: "stageInstanceCreate",
+    event: GatewayEvents.StageInstanceCreate,
     build: async (client, data) => [
       await client.guilds.stageInstances(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.StageInstanceUpdate]: {
-    event: "stageInstanceUpdate",
+    event: GatewayEvents.StageInstanceUpdate,
     before: (client, data) => client.guilds.stageInstances(data.guild_id).get(data.channel_id),
     build: async (client, data, previous) => [
       previous ?? null,
@@ -467,19 +467,19 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.StageInstanceDelete]: {
-    event: "stageInstanceDelete",
+    event: GatewayEvents.StageInstanceDelete,
     build: async (client, data) => [
       await client.guilds.stageInstances(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundCreate]: {
-    event: "guildSoundboardSoundCreate",
+    event: GatewayEvents.GuildSoundboardSoundCreate,
     build: async (client, data) => [
       await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundUpdate]: {
-    event: "guildSoundboardSoundUpdate",
+    event: GatewayEvents.GuildSoundboardSoundUpdate,
     before: (client, data) => client.guilds.soundboardSounds(data.guild_id!).get(data.sound_id),
     build: async (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id!, data.sound_id),
@@ -487,7 +487,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundDelete]: {
-    event: "guildSoundboardSoundDelete",
+    event: GatewayEvents.GuildSoundboardSoundDelete,
     before: (client, data) => client.guilds.soundboardSounds(data.guild_id).get(data.sound_id),
     build: (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id, data.sound_id),
@@ -495,7 +495,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundsUpdate]: {
-    event: "guildSoundboardSoundsUpdate",
+    event: GatewayEvents.GuildSoundboardSoundsUpdate,
     build: async (client, data) => {
       const sounds = client.guilds.soundboardSounds(data.guild_id);
       return [
@@ -505,7 +505,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     },
   },
   [GatewayDispatchEvents.SoundboardSounds]: {
-    event: "soundboardSounds",
+    event: GatewayEvents.SoundboardSounds,
     build: async (client, data) => {
       const sounds = client.guilds.soundboardSounds(data.guild_id);
       return [
@@ -516,18 +516,18 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
 
   [GatewayDispatchEvents.GuildBanAdd]: {
-    event: "guildBanAdd",
+    event: GatewayEvents.GuildBanAdd,
     build: async (client, data) => [await client.guilds.bans(data.guild_id).hydrate(data)],
   },
   [GatewayDispatchEvents.GuildBanRemove]: {
-    event: "guildBanRemove",
+    event: GatewayEvents.GuildBanRemove,
     before: (client, data) => client.guilds.bans(data.guild_id).get(data.user.id),
     build: async (client, data, previous) => [
       previous ?? (await client.guilds.bans(data.guild_id).hydrate(data)),
     ],
   },
   [GatewayDispatchEvents.GuildAuditLogEntryCreate]: {
-    event: "guildAuditLogEntryCreate",
+    event: GatewayEvents.GuildAuditLogEntryCreate,
     build: async (client, data) => {
       const [executor, guild, target] = await Promise.all([
         data.user_id ? cachedOrUndefined(client.users.get(data.user_id)) : undefined,
@@ -547,13 +547,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     },
   },
   [GatewayDispatchEvents.AutoModerationRuleCreate]: {
-    event: "autoModerationRuleCreate",
+    event: GatewayEvents.AutoModerationRuleCreate,
     build: async (client, data) => [
       await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.AutoModerationRuleUpdate]: {
-    event: "autoModerationRuleUpdate",
+    event: GatewayEvents.AutoModerationRuleUpdate,
     before: (client, data) => client.guilds.autoModerationRules(data.guild_id).get(data.id),
     build: async (client, data, previous) => [
       previous ?? null,
@@ -561,24 +561,24 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.AutoModerationRuleDelete]: {
-    event: "autoModerationRuleDelete",
+    event: GatewayEvents.AutoModerationRuleDelete,
     build: async (client, data) => [
       await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildIntegrationsUpdate]: {
-    event: "guildIntegrationsUpdate",
+    event: GatewayEvents.GuildIntegrationsUpdate,
     build: async (client, data) => [
       (await cachedOrUndefined(client.guilds.get(data.guild_id))) ?? null,
       data,
     ],
   },
   [GatewayDispatchEvents.IntegrationCreate]: {
-    event: "integrationCreate",
+    event: GatewayEvents.IntegrationCreate,
     build: async (client, data) => [await client.guilds.integrations(data.guild_id).hydrate(data)],
   },
   [GatewayDispatchEvents.IntegrationUpdate]: {
-    event: "integrationUpdate",
+    event: GatewayEvents.IntegrationUpdate,
     before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
     build: async (client, data, previous) => [
       previous ?? null,
@@ -586,13 +586,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     ],
   },
   [GatewayDispatchEvents.IntegrationDelete]: {
-    event: "integrationDelete",
+    event: GatewayEvents.IntegrationDelete,
     before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.AutoModerationActionExecution]: {
-    event: "autoModerationActionExecution",
+    event: GatewayEvents.AutoModerationActionExecution,
     build: async (client, data) => {
       const [user, guild, member, channel, autoModerationRule] = await Promise.all([
         cachedOrUndefined(client.users.get(data.user_id)),
@@ -616,12 +616,12 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     },
   },
   [GatewayDispatchEvents.VoiceServerUpdate]: {
-    event: "voiceServerUpdate",
+    event: GatewayEvents.VoiceServerUpdate,
     build: (_client, data) => [data],
   },
 
   [GatewayDispatchEvents.UserUpdate]: {
-    event: "userUpdate",
+    event: GatewayEvents.UserUpdate,
     before: (client, data) => client.users.get(data.id),
     build: async (client, data, previous) => {
       // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
@@ -652,7 +652,13 @@ export const MultiDispatchHandlers: {
       const current = await Promise.all(
         data.emojis.map((emoji) => emojis.hydrate({ ...emoji, guild_id: data.guild_id })),
       );
-      return diff(previous, current, "emojiCreate", "emojiUpdate", "emojiDelete");
+      return diff(
+        previous,
+        current,
+        GatewayEvents.EmojiCreate,
+        GatewayEvents.EmojiUpdate,
+        GatewayEvents.EmojiDelete,
+      );
     },
   },
   [GatewayDispatchEvents.GuildStickersUpdate]: {
@@ -663,7 +669,13 @@ export const MultiDispatchHandlers: {
       const current = await Promise.all(
         data.stickers.map((sticker) => stickers.hydrate({ ...sticker, guild_id: data.guild_id })),
       );
-      return diff(previous, current, "stickerCreate", "stickerUpdate", "stickerDelete");
+      return diff(
+        previous,
+        current,
+        GatewayEvents.StickerCreate,
+        GatewayEvents.StickerUpdate,
+        GatewayEvents.StickerDelete,
+      );
     },
   },
 };
@@ -674,9 +686,9 @@ type Diffable = { id: string | null; equals(other: never): boolean };
 function diff<Value extends Diffable>(
   previous: readonly Value[],
   current: readonly Value[],
-  create: string,
-  update: string,
-  remove: string,
+  create: GatewayEvents,
+  update: GatewayEvents,
+  remove: GatewayEvents,
 ): GatewayEventTuple[] {
   const before = new Map(previous.map((value) => [value.id, value]));
   const events: unknown[][] = [];
