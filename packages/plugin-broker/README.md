@@ -85,6 +85,10 @@ leaves it pending, and it is delivered again:
   long — including one left behind by a replica that crashed and never came back under the same
   name, and the consumer's own failed entries, which are then retried in-process.
 
+Idle time counts from an entry's last delivery, so an entry whose listeners are still running after
+`claimIdle` can be claimed and handled again by another consumer at the same time. Set `claimIdle`
+well above your slowest listener's run time, not just above how fast a crash should be noticed.
+
 With `maxDeliveries` set, an entry delivered more than that many times (a count Redis keeps across
 consumers and restarts) is moved to the dead-letter stream instead: it keeps its `event` and
 `payload` fields, plus the original `id`, `stream`, `group`, `consumer`, and `deliveries`. Without

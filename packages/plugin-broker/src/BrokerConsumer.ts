@@ -52,6 +52,10 @@ export interface BrokerConsumerOptions {
    * @remarks
    * This consumer's own entries are claimed too, so an entry whose listener threw is retried in-process once it has
    * been idle for this long, rather than only on the next start.
+   *
+   * An entry's idle time runs from its last delivery, not from its last sign of life: an entry whose listeners are
+   * still running after this long can be claimed and handled again, concurrently, by another consumer. Set it well
+   * above the slowest listener's run time, not just above how fast a crash should be noticed.
    */
   claimIdle?: number;
   /**
