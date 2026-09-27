@@ -1,5 +1,11 @@
 # @wolfstar/plugin-i18next
 
+## 2.1.1
+
+### Patch Changes
+
+- [#132](https://github.com/wolfstar-project/plugins/pull/132) [`5e1ac23`](https://github.com/wolfstar-project/plugins/commit/5e1ac23370c481962be408c21d832cce5a2ffda6) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 2.1.0
 
 ### Minor Changes

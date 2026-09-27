@@ -1,5 +1,42 @@
 # @wolfstar/plugin-gateway
 
+## 0.2.0
+
+### Minor Changes
+
+- [#130](https://github.com/wolfstar-project/plugins/pull/130) [`5f8c91c`](https://github.com/wolfstar-project/plugins/commit/5f8c91c9e0216aaf70b110a54b9018fdfaaf0ee7) - Register every `GatewayClient` as `container.gatewayClient`, typed as `GatewayClient`, so pieces reach its managers through `this.container.gatewayClient` without `getGatewayClient()` or a cast. `container.client` keeps the base `Client` type, since a module augmentation cannot redeclare it.
+
+- [#138](https://github.com/wolfstar-project/plugins/pull/138) [`d7c1b3f`](https://github.com/wolfstar-project/plugins/commit/d7c1b3fb1b8423ca55076e8168d711d2a0a387f2) - Extend `@discordjs/structures`' own classes instead of reimplementing them: `User`, `Message`, `Attachment`, `Embed`, `MessageReaction` (`Reaction`), `Poll`, `PollAnswer`, `Emoji`, `BaseInvite` (`Invite`), `Presence`, `Activity`, `VoiceState`, `Webhook`, `Sticker`, `StickerPack`, `SoundboardSound`, `StageInstance`, `AutoModerationRule`, and every channel type now inherit from their counterparts, keeping only the members they add or whose semantics are stricter. The structures without a counterpart still extend its base `Structure`. The source is now organized in one folder per domain (`channels/`, `messages/`, `users/`, ...), each with an `index.ts`.
+
+  New exports: `StructureMixin` (relations, public `kPatch`/`kClone`, and parsed timestamps, mixed into every structure), `initStructure`, and `MixinTypes`.
+
+  Breaking type changes, following `@discordjs/structures`:
+
+  - Getters that now come from `@discordjs/structures` return `undefined` rather than `null` when the field is absent (e.g. `Attachment.description`, `Message.webhookId`, `BaseInvite.maxAge`, `Webhook.token`, `VoiceState.guildId`, `Activity.applicationId`).
+  - Overridden getters are typed by `@discordjs/structures` (e.g. `TextChannel.nsfw` is `boolean | undefined`) even though ours still return a default.
+  - `Channel.flags` is a frozen `ChannelFlagsBitField` rather than a `number`; `isThread()` and `isDMBased()` are `@discordjs/structures`' type guards.
+  - `Embed.timestamp` is the timestamp in milliseconds rather than the ISO string.
+  - `MessageReaction.burstColors` holds numbers rather than `#rrggbb` strings.
+  - `VoiceState.requestToSpeakTimestamp` is the raw ISO string rather than milliseconds: use `requestToSpeakAt` for a `Date`.
+
+- [#126](https://github.com/wolfstar-project/plugins/pull/126) [`d6dc821`](https://github.com/wolfstar-project/plugins/commit/d6dc821d3619a59258c3fd71cc22b3d166ffbdc2) - Request guild members over the gateway (`REQUEST_GUILD_MEMBERS`) with `client.members.request(guildId, options)` or `guild.requestMembers(options)`, discord.js's `guild.members.fetch()`: every member, a `query`, or up to 100 `userIds`, resolving with the `GuildMember`s once the last `GUILD_MEMBERS_CHUNK` of the request's nonce is cached. It rejects with the new `GuildMembersTimeoutError` when the chunks stop arriving, or `GuildMembersRateLimitError` when Discord answers with `RATE_LIMITED`. Every chunk is also emitted as the new `guildMembersChunk` event (`members`, `guild | null`, `data`).
+
+- [#128](https://github.com/wolfstar-project/plugins/pull/128) [`b2ff9ed`](https://github.com/wolfstar-project/plugins/commit/b2ff9ed2e20cae0e48f49ce4e38d02784bbc88b0) - Resume gateway sessions across restarts. `GatewayClient` gains a `sessionStore` option (and `sessionStoreTimeout`), read once per shard and mirrored in memory, with background writes collapsed per shard; store failures are reported as `GatewaySessionStoreError`s and fall back to identifying. `GatewayClient#destroy({ resumable: true })` closes the shards with a resumable code and keeps their sessions stored, for the next process to resume them. `@wolfstar/plugin-cache` ships `createRedisSessionStore`, with a `ttl` (10 minutes by default), and the `GatewaySessionStore`/`GatewaySessionInfo` types.
+
+- [#131](https://github.com/wolfstar-project/plugins/pull/131) [`4203b27`](https://github.com/wolfstar-project/plugins/commit/4203b27e9f518a94cfabd6cb9443713853ae9aa3) - Add a synchronous read path for in-memory caches. `EntityCache` gains an optional, readonly `synchronous` flag, `true` on `MemoryEntityCache` (`createInMemoryCache`) and `false` on `RedisEntityCache` (`createRedisCache`, compressed or not); a store leaving it out is treated as asynchronous. Every `CachedManager` gains `cached(...ids)`, which takes the same arguments as `get` and returns the same structure, relations included, without a promise: `client.members.cached(guildId, userId)`. It returns `undefined` on a miss or without a cache, and throws a `TypeError` on an asynchronous cache instead of reporting a miss it cannot know about. The existing asynchronous methods are unchanged.
+
+### Patch Changes
+
+- [#132](https://github.com/wolfstar-project/plugins/pull/132) [`5e1ac23`](https://github.com/wolfstar-project/plugins/commit/5e1ac23370c481962be408c21d832cce5a2ffda6) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#135](https://github.com/wolfstar-project/plugins/pull/135) [`caea598`](https://github.com/wolfstar-project/plugins/commit/caea598b9baaf9e4876dabc907d3981ff5e5a326) - fix(deps): update dependency @discordjs/structures to v1.0.0-pr-11602.1789066132-275cd4b42 Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#134](https://github.com/wolfstar-project/plugins/pull/134) [`7d78af1`](https://github.com/wolfstar-project/plugins/commit/7d78af11709f72b935640eeec7685875346e0434) - Remove the README's "Subpath exports" section: `@wolfstar/plugin-gateway/rest` and `@wolfstar/plugin-gateway/ws` were never exported (importing them failed with `ERR_PACKAGE_PATH_NOT_EXPORTED`). Depend on `@discordjs/rest` and `@discordjs/ws` directly instead.
+
+- [#123](https://github.com/wolfstar-project/plugins/pull/123) [`354dec1`](https://github.com/wolfstar-project/plugins/commit/354dec1644b9485375a642b7fcd733cbe52b5489) - Add a `./register` subpath export. The Stars CLI build imports `<name>/register` for every `@wolfstar/plugin-*` dependency of a project, so these packages crashed their consumers at startup with `ERR_PACKAGE_PATH_NOT_EXPORTED`. The entrypoint is a no-op: none of them has an `@wolfstar/http-framework` `Plugin` hook to register.
+- Updated dependencies [[`b2ff9ed`](https://github.com/wolfstar-project/plugins/commit/b2ff9ed2e20cae0e48f49ce4e38d02784bbc88b0), [`354dec1`](https://github.com/wolfstar-project/plugins/commit/354dec1644b9485375a642b7fcd733cbe52b5489), [`4203b27`](https://github.com/wolfstar-project/plugins/commit/4203b27e9f518a94cfabd6cb9443713853ae9aa3)]:
+  - @wolfstar/plugin-cache@0.3.0
+
 ## 0.1.1
 
 ### Patch Changes
