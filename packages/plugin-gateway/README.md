@@ -73,8 +73,29 @@ On top of the `Client` options:
 | `dispatchTimeout`     | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it.                  |
 | `sessionStore`        | `undefined` | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
 | `sessionStoreTimeout` | `5_000`     | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
+| `partials`            | `[]`        | The structures to build partially for uncached entities, see [Partials](#partials).                                                |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
+
+### Partials
+
+Like discord.js's `partials`, `Partials` lists the structures the client builds from the IDs a dispatch carries when
+an event concerns an entity it has not cached: `User`, `Channel` (direct messages only), `GuildMember`, `Message`,
+`Reaction`, `GuildScheduledEvent`, `ThreadMember`, `Poll`, `PollAnswer`, and `SoundboardSound`.
+
+Unlike discord.js, events are emitted either way: without the partial, the uncached entity is `null` as usual. With
+it, it is a structure whose `partial` is `true`. Only its IDs are reliable, and `fetch()` completes it. Partial
+structures are never written to the cache. The reactions and poll answers of uncached messages are always partial, so
+`Partials.Reaction` and `Partials.PollAnswer` change nothing and exist for parity.
+
+```ts
+const client = new GatewayClient({ intents, partials: [Partials.Message, Partials.User] });
+
+client.on("messageDelete", async (message) => {
+  if (message?.partial)
+    console.log(`Uncached message ${message.id} deleted in ${message.channelId}`);
+});
+```
 
 ## Events
 

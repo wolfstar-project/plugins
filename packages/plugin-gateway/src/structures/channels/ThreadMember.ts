@@ -53,6 +53,26 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
     return this[kData].id ?? null;
   }
 
+  /**
+   * Whether the thread member is partial: built from its IDs alone for an event about an uncached thread member, see
+   * `Partials.ThreadMember`. Only `id`, `threadId`, and `guildId` are reliable then, and {@link ThreadMember.fetch}
+   * completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].flags === undefined;
+  }
+
+  /**
+   * Fetches the thread member from the API and patches this structure with the result.
+   */
+  public async fetch(): Promise<this> {
+    const { threadId, id } = this;
+    if (!threadId || !id)
+      throw new Error("A thread member without a thread or user ID cannot be fetched");
+    const member = await this.client.threadMembers.fetch(threadId, id, { force: true });
+    return this[kPatch](member.toJSON());
+  }
+
   public get joinedTimestamp(): number {
     return this.optimizedTimestamp("join_timestamp")!;
   }

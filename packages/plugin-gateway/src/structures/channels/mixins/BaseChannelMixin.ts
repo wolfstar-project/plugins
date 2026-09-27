@@ -28,6 +28,14 @@ export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
+   * Whether the channel is partial, like discord.js's `BaseChannel#partial`: only direct messages can be, see
+   * `Partials.Channel`.
+   */
+  public get partial(): boolean {
+    return false;
+  }
+
+  /**
    * The flags of the channel.
    */
   public get flags(): Readonly<ChannelFlagsBitField> {

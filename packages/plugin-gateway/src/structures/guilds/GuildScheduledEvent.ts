@@ -69,6 +69,25 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
     return this[kData].name;
   }
 
+  /**
+   * Whether the event is partial: built from its IDs alone for an event about an uncached scheduled event, see
+   * `Partials.GuildScheduledEvent`. Only `id` and `guildId` are reliable then, and {@link GuildScheduledEvent.fetch}
+   * completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].name === undefined;
+  }
+
+  /**
+   * Fetches the event from the API and patches this structure with the result.
+   */
+  public async fetch(): Promise<this> {
+    const event = await this.client.guilds
+      .scheduledEvents(this.guildId)
+      .fetch(this.id, { force: true });
+    return this[kPatch](event.toJSON());
+  }
+
   public get description(): string | null {
     return this[kData].description ?? null;
   }

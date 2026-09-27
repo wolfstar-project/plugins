@@ -23,3 +23,5 @@ Type changes: `BaseInvite.channel` is `AnyChannel | APIInviteChannel | null`; `M
 Fix: `Message#reply()` no longer hardcodes `failIfNotExists` to `false`; it now defaults like every other `reply`, to `GatewayClientOptions.failIfNotExists ?? true`.
 
 Breaking: `GatewayClient#core` is now protected, like the RFC `next` `Client`'s. Use the new `client.api` (the same `@discordjs/core` `API`), `client.rest`, and `client.gateway` instead of `client.core.api`, `client.core.rest`, and `client.core.gateway`.
+
+Add `Partials` and the `partials` client option, like discord.js's. With a partial enabled, an event about an uncached message, user, member, thread member, scheduled event, soundboard sound, poll, or direct message receives a structure built from the dispatch's IDs (`partial` is `true`, `fetch()` completes it) instead of `null`. Unlike discord.js, events are still emitted without it, so the default behavior is unchanged. `User`, `GuildMember`, `Message`, `MessageReaction`, `ThreadMember`, `GuildScheduledEvent`, `Poll`, `PollAnswer`, `SoundboardSound`, and channels gain `partial`; `ThreadMember`, `GuildScheduledEvent`, `Poll`, and `SoundboardSound` gain `fetch()`.

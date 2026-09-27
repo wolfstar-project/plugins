@@ -91,6 +91,14 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
   /**
    * How many users reacted, super reactions included; `null` when unknown.
    */
+  /**
+   * Whether the reaction is partial: its message is not cached, so its counts are unknown. Only its emoji and IDs are
+   * reliable then, and {@link MessageReaction.fetch} completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].count === undefined;
+  }
+
   public override get count(): number | null {
     return this[kData].count ?? null;
   }

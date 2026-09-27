@@ -76,6 +76,27 @@ export class SoundboardSound extends BaseSoundboardSound {
     return cdn.soundboardSound(this.soundId);
   }
 
+  /**
+   * Whether the sound is partial: built from its IDs alone for an event about an uncached sound, see
+   * `Partials.SoundboardSound`. Only `soundId` and `guildId` are reliable then, and {@link SoundboardSound.fetch}
+   * completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].name === undefined;
+  }
+
+  /**
+   * Fetches the guild sound from the API and patches this structure with the result.
+   */
+  public fetch(): Promise<this> {
+    return this.withGuild(async (guildId) => {
+      const sound = await this.client.guilds
+        .soundboardSounds(guildId)
+        .fetch(this.soundId, { force: true });
+      return this[kPatch](sound.toJSON());
+    });
+  }
+
   public edit(options: SoundboardSoundEditOptions): Promise<this> {
     return this.withGuild(async (guildId) => {
       const sound = await this.client.guilds.soundboardSounds(guildId).edit(this.soundId, options);

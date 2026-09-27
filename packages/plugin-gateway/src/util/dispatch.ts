@@ -1,6 +1,8 @@
 import {
+  ChannelType,
   GatewayDispatchEvents,
   type APIPartialEmoji,
+  type APIUser,
   type GatewayDispatchPayload,
   type GatewayMessagePollVoteDispatchData,
 } from "discord-api-types/v10";
@@ -11,15 +13,23 @@ import { ClientUser } from "../structures/users/ClientUser.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { bindClient, kPatch } from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import { createChannel } from "../managers/ChannelManager.js";
+import type { DMChannel } from "../structures/channels/DMChannel.js";
+import { GuildMember } from "../structures/guilds/GuildMember.js";
+import { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import type { Sticker } from "../structures/stickers/Sticker.js";
-import type { Message } from "../structures/messages/Message.js";
+import { Message } from "../structures/messages/Message.js";
 import { MessageReaction } from "../structures/messages/MessageReaction.js";
+import { Poll } from "../structures/polls/Poll.js";
 import { PollAnswer } from "../structures/polls/PollAnswer.js";
-import type { ThreadMember } from "../structures/channels/ThreadMember.js";
+import { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
+import { ThreadMember } from "../structures/channels/ThreadMember.js";
+import { User } from "../structures/users/User.js";
 import { Typing } from "../structures/channels/Typing.js";
 import { resolveAuditLogTarget } from "./auditLogs.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
+import { Partials } from "./Partials.js";
 
 /**
  * The data of the dispatch of type `Type`.
@@ -185,7 +195,10 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
         ? client.threadMembers.get(data.id, data.user_id)
         : Promise.resolve(undefined),
     build: async (client, data, previous) => [
-      previous ?? null,
+      previous ??
+        (data.id && data.user_id
+          ? partialThreadMember(client, data.id, data.user_id, data.guild_id)
+          : null),
       await client.threadMembers.hydrate(data),
     ],
   },
@@ -203,7 +216,9 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
           client.threadMembers.hydrate({ ...member, id: data.id, guild_id: data.guild_id }),
         ),
       ),
-      previous ?? [],
+      withPartials(previous ?? [], data.removed_member_ids ?? [], (userId) =>
+        partialThreadMember(client, data.id, userId, data.guild_id),
+      ),
       (await cachedOrUndefined(client.threads.get(data.id))) ?? null,
       data,
     ],
@@ -217,14 +232,17 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "messageUpdate",
     before: (client, data) => client.messages.get(data.channel_id, data.id),
     build: async (client, data, previous) => [
-      previous ?? null,
+      previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
       await client.messages.hydrate(data),
     ],
   },
   [GatewayDispatchEvents.MessageDelete]: {
     event: "messageDelete",
     before: (client, data) => client.messages.get(data.channel_id, data.id),
-    build: (_client, data, previous) => [previous ?? null, data],
+    build: (client, data, previous) => [
+      previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
+      data,
+    ],
   },
   [GatewayDispatchEvents.MessageDeleteBulk]: {
     event: "messageDeleteBulk",
@@ -234,14 +252,20 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       );
       return messages.filter((message) => message !== undefined);
     },
-    build: (_client, data, previous) => [previous ?? [], data],
+    build: (client, data, previous: Message[] | undefined) => [
+      withPartials(previous ?? [], data.ids, (id) =>
+        partialMessage(client, data.channel_id, id, data.guild_id),
+      ),
+      data,
+    ],
   },
 
   [GatewayDispatchEvents.MessageReactionAdd]: {
     event: "messageReactionAdd",
     build: async (client, data) => [
       await reactionOf(client, data),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+        partialUser(client, data.user_id),
       { userId: data.user_id, type: data.type, burst: data.burst },
     ],
   },
@@ -249,7 +273,8 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "messageReactionRemove",
     build: async (client, data) => [
       await reactionOf(client, data),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+        partialUser(client, data.user_id),
       { userId: data.user_id, type: data.type, burst: data.burst },
     ],
   },
@@ -258,7 +283,8 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     before: async (client, data) =>
       (await client.messages.get(data.channel_id, data.message_id))?.reactions.cache ?? [],
     build: async (client, data, previous: MessageReaction[] | undefined) => [
-      (await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id))) ?? null,
+      (await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id))) ??
+        partialMessage(client, data.channel_id, data.message_id, data.guild_id),
       previous ?? [],
       data,
     ],
@@ -291,7 +317,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     before: (client, data) => client.members.get(data.guild_id, data.user.id),
     // The payload is partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
-      previous ?? null,
+      previous ?? partialMember(client, data.guild_id, { id: data.user.id }),
       (await cachedOrUndefined(client.members.get(data.guild_id, data.user.id))) ??
         (await client.members.hydrate(data as CacheEntityTypes["members"])),
     ],
@@ -299,7 +325,10 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildMemberRemove]: {
     event: "guildMemberRemove",
     before: (client, data) => client.members.get(data.guild_id, data.user.id),
-    build: (_client, data, previous) => [previous ?? null, data],
+    build: (client, data, previous) => [
+      previous ?? partialMember(client, data.guild_id, data.user),
+      data,
+    ],
   },
   [GatewayDispatchEvents.GuildMembersChunk]: {
     event: "guildMembersChunk",
@@ -391,7 +420,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "guildScheduledEventUpdate",
     before: (client, data) => client.guilds.scheduledEvents(data.guild_id).get(data.id),
     build: async (client, data, previous) => [
-      previous ?? null,
+      previous ?? partialScheduledEvent(client, data.guild_id, data.id),
       await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
     ],
   },
@@ -406,8 +435,9 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data) => [
       (await cachedOrUndefined(
         client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
-      )) ?? null,
-      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      )) ?? partialScheduledEvent(client, data.guild_id, data.guild_scheduled_event_id),
+      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+        partialUser(client, data.user_id),
       data,
     ],
   },
@@ -416,8 +446,9 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data) => [
       (await cachedOrUndefined(
         client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
-      )) ?? null,
-      (await cachedOrUndefined(client.users.get(data.user_id))) ?? null,
+      )) ?? partialScheduledEvent(client, data.guild_id, data.guild_scheduled_event_id),
+      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+        partialUser(client, data.user_id),
       data,
     ],
   },
@@ -451,14 +482,17 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: "guildSoundboardSoundUpdate",
     before: (client, data) => client.guilds.soundboardSounds(data.guild_id!).get(data.sound_id),
     build: async (client, data, previous) => [
-      previous ?? null,
+      previous ?? partialSoundboardSound(client, data.guild_id!, data.sound_id),
       await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundDelete]: {
     event: "guildSoundboardSoundDelete",
     before: (client, data) => client.guilds.soundboardSounds(data.guild_id).get(data.sound_id),
-    build: (_client, data, previous) => [previous ?? null, data],
+    build: (client, data, previous) => [
+      previous ?? partialSoundboardSound(client, data.guild_id, data.sound_id),
+      data,
+    ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundsUpdate]: {
     event: "guildSoundboardSoundsUpdate",
@@ -593,10 +627,10 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
       if (client.user?.id === data.id) {
         client.user[kPatch](data);
-        return [previous ?? null, client.user];
+        return [previous ?? partialUser(client, data.id), client.user];
       }
 
-      return [previous ?? null, await client.users.hydrate(data)];
+      return [previous ?? partialUser(client, data.id), await client.users.hydrate(data)];
     },
   },
 };
@@ -683,7 +717,7 @@ async function partialReaction(
   client: GatewayClient,
   data: ReactionData,
   emptied = false,
-  message: Message | null = null,
+  message: Message | null = partialMessage(client, data.channel_id, data.message_id, data.guild_id),
 ): Promise<MessageReaction> {
   const { guild_id: guildId, emoji } = data;
   const cachedEmoji =
@@ -715,12 +749,18 @@ async function pollAnswerOf(
   const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
   return (
     message?.poll?.answers.find((answer) => answer.id === data.answer_id) ??
-    new PollAnswer({
-      answer_id: data.answer_id,
-      poll_media: {},
-      channel_id: data.channel_id,
-      message_id: data.message_id,
-    })
+    bindClient(
+      new PollAnswer(
+        {
+          answer_id: data.answer_id,
+          poll_media: {},
+          channel_id: data.channel_id,
+          message_id: data.message_id,
+        },
+        { poll: message?.poll ?? partialPoll(client, data.channel_id, data.message_id) },
+      ),
+      client,
+    )
   );
 }
 
@@ -746,11 +786,117 @@ async function typingOf(
   ]);
   return bindClient(
     new Typing(data, {
-      channel: channel ?? null,
-      user: user ?? null,
+      channel: channel ?? (guildId ? null : partialDMChannel(client, data.channel_id, userId)),
+      user: user ?? partialUser(client, userId),
       guild: guild ?? null,
-      member: resolvedMember ?? null,
+      member: resolvedMember ?? (guildId ? partialMember(client, guildId, { id: userId }) : null),
     }),
+    client,
+  );
+}
+
+// Whether the client builds partial structures of `partial`, see `GatewayClientOptions.partials`.
+function wants(client: GatewayClient, partial: Partials): boolean {
+  return client.partials.includes(partial);
+}
+
+// The cached entities, in the dispatch's order, completed by partial ones for the uncached IDs when `build` returns
+// them (i.e. their partial is enabled): only the cached ones otherwise.
+function withPartials<Value extends { id: string | null }>(
+  cached: readonly Value[],
+  ids: readonly string[],
+  build: (id: string) => Value | null,
+): Value[] {
+  const byId = new Map(cached.map((value) => [value.id, value]));
+  const values: Value[] = [];
+  for (const id of ids) {
+    const value = byId.get(id) ?? build(id);
+    if (value) values.push(value);
+  }
+
+  return values;
+}
+
+// The partial structures, built from the IDs a dispatch carries when their partial is enabled, `null` otherwise. They
+// are never written to the cache.
+
+function partialMessage(
+  client: GatewayClient,
+  channelId: string,
+  messageId: string,
+  guildId?: string,
+): Message | null {
+  if (!wants(client, Partials.Message)) return null;
+  return bindClient(
+    new Message({ id: messageId, channel_id: channelId, guild_id: guildId } as never),
+    client,
+  );
+}
+
+function partialUser(client: GatewayClient, userId: string): User | null {
+  return wants(client, Partials.User)
+    ? bindClient(new User({ id: userId } as never), client)
+    : null;
+}
+
+function partialMember(
+  client: GatewayClient,
+  guildId: string,
+  user: APIUser | { id: string },
+): GuildMember | null {
+  if (!wants(client, Partials.GuildMember)) return null;
+  return bindClient(new GuildMember({ guild_id: guildId, user } as never), client);
+}
+
+function partialThreadMember(
+  client: GatewayClient,
+  threadId: string,
+  userId: string,
+  guildId?: string,
+): ThreadMember | null {
+  if (!wants(client, Partials.ThreadMember)) return null;
+  return bindClient(
+    new ThreadMember({ id: threadId, user_id: userId, guild_id: guildId } as never),
+    client,
+  );
+}
+
+function partialScheduledEvent(
+  client: GatewayClient,
+  guildId: string,
+  eventId: string,
+): GuildScheduledEvent | null {
+  if (!wants(client, Partials.GuildScheduledEvent)) return null;
+  return bindClient(new GuildScheduledEvent({ id: eventId, guild_id: guildId } as never), client);
+}
+
+function partialSoundboardSound(
+  client: GatewayClient,
+  guildId: string,
+  soundId: string,
+): SoundboardSound | null {
+  if (!wants(client, Partials.SoundboardSound)) return null;
+  return bindClient(new SoundboardSound({ sound_id: soundId, guild_id: guildId } as never), client);
+}
+
+function partialPoll(client: GatewayClient, channelId: string, messageId: string): Poll | null {
+  if (!wants(client, Partials.Poll)) return null;
+  return bindClient(new Poll({ channel_id: channelId, message_id: messageId } as never), client);
+}
+
+// Only direct messages can be partial channels, like discord.js's: a guild channel's type is unknown from its ID.
+function partialDMChannel(
+  client: GatewayClient,
+  channelId: string,
+  recipientId: string,
+): DMChannel | null {
+  if (!wants(client, Partials.Channel)) return null;
+  return bindClient(
+    createChannel({
+      id: channelId,
+      type: ChannelType.DM,
+      recipients: [{ id: recipientId }],
+    } as never) as DMChannel,
     client,
   );
 }

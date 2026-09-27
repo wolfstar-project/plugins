@@ -135,7 +135,8 @@ export class Message extends BaseMessage<""> {
    * the user, not only the copy embedded in the message.
    */
   public get author(): User {
-    return this[kRelations].author ?? new User(this[kData].author);
+    // Only a partial message lacks its author: it gets an empty user rather than a crash.
+    return this[kRelations].author ?? new User(this[kData].author ?? ({} as never));
   }
 
   /**
@@ -171,11 +172,11 @@ export class Message extends BaseMessage<""> {
   }
 
   public get attachments(): Attachment[] {
-    return this[kData].attachments.map((attachment) => new Attachment(attachment));
+    return (this[kData].attachments ?? []).map((attachment) => new Attachment(attachment));
   }
 
   public get embeds(): Embed[] {
-    return this[kData].embeds.map((embed) => new Embed(embed));
+    return (this[kData].embeds ?? []).map((embed) => new Embed(embed));
   }
 
   /**
@@ -423,6 +424,15 @@ export class Message extends BaseMessage<""> {
     const channel = await this.fetchChannel();
     if (channel.type !== ChannelType.GuildAnnouncement) return false;
     return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
+  }
+
+  /**
+   * Whether the message is partial: built from its IDs alone for an event about an uncached message, see
+   * `Partials.Message`. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch} completes
+   * it.
+   */
+  public get partial(): boolean {
+    return this[kData].author === undefined;
   }
 
   /**

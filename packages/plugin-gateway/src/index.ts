@@ -18,5 +18,6 @@ export * from "./util/errors.js";
 export type * from "./util/events.js";
 export * from "./util/flags.js";
 export * from "./util/messages.js";
+export * from "./util/Partials.js";
 export * from "./util/permissions.js";
 export * from "./util/PermissionsBitField.js";

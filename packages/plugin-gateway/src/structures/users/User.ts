@@ -165,6 +165,14 @@ export class User extends BaseUser {
   }
 
   /**
+   * Whether the user is partial: built from its ID alone for an event about an uncached user, see `Partials.User`.
+   * Only its ID is reliable then, and {@link User.fetch} completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].username === undefined;
+  }
+
+  /**
    * Fetches the user from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {

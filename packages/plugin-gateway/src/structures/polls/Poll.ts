@@ -6,7 +6,14 @@ import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
-import { bindClient, initStructure, kData, kRelations, StructureMixin } from "../Structure.js";
+import {
+  bindClient,
+  initStructure,
+  kData,
+  kPatch,
+  kRelations,
+  StructureMixin,
+} from "../Structure.js";
 
 /**
  * The raw data of a poll, with the message it belongs to.
@@ -69,8 +76,28 @@ export class Poll extends BasePoll<""> {
     return this[kRelations].channel ?? null;
   }
 
+  /**
+   * Whether the poll is partial: built from its message's IDs alone for a vote on an uncached message, see
+   * `Partials.Poll`. Only `channelId` and `messageId` are reliable then, and {@link Poll.fetch} completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].question === undefined;
+  }
+
+  /**
+   * Fetches the poll's message from the API and patches this structure with its poll.
+   */
+  public async fetch(): Promise<this> {
+    const message = await this.client.messages.fetch(this.channelId, this.messageId, {
+      force: true,
+    });
+    const { poll } = message.toJSON();
+    if (!poll) throw new Error(`Message ${this.messageId} has no poll`);
+    return this[kPatch](poll as Partial<PollData>);
+  }
+
   public get question(): { text: string | null; emoji: ReactionEmoji | null } {
-    const { text, emoji } = this[kData].question;
+    const { text, emoji } = this[kData].question ?? {};
     return { text: text ?? null, emoji: emoji ? new ReactionEmoji(emoji) : null };
   }
 
@@ -81,7 +108,7 @@ export class Poll extends BasePoll<""> {
     const counts = new Map(
       (this[kData].results?.answer_counts ?? []).map((count) => [count.id, count]),
     );
-    return this[kData].answers.map((answer) => {
+    return (this[kData].answers ?? []).map((answer) => {
       const count = counts.get(answer.answer_id);
       const emojiId = answer.poll_media.emoji?.id;
       const relations = {

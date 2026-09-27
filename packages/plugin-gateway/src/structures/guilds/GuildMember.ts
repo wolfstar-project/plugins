@@ -435,6 +435,15 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
+   * Whether the member is partial: built from its IDs alone for an event about an uncached member, see
+   * `Partials.GuildMember`. Only its IDs (and the user a removal carries) are reliable then, and
+   * {@link GuildMember.fetch} completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].joined_at === undefined;
+  }
+
+  /**
    * Fetches the member from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {

@@ -59,7 +59,17 @@ export class PollAnswer extends BasePollAnswer {
   }
 
   public get text(): string | null {
-    return this[kData].poll_media.text ?? null;
+    return this[kData].poll_media?.text ?? null;
+  }
+
+  /**
+   * Whether the answer is partial: its message is not cached, so only its ID is known, see `Partials.PollAnswer`.
+   * Fetch its poll to complete it.
+   */
+  public get partial(): boolean {
+    return (
+      this[kData].poll_media?.text === undefined && this[kData].poll_media?.emoji === undefined
+    );
   }
 
   /**
@@ -75,7 +85,7 @@ export class PollAnswer extends BasePollAnswer {
    * else the payload's.
    */
   public get emoji(): GuildEmoji | ReactionEmoji | null {
-    const { emoji } = this[kData].poll_media;
+    const { emoji } = this[kData].poll_media ?? {};
     return this[kRelations].emoji ?? (emoji?.id || emoji?.name ? new ReactionEmoji(emoji) : null);
   }
 

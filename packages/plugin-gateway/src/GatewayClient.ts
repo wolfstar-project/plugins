@@ -45,6 +45,7 @@ import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
+import type { Partials } from "./util/Partials.js";
 import { GatewaySessionMirror } from "./util/sessions.js";
 
 export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
@@ -116,6 +117,13 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    * @default 30_000
    */
   dispatchTimeout?: number | null;
+  /**
+   * The structures to build partially when an event concerns one that is not cached, like discord.js's `partials`,
+   * e.g. `[Partials.Message, Partials.User]`. See {@link Partials}.
+   *
+   * @default []
+   */
+  partials?: readonly Partials[];
 }
 
 /** Options for loading pieces and starting both transports. */
@@ -222,6 +230,11 @@ export class GatewayClient extends Client {
    */
   public readonly dispatchTimeout: number | null;
 
+  /**
+   * The structures built partially for uncached entities, see {@link GatewayClientOptions.partials}.
+   */
+  public readonly partials: readonly Partials[];
+
   // Dispatches of a guild are processed in order, so an asynchronous cache never reorders them, while different
   // guilds proceed concurrently.
   readonly #queue = new DispatchQueue();
@@ -249,6 +262,7 @@ export class GatewayClient extends Client {
     this.cache = options.cache;
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
+    this.partials = Object.freeze([...(options.partials ?? [])]);
     this.#shardCount = options.shardCount ?? null;
     // The base client validated it already, and scrubs it from `this.options`.
     this.#token = (options.discordToken ?? process.env.DISCORD_TOKEN)!;

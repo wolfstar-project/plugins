@@ -34,6 +34,15 @@ export class DMChannel extends BaseDMChannel {
   }
 
   /**
+   * Whether the direct message is partial: built from its ID alone for an event in an uncached direct message, see
+   * `Partials.Channel`. Only its ID (and its recipient, when the event carried them) is reliable then, and `fetch()`
+   * completes it.
+   */
+  public get partial(): boolean {
+    return this[kData].last_message_id === undefined;
+  }
+
+  /**
    * The ID of the user the direct message is with, when the payload included them.
    */
   public get recipientId(): string | null {
