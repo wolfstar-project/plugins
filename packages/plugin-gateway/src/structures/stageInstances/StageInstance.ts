@@ -2,7 +2,6 @@ import { StageInstance as BaseStageInstance } from "@discordjs/structures";
 import type { APIStageInstance, StageInstancePrivacyLevel } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { StageInstanceEditOptions } from "../../managers/StageInstanceManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildScheduledEvent } from "../guilds/GuildScheduledEvent.js";
 import { Mixin } from "../Mixin.js";
@@ -60,7 +59,7 @@ export class StageInstance extends BaseStageInstance {
   public async fetchGuildScheduledEvent(): Promise<GuildScheduledEvent | null> {
     const { guildScheduledEventId } = this;
     return guildScheduledEventId
-      ? getGatewayClient().guilds.scheduledEvents(this.guildId).fetch(guildScheduledEventId)
+      ? this.client.guilds.scheduledEvents(this.guildId).fetch(guildScheduledEventId)
       : null;
   }
 
@@ -70,8 +69,8 @@ export class StageInstance extends BaseStageInstance {
    * @param options The topic and privacy level, and the reason for the audit log.
    */
   public async edit(options: StageInstanceEditOptions): Promise<this> {
-    const instance = await getGatewayClient()
-      .guilds.stageInstances(this.guildId)
+    const instance = await this.client.guilds
+      .stageInstances(this.guildId)
       .edit(this.channelId, options);
     return this[kPatch](instance.toJSON());
   }
@@ -90,7 +89,7 @@ export class StageInstance extends BaseStageInstance {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.stageInstances(this.guildId).delete(this.channelId, reason);
+    await this.client.guilds.stageInstances(this.guildId).delete(this.channelId, reason);
     return this;
   }
 }

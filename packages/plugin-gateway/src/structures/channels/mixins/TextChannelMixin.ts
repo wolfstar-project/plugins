@@ -1,6 +1,5 @@
 import type { ChannelType } from "discord-api-types/v10";
 import { ChannelMessageManager } from "../../../managers/ChannelMessageManager.js";
-import { getGatewayClient } from "../../../util/container.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../../../util/messages.js";
 import type { Channel, ChannelDataType } from "../Channel.js";
 import type { Message } from "../../messages/Message.js";
@@ -55,7 +54,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * The messages of the channel.
    */
   public get messages(): ChannelMessageManager {
-    return new ChannelMessageManager(getGatewayClient(), this.id);
+    return new ChannelMessageManager(this.client, this.id);
   }
 
   /**
@@ -64,14 +63,14 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * @param options The message, or its content.
    */
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return getGatewayClient().messages.send(this.id, options);
+    return this.client.messages.send(this.id, options);
   }
 
   /**
    * Shows the bot as typing in the channel, for about 10 seconds or until it sends a message.
    */
   public async sendTyping(): Promise<void> {
-    await getGatewayClient().core.api.channels.showTyping(this.id);
+    await this.client.core.api.channels.showTyping(this.id);
   }
 
   /**
@@ -82,7 +81,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * @returns The IDs of the deleted messages.
    */
   public bulkDelete(messages: readonly string[] | number, filterOld = false): Promise<string[]> {
-    return getGatewayClient().messages.bulkDelete(this.id, messages, filterOld);
+    return this.client.messages.bulkDelete(this.id, messages, filterOld);
   }
 
   /**
@@ -90,6 +89,6 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public async fetchLastMessage(): Promise<Message | null> {
     const { lastMessageId } = this;
-    return lastMessageId ? getGatewayClient().messages.fetch(this.id, lastMessageId) : null;
+    return lastMessageId ? this.client.messages.fetch(this.id, lastMessageId) : null;
   }
 }

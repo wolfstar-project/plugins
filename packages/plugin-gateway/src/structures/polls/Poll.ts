@@ -1,6 +1,5 @@
 import { Poll as BasePoll, Structure as BaseStructure } from "@discordjs/structures";
 import type { APIPoll } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import type { Message } from "../messages/Message.js";
 import { PollAnswer } from "./PollAnswer.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
@@ -85,7 +84,7 @@ export class Poll extends BasePoll<""> {
    * @returns The message holding the ended poll.
    */
   public end(): Promise<Message> {
-    return getGatewayClient().messages.endPoll(this.channelId, this.messageId);
+    return this.client.messages.endPoll(this.channelId, this.messageId);
   }
 
   public override toJSON(): PollData {

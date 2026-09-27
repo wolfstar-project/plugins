@@ -7,7 +7,6 @@ import type {
   APIUserPrimaryGuild,
 } from "discord-api-types/v10";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import { UserFlagsBitField } from "../../util/flags.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../../util/messages.js";
 import type { DMChannel } from "../channels/DMChannel.js";
@@ -142,14 +141,14 @@ export class User extends BaseUser {
    * Opens a direct message channel with the user, or gets the existing one.
    */
   public createDM(): Promise<DMChannel> {
-    return getGatewayClient().users.createDM(this.id);
+    return this.client.users.createDM(this.id);
   }
 
   /**
    * Closes the direct message channel with the user.
    */
   public deleteDM(): Promise<DMChannel> {
-    return getGatewayClient().users.deleteDM(this.id);
+    return this.client.users.deleteDM(this.id);
   }
 
   /**
@@ -158,14 +157,14 @@ export class User extends BaseUser {
    * @param options The message, or its content.
    */
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return getGatewayClient().users.send(this.id, options);
+    return this.client.users.send(this.id, options);
   }
 
   /**
    * Fetches the user from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const user = await getGatewayClient().users.fetch(this.id, { force: true });
+    const user = await this.client.users.fetch(this.id, { force: true });
     return this[kPatch](user.toJSON());
   }
 

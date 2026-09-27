@@ -12,7 +12,6 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { MessageThreadCreateOptions } from "../../managers/MessageManager.js";
 import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import { isDeepEqual } from "../../util/equal.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
 import type {
@@ -178,12 +177,7 @@ export class Message extends BaseMessage<""> {
   }
 
   public get reactions(): ReactionManager {
-    return new ReactionManager(
-      getGatewayClient(),
-      this.channelId,
-      this.id,
-      this[kData].reactions ?? [],
-    );
+    return new ReactionManager(this.client, this.channelId, this.id, this[kData].reactions ?? []);
   }
 
   public get poll(): Poll | null {
@@ -245,7 +239,7 @@ export class Message extends BaseMessage<""> {
    */
   public get thread(): AnyThreadChannel | null {
     const { thread } = this[kData] as APIMessage & { thread?: APIThreadChannel };
-    return thread ? getGatewayClient().threads.createStructure(thread) : null;
+    return thread ? this.client.threads.createStructure(thread) : null;
   }
 
   /**
@@ -303,7 +297,7 @@ export class Message extends BaseMessage<""> {
    * Fetches the channel the message was sent in.
    */
   public fetchChannel(): Promise<AnyChannel> {
-    return getGatewayClient().channels.fetch(this.channelId);
+    return this.client.channels.fetch(this.channelId);
   }
 
   /**
@@ -311,7 +305,7 @@ export class Message extends BaseMessage<""> {
    */
   public async fetchGuild(): Promise<Guild | null> {
     const { guildId } = this;
-    return guildId ? getGatewayClient().guilds.fetch(guildId) : null;
+    return guildId ? this.client.guilds.fetch(guildId) : null;
   }
 
   /**
@@ -320,17 +314,14 @@ export class Message extends BaseMessage<""> {
   public async fetchReference(): Promise<Message> {
     const reference = this.reference;
     if (!reference?.message_id) throw new Error(`Message ${this.id} references no message`);
-    return getGatewayClient().messages.fetch(
-      reference.channel_id ?? this.channelId,
-      reference.message_id,
-    );
+    return this.client.messages.fetch(reference.channel_id ?? this.channelId, reference.message_id);
   }
 
   /**
    * Whether the bot can edit the message: it is the author.
    */
   public async fetchEditable(): Promise<boolean> {
-    const client = getGatewayClient();
+    const client = this.client;
     return this.author.id === (client.user?.id ?? client.id);
   }
 
@@ -374,7 +365,7 @@ export class Message extends BaseMessage<""> {
    * Fetches the message from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const message = await getGatewayClient().messages.fetch(this.channelId, this.id, {
+    const message = await this.client.messages.fetch(this.channelId, this.id, {
       force: true,
     });
     return this[kPatch](message.toJSON());
@@ -386,7 +377,7 @@ export class Message extends BaseMessage<""> {
    * @param options The changes, or the new content.
    */
   public async edit(options: MessagePayloadResolvable<MessageEditOptions>): Promise<this> {
-    const message = await getGatewayClient().messages.edit(this.channelId, this.id, options);
+    const message = await this.client.messages.edit(this.channelId, this.id, options);
     return this[kPatch](message.toJSON());
   }
 
@@ -397,7 +388,7 @@ export class Message extends BaseMessage<""> {
    */
   public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
     const payload = typeof options === "string" ? { content: options } : options;
-    return getGatewayClient().messages.send(this.channelId, {
+    return this.client.messages.send(this.channelId, {
       ...payload,
       message_reference: {
         type: MessageReferenceType.Default,
@@ -414,21 +405,21 @@ export class Message extends BaseMessage<""> {
    * @param channelId The ID of the channel to forward it to.
    */
   public forward(channelId: string): Promise<Message> {
-    return getGatewayClient().messages.forward(this.channelId, this.id, channelId);
+    return this.client.messages.forward(this.channelId, this.id, channelId);
   }
 
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().messages.delete(this.channelId, this.id, reason);
+    await this.client.messages.delete(this.channelId, this.id, reason);
     return this;
   }
 
   public async pin(reason?: string): Promise<this> {
-    await getGatewayClient().messages.pin(this.channelId, this.id, reason);
+    await this.client.messages.pin(this.channelId, this.id, reason);
     return this[kPatch]({ pinned: true });
   }
 
   public async unpin(reason?: string): Promise<this> {
-    await getGatewayClient().messages.unpin(this.channelId, this.id, reason);
+    await this.client.messages.unpin(this.channelId, this.id, reason);
     return this[kPatch]({ pinned: false });
   }
 
@@ -438,7 +429,7 @@ export class Message extends BaseMessage<""> {
    * @param emoji The emoji.
    */
   public async react(emoji: EmojiIdentifierResolvable): Promise<this> {
-    await getGatewayClient().messages.react(this.channelId, this.id, emoji);
+    await this.client.messages.react(this.channelId, this.id, emoji);
     return this;
   }
 
@@ -446,7 +437,7 @@ export class Message extends BaseMessage<""> {
    * Publishes the message of an announcement channel to the channels following it.
    */
   public async crosspost(): Promise<this> {
-    const message = await getGatewayClient().messages.crosspost(this.channelId, this.id);
+    const message = await this.client.messages.crosspost(this.channelId, this.id);
     return this[kPatch](message.toJSON());
   }
 
@@ -456,7 +447,7 @@ export class Message extends BaseMessage<""> {
    * @param options The thread's name and settings.
    */
   public startThread(options: MessageThreadCreateOptions): Promise<AnyThreadChannel> {
-    return getGatewayClient().messages.startThread(this.channelId, this.id, options);
+    return this.client.messages.startThread(this.channelId, this.id, options);
   }
 
   /**
@@ -509,7 +500,7 @@ export class Message extends BaseMessage<""> {
   private async hasPermission(permission: PermissionsString): Promise<boolean> {
     const { guildId } = this;
     if (!guildId) return false;
-    const me = await getGatewayClient().members.fetchMe(guildId);
+    const me = await this.client.members.fetchMe(guildId);
     return (await me.fetchPermissionsIn(this.channelId)).has(permission);
   }
 }

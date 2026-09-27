@@ -6,7 +6,7 @@ import type {
 } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
-import type { StructureMixin } from "../structures/Structure.js";
+import { bindClient, type StructureMixin } from "../structures/Structure.js";
 import { isPromiseLike, whenAll } from "../util/cache.js";
 
 /**
@@ -201,7 +201,7 @@ export abstract class CachedManager<
    * @internal
    */
   public _resolveData(data: CacheEntityTypes[Name]): Awaitable<Value> {
-    return whenAll([this.getByKey(this.keyOf(data))], ([cached]) => cached ?? this._hydrate(data));
+    return whenAll([this.getByKey(this.keyOf(data))], ([cached]) => cached ?? this.build(data));
   }
 
   /**
@@ -221,7 +221,7 @@ export abstract class CachedManager<
    * @param data The raw data.
    */
   public async hydrate(data: CacheEntityTypes[Name]): Promise<Value> {
-    return this._hydrate(data);
+    return this.build(data);
   }
 
   /**
@@ -315,7 +315,16 @@ export abstract class CachedManager<
    */
   protected getByKey(key: string): Awaitable<Value | undefined> {
     return whenAll([this.cache?.get(key)], ([raw]) =>
-      raw === undefined ? undefined : this._hydrate(raw),
+      raw === undefined ? undefined : this.build(raw),
     );
+  }
+
+  /**
+   * Builds the structure of raw data with {@link CachedManager._hydrate}, bound to this manager's client.
+   *
+   * @param data The raw data.
+   */
+  protected build(data: CacheEntityTypes[Name]): Awaitable<Value> {
+    return whenAll([this._hydrate(data)], ([value]) => bindClient(value, this.client));
   }
 }

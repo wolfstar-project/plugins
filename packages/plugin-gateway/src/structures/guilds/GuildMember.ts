@@ -4,7 +4,6 @@ import type { APIAvatarDecorationData } from "discord-api-types/v10";
 import type { BanOptions, GuildMemberEditOptions } from "../../managers/GuildMemberManager.js";
 import { GuildMemberRoleManager } from "../../managers/GuildMemberRoleManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../../util/flags.js";
 import type { MessageCreateOptions, MessagePayloadResolvable } from "../../util/messages.js";
 import { computeGuildPermissions, computePermissionsIn } from "../../util/permissions.js";
@@ -68,7 +67,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Fetches the guild, cache first.
    */
   public fetchGuild(): Promise<Guild> {
-    return getGatewayClient().guilds.fetch(this.guildId);
+    return this.client.guilds.fetch(this.guildId);
   }
 
   public override [kPatch](data: Readonly<Partial<CacheEntityTypes["members"]>>): this {
@@ -108,12 +107,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * The member's roles. It needs the member's user ID, which every payload but some partial ones carries.
    */
   public get roles(): GuildMemberRoleManager {
-    return new GuildMemberRoleManager(
-      getGatewayClient(),
-      this.guildId,
-      this.requireId(),
-      this.roleIds,
-    );
+    return new GuildMemberRoleManager(this.client, this.guildId, this.requireId(), this.roleIds);
   }
 
   public get joinedTimestamp(): number | null {
@@ -252,7 +246,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Computes the member's guild-wide permissions, before channel overwrites.
    */
   public async fetchPermissions(): Promise<Readonly<PermissionsBitField>> {
-    const client = getGatewayClient();
+    const client = this.client;
     const guild = await client.guilds.fetch(this.guildId);
     const roles = await this.roles.fetch();
     return computeGuildPermissions({
@@ -281,7 +275,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    */
   public async fetchVoiceState(): Promise<VoiceState | null> {
     try {
-      return await getGatewayClient().voiceStates.fetch(this.guildId, this.requireId());
+      return await this.client.voiceStates.fetch(this.guildId, this.requireId());
     } catch (error) {
       // Discord answers 404 (Unknown Voice State) for members who are not connected.
       if (error instanceof DiscordAPIError && error.status === 404) return null;
@@ -295,7 +289,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * @returns The presence, or `null` when it is not cached (the bot needs the `GuildPresences` intent).
    */
   public async fetchPresence(): Promise<Presence | null> {
-    return (await getGatewayClient().presences.get(this.guildId, this.requireId())) ?? null;
+    return (await this.client.presences.get(this.guildId, this.requireId())) ?? null;
   }
 
   /**
@@ -317,7 +311,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * role is higher than theirs (or the bot owns the guild).
    */
   public async fetchManageable(): Promise<boolean> {
-    const client = getGatewayClient();
+    const client = this.client;
     const id = this.requireId();
     const guild = await client.guilds.fetch(this.guildId);
     const meId = client.user?.id ?? client.id;
@@ -358,7 +352,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * @returns This member, patched.
    */
   public async edit(options: GuildMemberEditOptions): Promise<this> {
-    const member = await getGatewayClient().members.edit(this.guildId, this.requireId(), options);
+    const member = await this.client.members.edit(this.guildId, this.requireId(), options);
     return this[kPatch](member.toJSON());
   }
 
@@ -388,32 +382,32 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   public async kick(reason?: string): Promise<this> {
-    await getGatewayClient().members.kick(this.guildId, this.requireId(), reason);
+    await this.client.members.kick(this.guildId, this.requireId(), reason);
     return this;
   }
 
   public async ban(options?: BanOptions): Promise<this> {
-    await getGatewayClient().members.ban(this.guildId, this.requireId(), options);
+    await this.client.members.ban(this.guildId, this.requireId(), options);
     return this;
   }
 
   public createDM(): Promise<DMChannel> {
-    return getGatewayClient().users.createDM(this.requireId());
+    return this.client.users.createDM(this.requireId());
   }
 
   public deleteDM(): Promise<DMChannel> {
-    return getGatewayClient().users.deleteDM(this.requireId());
+    return this.client.users.deleteDM(this.requireId());
   }
 
   public send(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
-    return getGatewayClient().users.send(this.requireId(), options);
+    return this.client.users.send(this.requireId(), options);
   }
 
   /**
    * Fetches the member from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const member = await getGatewayClient().members.fetch(this.guildId, this.requireId(), {
+    const member = await this.client.members.fetch(this.guildId, this.requireId(), {
       force: true,
     });
     return this[kPatch](member.toJSON());
@@ -423,7 +417,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Fetches the member's user, cache first.
    */
   public fetchUser(): Promise<User> {
-    return getGatewayClient().users.fetch(this.requireId());
+    return this.client.users.fetch(this.requireId());
   }
 
   /**
@@ -451,7 +445,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   private async managedWith(permission: "KickMembers" | "BanMembers" | "ModerateMembers") {
     if (!(await this.fetchManageable())) return false;
-    const me = await getGatewayClient().members.fetchMe(this.guildId);
+    const me = await this.client.members.fetchMe(this.guildId);
     return (await me.fetchPermissions()).has(permission);
   }
 

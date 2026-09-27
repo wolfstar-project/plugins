@@ -1,5 +1,4 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { getGatewayClient } from "../../util/container.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 
@@ -78,7 +77,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
   public async remove(): Promise<this> {
     const { id, threadId } = this;
     if (!id || !threadId) throw new Error("Cannot remove a thread member without its IDs");
-    await getGatewayClient().threadMembers.remove(threadId, id);
+    await this.client.threadMembers.remove(threadId, id);
     return this;
   }
 }

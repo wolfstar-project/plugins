@@ -1,6 +1,5 @@
 import { PollAnswer as BasePollAnswer } from "@discordjs/structures";
 import type { APIPollAnswer } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, StructureMixin } from "../Structure.js";
@@ -78,7 +77,7 @@ export class PollAnswer extends BasePollAnswer {
    * @param options How many voters to fetch (up to 100), and after which user ID.
    */
   public fetchVoters(options: { limit?: number; after?: string } = {}): Promise<User[]> {
-    return getGatewayClient().messages.fetchPollAnswerVoters(
+    return this.client.messages.fetchPollAnswerVoters(
       this.channelId,
       this.messageId,
       this.id,

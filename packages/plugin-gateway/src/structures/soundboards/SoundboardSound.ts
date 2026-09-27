@@ -2,7 +2,6 @@ import { SoundboardSound as BaseSoundboardSound } from "@discordjs/structures";
 import type { APISoundboardSound } from "discord-api-types/v10";
 import type { SoundboardSoundEditOptions } from "../../managers/GuildSoundboardSoundManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
@@ -61,16 +60,14 @@ export class SoundboardSound extends BaseSoundboardSound {
 
   public edit(options: SoundboardSoundEditOptions): Promise<this> {
     return this.withGuild(async (guildId) => {
-      const sound = await getGatewayClient()
-        .guilds.soundboardSounds(guildId)
-        .edit(this.soundId, options);
+      const sound = await this.client.guilds.soundboardSounds(guildId).edit(this.soundId, options);
       return this[kPatch](sound.toJSON());
     });
   }
 
   public delete(reason?: string): Promise<this> {
     return this.withGuild(async (guildId) => {
-      await getGatewayClient().guilds.soundboardSounds(guildId).delete(this.soundId, reason);
+      await this.client.guilds.soundboardSounds(guildId).delete(this.soundId, reason);
       return this;
     });
   }

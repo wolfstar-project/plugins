@@ -1,7 +1,6 @@
 import { AnnouncementChannel as BaseAnnouncementChannel } from "@discordjs/structures";
 import { type ChannelType } from "discord-api-types/v10";
 import { resolveId, type IdResolvable } from "../../util/channels.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { ChannelDataType, ChannelRelations } from "./Channel.js";
 import { Mixin, type MixinTypes } from "../Mixin.js";
 import { initStructure, StructureMixin } from "../Structure.js";
@@ -57,7 +56,7 @@ export class AnnouncementChannel extends BaseAnnouncementChannel {
    * @returns The ID of the follower webhook created in the target channel.
    */
   public async addFollower(channel: IdResolvable, reason?: string): Promise<string> {
-    const result = await getGatewayClient().core.api.channels.followAnnouncements(
+    const result = await this.client.core.api.channels.followAnnouncements(
       this.id,
       resolveId(channel),
       { reason },

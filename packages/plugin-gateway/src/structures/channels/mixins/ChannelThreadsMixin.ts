@@ -1,6 +1,5 @@
 import type { ChannelType } from "discord-api-types/v10";
 import { ChannelThreadManager } from "../../../managers/ChannelThreadManager.js";
-import { getGatewayClient } from "../../../util/container.js";
 import type { Channel } from "../Channel.js";
 import { kData } from "../../Structure.js";
 
@@ -18,10 +17,6 @@ export class ChannelThreadsMixin<Type extends ChannelType = ChannelType> {
    * The threads of the channel.
    */
   public get threads(): ChannelThreadManager {
-    return new ChannelThreadManager(
-      getGatewayClient(),
-      this.id,
-      (this[kData] as Data).guild_id ?? null,
-    );
+    return new ChannelThreadManager(this.client, this.id, (this[kData] as Data).guild_id ?? null);
   }
 }

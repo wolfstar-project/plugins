@@ -1,7 +1,6 @@
 import { Reaction as BaseReaction, Structure as BaseStructure } from "@discordjs/structures";
 import type { APIReaction } from "discord-api-types/v10";
 import { ReactionUserManager } from "../../managers/ReactionUserManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, StructureMixin } from "../Structure.js";
@@ -81,7 +80,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    */
   public get users(): ReactionUserManager {
     return new ReactionUserManager(
-      getGatewayClient(),
+      this.client,
       this.channelId,
       this.messageId,
       this.emoji.identifier,
@@ -92,7 +91,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * Reacts with this emoji as the bot.
    */
   public async react(): Promise<this> {
-    await getGatewayClient().messages.react(this.channelId, this.messageId, this.emoji.identifier);
+    await this.client.messages.react(this.channelId, this.messageId, this.emoji.identifier);
     return this[kPatch]({ me: true });
   }
 
@@ -100,7 +99,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * Removes every reaction with this emoji.
    */
   public async remove(): Promise<this> {
-    await getGatewayClient().messages.removeReactionEmoji(
+    await this.client.messages.removeReactionEmoji(
       this.channelId,
       this.messageId,
       this.emoji.identifier,
@@ -112,7 +111,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * Fetches the message and patches this reaction with its current counts.
    */
   public async fetch(): Promise<this> {
-    const message = await getGatewayClient().messages.fetch(this.channelId, this.messageId, {
+    const message = await this.client.messages.fetch(this.channelId, this.messageId, {
       force: true,
     });
     const identifier = this.emoji.identifier;

@@ -4,7 +4,6 @@ import { kData, kPatch } from "../../Structure.js";
 import type { APIOverwrite } from "discord-api-types/v10";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
-import { getGatewayClient } from "../../../util/container.js";
 import { computeTargetPermissions } from "../../../util/permissions.js";
 import type { PermissionsBitField } from "../../../util/PermissionsBitField.js";
 import type { GuildMember } from "../../guilds/GuildMember.js";
@@ -36,7 +35,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
   public get permissionOverwrites(): PermissionOverwriteManager {
     const data = this[kData] as Data;
     return new PermissionOverwriteManager(
-      getGatewayClient(),
+      this.client,
       this.id,
       data.guild_id ?? null,
       data.permission_overwrites ?? [],
@@ -57,8 +56,8 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
     if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
 
     const target = options.relative ? this.position + position : position;
-    await getGatewayClient()
-      .guilds.channels(guildId)
+    await this.client.guilds
+      .channels(guildId)
       .setPositions([{ channel: this.id, position: target }], options.reason);
     return this[kPatch]({ position: target } as never);
   }
@@ -104,7 +103,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
     const { parent_id: parentId } = this[kData] as Data;
     if (!parentId) return null;
 
-    const parent = (await getGatewayClient().channels.fetch(parentId)).toJSON() as Data;
+    const parent = (await this.client.channels.fetch(parentId)).toJSON() as Data;
     const own = (this[kData] as Data).permission_overwrites ?? [];
     const theirs = parent.permission_overwrites ?? [];
     return (

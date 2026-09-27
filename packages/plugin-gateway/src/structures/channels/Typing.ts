@@ -1,6 +1,5 @@
 import type { GatewayTypingStartDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import { GuildMember } from "../guilds/GuildMember.js";
 import { kData, Structure } from "../Structure.js";
 import type { User } from "../users/User.js";
@@ -52,13 +51,13 @@ export class Typing extends Structure<GatewayTypingStartDispatchData> {
    * Fetches the channel the user typed in.
    */
   public fetchChannel(): Promise<AnyChannel> {
-    return getGatewayClient().channels.fetch(this.channelId);
+    return this.client.channels.fetch(this.channelId);
   }
 
   /**
    * Fetches the typing user.
    */
   public fetchUser(): Promise<User> {
-    return getGatewayClient().users.fetch(this.userId);
+    return this.client.users.fetch(this.userId);
   }
 }

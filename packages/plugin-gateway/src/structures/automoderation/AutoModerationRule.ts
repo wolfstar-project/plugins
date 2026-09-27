@@ -8,7 +8,6 @@ import type {
 } from "discord-api-types/v10";
 import type { AutoModerationRuleEditOptions } from "../../managers/AutoModerationRuleManager.js";
 import type { IdResolvable } from "../../util/channels.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
@@ -65,9 +64,7 @@ export class AutoModerationRule extends BaseAutoModerationRule {
    * @param options The fields to edit, and the reason for the audit log.
    */
   public async edit(options: AutoModerationRuleEditOptions): Promise<this> {
-    const rule = await getGatewayClient()
-      .guilds.autoModerationRules(this.guildId)
-      .edit(this.id, options);
+    const rule = await this.client.guilds.autoModerationRules(this.guildId).edit(this.id, options);
     return this[kPatch](rule.toJSON());
   }
 
@@ -146,7 +143,7 @@ export class AutoModerationRule extends BaseAutoModerationRule {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.autoModerationRules(this.guildId).delete(this.id, reason);
+    await this.client.guilds.autoModerationRules(this.guildId).delete(this.id, reason);
     return this;
   }
 

@@ -3,7 +3,6 @@ import { Sticker as BaseSticker } from "@discordjs/structures";
 import { StickerFormatType, type APISticker } from "discord-api-types/v10";
 import type { GuildStickerEditOptions } from "../../managers/GuildStickerManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { StickerPack } from "./StickerPack.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
@@ -77,7 +76,7 @@ export class Sticker extends BaseSticker {
    */
   public async fetchGuild(): Promise<Guild | null> {
     const { guildId } = this;
-    return guildId ? getGatewayClient().guilds.fetch(guildId) : null;
+    return guildId ? this.client.guilds.fetch(guildId) : null;
   }
 
   /**
@@ -127,7 +126,7 @@ export class Sticker extends BaseSticker {
    * Fetches the sticker from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
-    const sticker = await getGatewayClient().fetchSticker(this.id);
+    const sticker = await this.client.fetchSticker(this.id);
     return this[kPatch](sticker.toJSON());
   }
 
@@ -137,7 +136,7 @@ export class Sticker extends BaseSticker {
   public async fetchPack(): Promise<StickerPack | null> {
     const { packId } = this;
     if (!packId) return null;
-    const packs = await getGatewayClient().fetchStickerPacks();
+    const packs = await this.client.fetchStickerPacks();
     return packs.find((pack) => pack.id === packId) ?? null;
   }
 
@@ -147,7 +146,7 @@ export class Sticker extends BaseSticker {
   public async fetchUser(): Promise<User | null> {
     const { guildId } = this;
     if (!guildId) return null;
-    return getGatewayClient().guilds.stickers(guildId).fetchUser(this.id);
+    return this.client.guilds.stickers(guildId).fetchUser(this.id);
   }
 
   /**
@@ -156,9 +155,7 @@ export class Sticker extends BaseSticker {
    * @param options The changes to apply.
    */
   public async edit(options: GuildStickerEditOptions): Promise<this> {
-    const sticker = await getGatewayClient()
-      .guilds.stickers(this.requireGuildId())
-      .edit(this.id, options);
+    const sticker = await this.client.guilds.stickers(this.requireGuildId()).edit(this.id, options);
     return this[kPatch](sticker.toJSON());
   }
 
@@ -168,7 +165,7 @@ export class Sticker extends BaseSticker {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.stickers(this.requireGuildId()).delete(this.id, reason);
+    await this.client.guilds.stickers(this.requireGuildId()).delete(this.id, reason);
     return this;
   }
 

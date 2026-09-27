@@ -1,6 +1,5 @@
 import { GuildFeature, type APIGuildWelcomeScreen } from "discord-api-types/v10";
 import type { GuildWelcomeScreenEditOptions } from "../../managers/GuildManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
@@ -79,7 +78,7 @@ export class WelcomeScreen extends Structure<WelcomeScreenData> {
    * @param options The changes to apply.
    */
   public async edit(options: GuildWelcomeScreenEditOptions): Promise<this> {
-    const screen = await getGatewayClient().guilds.editWelcomeScreen(this.guildId, options);
+    const screen = await this.client.guilds.editWelcomeScreen(this.guildId, options);
     return this[kPatch](screen.toJSON());
   }
 }

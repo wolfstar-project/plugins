@@ -1,5 +1,4 @@
 import type { APIOverwrite } from "discord-api-types/v10";
-import { getGatewayClient } from "../../util/container.js";
 import type { PermissionOverwriteOptions } from "../../util/channels.js";
 import { PermissionsBitField } from "../../util/PermissionsBitField.js";
 import { kData, kPatch, Structure } from "../Structure.js";
@@ -56,7 +55,7 @@ export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
    * @param reason The reason for the audit log.
    */
   public async edit(options: PermissionOverwriteOptions, reason?: string): Promise<this> {
-    const overwrites = await getGatewayClient().channels.permissionOverwrites(this.channelId);
+    const overwrites = await this.client.channels.permissionOverwrites(this.channelId);
     const edited = await overwrites.edit(this.id, options, { type: this.type, reason });
     return this[kPatch](edited.toJSON());
   }
@@ -67,7 +66,7 @@ export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    const overwrites = await getGatewayClient().channels.permissionOverwrites(this.channelId);
+    const overwrites = await this.client.channels.permissionOverwrites(this.channelId);
     await overwrites.delete(this.id, reason);
     return this;
   }

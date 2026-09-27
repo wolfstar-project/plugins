@@ -3,7 +3,6 @@ import type {
   GuildTemplateCreateGuildOptions,
   GuildTemplateEditOptions,
 } from "../../managers/GuildTemplateManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
@@ -115,7 +114,7 @@ export class GuildTemplate extends Structure<APITemplate> {
    * @param options The name and icon of the guild.
    */
   public createGuild(options: GuildTemplateCreateGuildOptions): Promise<Guild> {
-    return getGatewayClient().templates.createGuild(this.code, options);
+    return this.client.templates.createGuild(this.code, options);
   }
 
   /**
@@ -124,7 +123,7 @@ export class GuildTemplate extends Structure<APITemplate> {
    * @param options The name and description.
    */
   public async edit(options: GuildTemplateEditOptions): Promise<this> {
-    const template = await getGatewayClient().templates.edit(this.guildId, this.code, options);
+    const template = await this.client.templates.edit(this.guildId, this.code, options);
     return this[kPatch](template.toJSON());
   }
 
@@ -132,12 +131,12 @@ export class GuildTemplate extends Structure<APITemplate> {
    * Syncs the template with the current state of its guild.
    */
   public async sync(): Promise<this> {
-    const template = await getGatewayClient().templates.sync(this.guildId, this.code);
+    const template = await this.client.templates.sync(this.guildId, this.code);
     return this[kPatch](template.toJSON());
   }
 
   public async delete(): Promise<this> {
-    await getGatewayClient().templates.delete(this.guildId, this.code);
+    await this.client.templates.delete(this.guildId, this.code);
     return this;
   }
 

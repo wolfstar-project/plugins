@@ -1,5 +1,4 @@
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { kData, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
@@ -135,7 +134,7 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.integrations(this.guildId).delete(this.id, reason);
+    await this.client.guilds.integrations(this.guildId).delete(this.id, reason);
     return this;
   }
 }

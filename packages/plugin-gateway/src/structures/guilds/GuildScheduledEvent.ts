@@ -11,7 +11,6 @@ import type {
   GuildScheduledEventSubscribersOptions,
 } from "../../managers/GuildScheduledEventManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
@@ -187,9 +186,7 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
    * @param options The fields to edit, and the reason for the audit log.
    */
   public async edit(options: GuildScheduledEventEditOptions): Promise<this> {
-    const event = await getGatewayClient()
-      .guilds.scheduledEvents(this.guildId)
-      .edit(this.id, options);
+    const event = await this.client.guilds.scheduledEvents(this.guildId).edit(this.id, options);
     return this[kPatch](event.toJSON());
   }
 
@@ -231,13 +228,11 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   public fetchSubscribers(
     options?: GuildScheduledEventSubscribersOptions,
   ): Promise<GuildScheduledEventSubscriber[]> {
-    return getGatewayClient()
-      .guilds.scheduledEvents(this.guildId)
-      .fetchSubscribers(this.id, options);
+    return this.client.guilds.scheduledEvents(this.guildId).fetchSubscribers(this.id, options);
   }
 
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().guilds.scheduledEvents(this.guildId).delete(this.id, reason);
+    await this.client.guilds.scheduledEvents(this.guildId).delete(this.id, reason);
     return this;
   }
 }

@@ -8,7 +8,6 @@ import type {
   WebhookThreadOptions,
 } from "../../managers/WebhookManager.js";
 import { cdn } from "../../util/cdn.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { MessagePayloadResolvable } from "../../util/messages.js";
 import type { Message } from "../messages/Message.js";
 import { Mixin } from "../Mixin.js";
@@ -104,7 +103,7 @@ export class Webhook extends BaseWebhook {
   public send(
     options: MessagePayloadResolvable<WebhookMessageCreateOptions> & WebhookThreadOptions,
   ): Promise<Message> {
-    return getGatewayClient().webhooks.send(this.id, this.requireToken(), options);
+    return this.client.webhooks.send(this.id, this.requireToken(), options);
   }
 
   /**
@@ -114,7 +113,7 @@ export class Webhook extends BaseWebhook {
    */
   public async edit(options: WebhookEditOptions): Promise<this> {
     const token = options.channel === undefined ? this.token : undefined;
-    const webhook = await getGatewayClient().webhooks.edit(this.id, options, token);
+    const webhook = await this.client.webhooks.edit(this.id, options, token);
     return this[kPatch](webhook.toJSON());
   }
 
@@ -124,38 +123,23 @@ export class Webhook extends BaseWebhook {
    * @param reason The reason for the audit log.
    */
   public async delete(reason?: string): Promise<this> {
-    await getGatewayClient().webhooks.delete(this.id, { token: this.token, reason });
+    await this.client.webhooks.delete(this.id, { token: this.token, reason });
     return this;
   }
 
   public fetchMessage(messageId: string, options?: WebhookThreadOptions): Promise<Message> {
-    return getGatewayClient().webhooks.fetchMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
+    return this.client.webhooks.fetchMessage(this.id, this.requireToken(), messageId, options);
   }
 
   public editMessage(
     messageId: string,
     options: MessagePayloadResolvable<WebhookMessageEditOptions> & WebhookThreadOptions,
   ): Promise<Message> {
-    return getGatewayClient().webhooks.editMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
+    return this.client.webhooks.editMessage(this.id, this.requireToken(), messageId, options);
   }
 
   public deleteMessage(messageId: string, options?: WebhookThreadOptions): Promise<void> {
-    return getGatewayClient().webhooks.deleteMessage(
-      this.id,
-      this.requireToken(),
-      messageId,
-      options,
-    );
+    return this.client.webhooks.deleteMessage(this.id, this.requireToken(), messageId, options);
   }
 
   private requireToken(): string {

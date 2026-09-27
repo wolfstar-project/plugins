@@ -4,7 +4,6 @@ import type {
   APIGuildOnboardingPromptOption,
 } from "discord-api-types/v10";
 import type { GuildOnboardingEditOptions } from "../../managers/GuildManager.js";
-import { getGatewayClient } from "../../util/container.js";
 import type { Guild } from "./Guild.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
@@ -129,7 +128,7 @@ export class GuildOnboarding extends Structure<APIGuildOnboarding> {
    * @param options The changes to apply.
    */
   public async edit(options: GuildOnboardingEditOptions): Promise<this> {
-    const onboarding = await getGatewayClient().guilds.editOnboarding(this.guildId, options);
+    const onboarding = await this.client.guilds.editOnboarding(this.guildId, options);
     return this[kPatch](onboarding.toJSON());
   }
 }
