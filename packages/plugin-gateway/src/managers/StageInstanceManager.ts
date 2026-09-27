@@ -63,8 +63,19 @@ export class StageInstanceManager extends CachedManager<
 
   public override _hydrate(data: CacheEntityTypes["stageInstances"]): Awaitable<StageInstance> {
     return whenAll(
-      [this.cachedGuild(data.guild_id), this.client.channels._get(data.channel_id)],
-      ([guild, channel]) => new StageInstance(data, { guild, channel: channel ?? null }),
+      [
+        this.cachedGuild(data.guild_id),
+        this.client.channels._get(data.channel_id),
+        data.guild_scheduled_event_id
+          ? this.client.guilds.scheduledEvents(data.guild_id)._get(data.guild_scheduled_event_id)
+          : undefined,
+      ],
+      ([guild, channel, guildScheduledEvent]) =>
+        new StageInstance(data, {
+          guild,
+          channel: channel ?? null,
+          guildScheduledEvent: guildScheduledEvent ?? null,
+        }),
     );
   }
 

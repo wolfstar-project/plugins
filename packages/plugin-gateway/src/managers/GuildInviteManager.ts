@@ -83,8 +83,10 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
         data.inviter ? users._resolveData(data.inviter) : undefined,
         data.target_user ? users._resolveData(data.target_user) : undefined,
         this.cachedGuild(this.guildId),
+        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
       ],
-      ([inviter, targetUser, guild]) => new GuildInvite(data, { inviter, targetUser, guild }),
+      ([inviter, targetUser, guild, channel]) =>
+        new GuildInvite(data, { inviter, targetUser, guild, channel: channel ?? null }),
     );
   }
 

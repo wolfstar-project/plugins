@@ -8,6 +8,7 @@ import { Mixin } from "../Mixin.js";
 import {
   initStructure,
   kPatch,
+  kPatchRelations,
   kRelations,
   snowflakeTimestamp,
   StructureMixin,
@@ -19,6 +20,7 @@ import {
 export interface StageInstanceRelations {
   guild?: Guild | null;
   channel?: AnyChannel | null;
+  guildScheduledEvent?: GuildScheduledEvent | null;
 }
 
 export interface StageInstance extends StructureMixin<APIStageInstance, StageInstanceRelations> {}
@@ -43,6 +45,19 @@ export class StageInstance extends BaseStageInstance {
 
   public get channel(): AnyChannel | null {
     return this[kRelations].channel ?? null;
+  }
+
+  /**
+   * The scheduled event the stage belongs to, from the cache, like discord.js's
+   * `StageInstance#guildScheduledEvent`: `null` when it has none, when it is not cached, or when the stage was not
+   * built by its guild's stage instance manager.
+   */
+  public get guildScheduledEvent(): GuildScheduledEvent | null {
+    return this[kRelations].guildScheduledEvent ?? null;
+  }
+
+  public [kPatchRelations](data: object): void {
+    this.dropChangedRelations(data, { guildScheduledEvent: "guild_scheduled_event_id" });
   }
 
   public override get createdTimestamp(): number {

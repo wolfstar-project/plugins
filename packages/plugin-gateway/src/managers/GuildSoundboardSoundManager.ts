@@ -80,8 +80,11 @@ export class GuildSoundboardSoundManager extends CachedManager<
       [
         data.user ? this.client.users._resolveData(data.user) : null,
         this.cachedGuild(data.guild_id),
+        data.emoji_id && data.guild_id
+          ? this.client.guilds.emojis(data.guild_id)._get(data.emoji_id)
+          : undefined,
       ],
-      ([user, guild]) => new SoundboardSound(data, { user, guild }),
+      ([user, guild, emoji]) => new SoundboardSound(data, { user, guild, emoji: emoji ?? null }),
     );
   }
 

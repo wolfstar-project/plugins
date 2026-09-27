@@ -1,5 +1,7 @@
 import { GuildFeature, type APIGuildWelcomeScreen } from "discord-api-types/v10";
 import type { GuildWelcomeScreenEditOptions } from "../../managers/GuildManager.js";
+import type { AnyChannel } from "../../managers/ChannelManager.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import type { Guild } from "./Guild.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
@@ -14,18 +16,32 @@ export type WelcomeScreenData = APIGuildWelcomeScreen & { guild_id: string };
  */
 export interface WelcomeChannel {
   channelId: string;
+  /**
+   * The channel, from the cache, like discord.js's `WelcomeChannel#channel`: `null` when it is not cached, or when
+   * the welcome screen was not built by `client.guilds`.
+   */
+  channel: AnyChannel | null;
   description: string;
   /**
-   * The emoji shown next to the channel, if any.
+   * The emoji shown next to the channel, if any: the cached custom emoji of the guild, else the payload's.
    */
-  emoji: ReactionEmoji | null;
+  emoji: GuildEmoji | ReactionEmoji | null;
 }
 
 /**
- * The relations of a {@link WelcomeScreen}: its guild, when cached.
+ * The relations of a {@link WelcomeScreen}: its guild, and the channels and emojis of its welcome channels, when
+ * cached.
  */
 export interface WelcomeScreenRelations {
   guild?: Guild | null;
+  /**
+   * The cached channels of the welcome channels, by ID.
+   */
+  channels?: ReadonlyMap<string, AnyChannel>;
+  /**
+   * The cached custom emojis of the welcome channels, by ID.
+   */
+  emojis?: ReadonlyMap<string, GuildEmoji>;
 }
 
 /**
@@ -51,13 +67,16 @@ export class WelcomeScreen extends Structure<WelcomeScreenData> {
   }
 
   public get welcomeChannels(): WelcomeChannel[] {
+    const { channels, emojis } = this[kRelations];
     return this[kData].welcome_channels.map((channel) => ({
       channelId: channel.channel_id,
+      channel: channels?.get(channel.channel_id) ?? null,
       description: channel.description,
       emoji:
-        channel.emoji_id || channel.emoji_name
+        (channel.emoji_id && emojis?.get(channel.emoji_id)) ||
+        (channel.emoji_id || channel.emoji_name
           ? new ReactionEmoji({ id: channel.emoji_id, name: channel.emoji_name })
-          : null,
+          : null),
     }));
   }
 

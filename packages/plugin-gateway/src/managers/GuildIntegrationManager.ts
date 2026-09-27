@@ -54,8 +54,9 @@ export class GuildIntegrationManager extends CachedManager<
       [
         data.user ? this.client.users._resolveData(data.user) : null,
         this.cachedGuild(data.guild_id),
+        data.role_id ? this.client.roles._get(data.guild_id, data.role_id) : undefined,
       ],
-      ([user, guild]) => new Integration(data, { user, guild }),
+      ([user, guild, role]) => new Integration(data, { user, guild, role: role ?? null }),
     );
   }
 

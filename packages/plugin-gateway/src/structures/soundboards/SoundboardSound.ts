@@ -2,6 +2,8 @@ import { SoundboardSound as BaseSoundboardSound } from "@discordjs/structures";
 import type { APISoundboardSound } from "discord-api-types/v10";
 import type { SoundboardSoundEditOptions } from "../../managers/GuildSoundboardSoundManager.js";
 import { cdn } from "../../util/cdn.js";
+import type { GuildEmoji } from "../emojis/GuildEmoji.js";
+import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
@@ -13,6 +15,10 @@ import { User } from "../users/User.js";
 export interface SoundboardSoundRelations {
   user?: User | null;
   guild?: Guild | null;
+  /**
+   * The custom emoji of the sound, when it belongs to the sound's guild and is cached.
+   */
+  emoji?: GuildEmoji | null;
 }
 
 export interface SoundboardSound extends StructureMixin<
@@ -36,6 +42,7 @@ export class SoundboardSound extends BaseSoundboardSound {
 
   public [kPatch](data: Readonly<Partial<APISoundboardSound>>): this {
     if (data.user) this.dropRelations("user");
+    this.dropChangedRelations(data, { emoji: "emoji_id" });
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
@@ -45,6 +52,17 @@ export class SoundboardSound extends BaseSoundboardSound {
   public get user(): User | null {
     const { user } = this[kData];
     return this[kRelations].user ?? (user ? new User(user) : null);
+  }
+
+  /**
+   * The emoji of the sound, like discord.js's `SoundboardSound#emoji`: the cached custom emoji of the sound's guild,
+   * else the emoji of the payload. `null` when the sound has none.
+   */
+  public get emoji(): GuildEmoji | ReactionEmoji | null {
+    const resolved = this[kRelations].emoji;
+    if (resolved) return resolved;
+    const { emoji_id: id, emoji_name: name } = this[kData];
+    return id || name ? new ReactionEmoji({ id, name }) : null;
   }
 
   public get guild(): Guild | null {

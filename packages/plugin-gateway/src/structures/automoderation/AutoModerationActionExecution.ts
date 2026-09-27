@@ -12,6 +12,9 @@ import type { User } from "../users/User.js";
 export interface AutoModerationActionExecutionRelations {
   guild?: Guild | null;
   user?: User | null;
+  member?: GuildMember | null;
+  channel?: AnyChannel | null;
+  autoModerationRule?: AutoModerationRule | null;
 }
 
 /**
@@ -93,6 +96,27 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
 
   public get user(): User | null {
     return this[kRelations].user ?? null;
+  }
+
+  /**
+   * The member who triggered the rule, from the cache, like discord.js's `AutoModerationActionExecution#member`.
+   */
+  public get member(): GuildMember | null {
+    return this[kRelations].member ?? null;
+  }
+
+  /**
+   * The channel the rule was triggered in, from the cache: `null` when there is none or it is not cached.
+   */
+  public get channel(): AnyChannel | null {
+    return this[kRelations].channel ?? null;
+  }
+
+  /**
+   * The rule that was triggered, from the cache: `null` when it is not cached.
+   */
+  public get autoModerationRule(): AutoModerationRule | null {
+    return this[kRelations].autoModerationRule ?? null;
   }
 
   public fetchRule(): Promise<AutoModerationRule> {

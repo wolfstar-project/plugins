@@ -22,6 +22,19 @@ import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
 
 /**
+ * The relations of a {@link GuildMember}, resolved from the cache by `client.members`.
+ */
+export interface GuildMemberRelations {
+  user?: User;
+  guild?: Guild | null;
+  /**
+   * The member's voice state, `null` when they are not connected.
+   */
+  voice?: VoiceState | null;
+  presence?: Presence | null;
+}
+
+/**
  * A member of a Discord guild.
  *
  * @remarks
@@ -29,7 +42,7 @@ import { User } from "../users/User.js";
  * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
-  declare public [kRelations]: { user?: User; guild?: Guild | null };
+  declare public [kRelations]: GuildMemberRelations;
 
   protected override optimizeData(data: Partial<CacheEntityTypes["members"]>): void {
     this.optimizeTimestamp("joined_at", data.joined_at);
@@ -41,10 +54,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * @param data The raw member.
    * @param relations The member's user and guild as resolved from the cache, by `client.members`.
    */
-  public constructor(
-    data: CacheEntityTypes["members"],
-    relations: { user?: User; guild?: Guild | null } = {},
-  ) {
+  public constructor(data: CacheEntityTypes["members"], relations: GuildMemberRelations = {}) {
     super(data, relations);
   }
 
@@ -270,6 +280,23 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this);
+  }
+
+  /**
+   * The member's voice state, from the cache, like discord.js's `GuildMember#voice`: `null` when they are not
+   * connected, when the voice state is not cached (it needs the `GuildVoiceStates` intent), or when the member was not
+   * built by a manager. Use {@link GuildMember.fetchVoiceState} to ask the API.
+   */
+  public get voice(): VoiceState | null {
+    return this[kRelations].voice ?? null;
+  }
+
+  /**
+   * The member's presence, from the cache, like discord.js's `GuildMember#presence`: `null` when it is not cached
+   * (it needs the `GuildPresences` intent), or when the member was not built by a manager.
+   */
+  public get presence(): Presence | null {
+    return this[kRelations].presence ?? null;
   }
 
   /**

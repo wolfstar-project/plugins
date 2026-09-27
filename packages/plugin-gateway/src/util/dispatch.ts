@@ -17,6 +17,7 @@ import { MessageReaction } from "../structures/messages/MessageReaction.js";
 import { PollAnswer } from "../structures/polls/PollAnswer.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { Typing } from "../structures/channels/Typing.js";
+import { resolveAuditLogTarget } from "./auditLogs.js";
 import type { GatewayEventMap, GatewayEventName } from "./events.js";
 
 /**
@@ -341,7 +342,12 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data) => [
       data.guild_id
         ? await client.guilds.invites(data.guild_id).hydrate(data)
-        : new GuildInvite(data),
+        : bindClient(
+            new GuildInvite(data, {
+              channel: (await cachedOrUndefined(client.channels.get(data.channel_id))) ?? null,
+            }),
+            client,
+          ),
     ],
   },
   [GatewayDispatchEvents.InviteDelete]: {
@@ -488,11 +494,21 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildAuditLogEntryCreate]: {
     event: "guildAuditLogEntryCreate",
     build: async (client, data) => {
-      const [executor, guild] = await Promise.all([
+      const [executor, guild, target] = await Promise.all([
         data.user_id ? cachedOrUndefined(client.users.get(data.user_id)) : undefined,
         cachedOrUndefined(client.guilds.get(data.guild_id)),
+        resolveAuditLogTarget(client, data),
       ]);
-      return [new GuildAuditLogsEntry(data, { executor: executor ?? null, guild: guild ?? null })];
+      return [
+        bindClient(
+          new GuildAuditLogsEntry(data, {
+            executor: executor ?? null,
+            guild: guild ?? null,
+            target,
+          }),
+          client,
+        ),
+      ];
     },
   },
   [GatewayDispatchEvents.AutoModerationRuleCreate]: {
@@ -543,12 +559,24 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.AutoModerationActionExecution]: {
     event: "autoModerationActionExecution",
     build: async (client, data) => {
-      const [user, guild] = await Promise.all([
+      const [user, guild, member, channel, autoModerationRule] = await Promise.all([
         cachedOrUndefined(client.users.get(data.user_id)),
         cachedOrUndefined(client.guilds.get(data.guild_id)),
+        cachedOrUndefined(client.members.get(data.guild_id, data.user_id)),
+        data.channel_id ? cachedOrUndefined(client.channels.get(data.channel_id)) : undefined,
+        cachedOrUndefined(client.guilds.autoModerationRules(data.guild_id).get(data.rule_id)),
       ]);
       return [
-        new AutoModerationActionExecution(data, { user: user ?? null, guild: guild ?? null }),
+        bindClient(
+          new AutoModerationActionExecution(data, {
+            user: user ?? null,
+            guild: guild ?? null,
+            member: member ?? null,
+            channel: channel ?? null,
+            autoModerationRule: autoModerationRule ?? null,
+          }),
+          client,
+        ),
       ];
     },
   },

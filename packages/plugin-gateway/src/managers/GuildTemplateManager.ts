@@ -142,8 +142,8 @@ export class GuildTemplateManager {
   }
 
   private async build(template: APITemplate): Promise<GuildTemplate> {
-    await this.client.users._add(template.creator);
+    const creator = await this.client.users._add(template.creator);
     const guild = (await this.client.guilds.get(template.source_guild_id)) ?? null;
-    return new GuildTemplate(template, { guild });
+    return new GuildTemplate(template, { guild, creator });
   }
 }

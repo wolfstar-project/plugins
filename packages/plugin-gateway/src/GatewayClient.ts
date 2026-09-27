@@ -34,6 +34,7 @@ import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
 import type { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
+import { bindClient } from "./structures/Structure.js";
 import { Sticker } from "./structures/stickers/Sticker.js";
 import type { Webhook } from "./structures/webhooks/Webhook.js";
 import type { GuildTemplate } from "./structures/guilds/GuildTemplate.js";
@@ -396,7 +397,16 @@ export class GatewayClient extends Client {
       with_counts: options.withCounts ?? true,
       guild_scheduled_event_id: options.guildScheduledEventId,
     });
-    return createInvite(invite);
+    const [guild, channel, inviter, targetUser] = await Promise.all([
+      invite.guild ? this.guilds.get(invite.guild.id) : undefined,
+      invite.channel ? this.channels.get(invite.channel.id) : undefined,
+      invite.inviter ? this.users.resolveData(invite.inviter) : undefined,
+      invite.target_user ? this.users.resolveData(invite.target_user) : undefined,
+    ]);
+    return bindClient(
+      createInvite(invite, { guild: guild ?? null, channel: channel ?? null, inviter, targetUser }),
+      this,
+    );
   }
 
   /**

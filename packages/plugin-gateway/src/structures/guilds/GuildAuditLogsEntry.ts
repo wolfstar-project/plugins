@@ -3,6 +3,11 @@ import { AuditLogEvent, type APIAuditLogChange } from "discord-api-types/v10";
 import type { Guild } from "./Guild.js";
 import { kData, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 import type { User } from "../users/User.js";
+import {
+  auditLogTargetType,
+  type AuditLogEntryTarget,
+  type AuditLogTargetType,
+} from "../../util/auditLogs.js";
 
 /**
  * Whether an audit log action created, deleted, or updated something, like discord.js's `actionType`.
@@ -59,6 +64,10 @@ const DeleteActions = new Set<AuditLogEvent>([
 export interface GuildAuditLogsEntryRelations {
   executor?: User | null;
   guild?: Guild | null;
+  /**
+   * The entity the entry targets, see {@link GuildAuditLogsEntry.target}.
+   */
+  target?: AuditLogEntryTarget | null;
 }
 
 /**
@@ -108,6 +117,25 @@ export class GuildAuditLogsEntry extends Structure<CacheEntityTypes["auditLogEnt
    */
   public get targetId(): string | null {
     return this[kData].target_id;
+  }
+
+  /**
+   * The kind of entity the entry targets, like discord.js's `GuildAuditLogsEntry#targetType`.
+   */
+  public get targetType(): AuditLogTargetType {
+    return auditLogTargetType(this.action);
+  }
+
+  /**
+   * The entity the entry targets, like discord.js's `GuildAuditLogsEntry#target`: the cached structure, else one (or
+   * an object) built from the entry's changes, holding at least the target's ID. `null` for users that are not
+   * cached, and for entries without a target. Without a manager, only `{ id }`.
+   */
+  public get target(): AuditLogEntryTarget | null {
+    const resolved = this[kRelations].target;
+    if (resolved !== undefined) return resolved;
+    const { targetId } = this;
+    return targetId ? { id: targetId } : null;
   }
 
   public get reason(): string | null {
