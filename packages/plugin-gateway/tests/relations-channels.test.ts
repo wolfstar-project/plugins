@@ -326,3 +326,44 @@ describe("typing relations", () => {
     expect(typing.member?.user?.id).toBe(userId);
   });
 });
+
+describe("permission overwrite relations", () => {
+  const overwrite = { id: guildId, type: 0, allow: "0", deny: "1024" };
+
+  test("GIVEN a cached category THEN permissionsLocked compares the overwrites synchronously", async () => {
+    const client = createClient();
+    await seed(client);
+    await client.cache!.channels.set(categoryId, {
+      ...category,
+      permission_overwrites: [overwrite],
+    } as never);
+    await client.cache!.channels.set(channelId, {
+      ...text,
+      permission_overwrites: [overwrite],
+    } as never);
+    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBe(true);
+
+    await client.cache!.channels.set(channelId, { ...text, permission_overwrites: [] } as never);
+    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBe(false);
+  });
+
+  test("GIVEN an uncached category THEN permissionsLocked is null", async () => {
+    const client = createClient();
+    await client.cache!.channels.set(channelId, text as never);
+
+    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBeNull();
+  });
+
+  test("GIVEN a channel's overwrites THEN each one knows its channel", async () => {
+    const client = createClient();
+    await seed(client);
+    await client.cache!.channels.set(channelId, {
+      ...text,
+      permission_overwrites: [overwrite],
+    } as never);
+
+    const channel = (await client.channels.get(channelId)) as TextChannel;
+
+    expect(channel.permissionOverwrites.cache[0]!.channel).toBe(channel);
+  });
+});

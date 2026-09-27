@@ -1,6 +1,6 @@
 import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
-import { kData, kPatch } from "../../Structure.js";
+import { kData, kPatch, kRelations } from "../../Structure.js";
 import type { APIOverwrite } from "discord-api-types/v10";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
@@ -16,6 +16,24 @@ type Data = {
   position?: number;
   permission_overwrites?: APIOverwrite[];
 };
+
+// Whether two channels have the same permission overwrites, in any order.
+function sameOverwrites(channel: Data, parent: Data): boolean {
+  const own = channel.permission_overwrites ?? [];
+  const theirs = parent.permission_overwrites ?? [];
+  return (
+    own.length === theirs.length &&
+    own.every((overwrite) =>
+      theirs.some(
+        (other) =>
+          other.id === overwrite.id &&
+          other.type === overwrite.type &&
+          other.allow === overwrite.allow &&
+          other.deny === overwrite.deny,
+      ),
+    )
+  );
+}
 
 export interface ChannelPermissionMixin<
   Type extends ChannelType = ChannelType,
@@ -39,7 +57,19 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
       this.id,
       data.guild_id ?? null,
       data.permission_overwrites ?? [],
+      this as never,
     );
+  }
+
+  /**
+   * Whether the channel's overwrites are the same as its category's, like discord.js's
+   * `GuildChannel#permissionsLocked`: `null` when it has no category, or when the category is not cached (see
+   * {@link ChannelPermissionMixin.fetchPermissionsLocked}).
+   */
+  public get permissionsLocked(): boolean | null {
+    const { parent } = this[kRelations];
+    if (!parent) return null;
+    return sameOverwrites(this[kData] as Data, parent.toJSON() as Data);
   }
 
   /**
@@ -104,20 +134,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
     if (!parentId) return null;
 
     const parent = (await this.client.channels.fetch(parentId)).toJSON() as Data;
-    const own = (this[kData] as Data).permission_overwrites ?? [];
-    const theirs = parent.permission_overwrites ?? [];
-    return (
-      own.length === theirs.length &&
-      own.every((overwrite) =>
-        theirs.some(
-          (other) =>
-            other.id === overwrite.id &&
-            other.type === overwrite.type &&
-            other.allow === overwrite.allow &&
-            other.deny === overwrite.deny,
-        ),
-      )
-    );
+    return sameOverwrites(this[kData] as Data, parent);
   }
 
   /**

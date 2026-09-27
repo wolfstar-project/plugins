@@ -1,5 +1,7 @@
 import { OverwriteType, type APIOverwrite } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
+import { bindClient } from "../structures/Structure.js";
+import type { AnyChannel } from "./ChannelManager.js";
 import { PermissionOverwrites } from "../structures/channels/PermissionOverwrites.js";
 import {
   resolveId,
@@ -31,24 +33,41 @@ export class PermissionOverwriteManager {
 
   readonly #overwrites: readonly APIOverwrite[];
 
+  readonly #channel: AnyChannel | null;
+
+  /**
+   * @param client The client.
+   * @param channelId The ID of the channel.
+   * @param guildId The ID of the channel's guild, if known.
+   * @param overwrites The raw overwrites of the channel.
+   * @param channel The channel, which the overwrites refer to.
+   */
   public constructor(
     client: GatewayClient,
     channelId: string,
     guildId: string | null,
     overwrites: readonly APIOverwrite[],
+    channel: AnyChannel | null = null,
   ) {
     this.client = client;
     this.channelId = channelId;
     this.guildId = guildId;
     this.#overwrites = overwrites;
+    this.#channel = channel;
   }
 
   /**
    * The overwrites of the channel.
    */
   public get cache(): PermissionOverwrites[] {
-    return this.#overwrites.map(
-      (overwrite) => new PermissionOverwrites({ ...overwrite, channel_id: this.channelId }),
+    return this.#overwrites.map((overwrite) =>
+      bindClient(
+        new PermissionOverwrites(
+          { ...overwrite, channel_id: this.channelId },
+          { channel: this.#channel },
+        ),
+        this.client,
+      ),
     );
   }
 
