@@ -15,7 +15,6 @@ import { isDeepEqual } from "../../util/equal.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
 import {
   MessagePayload,
-  type GatewayClientMessageDefaults,
   type MessageCreateOptions,
   type MessageEditOptions,
   type MessagePayloadResolvable,
@@ -457,13 +456,11 @@ export class Message extends BaseMessage<""> {
    */
   public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
     const payload = MessagePayload.create(this, options);
-    const failIfNotExists =
-      (this.client.options as GatewayClientMessageDefaults).failIfNotExists ?? false;
     return this.client.messages.send(
       this.channelId,
       MessagePayload.create(this, {
         ...payload.options,
-        reply: { messageReference: this, failIfNotExists },
+        reply: { messageReference: this },
       }),
     );
   }

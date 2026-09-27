@@ -19,3 +19,5 @@ Bring the structures closer to discord.js:
   - Welcome channels: `channel` and the cached custom `emoji`. Onboardings: `defaultChannels`; prompts: `guild`; options: `guild`, `channels`, `roles`, and the cached custom `emoji`.
 
 Type changes: `BaseInvite.channel` is `AnyChannel | APIInviteChannel | null`; `MessageReaction.emoji`, `PollAnswer.emoji`, `SoundboardSound.emoji`, `WelcomeChannel.emoji`, and `GuildOnboardingPromptOption.emoji` may be a `GuildEmoji`; `WelcomeChannel` gains `channel`.
+
+Fix: `Message#reply()` no longer hardcodes `failIfNotExists` to `false`; it now defaults like every other `reply`, to `GatewayClientOptions.failIfNotExists ?? true`.

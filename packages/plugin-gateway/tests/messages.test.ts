@@ -18,6 +18,7 @@ import {
   Message,
   MessageMentions,
   ReactionEmoji,
+  type GatewayClientOptions,
   type TextChannel,
 } from "../src/index.js";
 
@@ -38,13 +39,14 @@ const mentioned: APIUser = {
   avatar: null,
 };
 
-function createClient() {
+function createClient(options: Partial<GatewayClientOptions> = {}) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: author.id,
     intents: 0,
     cache: createInMemoryCache(),
+    ...options,
   });
 }
 
@@ -145,7 +147,7 @@ describe("Message", () => {
     );
   });
 
-  test("GIVEN reply THEN it sends a message reference", async () => {
+  test("GIVEN reply THEN it sends a message reference defaulting to failIfNotExists true", async () => {
     createClient();
     const post = vi.spyOn(container.rest, "post").mockResolvedValue(message({ id: "2" }));
 
@@ -158,11 +160,27 @@ describe("Message", () => {
           type: MessageReferenceType.Default,
           message_id: "1200000000000000000",
           channel_id: channelId,
-          fail_if_not_exists: false,
+          fail_if_not_exists: true,
         },
       },
       files: undefined,
     });
+  });
+
+  test("GIVEN reply on a client with failIfNotExists false THEN it uses that default", async () => {
+    createClient({ failIfNotExists: false });
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(message({ id: "2" }));
+
+    await new Message(message()).reply("hi");
+
+    expect(post).toHaveBeenCalledWith(
+      Routes.channelMessages(channelId),
+      expect.objectContaining({
+        body: expect.objectContaining({
+          message_reference: expect.objectContaining({ fail_if_not_exists: false }),
+        }),
+      }),
+    );
   });
 
   test("GIVEN pin THEN the structure and the cache are patched", async () => {
