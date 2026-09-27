@@ -592,8 +592,8 @@ console.log(widget.presenceCount, widget.imageURL(GuildWidgetStyle.Banner2));
 
 ### Webhooks
 
-`client.webhooks` fetches, creates, edits, and deletes webhooks, and posts with their token like
-discord.js's `WebhookClient`. Text, announcement, voice, stage, forum, and media channels have
+`client.webhooks` fetches, creates, edits, and deletes webhooks, and posts with their token, without
+the bot's authorization. Text, announcement, voice, stage, forum, and media channels have
 `fetchWebhooks` and `createWebhook`, guilds `fetchWebhooks`, and announcement channels
 `addFollower`. Webhooks are not cached: Discord only says that they changed (`webhooksUpdate`).
 

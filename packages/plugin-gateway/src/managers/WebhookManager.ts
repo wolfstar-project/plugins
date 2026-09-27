@@ -52,8 +52,8 @@ export interface WebhookEditOptions {
  * Manages webhooks. Discord does not send them over the gateway, so they are never cached.
  *
  * @remarks
- * Methods taking a webhook's token call the API with it rather than with the bot's authorization, like discord.js's
- * `WebhookClient`: they work for webhooks of other applications too.
+ * Methods taking a webhook's token call the API with it rather than with the bot's authorization, so they work for
+ * webhooks of other applications too.
  */
 export class WebhookManager {
   public readonly client: GatewayClient;

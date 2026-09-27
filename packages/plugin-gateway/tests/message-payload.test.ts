@@ -4,19 +4,10 @@ import {
   AllowedMentionsTypes,
   MessageFlags,
   MessageReferenceType,
-  MessageType,
-  Routes,
   WebhookType,
-  type APIMessage,
 } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import {
-  GatewayClient,
-  MessagePayload,
-  Webhook,
-  WebhookClient,
-  type GatewayClientOptions,
-} from "../src/index.js";
+import { GatewayClient, MessagePayload, Webhook, type GatewayClientOptions } from "../src/index.js";
 
 const guildId = "100000000000000010";
 const channelId = "200000000000000020";
@@ -32,33 +23,6 @@ function createClient(options: Partial<GatewayClientOptions> = {}) {
     cache: createInMemoryCache(),
     ...options,
   });
-}
-
-function message(extra: Partial<APIMessage> = {}): APIMessage {
-  return {
-    id: "1",
-    channel_id: channelId,
-    author: {
-      id: webhookId,
-      username: "Howler",
-      discriminator: "0000",
-      global_name: null,
-      avatar: null,
-    },
-    content: "Awoo",
-    timestamp: new Date(0).toISOString(),
-    edited_timestamp: null,
-    tts: false,
-    mention_everyone: false,
-    mentions: [],
-    mention_roles: [],
-    attachments: [],
-    embeds: [],
-    pinned: false,
-    type: MessageType.Default,
-    webhook_id: webhookId,
-    ...extra,
-  };
 }
 
 afterEach(() => {
@@ -223,33 +187,6 @@ describe("MessagePayload", () => {
     const client = createClient();
     const payload = MessagePayload.create(client, "Awoo");
     expect(MessagePayload.create(client, payload)).toBe(payload);
-  });
-});
-
-describe("WebhookClient", () => {
-  test("GIVEN a URL THEN it parses the ID and token", () => {
-    const client = createClient();
-    const webhook = new WebhookClient({
-      url: `https://discord.com/api/webhooks/${webhookId}/${token}`,
-    });
-    expect(webhook.id).toBe(webhookId);
-    expect(webhook.token).toBe(token);
-    expect(webhook.client).toBe(client);
-    expect(webhook.url).toBe(`https://discord.com/api/webhooks/${webhookId}/${token}`);
-    expect(() => new WebhookClient({ url: "https://discord.com/nope" })).toThrow(/Invalid/);
-  });
-
-  test("GIVEN send THEN it posts with the token through the mixin", async () => {
-    createClient();
-    const post = vi.spyOn(container.rest, "post").mockResolvedValue(message());
-    const webhook = new WebhookClient({ id: webhookId, token });
-
-    await webhook.send({ content: "Awoo", username: "Wolf", threadId: "5" });
-
-    const [route, options] = post.mock.calls[0]!;
-    expect(route).toBe(Routes.webhook(webhookId, token));
-    expect(options).toMatchObject({ body: { content: "Awoo", username: "Wolf" }, auth: false });
-    expect((options as { query: URLSearchParams }).query.toString()).toBe("wait=true&thread_id=5");
   });
 });
 

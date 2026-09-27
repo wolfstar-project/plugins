@@ -19,8 +19,7 @@ export interface WebhookMixin {
 }
 
 /**
- * The members shared by everything posting through a webhook's token, like discord.js's `Webhook.applyToClass`:
- * {@link Webhook} and {@link WebhookClient}.
+ * The members shared by everything posting through a webhook's token, like discord.js's `Webhook.applyToClass`.
  *
  * @remarks
  * Every method calls the API with the webhook's token rather than with the bot's authorization, so they work for
