@@ -1,7 +1,8 @@
 import { ApplicationFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import { ApplicationFlagsBitField } from "../src/util/flags.js";
-import { Colors, resolveColor } from "../src/util/resolvables.js";
+import { Colors } from "../src/util/Colors.js";
+import { resolveColor } from "../src/util/Util.js";
 
 describe("resolveColor", () => {
   test("GIVEN a number THEN it is returned as is", () => {
