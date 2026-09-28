@@ -36,6 +36,10 @@ export const GatewayErrorMessages = {
   ChannelLockPermissionsConflict: "Pass either lockPermissions or permissionOverwrites, not both",
   GuildChannelOrphan: (channelId: string) =>
     `Channel ${channelId} has no category to sync its permissions with`,
+  GuildChannelUnknown: (guildId: string, channelId: string) =>
+    `Channel ${channelId} is not a channel of guild ${guildId}`,
+  GuildRoleUnknown: (guildId: string, roleId: string) =>
+    `Role ${roleId} is not a role of guild ${guildId}`,
   ThreadParentUnknown: (threadId: string) => `Thread ${threadId} has no known parent`,
   ThreadOwnerUnknown: (threadId: string) => `Thread ${threadId} has no known owner`,
   ThreadMemberIdsMissing: (action: string) =>

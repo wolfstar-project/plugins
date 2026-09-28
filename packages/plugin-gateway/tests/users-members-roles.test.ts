@@ -315,21 +315,57 @@ describe("Role", () => {
     expect(await client.roles.get(guildId, "21")).toBeDefined();
   });
 
-  test("GIVEN setPosition THEN the role takes the position Discord applied, not the one requested", async () => {
+  test("GIVEN setPosition THEN the role is moved among the sorted roles and takes the position Discord applied", async () => {
     const client = createClient();
     await seedGuild(client);
-    // Asked for 99, Discord clamps it to the top of the list.
-    vi.spyOn(container.rest, "patch").mockResolvedValue([
+    vi.spyOn(container.rest, "get").mockResolvedValue([
       role(guildId, 0, 0n),
+      role("21", 1, 0n),
       role("20", 2, 0n),
-      role("21", 3, 0n),
     ]);
+    // Discord answers with positions of its own, which win over the requested indexes.
+    const patch = vi
+      .spyOn(container.rest, "patch")
+      .mockResolvedValue([role(guildId, 0, 0n), role("20", 2, 0n), role("21", 3, 0n)]);
     const structure = (await client.roles.get(guildId, "21"))!;
 
-    await structure.setPosition(99);
+    await structure.setPosition(1, { relative: true, reason: "promotion" });
 
+    expect(patch).toHaveBeenCalledWith(Routes.guildRoles(guildId), {
+      body: [
+        { id: guildId, position: 0 },
+        { id: "20", position: 1 },
+        { id: "21", position: 2 },
+      ],
+      reason: "promotion",
+    });
     expect(structure.position).toBe(3);
     expect((await client.roles.get(guildId, "21"))?.position).toBe(3);
+  });
+
+  test("GIVEN setPosition out of range THEN the roles keep their order", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue([role(guildId, 0, 0n), role("21", 1, 0n)]);
+    const patch = vi
+      .spyOn(container.rest, "patch")
+      .mockResolvedValue([role(guildId, 0, 0n), role("21", 1, 0n)]);
+
+    await client.roles.setPosition(guildId, "21", 99, "cleanup");
+
+    expect(patch).toHaveBeenCalledWith(Routes.guildRoles(guildId), {
+      body: [
+        { id: guildId, position: 0 },
+        { id: "21", position: 1 },
+      ],
+      reason: "cleanup",
+    });
+  });
+
+  test("GIVEN setPosition for a role of another guild THEN it throws", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue([role(guildId, 0, 0n)]);
+
+    await expect(client.roles.setPosition(guildId, "99", 0)).rejects.toThrow(/not a role of guild/);
   });
 
   test("GIVEN delete THEN the role leaves the cache", async () => {

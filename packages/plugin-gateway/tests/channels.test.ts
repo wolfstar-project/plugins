@@ -295,4 +295,43 @@ describe("channel editing", () => {
     });
     expect(((await client.channels.get(channelId)) as TextChannel).position).toBe(3);
   });
+
+  test("GIVEN setPosition THEN the channel moves among the channels of its category and group", async () => {
+    const client = createClient();
+    await seedGuild(client);
+    const olderId = "200000000000000019";
+    const voiceId = "200000000000000022";
+    const otherCategoryId = "200000000000000023";
+    // `older` shares the position of `channelId`, and sorts first as the older channel.
+    const channels = [
+      textChannel({ position: 0 }),
+      textChannel({ id: olderId, name: "rules", position: 0 }),
+      textChannel({ id: "200000000000000024", name: "chat", position: 2 }),
+      textChannel({ id: voiceId, type: ChannelType.GuildVoice, name: "voice", position: 1 }),
+      textChannel({ id: "200000000000000025", name: "elsewhere", parent_id: otherCategoryId }),
+    ];
+    vi.spyOn(container.rest, "get").mockResolvedValue(channels);
+    const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(undefined);
+    const channel = (await client.channels.get(channelId)) as TextChannel;
+
+    await channel.setPosition(1, { relative: true, reason: "reorder" });
+
+    expect(patch).toHaveBeenCalledWith(Routes.guildChannels(guildId), {
+      body: [
+        { id: olderId, position: 0 },
+        { id: "200000000000000024", position: 1 },
+        { id: channelId, position: 2 },
+      ],
+      reason: "reorder",
+    });
+  });
+
+  test("GIVEN fetchSorted for a channel of another guild THEN it throws", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue([textChannel()]);
+
+    await expect(client.guilds.channels(guildId).fetchSorted("1")).rejects.toThrow(
+      /not a channel of guild/,
+    );
+  });
 });

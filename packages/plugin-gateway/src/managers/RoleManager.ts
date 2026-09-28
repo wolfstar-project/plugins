@@ -6,9 +6,12 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { Role, type RoleColors } from "../structures/guilds/Role.js";
+import { GatewayError } from "../errors/GatewayError.js";
 import { whenAll } from "../util/cache.js";
+import { computePositions, discordSort } from "../util/Util.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import { CachedManager } from "./CachedManager.js";
+import type { SetPositionOptions } from "./GuildChannelManager.js";
 import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
 /**
@@ -77,7 +80,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     const roles = await this.client.api.guilds.getRoles(guildId);
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
 
-    return structures.toSorted((a, b) => b.comparePositionTo(a));
+    return discordSort(structures).toReversed();
   }
 
   /**
@@ -131,20 +134,35 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
   }
 
   /**
-   * Moves a role.
+   * Moves a role among the roles of its guild, like discord.js's `RoleManager#setPosition`.
    *
    * @param guildId The ID of the guild.
    * @param roleId The ID of the role.
-   * @param position The new position.
-   * @param reason The reason for the audit log.
+   * @param position The index to move it to, lowest role first, or the offset to move it by with `relative`. An index
+   * out of range leaves the roles where they are.
+   * @param options Whether the position is relative and the reason for the audit log, or the reason alone.
+   * @returns Every role of the guild, highest first.
    */
   public async setPosition(
     guildId: string,
     roleId: string,
     position: number,
-    reason?: string,
+    options: SetPositionOptions | string = {},
   ): Promise<Role[]> {
-    return this.setPositions(guildId, [{ role: roleId, position }], reason);
+    const { relative = false, reason } =
+      typeof options === "string" ? { reason: options } : options;
+    // fetchAll sorts highest first: reversed, the roles are in discordSort order.
+    const sorted = (await this.fetchAll(guildId)).toReversed();
+    if (!sorted.some((role) => role.id === roleId)) {
+      throw new GatewayError("GuildRoleUnknown", guildId, roleId);
+    }
+
+    const positions = computePositions(roleId, position, relative, sorted);
+    return this.setPositions(
+      guildId,
+      positions.map((entry) => ({ role: entry.id, position: entry.position })),
+      reason,
+    );
   }
 
   /**
@@ -166,7 +184,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     }));
     const roles = await this.client.api.guilds.setRolePositions(guildId, body, { reason });
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
-    return structures.toSorted((a, b) => b.comparePositionTo(a));
+    return discordSort(structures).toReversed();
   }
 
   /**

@@ -5,9 +5,16 @@
  */
 
 import { parse } from "node:path";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { ChannelType, FormattingPatterns, type Snowflake } from "discord-api-types/v10";
+import type { GatewayClient } from "../GatewayClient.js";
+import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
+import type { GuildMember } from "../structures/guilds/GuildMember.js";
+import type { Role } from "../structures/guilds/Role.js";
+import type { User } from "../structures/users/User.js";
 import type { ColorResolvable, SKUResolvable } from "../types.js";
+import { whenAll, whenCachedMap } from "./cache.js";
 import { Colors } from "./Colors.js";
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -313,7 +320,7 @@ export function moveElementInArray<Element>(
 ): number {
   const index = array.indexOf(element);
   const target = (offset ? index : 0) + newIndex;
-  if (target > -1 && target < array.length) {
+  if (index > -1 && target > -1 && target < array.length) {
     const [removed] = array.splice(index, 1);
     array.splice(target, 0, removed!);
   }
@@ -418,4 +425,140 @@ export function resolveSKUId(resolvable: SKUResolvable): string | null {
   if (typeof resolvable === "string") return resolvable;
   if (isObject(resolvable) && typeof resolvable.id === "string") return resolvable.id;
   return null;
+}
+
+/**
+ * Computes the positions to send to Discord to move a role or channel among its sorted siblings: the body discord.js's
+ * `setPosition` sends.
+ *
+ * @param id The ID of the role or channel to move.
+ * @param position The index to move it to, or the offset to move it by with `relative`.
+ * @param relative Whether `position` is relative to its current index.
+ * @param sorted The role or channel and its siblings, sorted with {@link discordSort}.
+ * @returns Every sibling, with its index as its new position.
+ * @internal
+ */
+export function computePositions(
+  id: Snowflake,
+  position: number,
+  relative: boolean,
+  sorted: readonly { id: Snowflake }[],
+): { id: Snowflake; position: number }[] {
+  const ids = sorted.map((item) => item.id);
+  moveElementInArray(ids, id, position, relative);
+  return ids.map((itemId, index) => ({ id: itemId, position: index }));
+}
+
+/**
+ * The data {@link transformResolved} resolves: each entry is either an ID, read from the cache, or raw API data,
+ * resolved to its cached structure or built from the data when it is not cached.
+ */
+export interface ResolvableData {
+  users?: Iterable<Snowflake | CacheEntityTypes["users"]>;
+  /**
+   * The members of {@link SupportingResolvedData.guildId}: their raw data needs its `user`.
+   */
+  members?: Iterable<Snowflake | Omit<CacheEntityTypes["members"], "guild_id">>;
+  /**
+   * The roles of {@link SupportingResolvedData.guildId}.
+   */
+  roles?: Iterable<Snowflake | Omit<CacheEntityTypes["roles"], "guild_id">>;
+  channels?: Iterable<Snowflake | CacheEntityTypes["channels"]>;
+}
+
+/**
+ * The context {@link transformResolved} resolves data in.
+ */
+export interface SupportingResolvedData {
+  client: GatewayClient;
+  /**
+   * The guild of the members and roles: without it, they are not resolved.
+   */
+  guildId?: Snowflake | null;
+}
+
+/**
+ * The structures {@link transformResolved} resolved, by ID.
+ */
+export interface TransformedResolvedData {
+  users?: Map<Snowflake, User>;
+  members?: Map<Snowflake, GuildMember>;
+  roles?: Map<Snowflake, Role>;
+  channels?: Map<Snowflake, AnyChannel>;
+}
+
+/**
+ * Resolves the users, members, roles, and channels some data refers to into structures, like discord.js's
+ * `transformResolved`. `client.messages` builds the relations of a message's `MessageMentions` with it.
+ *
+ * @remarks
+ * Nothing is written to the cache. Synchronous when every cache it reads is.
+ *
+ * @param supportingData The client, and the guild of the members and roles.
+ * @param data The IDs or raw data to resolve.
+ * @returns A map for each kind of data given, keyed by ID, without duplicates nor the IDs that are not cached.
+ */
+export function transformResolved(
+  { client, guildId }: SupportingResolvedData,
+  { users, members, roles, channels }: ResolvableData,
+): Awaitable<TransformedResolvedData> {
+  return whenAll(
+    [
+      users &&
+        resolveEach(
+          users,
+          (id) => client.users._get(id),
+          (raw) => client.users._resolveData(raw),
+        ),
+      guildId && members
+        ? resolveEach(
+            members,
+            (id) => client.members._get(guildId, id),
+            (raw) => client.members._resolveData({ ...raw, guild_id: guildId }),
+            (raw) => raw.user.id,
+          )
+        : undefined,
+      guildId && roles
+        ? resolveEach(
+            roles,
+            (id) => client.roles._get(guildId, id),
+            (raw) => client.roles._resolveData({ ...raw, guild_id: guildId }),
+          )
+        : undefined,
+      channels &&
+        resolveEach(
+          channels,
+          (id) => client.channels._get(id),
+          (raw) => client.channels._resolveData(raw),
+        ),
+    ],
+    ([resolvedUsers, resolvedMembers, resolvedRoles, resolvedChannels]) => {
+      const result: TransformedResolvedData = {};
+      if (resolvedUsers) result.users = resolvedUsers;
+      if (resolvedMembers) result.members = resolvedMembers;
+      if (resolvedRoles) result.roles = resolvedRoles;
+      if (resolvedChannels) result.channels = resolvedChannels;
+      return result;
+    },
+  );
+}
+
+// Reads IDs from the cache and resolves raw data, preferring the raw data of an ID given both ways.
+function resolveEach<Raw extends object, Value>(
+  entries: Iterable<Snowflake | Raw>,
+  get: (id: Snowflake) => Awaitable<Value | null | undefined>,
+  resolve: (raw: Raw) => Awaitable<Value>,
+  idOf: (raw: Raw) => Snowflake = (raw) => (raw as { id?: Snowflake }).id!,
+): Awaitable<Map<Snowflake, Value>> {
+  const raws = new Map<Snowflake, Raw>();
+  const ids: Snowflake[] = [];
+  for (const entry of entries) {
+    if (typeof entry === "string") ids.push(entry);
+    else raws.set(idOf(entry), entry);
+  }
+
+  return whenCachedMap([...ids, ...raws.keys()], (id) => {
+    const raw = raws.get(id);
+    return raw ? resolve(raw) : get(id);
+  });
 }

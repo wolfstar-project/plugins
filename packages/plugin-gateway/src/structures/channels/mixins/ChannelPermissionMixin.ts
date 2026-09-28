@@ -2,6 +2,7 @@ import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import { kData, kPatch, kRelations } from "../../Structure.js";
 import type { APIOverwrite } from "discord-api-types/v10";
+import type { SetPositionOptions } from "../../../managers/GuildChannelManager.js";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
 import { computeTargetPermissions } from "../../../util/permissions.js";
@@ -74,23 +75,19 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
-   * Moves the channel.
+   * Moves the channel among the channels it is sorted with, like discord.js's `GuildChannel#setPosition`.
    *
-   * @param position The new position, or the offset from the current one with `relative`.
+   * @param position The index to move it to among them, or the offset to move it by with `relative`.
    * @param options Whether the position is relative, and the reason for the audit log.
    */
-  public async setPosition(
-    position: number,
-    options: { relative?: boolean; reason?: string } = {},
-  ): Promise<this> {
+  public async setPosition(position: number, options: SetPositionOptions = {}): Promise<this> {
     const { guild_id: guildId } = this[kData] as Data;
     if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
 
-    const target = options.relative ? this.position + position : position;
-    await this.client.guilds
+    const moved = await this.client.guilds
       .channels(guildId)
-      .setPositions([{ channel: this.id, position: target }], options.reason);
-    return this[kPatch]({ position: target } as never);
+      .setPosition(this.id, position, options);
+    return this[kPatch]({ position: (moved.toJSON() as Data).position } as never);
   }
 
   /**
