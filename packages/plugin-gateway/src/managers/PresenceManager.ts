@@ -20,7 +20,7 @@ export class PresenceManager extends CachedManager<
     super(client, "presences");
   }
 
-  public createStructure(data: CacheEntityTypes["presences"]): Presence {
+  public construct(data: CacheEntityTypes["presences"]): Presence {
     return new Presence(data);
   }
 
@@ -48,10 +48,12 @@ export class PresenceManager extends CachedManager<
    * Lists the cached presences of a guild.
    *
    * @param guildId The ID of the guild.
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(guildId: string): Promise<Presence[]> {
     const prefix = `${guildId}:`;
-    const entries = (await this.cache?.entries()) ?? [];
+    const entries = (await this.iterableCache()?.entries()) ?? [];
     return Promise.all(
       entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this.hydrate(raw)),
     );

@@ -33,7 +33,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["bans"]): GuildBan {
+  public construct(data: CacheEntityTypes["bans"]): GuildBan {
     return new GuildBan(data);
   }
 

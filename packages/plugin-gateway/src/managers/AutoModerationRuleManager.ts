@@ -59,7 +59,7 @@ export class AutoModerationRuleManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["autoModerationRules"]): AutoModerationRule {
+  public construct(data: CacheEntityTypes["autoModerationRules"]): AutoModerationRule {
     return new AutoModerationRule(data);
   }
 

@@ -396,7 +396,7 @@ describe("reactions and poll votes", () => {
 });
 
 describe("partial caches", () => {
-  const guild = {
+  const guildPayload = {
     id: "10",
     name: "Pack",
     channels: [{ id: "20", type: ChannelType.GuildText, name: "general" }],
@@ -419,7 +419,7 @@ describe("partial caches", () => {
     const guilds = new MemoryEntityCache();
     const cache = createCache({ makeCache: (entity) => (entity === "guilds" ? guilds : null) });
 
-    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild));
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guildPayload));
 
     expect(guilds.keys()).toEqual(["10"]);
   });

@@ -180,7 +180,7 @@ export class GuildMemberManager extends CachedManager<
     super(client, "members");
   }
 
-  public createStructure(data: CacheEntityTypes["members"]): GuildMember {
+  public construct(data: CacheEntityTypes["members"]): GuildMember {
     return new GuildMember(data);
   }
 

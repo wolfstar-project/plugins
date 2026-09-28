@@ -52,7 +52,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["emojis"]): GuildEmoji {
+  public construct(data: CacheEntityTypes["emojis"]): GuildEmoji {
     return new GuildEmoji(data);
   }
 
@@ -158,9 +158,12 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * @remarks
    * It enumerates the whole entity cache, which a Redis store answers from its index: prefer `fetchAll` when the
    * cache may be incomplete.
+   *
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(): Promise<GuildEmoji[]> {
-    const cache = this.cache;
+    const cache = this.iterableCache();
     if (!cache) return [];
 
     const prefix = `${this.guildId}:`;

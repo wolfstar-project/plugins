@@ -49,7 +49,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["soundboardSounds"]): SoundboardSound {
+  public construct(data: CacheEntityTypes["soundboardSounds"]): SoundboardSound {
     return new SoundboardSound(data);
   }
 

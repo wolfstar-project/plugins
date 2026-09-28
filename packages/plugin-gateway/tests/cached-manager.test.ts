@@ -2,6 +2,9 @@ import { container } from "@wolfstar/http-framework";
 import {
   createInMemoryCache,
   createRedisCache,
+  MemoryEntityCache,
+  type CacheFactory,
+  type EntityCache,
   memberKey,
   messageKey,
   roleKey,
@@ -10,6 +13,7 @@ import {
 import { ChannelType, MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  BaseManager,
   GatewayClient,
   Guild,
   kClone,
@@ -364,5 +368,123 @@ describe("CachedManager#cached", () => {
     expect(client.members.cache?.synchronous).toBe(true);
     expect(() => client.members.cached(guildId, user.id)).toThrow(TypeError);
     expect((await client.members.get(guildId, user.id))?.user?.username).toBe("wolf");
+  });
+});
+
+function failingStore(error: Error): EntityCache<any> {
+  const fail = () => {
+    throw error;
+  };
+  return {
+    synchronous: true,
+    get: fail,
+    set: fail,
+    upsert: fail,
+    has: fail,
+    delete: fail,
+    clear: fail,
+    getSize: fail,
+  };
+}
+
+function baseStore(): EntityCache<any> {
+  const inner = new MemoryEntityCache<any>();
+  return {
+    synchronous: true,
+    get: (key) => inner.get(key),
+    set: (key, value, options) => inner.set(key, value, options),
+    upsert: (key, data, options) => inner.upsert(key, data, options),
+    has: (key) => inner.has(key),
+    delete: (key) => inner.delete(key),
+    clear: () => inner.clear(),
+    getSize: () => inner.getSize(),
+  };
+}
+
+function clientWith(makeCache: CacheFactory, cacheErrors?: "miss" | "throw") {
+  return new GatewayClient({
+    discordPublicKey: "0".repeat(64),
+    discordToken: "test-token",
+    clientId: "266624760782258186",
+    intents: 0,
+    makeCache,
+    cacheErrors,
+  });
+}
+
+describe("RFC manager pattern", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  test("GIVEN a failing store THEN fetch falls back to the API and emits cacheError", async () => {
+    const error = new Error("down");
+    const client = clientWith((entity) => (entity === "users" ? failingStore(error) : null));
+    const cacheErrors: unknown[][] = [];
+    client.on("cacheError", (...args) => cacheErrors.push(args));
+    vi.spyOn(container.rest, "get").mockResolvedValue(user);
+
+    const fetched = await client.users.fetch(user.id);
+
+    expect(fetched.id).toBe(user.id);
+    expect(cacheErrors[0]).toEqual([error, { entity: "users", key: user.id, operation: "get" }]);
+    expect(cacheErrors[1]).toEqual([error, { entity: "users", key: user.id, operation: "upsert" }]);
+  });
+
+  test("GIVEN cacheErrors throw THEN fetch rejects with the cache error", async () => {
+    const error = new Error("down");
+    const client = clientWith(
+      (entity) => (entity === "users" ? failingStore(error) : null),
+      "throw",
+    );
+    const cacheErrors = vi.fn();
+    client.on("cacheError", cacheErrors);
+
+    await expect(client.users.fetch(user.id)).rejects.toBe(error);
+    expect(cacheErrors).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN a failing synchronous store THEN cached reports a miss", () => {
+    const client = clientWith((entity) =>
+      entity === "users" ? failingStore(new Error("down")) : null,
+    );
+    const cacheErrors = vi.fn();
+    client.on("cacheError", cacheErrors);
+
+    expect(client.users.cached(user.id)).toBeUndefined();
+    expect(cacheErrors).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN a store THEN _add writes through a single upsert", async () => {
+    const store = new MemoryEntityCache<any>();
+    const client = clientWith((entity) => (entity === "users" ? store : null));
+    const upsert = vi.spyOn(store, "upsert");
+    const get = vi.spyOn(store, "get");
+
+    const added = await client.users._add(user);
+
+    expect(added.username).toBe(user.username);
+    expect(upsert).toHaveBeenCalledExactlyOnceWith(user.id, user);
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN listCached THEN it needs a store able to enumerate", async () => {
+    const withoutStore = clientWith(() => null);
+    const nonIterable = clientWith((entity) =>
+      entity === "presences" || entity === "emojis" ? baseStore() : null,
+    );
+
+    await expect(withoutStore.presences.listCached(guildId)).resolves.toEqual([]);
+    await expect(withoutStore.guilds.emojis(guildId).listCached()).resolves.toEqual([]);
+    await expect(nonIterable.presences.listCached(guildId)).rejects.toThrow(TypeError);
+    await expect(nonIterable.guilds.emojis(guildId).listCached()).rejects.toThrow(TypeError);
+  });
+
+  test("GIVEN a manager THEN construct builds structures, and createStructure is kept as an alias", () => {
+    const client = clientWith(() => null);
+
+    expect(client.users.construct(user)).toBeInstanceOf(User);
+    expect(client.users.createStructure(user)).toBeInstanceOf(User);
+    expect(client.users).toBeInstanceOf(BaseManager);
   });
 });

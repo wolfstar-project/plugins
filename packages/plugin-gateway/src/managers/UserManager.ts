@@ -14,7 +14,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
     super(client, "users");
   }
 
-  public createStructure(data: CacheEntityTypes["users"]): User {
+  public construct(data: CacheEntityTypes["users"]): User {
     return new User(data);
   }
 

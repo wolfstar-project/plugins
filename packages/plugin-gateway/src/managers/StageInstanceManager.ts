@@ -49,7 +49,7 @@ export class StageInstanceManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["stageInstances"]): StageInstance {
+  public construct(data: CacheEntityTypes["stageInstances"]): StageInstance {
     return new StageInstance(data);
   }
 

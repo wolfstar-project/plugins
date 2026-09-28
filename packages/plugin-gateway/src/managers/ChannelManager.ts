@@ -116,7 +116,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     super(client, "channels");
   }
 
-  public createStructure(data: CacheEntityTypes["channels"]): AnyChannel {
+  public construct(data: CacheEntityTypes["channels"]): AnyChannel {
     return createChannel(data);
   }
 

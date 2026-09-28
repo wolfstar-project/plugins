@@ -242,6 +242,16 @@ export interface InMemoryCacheOptions {
   policies?: CachePolicies;
 }
 
+// Resolves an option given either for every entity cache or per entity cache.
+function resolve<T>(
+  value: T | Partial<Record<CacheEntityName, T>> | undefined,
+  name: CacheEntityName,
+): T | undefined {
+  return typeof value === "object" && value !== null
+    ? (value as Partial<Record<CacheEntityName, T>>)[name]
+    : (value as T | undefined);
+}
+
 /**
  * Creates a {@link Cache} that keeps everything in the process' memory.
  *
@@ -263,13 +273,6 @@ export interface InMemoryCacheOptions {
 export function createInMemoryCache(options: InMemoryCacheOptions = {}): Cache {
   const { entities = CacheEntityNames, maxSize, ttl, sweepInterval, policies } = options;
   const included = new Set(entities);
-  const resolve = <T>(
-    value: T | Partial<Record<CacheEntityName, T>> | undefined,
-    name: CacheEntityName,
-  ): T | undefined =>
-    typeof value === "object" && value !== null
-      ? (value as Partial<Record<CacheEntityName, T>>)[name]
-      : (value as T | undefined);
 
   return createCache({
     makeCache: (name) =>
