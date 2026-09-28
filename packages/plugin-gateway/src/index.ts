@@ -21,3 +21,4 @@ export * from "./util/messages.js";
 export * from "./util/Partials.js";
 export * from "./util/permissions.js";
 export * from "./util/PermissionsBitField.js";
+export * from "./util/resolvables.js";
