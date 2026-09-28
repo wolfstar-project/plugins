@@ -9,6 +9,7 @@ import { Role, type RoleColors } from "../structures/guilds/Role.js";
 import { whenAll } from "../util/cache.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
 import { CachedManager } from "./CachedManager.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
 /**
  * The options to create or edit a role with.
@@ -24,9 +25,9 @@ export interface RoleEditOptions {
   permissions?: PermissionResolvable;
   mentionable?: boolean;
   /**
-   * The icon as a data URI (`data:image/png;base64,...`), `null` to remove it.
+   * The icon: a data URI (`data:image/png;base64,...`), or anything `resolveImage` reads. `null` removes it.
    */
-  icon?: string | null;
+  icon?: ImageResolvable | null;
   unicodeEmoji?: string | null;
   /**
    * The reason for the audit log.
@@ -97,7 +98,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The role's fields.
    */
   public async create(guildId: string, options: RoleEditOptions = {}): Promise<Role> {
-    const role = await this.client.api.guilds.createRole(guildId, toRoleBody(options), {
+    const role = await this.client.api.guilds.createRole(guildId, await toRoleBody(options), {
       reason: options.reason,
     });
     return this.store(guildId, role);
@@ -111,7 +112,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param options The fields to edit.
    */
   public async edit(guildId: string, roleId: string, options: RoleEditOptions): Promise<Role> {
-    const role = await this.client.api.guilds.editRole(guildId, roleId, toRoleBody(options), {
+    const role = await this.client.api.guilds.editRole(guildId, roleId, await toRoleBody(options), {
       reason: options.reason,
     });
     return this.store(guildId, role);
@@ -202,7 +203,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    */
   public async premiumSubscriberRole(guildId: string): Promise<Role | null> {
     const roles = await this.fetchAll(guildId);
-    return roles.find((role) => role.tags?.premium_subscriber === null) ?? null;
+    return roles.find((role) => role.tags?.premiumSubscriberRole) ?? null;
   }
 
   /**
@@ -213,7 +214,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    */
   public async botRoleFor(guildId: string, botId: string): Promise<Role | null> {
     const roles = await this.fetchAll(guildId);
-    return roles.find((role) => role.tags?.bot_id === botId) ?? null;
+    return roles.find((role) => role.tags?.botId === botId) ?? null;
   }
 
   protected async fetchRaw(guildId: string, roleId: string) {
@@ -226,13 +227,13 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
   }
 }
 
-function toRoleBody(options: RoleEditOptions): RESTPatchAPIGuildRoleJSONBody {
+async function toRoleBody(options: RoleEditOptions): Promise<RESTPatchAPIGuildRoleJSONBody> {
   const body: RESTPatchAPIGuildRoleJSONBody = {
     name: options.name,
     color: options.color,
     hoist: options.hoist,
     mentionable: options.mentionable,
-    icon: options.icon,
+    icon: await resolveImageOption(options.icon),
     unicode_emoji: options.unicodeEmoji,
   };
   if (options.permissions !== undefined) {

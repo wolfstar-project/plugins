@@ -1,9 +1,5 @@
 import type { ImageURLOptions } from "@discordjs/rest";
-import {
-  GuildScheduledEventStatus,
-  type APIGuildScheduledEvent,
-  type APIGuildScheduledEventRecurrenceRule,
-} from "discord-api-types/v10";
+import { GuildScheduledEventStatus, type APIGuildScheduledEvent } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type {
   GuildScheduledEventEditOptions,
@@ -11,6 +7,12 @@ import type {
   GuildScheduledEventSubscribersOptions,
 } from "../../managers/GuildScheduledEventManager.js";
 import { cdn } from "../../util/cdn.js";
+import {
+  transformAPIGuildScheduledEventEntityMetadata,
+  transformAPIGuildScheduledEventRecurrenceRule,
+  type GuildScheduledEventEntityMetadata,
+  type GuildScheduledEventRecurrenceRule,
+} from "../../util/Transformers.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
@@ -133,6 +135,14 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   }
 
   /**
+   * The metadata of the event, camel-cased like discord.js's `GuildScheduledEvent#entityMetadata`.
+   */
+  public get entityMetadata(): GuildScheduledEventEntityMetadata | null {
+    const metadata = this[kData].entity_metadata;
+    return metadata ? transformAPIGuildScheduledEventEntityMetadata(metadata) : null;
+  }
+
+  /**
    * How many users subscribed, when the payload includes it.
    */
   public get userCount(): number | null {
@@ -143,8 +153,12 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
     return this[kData].image ?? null;
   }
 
-  public get recurrenceRule(): APIGuildScheduledEventRecurrenceRule | null {
-    return this[kData].recurrence_rule;
+  /**
+   * How the event repeats, camel-cased like discord.js's `GuildScheduledEvent#recurrenceRule`.
+   */
+  public get recurrenceRule(): GuildScheduledEventRecurrenceRule | null {
+    const rule = this[kData].recurrence_rule;
+    return rule ? transformAPIGuildScheduledEventRecurrenceRule(rule) : null;
   }
 
   /**

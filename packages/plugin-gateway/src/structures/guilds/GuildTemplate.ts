@@ -6,6 +6,7 @@ import type {
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GuildTemplatesPattern } from "../../util/DataResolver.js";
 
 /**
  * The relations of a {@link GuildTemplate}: its source guild, when cached, and its creator.
@@ -19,6 +20,11 @@ export interface GuildTemplateRelations {
  * A guild template: a snapshot of a guild's channels, roles, and settings, to create guilds from.
  */
 export class GuildTemplate extends Structure<APITemplate> {
+  /**
+   * Matches guild template URLs, capturing their `code`, like discord.js's `GuildTemplate.GuildTemplatesPattern`.
+   */
+  public static readonly GuildTemplatesPattern: RegExp = GuildTemplatesPattern;
+
   declare public [kRelations]: GuildTemplateRelations;
 
   protected override optimizeData(data: Partial<APITemplate>): void {

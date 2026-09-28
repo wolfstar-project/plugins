@@ -6,6 +6,7 @@ import {
   type GatewayPresenceUpdateData,
   type RESTPatchAPICurrentUserJSONBody,
 } from "discord-api-types/v10";
+import { resolveImageOption, type ImageResolvable } from "../../util/DataResolver.js";
 import { kData, kPatch } from "../Structure.js";
 import { User } from "./User.js";
 
@@ -34,12 +35,13 @@ export interface ActivityOptions extends Omit<GatewayActivityUpdateData, "name" 
 }
 
 /**
- * The options to edit the bot user with. Images are data URIs (`data:image/png;base64,...`), `null` removes them.
+ * The options to edit the bot user with. Images are data URIs (`data:image/png;base64,...`) or anything
+ * `resolveImage` reads (contents, a path, a URL, a stream, a blob), `null` removes them.
  */
 export interface ClientUserEditOptions {
   username?: string;
-  avatar?: string | null;
-  banner?: string | null;
+  avatar?: ImageResolvable | null;
+  banner?: ImageResolvable | null;
 }
 
 /**
@@ -80,7 +82,14 @@ export class ClientUser extends User {
    * @param options The fields to edit.
    */
   public async edit(options: ClientUserEditOptions): Promise<this> {
-    const body: RESTPatchAPICurrentUserJSONBody = options;
+    const body: RESTPatchAPICurrentUserJSONBody = {
+      username: options.username,
+      avatar: await resolveImageOption(options.avatar),
+      banner: await resolveImageOption(options.banner),
+    };
+    for (const key of Object.keys(body) as (keyof typeof body)[]) {
+      if (body[key] === undefined) delete body[key];
+    }
     const user = await this.client.api.users.edit(body);
     await this.client.users._add(user);
     return this[kPatch](user);
@@ -90,11 +99,11 @@ export class ClientUser extends User {
     return this.edit({ username });
   }
 
-  public setAvatar(avatar: string | null): Promise<this> {
+  public setAvatar(avatar: ImageResolvable | null): Promise<this> {
     return this.edit({ avatar });
   }
 
-  public setBanner(banner: string | null): Promise<this> {
+  public setBanner(banner: ImageResolvable | null): Promise<this> {
     return this.edit({ banner });
   }
 

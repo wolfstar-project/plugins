@@ -1,9 +1,15 @@
 import { DiscordAPIError, type ImageURLOptions } from "@discordjs/rest";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type { APIAvatarDecorationData } from "discord-api-types/v10";
+import type { APICollectibles } from "discord-api-types/v10";
 import type { BanOptions, GuildMemberEditOptions } from "../../managers/GuildMemberManager.js";
 import { GuildMemberRoleManager } from "../../managers/GuildMemberRoleManager.js";
 import { cdn } from "../../util/cdn.js";
+import {
+  transformAPIAvatarDecorationData,
+  transformCollectibles,
+  type AvatarDecorationData,
+  type Collectibles,
+} from "../../util/Transformers.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../../util/flags.js";
 import {
   MessagePayload,
@@ -196,8 +202,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * The member's guild avatar decoration, if any.
    */
-  public get avatarDecorationData(): APIAvatarDecorationData | null {
-    return this[kData].avatar_decoration_data ?? null;
+  public get avatarDecorationData(): AvatarDecorationData | null {
+    const data = this[kData].avatar_decoration_data;
+    return data ? transformAPIAvatarDecorationData(data) : null;
+  }
+
+  /**
+   * The member's guild collectibles, camel-cased like discord.js's `GuildMember#collectibles`.
+   */
+  public get collectibles(): Collectibles | null {
+    const collectibles = (this[kData] as { collectibles?: APICollectibles | null }).collectibles;
+    return collectibles ? transformCollectibles(collectibles) : null;
   }
 
   /**

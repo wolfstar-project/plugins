@@ -1,9 +1,10 @@
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type { APIRoleTags } from "discord-api-types/v10";
 import type { RoleEditOptions } from "../../managers/RoleManager.js";
 import { cdn } from "../../util/cdn.js";
+import type { ImageResolvable } from "../../util/DataResolver.js";
+import { transformAPIRoleTags, type RoleTagData } from "../../util/Transformers.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
@@ -141,10 +142,12 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * What the role belongs to: a bot, an integration, the server boosters, or a subscription listing.
+   * What the role belongs to: a bot, an integration, the server boosters, or a subscription listing. Camel-cased
+   * like discord.js's `Role#tags`.
    */
-  public get tags(): APIRoleTags | null {
-    return this[kData].tags ?? null;
+  public get tags(): RoleTagData | null {
+    const tags = this[kData].tags;
+    return tags ? transformAPIRoleTags(tags) : null;
   }
 
   public get flags(): Readonly<RoleFlagsBitField> {
@@ -225,9 +228,9 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Sets the role's icon, as a data URI (`data:image/png;base64,...`), or removes it with `null`.
+   * Sets the role's icon: a data URI (`data:image/png;base64,...`) or anything `resolveImage` reads. `null` removes it.
    */
-  public setIcon(icon: string | null, reason?: string): Promise<this> {
+  public setIcon(icon: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ icon, reason });
   }
 

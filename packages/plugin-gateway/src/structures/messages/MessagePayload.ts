@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { RawFile } from "@discordjs/rest";
 import {
@@ -15,9 +14,10 @@ import {
   type RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../../GatewayClient.js";
+import { resolveFile } from "../../util/DataResolver.js";
 import { MessageFlagsBitField, type MessageFlagsResolvable } from "../../util/flags.js";
 import { resolvePartialEmoji } from "../../util/Util.js";
-import { GatewayError, GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
+import { GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
 
 /**
  * Anything with a `toJSON` method, like the builders of `@discordjs/builders` and the structures of this package.
@@ -616,7 +616,7 @@ export class MessagePayload {
     let name = payload.name ?? (typeof attachment === "string" ? nameOf(attachment) : "file.jpg");
     if (payload.spoiler && !name.startsWith("SPOILER_")) name = `SPOILER_${name}`;
 
-    const { data, contentType } = await resolveBuffer(attachment);
+    const { data, contentType } = await resolveFile(attachment);
     return contentType ? { name, data, contentType } : { name, data };
   }
 
@@ -691,35 +691,4 @@ function nameOf(path: string): string {
     return name || "file.jpg";
   }
   return basename(path);
-}
-
-async function resolveBuffer(
-  attachment: BufferResolvable,
-): Promise<{ data: Uint8Array; contentType?: string }> {
-  if (attachment instanceof Uint8Array) return { data: attachment };
-  if (attachment instanceof ArrayBuffer) return { data: new Uint8Array(attachment) };
-  if (attachment instanceof Blob) {
-    return {
-      data: new Uint8Array(await attachment.arrayBuffer()),
-      contentType: attachment.type || undefined,
-    };
-  }
-  if (typeof attachment === "string") {
-    if (/^https?:\/\//.test(attachment)) {
-      const response = await fetch(attachment);
-      if (!response.ok)
-        throw new GatewayError("AttachmentDownloadFailed", attachment, response.status);
-      return {
-        data: new Uint8Array(await response.arrayBuffer()),
-        contentType: response.headers.get("content-type") ?? undefined,
-      };
-    }
-    return { data: await readFile(attachment) };
-  }
-
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of attachment) {
-    chunks.push(typeof chunk === "string" ? new TextEncoder().encode(chunk) : chunk);
-  }
-  return { data: Buffer.concat(chunks) };
 }

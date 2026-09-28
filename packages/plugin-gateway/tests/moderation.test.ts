@@ -205,7 +205,7 @@ describe("auto moderation", () => {
       body: { trigger_metadata: { keyword_filter: ["howl"], allow_list: ["wolf"] } },
       reason: undefined,
     });
-    expect(cached.triggerMetadata.keyword_filter).toEqual(["howl"]);
+    expect(cached.triggerMetadata.keywordFilter).toEqual(["howl"]);
   });
 
   test("GIVEN rule and execution dispatches THEN their events are emitted", async () => {

@@ -61,6 +61,7 @@ export const GatewayErrorMessages = {
   EmojiType: "Cannot resolve an emoji without an ID nor a name",
   NotGuildSticker: "Only guild stickers can be edited or deleted",
   NotGuildSoundboardSound: "Default soundboard sounds cannot be changed",
+  SoundboardSoundContentType: "Could not infer the content type of the sound, pass contentType",
 
   MessageContentType: "The content of a message must be a string",
   MessageNonceLength: "A message nonce must be at most 25 characters long",
@@ -69,6 +70,9 @@ export const GatewayErrorMessages = {
   MessageReferenceMissing: (messageId: string) => `Message ${messageId} references no message`,
   MessagePollMissing: (messageId: string) => `Message ${messageId} has no poll`,
   AttachmentDownloadFailed: (url: string, status: number) => `Could not download ${url}: ${status}`,
+  FileNotFound: (file: string) => `File could not be found: ${file}`,
+  ReqResourceType:
+    "The resource must be a string, a Uint8Array, an ArrayBuffer, a Blob, or a stream",
 
   VoiceStateNotOwn: "Only the bot's own voice state can request to speak",
   VoiceStateGuildUnknown: "This voice state does not belong to a guild",

@@ -17,6 +17,7 @@ import {
   type WebhookMessageEditOptions,
   type WebhookThreadOptions,
 } from "../util/messages.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
 export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThreadOptions };
 
@@ -26,9 +27,9 @@ export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThr
 export interface WebhookCreateOptions {
   name: string;
   /**
-   * The avatar, as a data URI.
+   * The avatar: a data URI, or anything `resolveImage` reads.
    */
-  avatar?: string | null;
+  avatar?: ImageResolvable | null;
   reason?: string;
 }
 
@@ -38,9 +39,9 @@ export interface WebhookCreateOptions {
 export interface WebhookEditOptions {
   name?: string;
   /**
-   * The avatar, as a data URI, `null` to remove it.
+   * The avatar: a data URI, or anything `resolveImage` reads. `null` removes it.
    */
-  avatar?: string | null;
+  avatar?: ImageResolvable | null;
   /**
    * The channel to move the webhook to. Needs the bot's authorization, not the webhook's token.
    */
@@ -100,7 +101,10 @@ export class WebhookManager {
    * @param options The webhook's name and avatar, and the reason for the audit log.
    */
   public async create(channelId: string, options: WebhookCreateOptions): Promise<Webhook> {
-    const body: RESTPostAPIChannelWebhookJSONBody = { name: options.name, avatar: options.avatar };
+    const body: RESTPostAPIChannelWebhookJSONBody = {
+      name: options.name,
+      avatar: await resolveImageOption(options.avatar),
+    };
     const webhook = await this.client.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
     });
@@ -121,7 +125,7 @@ export class WebhookManager {
   ): Promise<Webhook> {
     const body: RESTPatchAPIWebhookJSONBody = {
       name: options.name,
-      avatar: options.avatar,
+      avatar: await resolveImageOption(options.avatar),
       channel_id: options.channel === undefined ? undefined : resolveId(options.channel),
     };
     const webhook = await this.client.api.webhooks.edit(webhookId, body, {

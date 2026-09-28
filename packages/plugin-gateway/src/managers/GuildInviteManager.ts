@@ -10,6 +10,7 @@ import type { InviteData } from "../structures/invites/BaseInvite.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { resolveInviteCode } from "../util/DataResolver.js";
 
 /**
  * The options to create an invite with.
@@ -91,7 +92,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
   }
 
   public resolveKey(code: string): string {
-    return inviteKey(this.guildId, code);
+    return inviteKey(this.guildId, resolveInviteCode(code));
   }
 
   /**
@@ -141,12 +142,14 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    * @param reason The reason for the audit log.
    */
   public async delete(code: string, reason?: string): Promise<void> {
-    await this.client.api.invites.delete(code, { reason });
+    await this.client.api.invites.delete(resolveInviteCode(code), { reason });
     await this.cache?.delete(this.resolveKey(code));
   }
 
   protected async fetchRaw(code: string) {
-    const invite = await this.client.api.invites.get(code, { with_counts: true });
+    const invite = await this.client.api.invites.get(resolveInviteCode(code), {
+      with_counts: true,
+    });
     return this.toCached(invite);
   }
 

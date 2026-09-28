@@ -22,6 +22,7 @@ import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/er
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { GatewayError, GatewayTypeError, GatewayRangeError } from "../errors/GatewayError.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
 /**
  * The options to edit a member with.
@@ -53,12 +54,13 @@ export interface GuildMemberEditOptions {
 }
 
 /**
- * The options to edit the bot's own member with. Images are data URIs, `null` removes them.
+ * The options to edit the bot's own member with. Images are data URIs or anything `resolveImage` reads, `null`
+ * removes them.
  */
 export interface GuildMemberEditMeOptions {
   nick?: string | null;
-  avatar?: string | null;
-  banner?: string | null;
+  avatar?: ImageResolvable | null;
+  banner?: ImageResolvable | null;
   bio?: string | null;
   reason?: string;
 }
@@ -466,12 +468,13 @@ export class GuildMemberManager extends CachedManager<
    * @param options The fields to edit.
    */
   public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
-    const { reason, ...body } = options;
-    const member = await this.client.api.users.editCurrentGuildMember(
-      guildId,
-      body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
-      { reason },
-    );
+    const { reason, avatar, banner, ...rest } = options;
+    const body: RESTPatchAPICurrentGuildMemberJSONBody = {
+      ...rest,
+      avatar: await resolveImageOption(avatar),
+      banner: await resolveImageOption(banner),
+    };
+    const member = await this.client.api.users.editCurrentGuildMember(guildId, body, { reason });
     return this.store(guildId, member);
   }
 

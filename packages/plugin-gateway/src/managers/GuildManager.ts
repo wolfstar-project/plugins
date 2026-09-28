@@ -3,7 +3,6 @@ import {
   GatewayDispatchEvents,
   GatewayOpcodes,
   type APIGuild,
-  type APIIncidentsData,
   type APIVoiceRegion,
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
@@ -22,6 +21,8 @@ import {
   type RESTPutAPIGuildOnboardingJSONBody,
 } from "discord-api-types/v10";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
+import { resolveImageOption } from "../util/DataResolver.js";
+import { transformAPIIncidentsData, type IncidentActions } from "../util/Transformers.js";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnonymousGuild } from "../structures/guilds/AnonymousGuild.js";
 import {
@@ -574,10 +575,10 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       explicit_content_filter: options.explicitContentFilter,
       afk_channel_id: options.afkChannel,
       afk_timeout: options.afkTimeout,
-      icon: options.icon,
-      splash: options.splash,
-      discovery_splash: options.discoverySplash,
-      banner: options.banner,
+      icon: await resolveImageOption(options.icon),
+      splash: await resolveImageOption(options.splash),
+      discovery_splash: await resolveImageOption(options.discoverySplash),
+      banner: await resolveImageOption(options.banner),
       system_channel_id: options.systemChannel,
       system_channel_flags:
         options.systemChannelFlags === undefined
@@ -651,7 +652,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   public async setIncidentActions(
     guildId: string,
     options: GuildIncidentActionsOptions,
-  ): Promise<APIIncidentsData> {
+  ): Promise<IncidentActions> {
     const body: RESTPutAPIGuildIncidentActionsJSONBody = {
       invites_disabled_until: toISO(options.invitesDisabledUntil),
       dms_disabled_until: toISO(options.dmsDisabledUntil),
@@ -659,7 +660,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     const incidents = await this.client.api.guilds.editIncidentActions(guildId, body);
     const cached = await this.cache?.get(guildId);
     if (cached) await this.cache!.set(guildId, { ...cached, incidents_data: incidents });
-    return incidents;
+    return transformAPIIncidentsData(incidents);
   }
 
   protected async fetchRaw(guildId: string) {
