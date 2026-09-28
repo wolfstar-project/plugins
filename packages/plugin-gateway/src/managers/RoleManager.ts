@@ -150,7 +150,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
   ): Promise<Role[]> {
     const { relative = false, reason } =
       typeof options === "string" ? { reason: options } : options;
-    const sorted = discordSort(await this.fetchAll(guildId));
+    // fetchAll sorts highest first: reversed, the roles are in discordSort order.
+    const sorted = (await this.fetchAll(guildId)).toReversed();
     if (!sorted.some((role) => role.id === roleId)) {
       throw new GatewayError("GuildRoleUnknown", guildId, roleId);
     }
