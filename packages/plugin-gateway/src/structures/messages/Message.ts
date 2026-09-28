@@ -11,6 +11,7 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { MessageThreadCreateOptions } from "../../managers/MessageManager.js";
 import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
+import { createComponent, type MessageTopLevelComponent } from "../../util/components.js";
 import { isDeepEqual } from "../../util/equal.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
 import {
@@ -181,10 +182,11 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The raw components of the message. Build components with `@discordjs/builders`.
+   * The top-level components of the message, like discord.js'. Their `toJSON` returns the raw components; build new
+   * ones with `@discordjs/builders`.
    */
-  public get components() {
-    return this[kData].components ?? [];
+  public get components(): MessageTopLevelComponent[] {
+    return (this[kData].components ?? []).map((component) => createComponent(component));
   }
 
   /**

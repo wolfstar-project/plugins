@@ -1,5 +1,6 @@
 export * from "./automoderation/index.js";
 export * from "./channels/index.js";
+export * from "./components/index.js";
 export * from "./emojis/index.js";
 export * from "./guilds/index.js";
 export * from "./invites/index.js";
