@@ -709,6 +709,27 @@ const { items } = await client.messages.fetchPins(channelId);
 const users = await message.reactions.resolve("🐺")?.users.fetch();
 ```
 
+## Errors
+
+Like discord.js's `DiscordjsError`, every error the package throws or emits carries a `code` from
+`GatewayErrorCodes`, and its message comes from `GatewayErrorMessages`. `GatewayError`,
+`GatewayTypeError`, and `GatewayRangeError` extend `Error`, `TypeError`, and `RangeError`, and are
+named after their code (`GatewayError [WebhookTokenUnavailable]`). The errors with extra data
+(`DispatchTimeoutError`, `GuildMembersTimeoutError`, `GuildMembersRateLimitError`, and
+`GatewaySessionStoreError`) extend `GatewayError`.
+
+```typescript
+import { GatewayError, GatewayErrorCodes } from "@wolfstar/plugin-gateway";
+
+try {
+  await webhook.send("Awoo");
+} catch (error) {
+  if (error instanceof GatewayError && error.code === GatewayErrorCodes.WebhookTokenUnavailable) {
+    // The webhook was fetched without its token.
+  }
+}
+```
+
 ## Limitations
 
 - A `GatewayClient` connects its gateway shards from a single process (`@discordjs/ws`'s
@@ -716,3 +737,11 @@ const users = await message.reactions.resolve("🐺")?.users.fetch();
   processes, use [`@wolfstar/plugin-sharder`](../plugin-sharder) and spread
   `shardClient.gatewayOptions` into the client's options.
 - Interaction payloads keep being handled as today, they do not read through `client.users` & co.
+
+## Credits
+
+The error system (`src/errors/`) is adapted from discord.js's
+[`errors`](https://github.com/discordjs/discord.js/tree/main/packages/discord.js/src/errors)
+module, Copyright 2021 Noel Buechler and Copyright 2015 Amish Shah, licensed under the
+[Apache License 2.0](https://github.com/discordjs/discord.js/blob/main/packages/discord.js/LICENSE).
+The structures and managers follow discord.js's API as well.

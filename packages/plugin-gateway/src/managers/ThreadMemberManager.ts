@@ -4,6 +4,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * The options to list the members of a thread with.
@@ -38,7 +39,7 @@ export class ThreadMemberManager extends CachedManager<
 
   public keyOf(data: CacheEntityTypes["threadMembers"]): string {
     if (!data.id || !data.user_id) {
-      throw new TypeError("Cannot key a thread member without its IDs");
+      throw new GatewayTypeError("CacheKeyUnresolvable", "thread member", "without its IDs");
     }
 
     return this.resolveKey(data.id, data.user_id);

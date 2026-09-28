@@ -3,6 +3,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Presence } from "../structures/presences/Presence.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * Manages the presences of guild members.
@@ -60,10 +61,6 @@ export class PresenceManager extends CachedManager<
   }
 
   protected fetchRaw(guildId: string, userId: string): Promise<CacheEntityTypes["presences"]> {
-    return Promise.reject(
-      new Error(
-        `Presences cannot be fetched from the API, they are only received from the gateway (user ${userId} of guild ${guildId} is not cached); enable the presences cache to read them later`,
-      ),
-    );
+    return Promise.reject(new GatewayError("PresenceNotFetchable", guildId, userId));
   }
 }

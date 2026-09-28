@@ -3,6 +3,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Integration } from "../structures/guilds/Integration.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { GatewayRangeError } from "../errors/GatewayError.js";
 
 /**
  * Manages the integrations of one guild.
@@ -82,7 +83,7 @@ export class GuildIntegrationManager extends CachedManager<
   protected async fetchRaw(integrationId: string) {
     const integration = (await this.list()).find(({ id }) => id === integrationId);
     if (!integration) {
-      throw new RangeError(`The guild ${this.guildId} has no integration ${integrationId}`);
+      throw new GatewayRangeError("GuildIntegrationNotFound", this.guildId, integrationId);
     }
 
     return integration;

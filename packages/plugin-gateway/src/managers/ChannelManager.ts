@@ -29,6 +29,7 @@ import { whenAll } from "../util/cache.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * Any of the channel structures {@link ChannelManager} builds.
@@ -254,7 +255,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    */
   public async edit(channelId: string, options: GuildChannelEditOptions): Promise<AnyChannel> {
     if (options.lockPermissions && options.permissionOverwrites) {
-      throw new TypeError("Pass either lockPermissions or permissionOverwrites, not both");
+      throw new GatewayTypeError("ChannelLockPermissionsConflict");
     }
 
     const body = toChannelBody(options);

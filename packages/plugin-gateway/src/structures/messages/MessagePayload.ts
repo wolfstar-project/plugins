@@ -16,6 +16,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../../GatewayClient.js";
 import { MessageFlagsBitField, type MessageFlagsResolvable } from "../../util/flags.js";
+import { GatewayError, GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
 
 /**
  * Anything with a `toJSON` method, like the builders of `@discordjs/builders` and the structures of this package.
@@ -386,8 +387,7 @@ export class MessagePayload {
     const { content } = this.options;
     if (content === null) return this.isEdit ? "" : undefined;
     if (content === undefined) return undefined;
-    if (typeof content !== "string")
-      throw new TypeError("The content of a message must be a string");
+    if (typeof content !== "string") throw new GatewayTypeError("MessageContentType");
     return content;
   }
 
@@ -466,10 +466,10 @@ export class MessagePayload {
   private resolveNonce(nonce: string | number | undefined): string | number | undefined {
     if (nonce === undefined) return undefined;
     if (typeof nonce === "string" && nonce.length > 25) {
-      throw new RangeError("A message nonce must be at most 25 characters long");
+      throw new GatewayRangeError("MessageNonceLength");
     }
     if (typeof nonce === "number" && !Number.isInteger(nonce)) {
-      throw new RangeError("A message nonce must be an integer");
+      throw new GatewayRangeError("MessageNonceType");
     }
     return nonce;
   }
@@ -500,7 +500,7 @@ export class MessagePayload {
       const { message, channel, guild } = forward;
       const channelId =
         typeof message === "string" ? MessagePayload.id(channel) : message.channelId;
-      if (!channelId) throw new TypeError("Forwarding a message by ID needs its channel");
+      if (!channelId) throw new GatewayTypeError("MessageForwardChannelMissing");
       return {
         type: MessageReferenceType.Forward,
         message_id: typeof message === "string" ? message : message.id,
@@ -705,7 +705,8 @@ async function resolveBuffer(
   if (typeof attachment === "string") {
     if (/^https?:\/\//.test(attachment)) {
       const response = await fetch(attachment);
-      if (!response.ok) throw new Error(`Could not download ${attachment}: ${response.status}`);
+      if (!response.ok)
+        throw new GatewayError("AttachmentDownloadFailed", attachment, response.status);
       return {
         data: new Uint8Array(await response.arrayBuffer()),
         contentType: response.headers.get("content-type") ?? undefined,

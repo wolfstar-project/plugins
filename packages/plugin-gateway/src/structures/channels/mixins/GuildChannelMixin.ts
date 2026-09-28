@@ -14,6 +14,7 @@ import { kData, kRelations } from "../../Structure.js";
 import type { GuildChannelCreateOptions, GuildChannelEditOptions } from "../../../util/channels.js";
 import type { AnyChannel } from "../../../managers/ChannelManager.js";
 import { editChannel } from "./edit.js";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = { guild_id?: string; name?: string | null };
 
@@ -90,7 +91,7 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public async clone(options: Partial<GuildChannelCreateOptions> = {}): Promise<AnyChannel> {
     const { guildId } = this;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
 
     const data = this[kData] as CloneableData;
     return this.client.guilds.channels(guildId).create({

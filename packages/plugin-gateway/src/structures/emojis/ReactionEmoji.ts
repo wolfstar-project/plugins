@@ -1,5 +1,6 @@
 import { FormattingPatterns, type APIPartialEmoji } from "discord-api-types/v10";
 import { Emoji } from "./Emoji.js";
+import { GatewayTypeError } from "../../errors/GatewayError.js";
 
 /**
  * Anything identifying an emoji: a Unicode emoji, a custom emoji mention (`<a:name:id>`), a `name:id` pair, a bare
@@ -35,14 +36,14 @@ export class ReactionEmoji extends Emoji<APIPartialEmoji> {
         return `${animated ? "a:" : ""}${name}:${id}`;
       }
 
-      if (!decoded) throw new TypeError("Cannot resolve an empty string to an emoji");
+      if (!decoded) throw new GatewayTypeError("EmojiEmpty");
       return encodeURIComponent(decoded);
     }
 
     const { id, name, animated } = emoji;
     if (id) return `${animated ? "a:" : ""}${name ?? "_"}:${id}`;
     if (name) return encodeURIComponent(name);
-    throw new TypeError("Cannot resolve an emoji without an ID nor a name");
+    throw new GatewayTypeError("EmojiType");
   }
 
   /**

@@ -56,6 +56,7 @@ import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import type { Partials } from "./util/Partials.js";
 import { GatewaySessionMirror } from "./util/sessions.js";
+import { GatewayTypeError } from "./errors/GatewayError.js";
 
 export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
   /**
@@ -793,9 +794,7 @@ export class GatewayClient extends Client {
   ): Pick<OptionalWebSocketManagerOptions, "retrieveSessionInfo" | "updateSessionInfo"> {
     const { sessionStore, gateway } = options;
     if (sessionStore && (gateway?.retrieveSessionInfo || gateway?.updateSessionInfo)) {
-      throw new TypeError(
-        "sessionStore replaces gateway.retrieveSessionInfo and gateway.updateSessionInfo, pass one or the other",
-      );
+      throw new GatewayTypeError("ClientSessionStoreConflict");
     }
 
     let retrieve =

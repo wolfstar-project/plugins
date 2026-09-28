@@ -12,6 +12,7 @@ import type { Guild } from "../structures/guilds/Guild.js";
 import { bindClient, type StructureMixin } from "../structures/Structure.js";
 import { isPromiseLike, whenAll } from "../util/cache.js";
 import type { CacheErrorContext } from "../util/events.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * The options to fetch an entity with.
@@ -127,16 +128,14 @@ export abstract class CachedManager<
     const { cache } = this;
     if (cache === undefined) return undefined;
     if (cache.synchronous !== true) {
-      throw new TypeError(`The ${this.entity} cache is asynchronous, use get instead of cached`);
+      throw new GatewayTypeError("CacheAsynchronous", this.entity);
     }
 
     const value = this._get(...args);
     if (isPromiseLike(value)) {
       // Nothing awaits the promise anymore, so its rejection must not go unhandled.
       value.catch(() => undefined);
-      throw new TypeError(
-        `The relations of the ${this.entity} cache are read from an asynchronous cache, use get instead of cached`,
-      );
+      throw new GatewayTypeError("CacheRelationsAsynchronous", this.entity);
     }
 
     return value;
@@ -351,9 +350,7 @@ export abstract class CachedManager<
     const { cache } = this;
     if (cache === undefined) return undefined;
     if (!isIterableCache(cache)) {
-      throw new TypeError(
-        `The ${this.entity} cache cannot enumerate its entries (it has no keys/values/entries)`,
-      );
+      throw new GatewayTypeError("CacheNotIterable", this.entity);
     }
 
     return cache;

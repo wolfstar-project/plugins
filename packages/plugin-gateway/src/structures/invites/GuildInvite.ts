@@ -2,6 +2,7 @@ import { BaseInvite } from "./BaseInvite.js";
 import { InviteGuild } from "../guilds/InviteGuild.js";
 import type { Guild } from "../guilds/Guild.js";
 import { kData, kRelations } from "../Structure.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * An invite to a guild.
@@ -41,7 +42,7 @@ export class GuildInvite extends BaseInvite {
    */
   public async delete(reason?: string): Promise<this> {
     const { guildId } = this;
-    if (!guildId) throw new Error(`Invite ${this.code} has no known guild`);
+    if (!guildId) throw new GatewayError("InviteGuildUnknown", this.code);
     await this.client.guilds.invites(guildId).delete(this.code, reason);
     return this;
   }

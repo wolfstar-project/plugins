@@ -15,6 +15,7 @@ import {
   StructureMixin,
 } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link Sticker}, resolved from the cache by the guild's sticker manager.
@@ -187,7 +188,7 @@ export class Sticker extends BaseSticker {
 
   private requireGuildId(): string {
     const { guildId } = this;
-    if (!guildId) throw new Error("Only guild stickers can be edited or deleted");
+    if (!guildId) throw new GatewayError("NotGuildSticker");
     return guildId;
   }
 }

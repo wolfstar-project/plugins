@@ -8,6 +8,7 @@ import {
   type MultiDispatchHandler,
 } from "../util/dispatch.js";
 import type { GatewayEventName } from "../util/events.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /** Processes one kind of gateway dispatch around the cache write. */
 export abstract class Action {
@@ -88,9 +89,7 @@ export class ActionsManager {
       if (handler) {
         // An event holds a single action, so it may be registered in only one of the two handler tables.
         if (this.#actions.has(event as GatewayDispatchPayload["t"])) {
-          throw new Error(
-            `Dispatch event "${event}" is registered in both DispatchHandlers and MultiDispatchHandlers`,
-          );
+          throw new GatewayError("DispatchHandlerConflict", event);
         }
         this.#actions.set(
           event as GatewayDispatchPayload["t"],
