@@ -16,6 +16,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../../GatewayClient.js";
 import { MessageFlagsBitField, type MessageFlagsResolvable } from "../../util/flags.js";
+import { resolvePartialEmoji } from "../../util/Util.js";
 import { GatewayError, GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
 
 /**
@@ -543,7 +544,7 @@ export class MessagePayload {
           ({
             poll_media: {
               text,
-              emoji: typeof emoji === "string" ? resolvePartialEmoji(emoji) : (emoji ?? undefined),
+              emoji: typeof emoji === "string" ? toPollEmoji(emoji) : (emoji ?? undefined),
             },
           }) as Omit<APIPollAnswer, "answer_id">,
       ),
@@ -658,9 +659,10 @@ function isCamelPoll(poll: object): boolean {
   return answers?.some((answer) => !("poll_media" in answer)) ?? false;
 }
 
-function resolvePartialEmoji(emoji: string): { id?: string; name?: string } {
-  const match = /<?(?:a?:)?(\w{2,32}):(\d{17,20})>?/.exec(emoji);
-  return match ? { name: match[1], id: match[2] } : { name: emoji };
+function toPollEmoji(emoji: string): { id?: string; name?: string } {
+  const partial = resolvePartialEmoji(emoji);
+  if (!partial) return { name: emoji };
+  return "name" in partial ? { name: partial.name, id: partial.id } : { id: partial.id };
 }
 
 function isRawFile(file: AttachmentResolvable): file is RawFile {

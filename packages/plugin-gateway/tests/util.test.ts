@@ -2,7 +2,7 @@ import { ApplicationFlags } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import { ApplicationFlagsBitField } from "../src/util/flags.js";
 import { Colors } from "../src/util/Colors.js";
-import { resolveColor } from "../src/util/Util.js";
+import { parseEmoji, resolveColor, resolvePartialEmoji } from "../src/util/Util.js";
 
 describe("resolveColor", () => {
   test("GIVEN a number THEN it is returned as is", () => {
@@ -46,5 +46,48 @@ describe("ApplicationFlagsBitField", () => {
       BigInt(ApplicationFlags.GatewayPresence),
     );
     expect(new ApplicationFlagsBitField(["Embedded"]).toJSON()).toBe(ApplicationFlags.Embedded);
+  });
+});
+
+describe("parseEmoji", () => {
+  test.each([
+    ["🐺", { animated: false, name: "🐺", id: undefined }],
+    [encodeURIComponent("🐺"), { animated: false, name: "🐺", id: undefined }],
+    ["<:howl:123456789012345678>", { animated: false, name: "howl", id: "123456789012345678" }],
+    ["<a:howl:123456789012345678>", { animated: true, name: "howl", id: "123456789012345678" }],
+    ["howl:123456789012345678", { animated: false, name: "howl", id: "123456789012345678" }],
+    ["a:howl:123456789012345678", { animated: true, name: "howl", id: "123456789012345678" }],
+  ])("GIVEN %s THEN it parses to %o", (text, expected) => {
+    expect(parseEmoji(text)).toStrictEqual(expected);
+  });
+
+  test("GIVEN a string with a colon that is no custom emoji THEN it returns null", () => {
+    expect(parseEmoji("not:an-emoji")).toBeNull();
+  });
+});
+
+describe("resolvePartialEmoji", () => {
+  test("GIVEN an emoji ID THEN only the ID is kept", () => {
+    expect(resolvePartialEmoji("123456789012345678")).toStrictEqual({ id: "123456789012345678" });
+  });
+
+  test("GIVEN a string THEN it is parsed", () => {
+    expect(resolvePartialEmoji("<a:howl:123456789012345678>")).toStrictEqual({
+      animated: true,
+      name: "howl",
+      id: "123456789012345678",
+    });
+  });
+
+  test("GIVEN an object THEN its id, name, and animated flag are kept", () => {
+    expect(resolvePartialEmoji({ id: "123456789012345678", name: "howl" })).toStrictEqual({
+      id: "123456789012345678",
+      name: "howl",
+      animated: false,
+    });
+  });
+
+  test("GIVEN an object with neither id nor name THEN it returns null", () => {
+    expect(resolvePartialEmoji({ id: null, name: null })).toBeNull();
   });
 });
