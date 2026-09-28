@@ -173,9 +173,16 @@ export class PermissionOverwriteManager {
       return "hoist" in target ? OverwriteType.Role : OverwriteType.Member;
     }
 
-    if (id === this.guildId) return OverwriteType.Role;
-    const role = this.guildId ? await this.client.roles.get(this.guildId, id) : undefined;
-    return role ? OverwriteType.Role : OverwriteType.Member;
+    if (id === this.guildId || !this.guildId) return OverwriteType.Role;
+    // With a roles cache, an uncached ID is a member's; without one, only the guild's roles tell.
+    if (this.client.roles.cache) {
+      return (await this.client.roles.get(this.guildId, id))
+        ? OverwriteType.Role
+        : OverwriteType.Member;
+    }
+
+    const roles = await this.client.roles.fetchAll(this.guildId);
+    return roles.some((role) => role.id === id) ? OverwriteType.Role : OverwriteType.Member;
   }
 
   // The overwrite endpoints answer 204 without the channel, so the cached entry is patched instead of refetched.

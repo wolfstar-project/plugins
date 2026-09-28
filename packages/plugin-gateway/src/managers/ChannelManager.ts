@@ -169,7 +169,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
           ([parent]) => {
             const relations: ChannelRelations = { guild, parent };
             if (recipient) relations.recipient = resolvedRecipient ?? null;
-            if (thread && client.cache) relations.joined = me !== undefined;
+            if (thread && client.cache?.threadMembers) relations.joined = me !== undefined;
             const channel = bindClient(createChannel(data, relations), client);
             if (data.type === ChannelType.GuildStageVoice) {
               // Built here rather than by the stage instance manager, whose relations lead back to this channel.

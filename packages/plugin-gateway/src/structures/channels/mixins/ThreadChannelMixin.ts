@@ -73,10 +73,12 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Whether the bot is a member of the thread, like discord.js's `ThreadChannel#joined`: from the thread member cache
-   * when the thread was built by a manager, else whether the payload carries the bot's thread member.
+   * when the thread was built by a manager, else `true` when the payload carries the bot's thread member.
+   *
+   * @returns `null` when it cannot be told: no thread member cache, and no thread member in the payload.
    */
-  public get joined(): boolean {
-    return this[kRelations].joined ?? (this[kData] as Data).member !== undefined;
+  public get joined(): boolean | null {
+    return this[kRelations].joined ?? ((this[kData] as Data).member === undefined ? null : true);
   }
 
   /**

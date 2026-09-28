@@ -231,13 +231,22 @@ export interface GatewayEventMap {
   userUpdate: [oldUser: User | null, newUser: User];
 
   /**
-   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without a cache, the emoji events
-   * are not emitted: listen to `raw` instead.
+   * Emitted for every `GUILD_EMOJIS_UPDATE`, with every emoji the guild now has. Always emitted, cache or not: the
+   * granular `emojiCreate`, `emojiUpdate`, and `emojiDelete` need the previous emojis, so the emojis cache.
+   */
+  guildEmojisUpdate: [guildId: string, emojis: GuildEmoji[]];
+  /**
+   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without an emojis cache (able to
+   * enumerate its entries), the emoji events are not emitted: listen to `guildEmojisUpdate` instead.
    */
   emojiCreate: [emoji: GuildEmoji];
   emojiUpdate: [oldEmoji: GuildEmoji, newEmoji: GuildEmoji];
   emojiDelete: [emoji: GuildEmoji];
 
+  /**
+   * Emitted for every `GUILD_STICKERS_UPDATE`, with every sticker the guild now has, like `guildEmojisUpdate`.
+   */
+  guildStickersUpdate: [guildId: string, stickers: Sticker[]];
   /**
    * Emitted for each sticker a `GUILD_STICKERS_UPDATE` adds, compared with the cache, like the emoji events.
    */
@@ -388,9 +397,11 @@ export enum GatewayEvents {
   GuildRoleUpdate = "guildRoleUpdate",
   GuildRoleDelete = "guildRoleDelete",
   UserUpdate = "userUpdate",
+  GuildEmojisUpdate = "guildEmojisUpdate",
   EmojiCreate = "emojiCreate",
   EmojiUpdate = "emojiUpdate",
   EmojiDelete = "emojiDelete",
+  GuildStickersUpdate = "guildStickersUpdate",
   StickerCreate = "stickerCreate",
   StickerUpdate = "stickerUpdate",
   StickerDelete = "stickerDelete",
