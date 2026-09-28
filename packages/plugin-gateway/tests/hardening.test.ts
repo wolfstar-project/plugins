@@ -1,6 +1,6 @@
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { container } from "@wolfstar/http-framework";
-import { createInMemoryCache, type Cache } from "@wolfstar/plugin-cache";
+import { createInMemoryCache, type Cache, type MemoryEntityCache } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   GatewayDispatchEvents,
@@ -280,7 +280,7 @@ describe("CachedManager fetch options", () => {
 
   test("GIVEN force THEN the API is hit even on a cache hit, and the cache is refreshed", async () => {
     const client = createClient(createInMemoryCache());
-    await client.cache!.users.set(user.id, user);
+    await client.cache!.users!.set(user.id, user);
     const get = vi.spyOn(container.rest, "get").mockResolvedValue({ ...user, username: "renamed" });
 
     const fetched = await client.users.fetch(user.id, { force: true });
@@ -344,8 +344,10 @@ describe("READY reconciliation", () => {
 
   test("GIVEN an unreachable cache THEN READY is still emitted under the default skip policy", async () => {
     const cache = createInMemoryCache();
-    await cache.guilds.set("11", guild("11") as never);
-    vi.spyOn(cache.guilds, "keys").mockRejectedValue(new Error("down"));
+    // `createInMemoryCache` builds MemoryEntityCaches, which can enumerate their entries.
+    const guilds = cache.guilds as MemoryEntityCache<unknown>;
+    await guilds.set("11", guild("11"));
+    vi.spyOn(guilds, "keys").mockRejectedValue(new Error("down"));
     vi.spyOn(cache.users!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache, { shardCount: 1 });
     const errors = record(client, "error");
