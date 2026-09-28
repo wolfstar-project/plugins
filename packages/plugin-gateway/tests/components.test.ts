@@ -341,10 +341,19 @@ describe("modal components", () => {
       type: ComponentType.CheckboxGroup,
       custom_id: "cg",
       options,
-      max_values: 2,
+      min_values: 0,
+      max_values: 1,
     });
-    expect(group.maxValues).toBe(2);
-    expect(group.minValues).toBeNull();
+    expect(group.minValues).toBe(0);
+    expect(group.maxValues).toBe(1);
+
+    const defaults = new CheckboxGroupComponent({
+      type: ComponentType.CheckboxGroup,
+      custom_id: "cg",
+      options,
+    });
+    expect(defaults.minValues).toBe(1);
+    expect(defaults.maxValues).toBe(options.length);
 
     const checkbox = new CheckboxComponent({ type: ComponentType.Checkbox, custom_id: "cb" });
     expect(checkbox.customId).toBe("cb");

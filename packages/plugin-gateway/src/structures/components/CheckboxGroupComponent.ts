@@ -21,17 +21,17 @@ export class CheckboxGroupComponent extends Component<APICheckboxGroupComponent>
   }
 
   /**
-   * The minimum number of options to pick.
+   * The minimum number of options to pick, `1` by default.
    */
-  public get minValues(): number | null {
-    return this[kData].min_values ?? null;
+  public get minValues(): number {
+    return this[kData].min_values ?? 1;
   }
 
   /**
-   * The maximum number of options to pick.
+   * The maximum number of options to pick, the number of options by default.
    */
-  public get maxValues(): number | null {
-    return this[kData].max_values ?? null;
+  public get maxValues(): number {
+    return this[kData].max_values ?? this.options.length;
   }
 
   /**
