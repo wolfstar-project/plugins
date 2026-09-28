@@ -17,6 +17,7 @@ const eventMapKeys: Record<GatewayEventName, true> = {
   shardResume: true,
   shardClose: true,
   shardError: true,
+  cacheError: true,
   guildCreate: true,
   guildUpdate: true,
   guildDelete: true,

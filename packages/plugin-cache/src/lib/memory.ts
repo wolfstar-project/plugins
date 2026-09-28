@@ -98,6 +98,22 @@ export class MemoryEntityCache<Raw> implements IterableEntityCache<Raw> {
   }
 
   public set(key: string, value: Raw, options?: CacheSetOptions): void {
+    this.#write(key, value, options);
+  }
+
+  public upsert(
+    key: string,
+    data: Partial<Raw>,
+    options?: CacheUpsertOptions,
+  ): CacheUpsertResult<Raw> {
+    const existing = this.#live(key)?.value;
+    const added = (options?.overwrite ? data : mergeValues(existing, data as Raw)) as Raw;
+    this.#write(key, added, options);
+    return { existing, added };
+  }
+
+  // Shared by `set` and `upsert`, so overriding (or spying on) one never changes the other.
+  #write(key: string, value: Raw, options: CacheSetOptions | undefined): void {
     const ttl = options?.ttl === undefined ? this.ttl : validateTtl(options.ttl);
     if (this.maxSize === 0) return;
 
@@ -108,17 +124,6 @@ export class MemoryEntityCache<Raw> implements IterableEntityCache<Raw> {
       // Maps iterate in insertion order, so the first key is the least recently used one.
       this.#items.delete(this.#items.keys().next().value!);
     }
-  }
-
-  public upsert(
-    key: string,
-    data: Partial<Raw>,
-    options?: CacheUpsertOptions,
-  ): CacheUpsertResult<Raw> {
-    const existing = this.#live(key)?.value;
-    const added = (options?.overwrite ? data : mergeValues(existing, data as Raw)) as Raw;
-    this.set(key, added, options);
-    return { existing, added };
   }
 
   public has(key: string): boolean {

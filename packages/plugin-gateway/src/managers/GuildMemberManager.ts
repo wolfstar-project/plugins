@@ -219,8 +219,8 @@ export class GuildMemberManager extends CachedManager<
       [
         data.user ? client.users._resolveData(data.user) : undefined,
         this.cachedGuild(data.guild_id),
-        key ? client.cache?.voiceStates.get(key) : undefined,
-        key ? client.cache?.presences.get(key) : undefined,
+        key ? client.cache?.voiceStates?.get(key) : undefined,
+        key ? client.cache?.presences?.get(key) : undefined,
       ],
       ([user, guild, voiceData, presenceData]) => {
         const relations: GuildMemberRelations = { user, guild };
@@ -228,13 +228,16 @@ export class GuildMemberManager extends CachedManager<
         return whenAll(
           [voiceData?.channel_id ? client.channels._get(voiceData.channel_id) : undefined],
           ([channel]) => {
-            if (key && client.cache) {
+            // Only a cached relation is known to be absent, otherwise it stays unknown (`undefined`).
+            if (key && client.cache?.voiceStates) {
               relations.voice = voiceData
                 ? bindClient(
                     new VoiceState(voiceData, { member, guild, channel: channel ?? null }),
                     client,
                   )
                 : null;
+            }
+            if (key && client.cache?.presences) {
               relations.presence = presenceData
                 ? bindClient(
                     new Presence(presenceData, { user: user ?? null, member, guild }),

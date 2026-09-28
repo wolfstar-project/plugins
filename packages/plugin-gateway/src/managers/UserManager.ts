@@ -49,7 +49,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
   public async deleteDM(userId: string): Promise<DMChannel> {
     const channel = await this.createDM(userId);
     await this.client.api.channels.delete(channel.id);
-    await this.client.cache?.channels.delete(channel.id);
+    await this.client.cache?.channels?.delete(channel.id);
     return channel;
   }
 

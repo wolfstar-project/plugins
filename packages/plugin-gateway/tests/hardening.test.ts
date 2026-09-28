@@ -197,10 +197,10 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN a slow guild THEN another guild's events are not held back, and each guild stays ordered", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    const upsert = cache.messages!.upsert.bind(cache.messages);
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       if (key.startsWith("slow")) await delay(40);
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache);
     const created = record(client, "messageCreate");
@@ -220,10 +220,10 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN a dispatch slower than dispatchTimeout THEN a DispatchTimeoutError is reported and the event still emitted", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    const upsert = cache.messages!.upsert.bind(cache.messages);
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       await delay(60);
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache, { dispatchTimeout: 10 });
     const errors = record(client, "error");
@@ -241,7 +241,7 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN cacheFailure skip THEN a failing cache drops the event", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.messages!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache);
     const errors = record(client, "error");
     const created = record(client, "messageCreate");
@@ -255,8 +255,8 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN cacheFailure emitUncached THEN the event is still emitted, built from the payload", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.guilds, "get").mockRejectedValue(new Error("down"));
-    vi.spyOn(cache.guilds, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.guilds!, "get").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.guilds!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache, { cacheFailure: "emitUncached" });
     const errors = record(client, "error");
     const updated = record(client, "guildUpdate");
@@ -346,7 +346,7 @@ describe("READY reconciliation", () => {
     const cache = createInMemoryCache();
     await cache.guilds.set("11", guild("11") as never);
     vi.spyOn(cache.guilds, "keys").mockRejectedValue(new Error("down"));
-    vi.spyOn(cache.users, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.users!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache, { shardCount: 1 });
     const errors = record(client, "error");
     const ready = record(client, "shardReady");

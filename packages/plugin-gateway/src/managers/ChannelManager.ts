@@ -157,10 +157,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
         parentId && depth < MaxParentDepth ? this.cache?.get(parentId) : undefined,
         recipient ? client.users._resolveData(recipient) : undefined,
         data.type === ChannelType.GuildStageVoice && guildId
-          ? client.cache?.stageInstances.get(stageInstanceKey(guildId, data.id))
+          ? client.cache?.stageInstances?.get(stageInstanceKey(guildId, data.id))
           : undefined,
         thread
-          ? client.cache?.threadMembers.get(threadMemberKey(data.id, client.user?.id ?? client.id))
+          ? client.cache?.threadMembers?.get(threadMemberKey(data.id, client.user?.id ?? client.id))
           : undefined,
       ],
       ([parentData, resolvedRecipient, stageData, me]) =>
@@ -240,7 +240,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     raw: CacheEntityTypes["channels"],
   ): Promise<void> {
     if (isThreadChannelType(raw.type)) {
-      await this.client.cache?.threads.set(channelId, raw as CacheEntityTypes["threads"]);
+      await this.client.cache?.threads?.set(channelId, raw as CacheEntityTypes["threads"]);
     } else {
       await this.cache?.set(channelId, raw);
     }

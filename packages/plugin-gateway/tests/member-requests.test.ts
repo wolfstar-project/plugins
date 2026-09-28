@@ -156,10 +156,11 @@ describe("GuildMemberManager#request", () => {
     const cache = createInMemoryCache();
     const { client, send } = createClient(cache);
     const order: string[] = [];
-    const set = cache.members.set.bind(cache.members);
-    vi.spyOn(cache.members, "set").mockImplementation(async (key, value) => {
-      await set(key, value);
+    const upsert = cache.members!.upsert.bind(cache.members);
+    vi.spyOn(cache.members!, "upsert").mockImplementation(async (key, value, options) => {
+      const result = await upsert(key, value, options);
       order.push(`cached ${key}`);
+      return result;
     });
 
     const request = client.members.request(guildId);
