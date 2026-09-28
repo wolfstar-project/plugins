@@ -36,7 +36,7 @@ import {
 } from "./keys.js";
 import { isObject, mergeValues } from "./merge.js";
 import { addReaction, countPollVote, removeReaction, removeReactionEmoji } from "./reactions.js";
-import type { Cache, CacheEntityName, EntityCache } from "./types.js";
+import { isIterableCache, type Cache, type CacheEntityName, type EntityCache } from "./types.js";
 
 export { mergeValues };
 
@@ -774,48 +774,98 @@ export function createCacheOperations(
 }
 
 /**
+ * The outcome of one write {@link applyCacheOperations} made.
+ */
+export interface CacheOperationResult {
+  /**
+   * The entity cache written to.
+   */
+  entity: CacheEntityName;
+  /**
+   * The key of the entry.
+   */
+  key: string;
+  /**
+   * What happened to the entry.
+   */
+  type: "upsert" | "update" | "delete";
+  /**
+   * The entry before the write, `undefined` when it was not cached.
+   */
+  existing?: unknown;
+  /**
+   * The entry after an upsert or an update.
+   */
+  added?: unknown;
+}
+
+/**
  * Applies a list of {@link CacheOperation}s to a {@link Cache}, sequentially and in order.
+ *
+ * @remarks
+ * Operations on an entity cache the cache does not hold are skipped, and so are the scans (`deletePrefix` and
+ * `deleteWhere` without a guild index) of an entity cache that cannot enumerate its entries.
  *
  * @param cache The cache to mutate.
  * @param operations The operations to apply, usually created by {@link createCacheOperations}.
+ * @returns One result per entry written or deleted, in order. `deleteGuild` deletions are not listed.
  */
 export async function applyCacheOperations(
   cache: Cache,
   operations: readonly CacheOperation[],
-): Promise<void> {
+): Promise<CacheOperationResult[]> {
+  const results: CacheOperationResult[] = [];
   for (const operation of operations) {
-    const store = cache[operation.store] as EntityCache<unknown>;
+    const store = cache[operation.store] as EntityCache<unknown> | undefined;
+    if (store === undefined) continue;
 
+    const entity = operation.store;
     switch (operation.type) {
       case "upsert": {
-        const value = operation.merge
-          ? mergeValues(await store.get(operation.key), operation.raw)
-          : operation.raw;
-        await store.set(operation.key, value);
+        const { existing, added } = await store.upsert(operation.key, operation.raw, {
+          overwrite: !operation.merge,
+        });
+        results.push({ entity, key: operation.key, type: "upsert", existing, added });
         break;
       }
       case "update": {
         const existing = await store.get(operation.key);
-        if (existing !== undefined) await store.set(operation.key, operation.update(existing));
+        if (existing === undefined) break;
+
+        const added = operation.update(existing);
+        await store.set(operation.key, added);
+        results.push({ entity, key: operation.key, type: "update", existing, added });
         break;
       }
-      case "delete":
-        await store.delete(operation.key);
+      case "delete": {
+        const existing = await store.get(operation.key);
+        if (await store.delete(operation.key)) {
+          results.push({ entity, key: operation.key, type: "delete", existing });
+        }
         break;
+      }
       case "deletePrefix":
         if (await deleteGuildThroughIndex(store, operation.guildId)) break;
-        for (const key of await store.keys()) {
-          if (key.startsWith(operation.prefix)) await store.delete(key);
+        if (!isIterableCache(store)) break;
+        for (const [key, value] of await store.entries()) {
+          if (key.startsWith(operation.prefix) && (await store.delete(key))) {
+            results.push({ entity, key, type: "delete", existing: value });
+          }
         }
         break;
       case "deleteWhere":
         if (await deleteGuildThroughIndex(store, operation.guildId)) break;
+        if (!isIterableCache(store)) break;
         for (const [key, value] of await store.entries()) {
-          if (operation.predicate(value)) await store.delete(key);
+          if (operation.predicate(value) && (await store.delete(key))) {
+            results.push({ entity, key, type: "delete", existing: value });
+          }
         }
         break;
     }
   }
+
+  return results;
 }
 
 /**
@@ -842,7 +892,7 @@ export function applyGatewayDispatch(
   cache: Cache,
   payload: GatewayDispatchPayload,
   context?: CacheOperationContext,
-): Promise<void> {
+): Promise<CacheOperationResult[]> {
   return applyCacheOperations(cache, createCacheOperations(payload, context));
 }
 

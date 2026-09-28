@@ -7,9 +7,13 @@ import {
 } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import {
+  applyCacheOperations,
   applyGatewayDispatch,
+  createCache,
   createCacheOperations,
   createInMemoryCache,
+  MemoryEntityCache,
+  type EntityCache,
   memberKey,
   messageKey,
   roleKey,
@@ -387,6 +391,136 @@ describe("reactions and poll votes", () => {
     });
     expect((await cache.messages.get(key))?.poll?.results?.answer_counts).toEqual([
       { id: 1, count: 1, me_voted: false },
+    ]);
+  });
+});
+
+describe("partial caches", () => {
+  const guild = {
+    id: "10",
+    name: "Pack",
+    channels: [{ id: "20", type: ChannelType.GuildText, name: "general" }],
+    members: [
+      {
+        user,
+        roles: [],
+        joined_at: "2024-01-01T00:00:00.000Z",
+        deaf: false,
+        mute: false,
+        flags: 0,
+      },
+    ],
+    roles: [{ id: "10", name: "@everyone" }],
+    emojis: [],
+    stickers: [],
+  };
+
+  test("GIVEN a cache holding only guilds THEN a GUILD_CREATE writes only the guild", async () => {
+    const guilds = new MemoryEntityCache();
+    const cache = createCache({ makeCache: (entity) => (entity === "guilds" ? guilds : null) });
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild));
+
+    expect(guilds.keys()).toEqual(["10"]);
+  });
+
+  test("GIVEN an empty cache THEN every dispatch is a no-op", async () => {
+    const cache = createCache({ makeCache: () => null });
+
+    await expect(
+      applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild)),
+    ).resolves.toEqual([]);
+    await expect(
+      applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildDelete, { id: "10" })),
+    ).resolves.toEqual([]);
+  });
+
+  test("GIVEN a store that cannot enumerate THEN GUILD_DELETE skips its scan", async () => {
+    const inner = new MemoryEntityCache<any>();
+    inner.set("20", { id: "20", guild_id: "10" });
+    // Only the base contract: no keys, values, entries, nor deleteGuild.
+    const channels: EntityCache<any> = {
+      get: (key) => inner.get(key),
+      set: (key, value, options) => inner.set(key, value, options),
+      upsert: (key, data, options) => inner.upsert(key, data, options),
+      has: (key) => inner.has(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      getSize: () => inner.getSize(),
+    };
+    const cache = createCache({ makeCache: (entity) => (entity === "channels" ? channels : null) });
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildDelete, { id: "10" }));
+
+    expect(inner.has("20")).toBe(true);
+  });
+});
+
+describe("applyCacheOperations results", () => {
+  test("GIVEN upserts THEN each result carries the entry before and after", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", user);
+
+    const results = await applyCacheOperations(cache, [
+      { type: "upsert", store: "users", key: "1", raw: { id: "1", username: "new" }, merge: true },
+      { type: "upsert", store: "users", key: "2", raw: { ...user, id: "2" } },
+      { type: "upsert", store: "members", key: "10:1", raw: {} },
+    ]);
+
+    expect(results).toEqual([
+      {
+        entity: "users",
+        key: "1",
+        type: "upsert",
+        existing: user,
+        added: { ...user, username: "new" },
+      },
+      {
+        entity: "users",
+        key: "2",
+        type: "upsert",
+        existing: undefined,
+        added: { ...user, id: "2" },
+      },
+    ]);
+  });
+
+  test("GIVEN a non-merged upsert THEN the cached entry is replaced", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", { ...user, bot: true });
+
+    await applyCacheOperations(cache, [{ type: "upsert", store: "users", key: "1", raw: user }]);
+
+    expect(cache.users!.get("1")).toEqual(user);
+  });
+
+  test("GIVEN updates and deletes THEN their results carry the previous entry", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", user);
+    cache.users!.set("2", { ...user, id: "2" });
+
+    const results = await applyCacheOperations(cache, [
+      {
+        type: "update",
+        store: "users",
+        key: "1",
+        update: (value) => ({ ...(value as object), username: "u" }),
+      },
+      { type: "update", store: "users", key: "3", update: (value) => value },
+      { type: "delete", store: "users", key: "2" },
+      { type: "deleteWhere", store: "users", predicate: () => true },
+    ]);
+
+    expect(results).toEqual([
+      {
+        entity: "users",
+        key: "1",
+        type: "update",
+        existing: user,
+        added: { ...user, username: "u" },
+      },
+      { entity: "users", key: "2", type: "delete", existing: { ...user, id: "2" } },
+      { entity: "users", key: "1", type: "delete", existing: { ...user, username: "u" } },
     ]);
   });
 });

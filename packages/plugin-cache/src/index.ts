@@ -20,6 +20,7 @@ export {
   mergeValues,
   type CacheOperation,
   type CacheOperationContext,
+  type CacheOperationResult,
 } from "./lib/operations.js";
 export {
   CacheValueError,
