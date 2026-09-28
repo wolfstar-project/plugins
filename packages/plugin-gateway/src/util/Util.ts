@@ -1,3 +1,10 @@
+/*
+ * Adapted from discord.js's `Util`
+ * (https://github.com/discordjs/discord.js/blob/main/packages/discord.js/src/util/Util.js).
+ * Copyright 2021 Noel Buechler, Copyright 2015 Amish Shah. Licensed under the Apache License, Version 2.0.
+ */
+
+import { parse } from "node:path";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { ChannelType, FormattingPatterns, type Snowflake } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
@@ -6,9 +13,12 @@ import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmo
 import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { Role } from "../structures/guilds/Role.js";
 import type { User } from "../structures/users/User.js";
-import type { ColorResolvable } from "../types.js";
+import type { ColorResolvable, SKUResolvable } from "../types.js";
 import { whenAll, whenCachedMap } from "./cache.js";
 import { Colors } from "./Colors.js";
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 /**
  * An emoji parsed from a string: a Unicode emoji has no `id`.
@@ -80,6 +90,7 @@ export function resolveColor(color: ColorResolvable): number {
 
   if (typeof color === "string") {
     if (color === "Random") return Math.floor(Math.random() * (0xffffff + 1));
+    if (color === "Default") return 0;
     if (/^#?[\da-f]{6}$/i.test(color)) return Number.parseInt(color.replace("#", ""), 16);
     resolved = (Colors as Record<string, number>)[color] ?? Number.NaN;
   } else if (Array.isArray(color)) {
@@ -97,36 +108,224 @@ export function resolveColor(color: ColorResolvable): number {
 }
 
 /**
- * Something with a Discord position: a role or a guild channel, as a structure or raw API data.
+ * Flattens an object for serialization, like discord.js's `flatten`: maps become the array of their keys, arrays are
+ * flattened element by element, objects with a `toJSON` are replaced by its result, and keys starting with `_` are
+ * dropped.
+ *
+ * @param object The object to flatten.
+ * @param props Specific properties to include (`true`), exclude (`false`), or rename (a string).
  */
-export interface PositionSortable {
-  id: Snowflake;
-  position: number;
-  /**
-   * The type of a channel: guild channels break position ties differently from roles.
-   */
-  type?: ChannelType;
+export function flatten(
+  object: unknown,
+  ...props: Record<string, boolean | string>[]
+): Record<string, unknown> {
+  if (!isObject(object)) return object as never;
+
+  const merged: Record<string, boolean | string> = Object.assign(
+    Object.fromEntries(
+      Object.keys(object)
+        .filter((key) => !key.startsWith("_"))
+        .map((key) => [key, true]),
+    ),
+    ...props,
+  );
+
+  const out: Record<string, unknown> = {};
+  for (const [prop, rename] of Object.entries(merged)) {
+    if (!rename) continue;
+    const key = rename === true ? prop : rename;
+    const element = object[prop];
+    const valueOf =
+      isObject(element) && typeof element.valueOf === "function" ? element.valueOf() : null;
+
+    if (element instanceof Map) out[key] = [...element.keys()];
+    else if (valueOf instanceof Map) out[key] = [...valueOf.keys()];
+    else if (Array.isArray(element)) {
+      out[key] = element.map((value: unknown) =>
+        isObject(value) && typeof value.toJSON === "function" ? value.toJSON() : flatten(value),
+      );
+    } else if (typeof valueOf !== "object") out[key] = valueOf;
+    else if (isObject(element) && typeof element.toJSON === "function") out[key] = element.toJSON();
+    else if (isObject(element)) out[key] = flatten(element);
+    else out[key] = element;
+  }
+
+  return out;
 }
 
 /**
- * Sorts roles or guild channels the way Discord displays them, like discord.js's `discordSort`: by position, then,
- * among equal positions, older first for channels and newer first for roles.
- *
- * @param items The roles or channels to sort, not mixed.
- * @returns A new array, lowest position first.
+ * Names by ID, as a map or a plain object.
  */
-export function discordSort<Value extends PositionSortable>(items: Iterable<Value>): Value[] {
-  const array = [...items];
-  const isChannel = array[0]?.type !== undefined;
-  return array.toSorted(
-    isChannel
-      ? (a, b) => a.position - b.position || compareSnowflakes(a.id, b.id)
-      : (a, b) => a.position - b.position || compareSnowflakes(b.id, a.id),
+export type NamesById = ReadonlyMap<string, string> | Readonly<Record<string, string>>;
+
+/**
+ * The names to replace mentions with in {@link cleanContent}, by ID. A mention whose ID has no name is kept.
+ */
+export interface CleanContentNames {
+  /**
+   * The display names of users, used for `<@id>` and `<@!id>` when `members` has none.
+   */
+  users?: NamesById;
+  /**
+   * The display names of guild members, preferred over `users`.
+   */
+  members?: NamesById;
+  /**
+   * The names of roles, used for `<@&id>`.
+   */
+  roles?: NamesById;
+  /**
+   * The names of channels, used for `<#id>`.
+   */
+  channels?: NamesById;
+}
+
+function nameIn(names: NamesById | undefined, id: string): string | undefined {
+  if (!names) return undefined;
+  return names instanceof Map ? names.get(id) : (names as Readonly<Record<string, string>>)[id];
+}
+
+/**
+ * Replaces the mentions of a string with the text they display, like discord.js's `cleanContent`: `@name`, `@role`,
+ * `#channel`, `/command`, and `:emoji:`.
+ *
+ * @remarks
+ * discord.js reads the names from its synchronous cache. The cache of this package is asynchronous, so the names
+ * are passed in instead; `Message#cleanContent` does it with the message's own mentions.
+ * @param text The string to clean.
+ * @param names The names to replace mentions with, by ID.
+ */
+export function cleanContent(text: string, names: CleanContentNames = {}): string {
+  return text.replaceAll(
+    /<(?:(?<type>@[!&]?|#)|(?:\/(?<commandName>[-_\p{L}\p{N}\p{sc=Deva}\p{sc=Thai} ]+):)|(?:a?:(?<emojiName>\w+):))(?<id>\d{17,19})>/gu,
+    (
+      match: string,
+      type: string | undefined,
+      commandName: string | undefined,
+      emojiName: string | undefined,
+      id: string,
+    ) => {
+      if (commandName) return `/${commandName}`;
+      if (emojiName) return `:${emojiName}:`;
+
+      if (type === "#") {
+        const channel = nameIn(names.channels, id);
+        return channel ? `#${channel}` : match;
+      }
+
+      const name =
+        type === "@&"
+          ? nameIn(names.roles, id)
+          : (nameIn(names.members, id) ?? nameIn(names.users, id));
+      return name ? `@${name}` : match;
+    },
   );
 }
 
-function compareSnowflakes(a: Snowflake, b: Snowflake): number {
-  return Number(BigInt(a) - BigInt(b));
+/**
+ * Escapes the code block fences of a string, to put it in a code block.
+ *
+ * @param text The string to escape.
+ */
+export function cleanCodeBlockContent(text: string): string {
+  return text.replaceAll("```", "`​``");
+}
+
+/**
+ * The ID and token of a webhook.
+ */
+export interface WebhookDataIdWithToken {
+  id: string;
+  token: string;
+}
+
+/**
+ * Parses a webhook URL for its ID and token.
+ *
+ * @param url The URL to parse.
+ * @returns The ID and token, `null` when the URL is no webhook URL.
+ */
+export function parseWebhookURL(url: string): WebhookDataIdWithToken | null {
+  const groups =
+    /https?:\/\/(?:ptb\.|canary\.)?discord\.com\/api(?:\/v\d{1,2})?\/webhooks\/(?<id>\d{17,19})\/(?<token>[\w-]{68})/i.exec(
+      url,
+    )?.groups;
+  return groups ? { id: groups.id!, token: groups.token! } : null;
+}
+
+/**
+ * Verifies that a value is a string, throwing otherwise.
+ *
+ * @param data The value to verify.
+ * @param error The constructor of the error to throw.
+ * @param errorMessage The message of the error to throw.
+ * @param allowEmpty Whether an empty string is allowed.
+ */
+export function verifyString(
+  data: unknown,
+  error: new (message: string) => Error = Error,
+  errorMessage = `Expected a string, got ${String(data)} instead.`,
+  allowEmpty = true,
+): string {
+  if (typeof data !== "string") throw new error(errorMessage);
+  if (!allowEmpty && data.length === 0) throw new error(errorMessage);
+  return data;
+}
+
+/**
+ * Something Discord sorts by position and ID: a role or a guild channel.
+ */
+export interface Positioned {
+  id: string;
+  position?: number | null;
+  rawPosition?: number | null;
+  type?: unknown;
+}
+
+/**
+ * Sorts roles or guild channels the way Discord displays them, like discord.js's `discordSort`: by position, then by
+ * ID, ascending for channels and descending for roles (told apart by channels having a `type`).
+ *
+ * @param items The roles or channels to sort, or a map of them.
+ * @returns A new sorted array.
+ */
+export function discordSort<Item extends Positioned>(
+  items: Iterable<Item> | ReadonlyMap<string, Item>,
+): Item[] {
+  const array = [...(items instanceof Map ? items.values() : (items as Iterable<Item>))];
+  const position = (item: Item) => item.rawPosition ?? item.position ?? 0;
+  const channels = array[0]?.type !== undefined;
+  return array.toSorted((a, b) => {
+    const byPosition = position(a) - position(b);
+    if (byPosition !== 0) return byPosition;
+    const byId = BigInt(a.id) - BigInt(b.id);
+    return byId === 0n ? 0 : byId > 0n === channels ? 1 : -1;
+  });
+}
+
+/**
+ * Moves an element of an array in place.
+ *
+ * @param array The array.
+ * @param element The element to move.
+ * @param newIndex The index to move it to, or the offset to move it by.
+ * @param offset Whether `newIndex` is an offset.
+ * @returns The new index of the element.
+ */
+export function moveElementInArray<Element>(
+  array: Element[],
+  element: Element,
+  newIndex: number,
+  offset = false,
+): number {
+  const index = array.indexOf(element);
+  const target = (offset ? index : 0) + newIndex;
+  if (index > -1 && target > -1 && target < array.length) {
+    const [removed] = array.splice(index, 1);
+    array.splice(target, 0, removed!);
+  }
+
+  return array.indexOf(element);
 }
 
 const TextSortableGroupTypes: readonly ChannelType[] = [
@@ -142,11 +341,10 @@ const VoiceSortableGroupTypes: readonly ChannelType[] = [
 const CategorySortableGroupTypes: readonly ChannelType[] = [ChannelType.GuildCategory];
 
 /**
- * The channel types a channel is ordered among, like discord.js's `getSortableGroupTypes`: text-like channels always
- * come before voice ones in a category, so each group has its own positions.
+ * Gets the channel types sorted together with a channel type: text-like channels are listed above voice ones, and
+ * categories on their own.
  *
  * @param type The type of the channel.
- * @internal
  */
 export function getSortableGroupTypes(type: ChannelType): readonly ChannelType[] {
   switch (type) {
@@ -166,30 +364,67 @@ export function getSortableGroupTypes(type: ChannelType): readonly ChannelType[]
 }
 
 /**
- * Moves an element of an array in place, like discord.js's `moveElementInArray`. An out of range target leaves the
- * array untouched.
- *
- * @param array The array.
- * @param element The element to move.
- * @param newIndex The index to move it to, or the offset to move it by with `offset`.
- * @param offset Whether `newIndex` is relative to the element's current index.
- * @returns The new index of the element.
- * @internal
+ * The plain information of an error, e.g. to send it to another process.
  */
-export function moveElementInArray<Value>(
-  array: Value[],
-  element: Value,
-  newIndex: number,
-  offset = false,
-): number {
-  const index = array.indexOf(element);
-  const targetIndex = (offset ? index : 0) + newIndex;
-  if (index > -1 && targetIndex > -1 && targetIndex < array.length) {
-    const [removed] = array.splice(index, 1);
-    array.splice(targetIndex, 0, removed!);
-  }
+export interface MakeErrorOptions {
+  name: string;
+  message: string;
+  stack?: string;
+}
 
-  return array.indexOf(element);
+/**
+ * Makes an error from its plain information.
+ *
+ * @param options The error's name, message, and stack.
+ */
+export function makeError(options: MakeErrorOptions): Error {
+  const error = new Error(options.message);
+  error.name = options.name;
+  error.stack = options.stack;
+  return error;
+}
+
+/**
+ * Gets the plain information of an error.
+ *
+ * @param error The error.
+ */
+export function makePlainError(error: Error): MakeErrorOptions {
+  return { name: error.name, message: error.message, stack: error.stack };
+}
+
+/**
+ * Gets the name of a path or URL without its query string, like discord.js's `basename`.
+ *
+ * @param path The path or URL.
+ * @param ext The extension to remove, if the name has it.
+ */
+export function basename(path: string, ext?: string): string {
+  const parsed = parse(path);
+  return ext && parsed.ext.startsWith(ext) ? parsed.name : parsed.base.split("?")[0]!;
+}
+
+/**
+ * Finds the name of a file to attach: the name of a path or URL, or of a stream's `path`, `file.jpg` otherwise.
+ *
+ * @param thing The file.
+ */
+export function findName(thing: unknown): string {
+  if (typeof thing === "string") return basename(thing);
+  if (isObject(thing) && typeof thing.path === "string") return basename(thing.path);
+  return "file.jpg";
+}
+
+/**
+ * Resolves a SKU, or its ID, to its ID.
+ *
+ * @param resolvable The SKU or its ID.
+ * @returns The ID, `null` when the value is neither.
+ */
+export function resolveSKUId(resolvable: SKUResolvable): string | null {
+  if (typeof resolvable === "string") return resolvable;
+  if (isObject(resolvable) && typeof resolvable.id === "string") return resolvable.id;
+  return null;
 }
 
 /**

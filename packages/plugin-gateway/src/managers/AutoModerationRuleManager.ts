@@ -15,6 +15,12 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
+import {
+  transformAutoModerationAction,
+  transformAutoModerationRuleTriggerMetadata,
+  type AutoModerationActionOptions,
+  type AutoModerationTriggerMetadataOptions,
+} from "../util/Transformers.js";
 import { CachedManager } from "./CachedManager.js";
 
 /**
@@ -24,10 +30,13 @@ export interface AutoModerationRuleEditOptions {
   name?: string;
   eventType?: AutoModerationRuleEventType;
   /**
-   * The trigger's settings. Discord replaces them as a whole.
+   * The trigger's settings, camel-cased or raw. Discord replaces them as a whole.
    */
-  triggerMetadata?: APIAutoModerationRuleTriggerMetadata;
-  actions?: readonly APIAutoModerationAction[];
+  triggerMetadata?: AutoModerationTriggerMetadataOptions | APIAutoModerationRuleTriggerMetadata;
+  /**
+   * The actions, camel-cased or raw.
+   */
+  actions?: readonly (AutoModerationActionOptions | APIAutoModerationAction)[];
   enabled?: boolean;
   exemptRoles?: readonly IdResolvable[];
   exemptChannels?: readonly IdResolvable[];
@@ -41,7 +50,7 @@ export interface AutoModerationRuleCreateOptions extends AutoModerationRuleEditO
   name: string;
   eventType: AutoModerationRuleEventType;
   triggerType: AutoModerationRuleTriggerType;
-  actions: readonly APIAutoModerationAction[];
+  actions: readonly (AutoModerationActionOptions | APIAutoModerationAction)[];
 }
 
 /**
@@ -99,7 +108,7 @@ export class AutoModerationRuleManager extends CachedManager<
       name: options.name,
       event_type: options.eventType,
       trigger_type: options.triggerType,
-      actions: [...options.actions],
+      actions: options.actions.map(transformAutoModerationAction),
     };
     const rule = await this.client.api.guilds.createAutoModerationRule(this.guildId, body, {
       reason: options.reason,
@@ -150,8 +159,10 @@ function toRuleBody(
   const body: RESTPatchAPIAutoModerationRuleJSONBody = {
     name: options.name,
     event_type: options.eventType,
-    trigger_metadata: options.triggerMetadata,
-    actions: options.actions && [...options.actions],
+    trigger_metadata:
+      options.triggerMetadata &&
+      transformAutoModerationRuleTriggerMetadata(options.triggerMetadata),
+    actions: options.actions?.map(transformAutoModerationAction),
     enabled: options.enabled,
     exempt_roles: options.exemptRoles?.map(resolveId),
     exempt_channels: options.exemptChannels?.map(resolveId),

@@ -13,6 +13,18 @@ import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import { createComponent, type MessageTopLevelComponent } from "../../util/components.js";
 import { isDeepEqual } from "../../util/equal.js";
+import {
+  transformAPIMessageActivity,
+  transformAPIMessageCall,
+  transformAPIMessageInteractionMetadata,
+  transformAPIMessageReference,
+  transformAPIRoleSubscriptionData,
+  type MessageActivity,
+  type MessageCall,
+  type MessageInteractionMetadata,
+  type MessageReference,
+  type RoleSubscriptionData,
+} from "../../util/Transformers.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
 import {
   MessagePayload,
@@ -33,6 +45,7 @@ import { Mixin } from "../Mixin.js";
 import {
   bindClient,
   initStructure,
+  kClient,
   kData,
   kPatch,
   kRelations,
@@ -237,45 +250,67 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The reference of a reply, crosspost, forward, or pin notice, if any.
+   * The reference of a reply, crosspost, forward, or pin notice, if any, camel-cased like discord.js's
+   * `Message#reference`.
    */
-  public get reference() {
-    return this[kData].message_reference ?? null;
+  public get reference(): MessageReference | null {
+    const reference = this[kData].message_reference;
+    return reference ? transformAPIMessageReference(reference) : null;
   }
 
   /**
-   * The snapshots of the messages this one forwards.
+   * The snapshots of the messages this one forwards, as messages carrying the IDs of the forwarded message, like
+   * discord.js's `Message#messageSnapshots`.
    */
-  public get messageSnapshots() {
-    return this[kData].message_snapshots ?? [];
+  public get messageSnapshots(): Message[] {
+    const snapshots = this[kData].message_snapshots;
+    if (!snapshots?.length) return [];
+    const reference = this[kData].message_reference;
+    const client = this[kClient];
+    return snapshots.map((snapshot) => {
+      const message = new Message({
+        ...snapshot.message,
+        id: reference?.message_id ?? this.id,
+        channel_id: reference?.channel_id ?? this.channelId,
+        guild_id: reference?.guild_id,
+      } as CacheEntityTypes["messages"]);
+      return client ? bindClient(message, client) : message;
+    });
   }
 
   /**
-   * The rich presence activity the message was sent with, e.g. a game invite.
+   * The rich presence activity the message was sent with, e.g. a game invite, camel-cased like discord.js's
+   * `Message#activity`.
    */
-  public get activity() {
-    return this[kData].activity ?? null;
+  public get activity(): MessageActivity | null {
+    const activity = this[kData].activity;
+    return activity ? transformAPIMessageActivity(activity) : null;
   }
 
   /**
-   * The metadata of the interaction the message answers, if any.
+   * The metadata of the interaction the message answers, if any, camel-cased like discord.js's
+   * `Message#interactionMetadata`.
    */
-  public get interactionMetadata() {
-    return this[kData].interaction_metadata ?? null;
+  public get interactionMetadata(): MessageInteractionMetadata | null {
+    const metadata = this[kData].interaction_metadata;
+    return metadata ? transformAPIMessageInteractionMetadata(metadata, this[kClient]) : null;
   }
 
   /**
-   * The call a call message is about.
+   * The call a call message is about, camel-cased like discord.js's `Message#call`.
    */
-  public get call() {
-    return this[kData].call ?? null;
+  public get call(): MessageCall | null {
+    const call = this[kData].call;
+    return call ? transformAPIMessageCall(call) : null;
   }
 
   /**
-   * The subscription a role subscription purchase message is about.
+   * The subscription a role subscription purchase message is about, camel-cased like discord.js's
+   * `Message#roleSubscriptionData`.
    */
-  public get roleSubscriptionData() {
-    return this[kData].role_subscription_data ?? null;
+  public get roleSubscriptionData(): RoleSubscriptionData | null {
+    const data = this[kData].role_subscription_data;
+    return data ? transformAPIRoleSubscriptionData(data) : null;
   }
 
   /**
@@ -381,8 +416,8 @@ export class Message extends BaseMessage<""> {
    */
   public async fetchReference(): Promise<Message> {
     const reference = this.reference;
-    if (!reference?.message_id) throw new GatewayError("MessageReferenceMissing", this.id);
-    return this.client.messages.fetch(reference.channel_id ?? this.channelId, reference.message_id);
+    if (!reference?.messageId) throw new GatewayError("MessageReferenceMissing", this.id);
+    return this.client.messages.fetch(reference.channelId ?? this.channelId, reference.messageId);
   }
 
   /**

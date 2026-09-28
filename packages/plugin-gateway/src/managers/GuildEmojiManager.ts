@@ -9,15 +9,17 @@ import { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { resolveImage, type ImageResolvable } from "../util/DataResolver.js";
 
 /**
  * The options to create an emoji with.
  */
 export interface GuildEmojiCreateOptions {
   /**
-   * The image, as a data URI (`data:image/png;base64,...`), up to 256 KiB.
+   * The image, up to 256 KiB: a data URI (`data:image/png;base64,...`), its contents, a path, a URL, a stream, or a
+   * blob.
    */
-  attachment: string;
+  attachment: ImageResolvable;
   name: string;
   /**
    * The IDs of the roles allowed to use the emoji, everyone when omitted.
@@ -103,7 +105,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    */
   public async create(options: GuildEmojiCreateOptions): Promise<GuildEmoji> {
     const body: RESTPostAPIGuildEmojiJSONBody = {
-      image: options.attachment,
+      image: (await resolveImage(options.attachment))!,
       name: options.name,
       roles: options.roles ? [...options.roles] : undefined,
     };

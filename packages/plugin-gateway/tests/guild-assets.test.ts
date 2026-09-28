@@ -176,7 +176,12 @@ describe("Guild", () => {
     });
 
     expect(put).toHaveBeenCalledWith(Routes.guildIncidentActions(guildId), { body: incidents });
-    expect((await client.guilds.get(guildId))?.incidentsData).toEqual(incidents);
+    expect((await client.guilds.get(guildId))?.incidentsData).toEqual({
+      invitesDisabledUntil: new Date("2024-06-01T01:00:00.000Z"),
+      dmsDisabledUntil: null,
+      dmSpamDetectedAt: null,
+      raidDetectedAt: null,
+    });
   });
 
   test("GIVEN leave THEN the guild and everything it scopes leave the cache", async () => {

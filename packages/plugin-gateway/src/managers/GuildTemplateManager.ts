@@ -9,6 +9,11 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
 import { GuildTemplate } from "../structures/guilds/GuildTemplate.js";
+import {
+  resolveGuildTemplateCode,
+  resolveImageOption,
+  type ImageResolvable,
+} from "../util/DataResolver.js";
 
 /**
  * The options to create a template with.
@@ -32,9 +37,9 @@ export interface GuildTemplateEditOptions {
 export interface GuildTemplateCreateGuildOptions {
   name: string;
   /**
-   * The icon, as a data URI.
+   * The icon: a data URI, or anything `resolveImage` reads.
    */
-  icon?: string;
+  icon?: ImageResolvable;
 }
 
 /**
@@ -53,9 +58,7 @@ export class GuildTemplateManager {
    * @param code The code of the template, or its URL.
    */
   public async fetch(code: string): Promise<GuildTemplate> {
-    // Accept `https://discord.new/code` as well as the bare code.
-    const resolved = code.split("/").pop()!;
-    return this.build(await this.client.api.guilds.getTemplate(resolved));
+    return this.build(await this.client.api.guilds.getTemplate(resolveGuildTemplateCode(code)));
   }
 
   /**
@@ -134,7 +137,10 @@ export class GuildTemplateManager {
    * @param options The name and icon of the guild.
    */
   public async createGuild(code: string, options: GuildTemplateCreateGuildOptions): Promise<Guild> {
-    const body: RESTPostAPITemplateCreateGuildJSONBody = { name: options.name, icon: options.icon };
+    const body: RESTPostAPITemplateCreateGuildJSONBody = {
+      name: options.name,
+      icon: (await resolveImageOption(options.icon)) ?? undefined,
+    };
     const guild = (await this.client.api.rest.post(Routes.template(code), {
       body,
     })) as APIGuild;

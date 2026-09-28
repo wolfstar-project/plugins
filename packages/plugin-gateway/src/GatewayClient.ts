@@ -52,6 +52,7 @@ import { Widget } from "./structures/guilds/Widget.js";
 import { StickerPack } from "./structures/stickers/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
+import { resolveInviteCode } from "./util/DataResolver.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import type { Partials } from "./util/Partials.js";
@@ -535,9 +536,7 @@ export class GatewayClient extends Client {
     code: string,
     options: { withCounts?: boolean; guildScheduledEventId?: string } = {},
   ): Promise<BaseInvite> {
-    // Accept `https://discord.gg/code` and `discord.com/invite/code` as well as the bare code.
-    const resolved = code.split("/").pop()!;
-    const invite = await this.api.invites.get(resolved, {
+    const invite = await this.api.invites.get(resolveInviteCode(code), {
       with_counts: options.withCounts ?? true,
       guild_scheduled_event_id: options.guildScheduledEventId,
     });

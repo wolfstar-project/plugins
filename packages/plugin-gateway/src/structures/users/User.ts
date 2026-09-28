@@ -1,12 +1,15 @@
 import type { BaseImageURLOptions, ImageURLOptions } from "@discordjs/rest";
 import { User as BaseUser } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type {
-  APIAvatarDecorationData,
-  APICollectibles,
-  APIUserPrimaryGuild,
-} from "discord-api-types/v10";
 import { cdn } from "../../util/cdn.js";
+import {
+  transformAPIAvatarDecorationData,
+  transformAPIUserPrimaryGuild,
+  transformCollectibles,
+  type AvatarDecorationData,
+  type Collectibles,
+  type UserPrimaryGuild,
+} from "../../util/Transformers.js";
 import { UserFlagsBitField } from "../../util/flags.js";
 import {
   MessagePayload,
@@ -49,19 +52,28 @@ export class User extends BaseUser {
     return `#${accentColor.toString(16).padStart(6, "0")}`;
   }
 
-  public get avatarDecorationData(): APIAvatarDecorationData | null {
-    return this[kData].avatar_decoration_data ?? null;
-  }
-
-  public get collectibles(): APICollectibles | null {
-    return this[kData].collectibles ?? null;
+  /**
+   * The user's avatar decoration, camel-cased like discord.js's `User#avatarDecorationData`.
+   */
+  public get avatarDecorationData(): AvatarDecorationData | null {
+    const data = this[kData].avatar_decoration_data;
+    return data ? transformAPIAvatarDecorationData(data) : null;
   }
 
   /**
-   * The guild whose tag the user displays, if any.
+   * The user's collectibles, camel-cased like discord.js's `User#collectibles`.
    */
-  public get primaryGuild(): APIUserPrimaryGuild | null {
-    return this[kData].primary_guild ?? null;
+  public get collectibles(): Collectibles | null {
+    const collectibles = this[kData].collectibles;
+    return collectibles ? transformCollectibles(collectibles) : null;
+  }
+
+  /**
+   * The guild whose tag the user displays, if any, camel-cased like discord.js's `User#primaryGuild`.
+   */
+  public get primaryGuild(): UserPrimaryGuild | null {
+    const guild = this[kData].primary_guild;
+    return guild ? transformAPIUserPrimaryGuild(guild) : null;
   }
 
   /**
@@ -136,8 +148,8 @@ export class User extends BaseUser {
    */
   public guildTagBadgeURL(options?: BaseImageURLOptions): string | null {
     const guild = this.primaryGuild;
-    return guild?.identity_guild_id && guild.badge
-      ? cdn.guildTagBadge(guild.identity_guild_id, guild.badge, options)
+    return guild?.identityGuildId && guild.badge
+      ? cdn.guildTagBadge(guild.identityGuildId, guild.badge, options)
       : null;
   }
 

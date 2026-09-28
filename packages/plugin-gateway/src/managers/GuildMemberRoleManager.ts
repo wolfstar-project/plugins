@@ -90,14 +90,14 @@ export class GuildMemberRoleManager {
    * Fetches the server booster role, if the member has it.
    */
   public async fetchPremiumSubscriberRole(): Promise<Role | null> {
-    return (await this.fetch()).find((role) => role.tags?.premium_subscriber === null) ?? null;
+    return (await this.fetch()).find((role) => role.tags?.premiumSubscriberRole) ?? null;
   }
 
   /**
    * Fetches the role Discord manages for the member, when the member is a bot.
    */
   public async fetchBotRole(): Promise<Role | null> {
-    return (await this.fetch()).find((role) => role.tags?.bot_id === this.userId) ?? null;
+    return (await this.fetch()).find((role) => role.tags?.botId === this.userId) ?? null;
   }
 
   /**
