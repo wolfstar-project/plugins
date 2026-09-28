@@ -1,5 +1,15 @@
 # @wolfstar/plugin-gateway
 
+## 0.7.0
+
+### Minor Changes
+
+- [#151](https://github.com/wolfstar-project/plugins/pull/151) [`8d75381`](https://github.com/wolfstar-project/plugins/commit/8d753813fcdc11a5f0cae5b6d1b3053044859a62) - Add component structures like discord.js': `ActionRow`, `InteractiveButtonComponent`, `LinkButtonComponent`, `PremiumButtonComponent`, the five select menus, `TextInputComponent`, `ContainerComponent`, `SectionComponent`, `TextDisplayComponent`, `ThumbnailComponent`, `MediaGalleryComponent` (with `MediaGalleryItem` and `UnfurledMediaItem`), `FileComponent`, `SeparatorComponent`, `LabelComponent`, `FileUploadComponent`, `RadioGroupComponent`, `CheckboxGroupComponent`, and `CheckboxComponent`, all extending a common `Component`. `createComponent()` builds the matching class for raw component data, and `findComponentByCustomId()` searches a component tree.
+
+  **Breaking:** `Message#components` now returns these structures instead of the raw API data. Call `toJSON()` on them to get the raw components back.
+
+- [#152](https://github.com/wolfstar-project/plugins/pull/152) [`d853792`](https://github.com/wolfstar-project/plugins/commit/d853792733a8fe3fb81f754d079cc7df9d042cd3) - Add discord.js-style errors: every error thrown or emitted by the package is now a `GatewayError`, `GatewayTypeError`, or `GatewayRangeError` carrying a `code` from `GatewayErrorCodes`, with its message in `GatewayErrorMessages`. `DispatchTimeoutError`, `GuildMembersTimeoutError`, `GuildMembersRateLimitError`, and `GatewaySessionStoreError` extend `GatewayError`, so their `name` now includes the code (e.g. `GuildMembersTimeoutError [GuildMembersTimeout]`). Adapted from discord.js (Apache-2.0).
+
 ## 0.6.0
 
 ### Minor Changes
