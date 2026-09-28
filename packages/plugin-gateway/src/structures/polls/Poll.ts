@@ -14,6 +14,7 @@ import {
   kRelations,
   StructureMixin,
 } from "../Structure.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The raw data of a poll, with the message it belongs to.
@@ -92,7 +93,7 @@ export class Poll extends BasePoll<""> {
       force: true,
     });
     const { poll } = message.toJSON();
-    if (!poll) throw new Error(`Message ${this.messageId} has no poll`);
+    if (!poll) throw new GatewayError("MessagePollMissing", this.messageId);
     return this[kPatch](poll as Partial<PollData>);
   }
 

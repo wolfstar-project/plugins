@@ -3,6 +3,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * Manages the voice states of the members connected to voice channels.
@@ -25,7 +26,8 @@ export class VoiceStateManager extends CachedManager<
   }
 
   public keyOf(data: CacheEntityTypes["voiceStates"]): string {
-    if (!data.guild_id) throw new TypeError("Cannot key a voice state outside of a guild");
+    if (!data.guild_id)
+      throw new GatewayTypeError("CacheKeyUnresolvable", "voice state", "outside of a guild");
     return this.resolveKey(data.guild_id, data.user_id);
   }
 

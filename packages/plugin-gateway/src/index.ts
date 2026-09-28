@@ -1,6 +1,7 @@
 export * from "./EventGatewayListener.js";
 export * from "./GatewayClient.js";
 export * from "./actions/Action.js";
+export * from "./errors/index.js";
 
 export * from "./structures/index.js";
 

@@ -20,6 +20,7 @@ import type { VoiceState } from "../voice/VoiceState.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link GuildMember}, resolved from the cache by `client.members`.
@@ -491,7 +492,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   private requireId(): string {
     const { id } = this;
-    if (id === null) throw new Error("This member has no user data: its ID is unknown");
+    if (id === null) throw new GatewayError("GuildMemberUserUnknown");
     return id;
   }
 }

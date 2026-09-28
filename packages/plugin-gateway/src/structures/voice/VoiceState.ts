@@ -6,6 +6,7 @@ import type { GuildMember } from "../guilds/GuildMember.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
 import type { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The options to edit a voice state with, only applicable in stage channels.
@@ -191,7 +192,7 @@ export class VoiceState extends BaseVoiceState {
   public async edit(options: VoiceStateEditOptions): Promise<this> {
     const target = this.resolveTarget();
     if (target !== "@me" && options.requestToSpeak !== undefined) {
-      throw new Error("Only the bot's own voice state can request to speak");
+      throw new GatewayError("VoiceStateNotOwn");
     }
 
     const requestToSpeakTimestamp = options.requestToSpeak
@@ -234,7 +235,7 @@ export class VoiceState extends BaseVoiceState {
 
   private requireGuildId(): string {
     const { guildId } = this;
-    if (!guildId) throw new Error("This voice state does not belong to a guild");
+    if (!guildId) throw new GatewayError("VoiceStateGuildUnknown");
     return guildId;
   }
 

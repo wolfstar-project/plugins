@@ -8,6 +8,7 @@ import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link SoundboardSound}, resolved from the cache by the guild's soundboard manager.
@@ -113,7 +114,7 @@ export class SoundboardSound extends BaseSoundboardSound {
 
   private withGuild(action: (guildId: string) => Promise<this>): Promise<this> {
     const { guildId } = this;
-    if (!guildId) return Promise.reject(new Error("Default soundboard sounds cannot be changed"));
+    if (!guildId) return Promise.reject(new GatewayError("NotGuildSoundboardSound"));
     return action(guildId);
   }
 }

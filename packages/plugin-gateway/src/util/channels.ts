@@ -17,6 +17,7 @@ import {
   type PermissionResolvable,
   type PermissionsString,
 } from "./PermissionsBitField.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * Something with an ID: a structure, or the ID itself.
@@ -30,7 +31,7 @@ export type IdResolvable = string | { id: string | null };
  */
 export function resolveId(value: IdResolvable): string {
   const id = typeof value === "string" ? value : value.id;
-  if (!id) throw new TypeError("Cannot resolve an ID from a structure without one");
+  if (!id) throw new GatewayTypeError("IdUnresolvable");
   return id;
 }
 

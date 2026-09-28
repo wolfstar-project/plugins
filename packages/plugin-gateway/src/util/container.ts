@@ -1,5 +1,6 @@
 import { container } from "@wolfstar/http-framework";
 import type { GatewayClient } from "../GatewayClient.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * Gets the {@link GatewayClient} registered in the framework's container.
@@ -11,7 +12,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 export function getGatewayClient(): GatewayClient {
   const { client } = container;
   if (!client || !("gateway" in client)) {
-    throw new Error("No GatewayClient has been constructed yet");
+    throw new GatewayError("ClientNotConstructed");
   }
 
   return client as GatewayClient;

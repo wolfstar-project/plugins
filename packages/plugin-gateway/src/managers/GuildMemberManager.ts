@@ -21,6 +21,7 @@ import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { GatewayError, GatewayTypeError, GatewayRangeError } from "../errors/GatewayError.js";
 
 /**
  * The options to edit a member with.
@@ -185,7 +186,8 @@ export class GuildMemberManager extends CachedManager<
   }
 
   public keyOf(data: CacheEntityTypes["members"]): string {
-    if (!data.user) throw new TypeError("Cannot key a member without its user");
+    if (!data.user)
+      throw new GatewayTypeError("CacheKeyUnresolvable", "member", "without its user");
     return this.resolveKey(data.guild_id, data.user.id);
   }
 
@@ -322,13 +324,13 @@ export class GuildMemberManager extends CachedManager<
     const userIds = options.userIds?.length ? options.userIds : undefined;
     const nonce = options.nonce ?? randomBytes(16).toString("hex");
     if (query !== undefined && userIds !== undefined) {
-      throw new TypeError("Cannot request members by both query and userIds");
+      throw new GatewayTypeError("GuildMembersQueryConflict");
     }
     if (userIds && userIds.length > 100) {
-      throw new RangeError("Cannot request more than 100 members by their IDs");
+      throw new GatewayRangeError("GuildMembersUserIdsLimit");
     }
     if (Buffer.byteLength(nonce) > 32) {
-      throw new RangeError("The nonce of a members request cannot exceed 32 bytes");
+      throw new GatewayRangeError("MemberFetchNonceLength");
     }
 
     const d: GatewayRequestGuildMembersData = userIds
@@ -339,7 +341,7 @@ export class GuildMemberManager extends CachedManager<
 
     // The nonce is the only link between the request and its chunks, so it must be unique while pending.
     if (this.#requests.has(nonce)) {
-      throw new Error(`A members request with the nonce "${nonce}" is pending already`);
+      throw new GatewayError("GuildMembersNoncePending", nonce);
     }
     let request!: MembersRequest;
     const promise = new Promise<GuildMember[]>((resolve, reject) => {

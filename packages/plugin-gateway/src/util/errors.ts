@@ -1,3 +1,5 @@
+import { GatewayError } from "../errors/GatewayError.js";
+
 /**
  * Emitted as an `error` when a dispatch takes longer than `GatewayClientOptions.dispatchTimeout` to process.
  *
@@ -6,7 +8,7 @@
  * event order is preserved. The error only reports that the partition is stuck, usually on a slow or unreachable
  * cache.
  */
-export class DispatchTimeoutError extends Error {
+export class DispatchTimeoutError extends GatewayError<"DispatchTimeout"> {
   /**
    * The type of the slow dispatch, e.g. `MESSAGE_CREATE`.
    */
@@ -28,10 +30,7 @@ export class DispatchTimeoutError extends Error {
   public readonly timeout: number;
 
   public constructor(type: string, shardId: number, partition: string | null, timeout: number) {
-    super(
-      `Processing ${type} on shard ${shardId} (${partition ?? "barrier"}) took longer than ${timeout}ms`,
-    );
-    this.name = "DispatchTimeoutError";
+    super("DispatchTimeout", type, shardId, partition, timeout);
     this.type = type;
     this.shardId = shardId;
     this.partition = partition;
@@ -45,7 +44,7 @@ export class DispatchTimeoutError extends Error {
  * @remarks
  * The request is dropped: chunks arriving later still update the cache and emit `guildMembersChunk`.
  */
-export class GuildMembersTimeoutError extends Error {
+export class GuildMembersTimeoutError extends GatewayError<"GuildMembersTimeout"> {
   /**
    * The ID of the guild whose members were requested.
    */
@@ -62,8 +61,7 @@ export class GuildMembersTimeoutError extends Error {
   public readonly timeout: number;
 
   public constructor(guildId: string, nonce: string, timeout: number) {
-    super(`Requesting the members of guild ${guildId} (${nonce}) took longer than ${timeout}ms`);
-    this.name = "GuildMembersTimeoutError";
+    super("GuildMembersTimeout", guildId, nonce, timeout);
     this.guildId = guildId;
     this.nonce = nonce;
     this.timeout = timeout;
@@ -73,7 +71,7 @@ export class GuildMembersTimeoutError extends Error {
 /**
  * Thrown by `GuildMemberManager#request` when Discord answers with `RATE_LIMITED` instead of the members' chunks.
  */
-export class GuildMembersRateLimitError extends Error {
+export class GuildMembersRateLimitError extends GatewayError<"GuildMembersRateLimited"> {
   /**
    * The ID of the guild whose members were requested.
    */
@@ -90,10 +88,7 @@ export class GuildMembersRateLimitError extends Error {
   public readonly retryAfter: number;
 
   public constructor(guildId: string, nonce: string, retryAfter: number) {
-    super(
-      `Requesting the members of guild ${guildId} (${nonce}) is rate limited, retry after ${retryAfter}ms`,
-    );
-    this.name = "GuildMembersRateLimitError";
+    super("GuildMembersRateLimited", guildId, nonce, retryAfter);
     this.guildId = guildId;
     this.nonce = nonce;
     this.retryAfter = retryAfter;
@@ -107,7 +102,7 @@ export class GuildMembersRateLimitError extends Error {
  * Neither failure stops the shard: a failed (or timed out) read identifies instead of resuming, and a failed write
  * only means the session may not be resumed after a restart. The store's error is the `cause`.
  */
-export class GatewaySessionStoreError extends Error {
+export class GatewaySessionStoreError extends GatewayError<"SessionStoreFailed"> {
   /**
    * Whether the store failed to read (`"get"`) or write (`"set"`) the session.
    */
@@ -119,11 +114,8 @@ export class GatewaySessionStoreError extends Error {
   public readonly shardId: number;
 
   public constructor(operation: "get" | "set", shardId: number, cause: unknown) {
-    super(
-      `Cannot ${operation === "get" ? "read" : "write"} the session of shard ${shardId} in the session store`,
-      { cause },
-    );
-    this.name = "GatewaySessionStoreError";
+    super("SessionStoreFailed", operation, shardId);
+    this.cause = cause;
     this.operation = operation;
     this.shardId = shardId;
   }

@@ -7,6 +7,7 @@ import type { ThreadMember } from "../ThreadMember.js";
 import { kData, kRelations } from "../../Structure.js";
 import { editChannel } from "./edit.js";
 import type { APIThreadMetadata } from "discord-api-types/v10";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = {
   parent_id?: string | null;
@@ -131,7 +132,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public fetchStarterMessage(): Promise<Message> {
     const { parent_id: parentId } = this[kData] as Data;
-    if (!parentId) throw new Error(`Thread ${this.id} has no known parent`);
+    if (!parentId) throw new GatewayError("ThreadParentUnknown", this.id);
     return this.client.messages.fetch(parentId, this.id);
   }
 
@@ -140,7 +141,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public fetchOwner(): Promise<ThreadMember> {
     const { owner_id: ownerId } = this[kData] as Data;
-    if (!ownerId) throw new Error(`Thread ${this.id} has no known owner`);
+    if (!ownerId) throw new GatewayError("ThreadOwnerUnknown", this.id);
     return this.client.threadMembers.fetch(this.id, ownerId);
   }
 }

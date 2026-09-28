@@ -10,6 +10,7 @@ import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { Role } from "../structures/guilds/Role.js";
 import { getGatewayClient } from "./container.js";
 import { PermissionsBitField } from "./PermissionsBitField.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * What {@link computeGuildPermissions} needs to know about a member of a guild.
@@ -179,7 +180,7 @@ export async function computePermissionsIn(
     data = resolved.toJSON() as OverwriteHolder;
   }
 
-  if (!data.guild_id) throw new Error(`Channel ${resolved.id} has no known guild`);
+  if (!data.guild_id) throw new GatewayError("ChannelGuildUnknown", resolved.id);
   return computeTargetPermissions(data.guild_id, data.permission_overwrites ?? [], target);
 }
 

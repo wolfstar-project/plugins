@@ -39,6 +39,7 @@ import {
   StructureMixin,
 } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 const ZeroWidthSpace = String.fromCodePoint(0x20_0b);
 
@@ -378,7 +379,7 @@ export class Message extends BaseMessage<""> {
    */
   public async fetchReference(): Promise<Message> {
     const reference = this.reference;
-    if (!reference?.message_id) throw new Error(`Message ${this.id} references no message`);
+    if (!reference?.message_id) throw new GatewayError("MessageReferenceMissing", this.id);
     return this.client.messages.fetch(reference.channel_id ?? this.channelId, reference.message_id);
   }
 

@@ -9,6 +9,7 @@ import type { PermissionsBitField } from "../../../util/PermissionsBitField.js";
 import type { GuildMember } from "../../guilds/GuildMember.js";
 import type { Role } from "../../guilds/Role.js";
 import { editChannel } from "./edit.js";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = {
   guild_id?: string;
@@ -83,7 +84,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
     options: { relative?: boolean; reason?: string } = {},
   ): Promise<this> {
     const { guild_id: guildId } = this[kData] as Data;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
 
     const target = options.relative ? this.position + position : position;
     await this.client.guilds
@@ -120,7 +121,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
    */
   public lockPermissions(reason?: string): Promise<this> {
     if (!(this[kData] as Data).parent_id) {
-      throw new Error(`Channel ${this.id} has no category to sync its permissions with`);
+      throw new GatewayError("GuildChannelOrphan", this.id);
     }
 
     return editChannel(this, { lockPermissions: true, reason });
@@ -147,7 +148,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
     target: GuildMember | Role | string,
   ): Promise<Readonly<PermissionsBitField>> {
     const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
     return computeTargetPermissions(guildId, overwrites, target);
   }
 }

@@ -5,6 +5,7 @@ import type {
   FetchedThreads,
   ThreadCreateOptions,
 } from "./ThreadManager.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * Manages the threads of one channel: `client.threads`, with the channel's ID filled in.
@@ -33,7 +34,7 @@ export class ChannelThreadManager {
    * Fetches the active threads of the channel, and caches them.
    */
   public async fetchActive(): Promise<FetchedThreads> {
-    if (!this.guildId) throw new Error(`Channel ${this.channelId} has no known guild`);
+    if (!this.guildId) throw new GatewayError("ChannelGuildUnknown", this.channelId);
 
     // Discord only lists the active threads of a whole guild.
     const { threads, members } = await this.client.threads.fetchActive(this.guildId);

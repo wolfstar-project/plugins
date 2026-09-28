@@ -1,5 +1,6 @@
 import type { GatewaySessionInfo, GatewaySessionStore } from "@wolfstar/plugin-cache";
 import { GatewaySessionStoreError } from "./errors.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * Sits between `@discordjs/ws` and a {@link GatewaySessionStore}, which `@discordjs/ws` would otherwise read on every
@@ -73,7 +74,10 @@ export class GatewaySessionMirror {
       return await Promise.race([
         read,
         new Promise<never>((_, reject) => {
-          timer = setTimeout(() => reject(new Error(`Timed out after ${timeout}ms`)), timeout);
+          timer = setTimeout(
+            () => reject(new GatewayError("SessionStoreTimeout", timeout)),
+            timeout,
+          );
         }),
       ]);
     } catch (error) {
