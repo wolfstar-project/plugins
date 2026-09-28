@@ -7,7 +7,17 @@ import {
   GuildFieldCacheEntityNames,
   GuildKeyedCacheEntityNames,
 } from "./operations.js";
-import type { Cache, CacheEntityName, CacheEntityTypes, EntityCache } from "./types.js";
+import { mergeValues } from "./merge.js";
+import { createCache } from "./policy.js";
+import type {
+  Cache,
+  CacheEntityName,
+  CachePolicies,
+  CacheSetOptions,
+  CacheUpsertOptions,
+  CacheUpsertResult,
+  IterableEntityCache,
+} from "./types.js";
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
@@ -168,7 +178,7 @@ function codecMarker(codec: CacheCodec): string {
  * With {@link RedisEntityCacheOptions.guildOf}, one more sorted set per guild (`<prefix>:@guild:<guildId>`) tracks the
  * keys of that guild's entries the same way, and `<prefix>:@guilds` lists the guilds having one, for `clear`.
  */
-export class RedisEntityCache<Raw> implements EntityCache<Raw> {
+export class RedisEntityCache<Raw> implements IterableEntityCache<Raw> {
   /**
    * Always `false`: every method returns a promise, compressed or not.
    */
@@ -210,12 +220,13 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
     return value === null ? undefined : this.deserialize(valueKey, value);
   }
 
-  public async set(key: string, value: Raw): Promise<void> {
+  public async set(key: string, value: Raw, options?: CacheSetOptions): Promise<void> {
+    const milliseconds = this.resolveTtl(options?.ttl);
     const serialized = await this.serialize(value);
     const guildId = this.#guildOf?.(key, value);
     // The value and its index entries are written in one transaction, so neither can exist without the other.
     const transaction = this.#redis.multi();
-    if (this.ttl === undefined) {
+    if (milliseconds === null) {
       transaction.set(this.valueKey(key), serialized).zadd(this.indexKey, "+inf", key);
       if (guildId !== undefined) {
         transaction
@@ -224,7 +235,6 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
       }
     } else {
       const now = Date.now();
-      const milliseconds = Math.round(this.ttl * 1000);
       transaction
         .set(this.valueKey(key), serialized, "PX", milliseconds)
         .zadd(this.indexKey, now + milliseconds, key)
@@ -244,6 +254,24 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
     }
 
     await execute(transaction);
+  }
+
+  /**
+   * Merges data into the cached entry, see {@link EntityCache.upsert}.
+   *
+   * @remarks
+   * It is a read followed by a write, not an atomic operation: a write landing in between from another process is
+   * overwritten.
+   */
+  public async upsert(
+    key: string,
+    data: Partial<Raw>,
+    options?: CacheUpsertOptions,
+  ): Promise<CacheUpsertResult<Raw>> {
+    const existing = await this.get(key);
+    const added = (options?.overwrite ? data : mergeValues(existing, data as Raw)) as Raw;
+    await this.set(key, added, options);
+    return { existing, added };
   }
 
   public async has(key: string): Promise<boolean> {
@@ -389,8 +417,20 @@ export class RedisEntityCache<Raw> implements EntityCache<Raw> {
   }
 
   private async prune(): Promise<void> {
-    if (this.ttl !== undefined)
-      await this.#redis.zremrangebyscore(this.indexKey, "-inf", Date.now());
+    // Any write may have set a time-to-live, whatever the store's default.
+    await this.#redis.zremrangebyscore(this.indexKey, "-inf", Date.now());
+  }
+
+  // The time-to-live of a write in milliseconds, `null` for none.
+  private resolveTtl(ttl: number | null | undefined): number | null {
+    if (ttl === undefined) return this.ttl === undefined ? null : Math.round(this.ttl * 1000);
+    if (ttl !== null && !(ttl > 0)) {
+      throw new RangeError(
+        `ttl must be a positive amount of milliseconds or null, received ${ttl}`,
+      );
+    }
+
+    return ttl;
   }
 
   private async serialize(value: Raw): Promise<string> {
@@ -467,11 +507,11 @@ function decode(value: string, markerLength: number): Buffer {
 }
 
 /**
- * A {@link Cache} whose entity caches are all {@link RedisEntityCache}s.
+ * A {@link Cache} created by {@link createRedisCache}.
+ *
+ * @deprecated Use {@link Cache}: the stores may be left out (`entities`) or wrapped by a policy (`policies`).
  */
-export type RedisCache = {
-  readonly [Name in CacheEntityName]: RedisEntityCache<CacheEntityTypes[Name]>;
-};
+export type RedisCache = Cache;
 
 export interface RedisCacheOptions {
   /**
@@ -508,9 +548,18 @@ export interface RedisCacheOptions {
    */
   legacyCodecs?: readonly CacheCodec[];
   /**
-   * The time-to-live per entity cache, in seconds. Entity caches left out never expire.
+   * The entity kinds to cache, every other one is not. Every entity kind is cached when omitted.
+   */
+  entities?: readonly CacheEntityName[];
+  /**
+   * The default time-to-live per entity cache, in seconds. Entity caches left out never expire their entries, unless
+   * a write (or a policy) sets one.
    */
   ttl?: Partial<Record<CacheEntityName, number>>;
+  /**
+   * The policies deciding which entries get cached and for how long, per entity cache, see `withPolicy`.
+   */
+  policies?: CachePolicies;
   /**
    * Whether to index the guild-scoped entity caches by guild, so a `GUILD_DELETE` drops a guild's entries without
    * scanning every entity cache. It costs one more sorted-set write per write, and a read before every delete.
@@ -570,7 +619,7 @@ export const DefaultRedisCachePrefix = "wolfstar:cache";
  *
  * @param options The options for the cache.
  */
-export function createRedisCache(options: RedisCacheOptions): RedisCache & Cache {
+export function createRedisCache(options: RedisCacheOptions): Cache {
   const {
     redis,
     prefix = DefaultRedisCachePrefix,
@@ -580,22 +629,24 @@ export function createRedisCache(options: RedisCacheOptions): RedisCache & Cache
     legacyCodecs,
     ttl,
     indexGuilds = true,
+    entities = CacheEntityNames,
+    policies,
   } = options;
+  const included = new Set(entities);
 
-  return Object.freeze(
-    Object.fromEntries(
-      CacheEntityNames.map((name) => [
-        name,
-        new RedisEntityCache(redis, {
-          prefix: `${prefix}:${name}`,
-          ttl: ttl?.[name],
-          compression,
-          compressionThreshold,
-          codec,
-          legacyCodecs,
-          guildOf: indexGuilds ? GuildResolvers[name] : undefined,
-        }),
-      ]),
-    ) as RedisCache,
-  );
+  return createCache({
+    makeCache: (name) =>
+      included.has(name)
+        ? new RedisEntityCache(redis, {
+            prefix: `${prefix}:${name}`,
+            ttl: ttl?.[name],
+            compression,
+            compressionThreshold,
+            codec,
+            legacyCodecs,
+            guildOf: indexGuilds ? GuildResolvers[name] : undefined,
+          })
+        : null,
+    policies,
+  });
 }
