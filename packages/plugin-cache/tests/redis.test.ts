@@ -65,6 +65,55 @@ describe("RedisEntityCache", () => {
     expect(() => new RedisEntityCache(redis, { prefix: "test", ttl: 0 })).toThrow(RangeError);
   });
 
+  test("GIVEN a per-write ttl THEN it overrides the store's default", async () => {
+    vi.useFakeTimers();
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test", ttl: 10 });
+
+    await cache.set("short", 1, { ttl: 1_500 });
+    await cache.set("forever", 2, { ttl: null });
+    await cache.set("default", 3);
+
+    expect(redis.strings.get("test:short")!.expiresAt).toBe(Date.now() + 1_500);
+    expect(redis.strings.get("test:forever")!.expiresAt).toBe(Infinity);
+    expect(redis.sortedSets.get("test:@index")!.get("forever")).toBe(Infinity);
+
+    vi.advanceTimersByTime(1_501);
+    expect((await cache.keys()).toSorted()).toEqual(["default", "forever"]);
+    expect(await cache.get("short")).toBeUndefined();
+
+    vi.advanceTimersByTime(10_000);
+    expect(await cache.keys()).toEqual(["forever"]);
+  });
+
+  test("GIVEN a per-write ttl on a store without a default THEN the entry expires", async () => {
+    vi.useFakeTimers();
+    const cache = new RedisEntityCache<number>(redis, { prefix: "test" });
+
+    await cache.set("a", 1, { ttl: 100 });
+    vi.advanceTimersByTime(101);
+
+    expect(await cache.get("a")).toBeUndefined();
+    expect(await cache.getSize()).toBe(0);
+  });
+
+  test("GIVEN an upsert THEN the data is merged into the cached entry", async () => {
+    const cache = new RedisEntityCache<{ id: string; name?: string; bot?: boolean }>(redis, {
+      prefix: "test",
+    });
+
+    expect(await cache.upsert("1", { id: "1", name: "old", bot: false })).toEqual({
+      existing: undefined,
+      added: { id: "1", name: "old", bot: false },
+    });
+    expect(await cache.upsert("1", { name: "new" })).toEqual({
+      existing: { id: "1", name: "old", bot: false },
+      added: { id: "1", name: "new", bot: false },
+    });
+    await cache.upsert("1", { id: "1" }, { overwrite: true });
+
+    expect(await cache.get("1")).toEqual({ id: "1" });
+  });
+
   test.each(["gzip", "brotli"] as const)(
     "GIVEN %s compression THEN large values are compressed and read back",
     async (compression) => {
@@ -474,6 +523,27 @@ describe("createRedisCache", () => {
       await expect(cache.users.get("1")).resolves.toBeUndefined();
     },
   );
+
+  test("GIVEN entities THEN only those are cached", () => {
+    const cache = createRedisCache({ redis: new FakeRedis(), entities: ["users"] });
+
+    expect(Object.keys(cache)).toEqual(["users"]);
+  });
+
+  test("GIVEN policies THEN the stores follow them", async () => {
+    const redis = new FakeRedis();
+    const cache = createRedisCache({
+      redis,
+      policies: { users: { filter: (user) => !user.bot, ttl: () => 5_000 } },
+    });
+
+    await cache.users!.set("1", { id: "1", bot: true } as never);
+    await cache.users!.set("2", { id: "2" } as never);
+
+    expect(await cache.users!.has("1")).toBe(false);
+    expect(redis.strings.get("wolfstar:cache:users:2")!.expiresAt).toBeLessThan(Infinity);
+    expect(cache.users!.synchronous).toBe(false);
+  });
 
   test("GIVEN no prefix THEN the default one is used", () => {
     expect(createRedisCache({ redis: new FakeRedis() }).messages.prefix).toBe(

@@ -32,7 +32,7 @@ export class ThreadMemberManager extends CachedManager<
     super(client, "threadMembers");
   }
 
-  public createStructure(data: CacheEntityTypes["threadMembers"]): ThreadMember {
+  public construct(data: CacheEntityTypes["threadMembers"]): ThreadMember {
     return new ThreadMember(data);
   }
 

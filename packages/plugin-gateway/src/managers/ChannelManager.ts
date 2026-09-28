@@ -116,7 +116,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     super(client, "channels");
   }
 
-  public createStructure(data: CacheEntityTypes["channels"]): AnyChannel {
+  public construct(data: CacheEntityTypes["channels"]): AnyChannel {
     return createChannel(data);
   }
 
@@ -157,10 +157,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
         parentId && depth < MaxParentDepth ? this.cache?.get(parentId) : undefined,
         recipient ? client.users._resolveData(recipient) : undefined,
         data.type === ChannelType.GuildStageVoice && guildId
-          ? client.cache?.stageInstances.get(stageInstanceKey(guildId, data.id))
+          ? client.cache?.stageInstances?.get(stageInstanceKey(guildId, data.id))
           : undefined,
         thread
-          ? client.cache?.threadMembers.get(threadMemberKey(data.id, client.user?.id ?? client.id))
+          ? client.cache?.threadMembers?.get(threadMemberKey(data.id, client.user?.id ?? client.id))
           : undefined,
       ],
       ([parentData, resolvedRecipient, stageData, me]) =>
@@ -169,7 +169,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
           ([parent]) => {
             const relations: ChannelRelations = { guild, parent };
             if (recipient) relations.recipient = resolvedRecipient ?? null;
-            if (thread && client.cache) relations.joined = me !== undefined;
+            if (thread && client.cache?.threadMembers) relations.joined = me !== undefined;
             const channel = bindClient(createChannel(data, relations), client);
             if (data.type === ChannelType.GuildStageVoice) {
               // Built here rather than by the stage instance manager, whose relations lead back to this channel.
@@ -240,7 +240,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     raw: CacheEntityTypes["channels"],
   ): Promise<void> {
     if (isThreadChannelType(raw.type)) {
-      await this.client.cache?.threads.set(channelId, raw as CacheEntityTypes["threads"]);
+      await this.client.cache?.threads?.set(channelId, raw as CacheEntityTypes["threads"]);
     } else {
       await this.cache?.set(channelId, raw);
     }

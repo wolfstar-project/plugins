@@ -20,7 +20,7 @@ export class VoiceStateManager extends CachedManager<
     super(client, "voiceStates");
   }
 
-  public createStructure(data: CacheEntityTypes["voiceStates"]): VoiceState {
+  public construct(data: CacheEntityTypes["voiceStates"]): VoiceState {
     return new VoiceState(data);
   }
 
@@ -54,10 +54,12 @@ export class VoiceStateManager extends CachedManager<
    * Lists the cached voice states of a guild.
    *
    * @param guildId The ID of the guild.
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(guildId: string): Promise<VoiceState[]> {
     const prefix = `${guildId}:`;
-    const entries = (await this.cache?.entries()) ?? [];
+    const entries = (await this.iterableCache()?.entries()) ?? [];
     return Promise.all(
       entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this.hydrate(raw)),
     );

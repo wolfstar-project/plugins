@@ -257,7 +257,7 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
     const channelId = (this[kData] as unknown as Record<string, string | null | undefined>)[
       GuildChannelFields[name]
     ];
-    if (!channelId || this.client.cache?.channels.synchronous !== true) return null;
+    if (!channelId || this.client.cache?.channels?.synchronous !== true) return null;
     try {
       return this.client.channels.cached(channelId) ?? null;
     } catch {

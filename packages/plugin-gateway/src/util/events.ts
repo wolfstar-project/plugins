@@ -21,6 +21,7 @@ import type {
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
+import type { CacheEntityName } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
@@ -46,6 +47,24 @@ import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { Typing } from "../structures/channels/Typing.js";
 import type { User } from "../structures/users/User.js";
 import type { VoiceState } from "../structures/voice/VoiceState.js";
+
+/**
+ * Where a cache failure reported by the `cacheError` event happened.
+ */
+export interface CacheErrorContext {
+  /**
+   * The entity cache that failed.
+   */
+  entity: CacheEntityName;
+  /**
+   * The key of the entry, `null` for operations spanning the whole cache.
+   */
+  key: string | null;
+  /**
+   * The operation that failed.
+   */
+  operation: "get" | "set" | "upsert" | "delete";
+}
 
 /**
  * What a reaction event says besides the reaction and the user.
@@ -110,6 +129,11 @@ export interface GatewayEventMap {
    * Emitted when a shard runs into an error.
    */
   shardError: [error: Error, shardId: number];
+  /**
+   * Emitted when a manager's cache read or write fails, e.g. while Redis is unreachable. With the default
+   * `cacheErrors: "miss"`, the manager then carries on as if the entry was not cached.
+   */
+  cacheError: [error: unknown, context: CacheErrorContext];
 
   guildCreate: [guild: Guild];
   guildUpdate: [oldGuild: Guild | null, newGuild: Guild];
@@ -217,13 +241,22 @@ export interface GatewayEventMap {
   userUpdate: [oldUser: User | null, newUser: User];
 
   /**
-   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without a cache, the emoji events
-   * are not emitted: listen to `raw` instead.
+   * Emitted for every `GUILD_EMOJIS_UPDATE`, with every emoji the guild now has. Always emitted, cache or not: the
+   * granular `emojiCreate`, `emojiUpdate`, and `emojiDelete` need the previous emojis, so the emojis cache.
+   */
+  guildEmojisUpdate: [guildId: string, emojis: GuildEmoji[]];
+  /**
+   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without an emojis cache (able to
+   * enumerate its entries), the emoji events are not emitted: listen to `guildEmojisUpdate` instead.
    */
   emojiCreate: [emoji: GuildEmoji];
   emojiUpdate: [oldEmoji: GuildEmoji, newEmoji: GuildEmoji];
   emojiDelete: [emoji: GuildEmoji];
 
+  /**
+   * Emitted for every `GUILD_STICKERS_UPDATE`, with every sticker the guild now has, like `guildEmojisUpdate`.
+   */
+  guildStickersUpdate: [guildId: string, stickers: Sticker[]];
   /**
    * Emitted for each sticker a `GUILD_STICKERS_UPDATE` adds, compared with the cache, like the emoji events.
    */
@@ -342,6 +375,7 @@ export enum GatewayEvents {
   ShardResume = "shardResume",
   ShardClose = "shardClose",
   ShardError = "shardError",
+  CacheError = "cacheError",
   GuildCreate = "guildCreate",
   GuildUpdate = "guildUpdate",
   GuildDelete = "guildDelete",
@@ -374,9 +408,11 @@ export enum GatewayEvents {
   GuildRoleUpdate = "guildRoleUpdate",
   GuildRoleDelete = "guildRoleDelete",
   UserUpdate = "userUpdate",
+  GuildEmojisUpdate = "guildEmojisUpdate",
   EmojiCreate = "emojiCreate",
   EmojiUpdate = "emojiUpdate",
   EmojiDelete = "emojiDelete",
+  GuildStickersUpdate = "guildStickersUpdate",
   StickerCreate = "stickerCreate",
   StickerUpdate = "stickerUpdate",
   StickerDelete = "stickerDelete",

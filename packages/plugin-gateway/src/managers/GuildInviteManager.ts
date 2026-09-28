@@ -53,7 +53,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["invites"]): GuildInvite {
+  public construct(data: CacheEntityTypes["invites"]): GuildInvite {
     return new GuildInvite(data);
   }
 

@@ -48,7 +48,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["stickers"]): Sticker {
+  public construct(data: CacheEntityTypes["stickers"]): Sticker {
     return new Sticker(data);
   }
 
@@ -156,9 +156,12 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @remarks
    * It enumerates the whole entity cache, which a Redis store answers from its index: prefer `fetchAll` when the
    * cache may be incomplete.
+   *
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(): Promise<Sticker[]> {
-    const cache = this.cache;
+    const cache = this.iterableCache();
     if (!cache) return [];
 
     const prefix = `${this.guildId}:`;

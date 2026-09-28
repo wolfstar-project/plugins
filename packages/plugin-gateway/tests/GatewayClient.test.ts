@@ -267,7 +267,7 @@ describe("GatewayClient", () => {
 
   test("GIVEN a failing cache THEN the error is emitted and later dispatches still run", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockImplementationOnce(() => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementationOnce(() => {
       throw new Error("boom");
     });
     const client = createClient(cache);
@@ -283,7 +283,7 @@ describe("GatewayClient", () => {
 
   test("GIVEN a failing cache and no error listener THEN the error is logged and the shard keeps going", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockImplementationOnce(() => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementationOnce(() => {
       throw new Error("boom");
     });
     const client = createClient(cache);
@@ -299,12 +299,12 @@ describe("GatewayClient", () => {
 
   test("GIVEN an asynchronous cache THEN dispatches of a shard are processed in order", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
+    const upsert = cache.messages!.upsert.bind(cache.messages);
     let delay = 20;
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       // The first write is the slowest one: without the queue it would complete last.
       await new Promise((resolve) => setTimeout(resolve, (delay -= 10)));
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache);
     const calls = record(client, "messageCreate");

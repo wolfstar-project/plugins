@@ -1,13 +1,17 @@
-import type {
-  Awaitable,
-  CacheEntityName,
-  CacheEntityTypes,
-  EntityCache,
+import {
+  isIterableCache,
+  mergeValues,
+  type Awaitable,
+  type CacheEntityName,
+  type CacheEntityTypes,
+  type EntityCache,
+  type IterableEntityCache,
 } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
 import { bindClient, type StructureMixin } from "../structures/Structure.js";
 import { isPromiseLike, whenAll } from "../util/cache.js";
+import type { CacheErrorContext } from "../util/events.js";
 
 /**
  * The options to fetch an entity with.
@@ -38,12 +42,16 @@ export interface AddOptions {
 }
 
 /**
- * The base class of every manager: it reads raw data from one of the client's entity caches, falls back to the REST
- * API when asked to, and wraps the result in a {@link StructureMixin | structure}.
+ * The base class of every manager, the `BaseManager` of the discord.js RFC #11426: it reads raw data from one of the
+ * client's entity caches, falls back to the REST API when asked to, and wraps the result in a
+ * {@link StructureMixin | structure} with {@link CachedManager.construct}.
  *
  * @remarks
- * The cache only ever holds raw API data, building structures is always the manager's job. Without a cache, `get`
- * always resolves to `undefined` and `fetch` always hits the API.
+ * The cache only ever holds raw API data, building structures is always the manager's job. Without a store for its
+ * entity (see the client's `makeCache`), `get` always resolves to `undefined` and `fetch` always hits the API.
+ *
+ * A failing store (e.g. Redis being unreachable) emits `cacheError` and, with the client's default
+ * `cacheErrors: "miss"`, is treated as a cache miss.
  *
  * Every method is asynchronous since the cache can be Redis, except {@link CachedManager.cached}, which reads a
  * synchronous cache (`createInMemoryCache`) without awaiting it.
@@ -178,10 +186,18 @@ export abstract class CachedManager<
     cache = true,
     { key = this.keyOf(data) }: AddOptions = {},
   ): Promise<Value> {
-    const existing = await this.cache?.get(key);
-    const merged = existing ? { ...existing, ...data } : data;
-    if (cache) await this.storeRaw(key, merged);
-    return this.hydrate(merged);
+    const store = this.cache;
+    if (store === undefined) return this.hydrate(data);
+
+    if (!cache) {
+      const existing = await this.guard("get", key, () => store.get(key), undefined);
+      return this.hydrate(mergeValues(existing, data));
+    }
+
+    const { added } = await this.guard("upsert", key, () => store.upsert(key, data), {
+      added: data,
+    });
+    return this.hydrate(added);
   }
 
   /**
@@ -221,7 +237,7 @@ export abstract class CachedManager<
 
   /**
    * Builds the structure of raw data, resolving its relations from the cache. Without relations to resolve, the same
-   * as {@link CachedManager.createStructure}.
+   * as {@link CachedManager.construct}.
    *
    * @param data The raw data.
    */
@@ -238,7 +254,7 @@ export abstract class CachedManager<
    * @internal
    */
   public _hydrate(data: CacheEntityTypes[Name]): Awaitable<Value> {
-    return this.createStructure(data);
+    return this.construct(data);
   }
 
   /**
@@ -276,11 +292,22 @@ export abstract class CachedManager<
   }
 
   /**
-   * Wraps raw data in this manager's structure.
+   * Wraps raw data in this manager's structure: the RFC's `StructureCreator`, which lives on the manager since the
+   * cache only holds raw data.
    *
    * @param data The raw data.
    */
-  public abstract createStructure(data: CacheEntityTypes[Name]): Value;
+  public abstract construct(data: CacheEntityTypes[Name]): Value;
+
+  /**
+   * Wraps raw data in this manager's structure.
+   *
+   * @param data The raw data.
+   * @deprecated Use {@link CachedManager.construct}.
+   */
+  public createStructure(data: CacheEntityTypes[Name]): Value {
+    return this.construct(data);
+  }
 
   /**
    * Gets the cache key of raw data.
@@ -310,7 +337,26 @@ export abstract class CachedManager<
    * @param raw The raw data of the entity.
    */
   protected async storeRaw(key: string, raw: CacheEntityTypes[Name]): Promise<void> {
-    await this.cache?.set(key, raw);
+    const { cache } = this;
+    if (cache) await this.guard("set", key, () => cache.set(key, raw), undefined);
+  }
+
+  /**
+   * Gets this manager's store when it can enumerate its entries, for the `listCached` methods.
+   *
+   * @returns The store, or `undefined` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
+   */
+  protected iterableCache(): IterableEntityCache<CacheEntityTypes[Name]> | undefined {
+    const { cache } = this;
+    if (cache === undefined) return undefined;
+    if (!isIterableCache(cache)) {
+      throw new TypeError(
+        `The ${this.entity} cache cannot enumerate its entries (it has no keys/values/entries)`,
+      );
+    }
+
+    return cache;
   }
 
   /**
@@ -319,9 +365,40 @@ export abstract class CachedManager<
    * @param key The cache key of the entity.
    */
   protected getByKey(key: string): Awaitable<Value | undefined> {
-    return whenAll([this.cache?.get(key)], ([raw]) =>
-      raw === undefined ? undefined : this.build(raw),
+    const { cache } = this;
+    return whenAll(
+      [cache ? this.guard("get", key, () => cache.get(key), undefined) : undefined],
+      ([raw]) => (raw === undefined ? undefined : this.build(raw)),
     );
+  }
+
+  /**
+   * Runs a cache operation, reporting its failure through `cacheError`. With the client's `cacheErrors: "miss"`, a
+   * failure resolves to `fallback`, otherwise it is rethrown. Synchronous when the operation is.
+   *
+   * @param operation The operation, for `cacheError`.
+   * @param key The key of the entry, for `cacheError`.
+   * @param run Runs the operation.
+   * @param fallback What a failure resolves to under `cacheErrors: "miss"`.
+   */
+  protected guard<T>(
+    operation: CacheErrorContext["operation"],
+    key: string | null,
+    run: () => Awaitable<T>,
+    fallback: T,
+  ): Awaitable<T> {
+    const fail = (error: unknown): T => {
+      this.client.emit("cacheError", error, { entity: this.entity, key, operation });
+      if (this.client.cacheErrors === "throw") throw error;
+      return fallback;
+    };
+
+    try {
+      const result = run();
+      return isPromiseLike(result) ? result.catch(fail) : result;
+    } catch (error) {
+      return fail(error);
+    }
   }
 
   /**
@@ -333,3 +410,10 @@ export abstract class CachedManager<
     return whenAll([this._hydrate(data)], ([value]) => bindClient(value, this.client));
   }
 }
+
+export {
+  /**
+   * The name of {@link CachedManager} in the discord.js RFC #11426.
+   */
+  CachedManager as BaseManager,
+};

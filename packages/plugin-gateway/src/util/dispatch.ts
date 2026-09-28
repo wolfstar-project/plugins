@@ -6,7 +6,12 @@ import {
   type GatewayDispatchPayload,
   type GatewayMessagePollVoteDispatchData,
 } from "discord-api-types/v10";
-import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  isIterableCache,
+  type Awaitable,
+  type CacheEntityTypes,
+  type EntityCache,
+} from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
 import { ClientUser } from "../structures/users/ClientUser.js";
@@ -639,46 +644,67 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
  * The table of the dispatches that turn into several events, diffed against the cache.
  *
  * @remarks
- * Without a cache there is nothing to diff against, so these dispatches only reach `raw`.
+ * Their aggregate event (e.g. `guildEmojisUpdate`) is always emitted. Without a cache there is nothing to diff
+ * against, so the granular events are not.
  */
 export const MultiDispatchHandlers: {
   [Type in GatewayDispatchEvents]?: MultiDispatchHandler<Type>;
 } = {
   [GatewayDispatchEvents.GuildEmojisUpdate]: {
-    before: (client, data) => client.guilds.emojis(data.guild_id).listCached(),
+    before: (client, data) =>
+      cachedList(client.cache?.emojis, () => client.guilds.emojis(data.guild_id).listCached()),
     emit: async (client, data, previous: GuildEmoji[] | undefined) => {
-      if (!client.cache || !previous) return [];
       const emojis = client.guilds.emojis(data.guild_id);
       const current = await Promise.all(
         data.emojis.map((emoji) => emojis.hydrate({ ...emoji, guild_id: data.guild_id })),
       );
-      return diff(
-        previous,
-        current,
-        GatewayEvents.EmojiCreate,
-        GatewayEvents.EmojiUpdate,
-        GatewayEvents.EmojiDelete,
+      const events: GatewayEventTuple[] = [
+        [GatewayEvents.GuildEmojisUpdate, data.guild_id, current],
+      ];
+      if (!previous) return events;
+      return events.concat(
+        diff(
+          previous,
+          current,
+          GatewayEvents.EmojiCreate,
+          GatewayEvents.EmojiUpdate,
+          GatewayEvents.EmojiDelete,
+        ),
       );
     },
   },
   [GatewayDispatchEvents.GuildStickersUpdate]: {
-    before: (client, data) => client.guilds.stickers(data.guild_id).listCached(),
+    before: (client, data) =>
+      cachedList(client.cache?.stickers, () => client.guilds.stickers(data.guild_id).listCached()),
     emit: async (client, data, previous: Sticker[] | undefined) => {
-      if (!client.cache || !previous) return [];
       const stickers = client.guilds.stickers(data.guild_id);
       const current = await Promise.all(
         data.stickers.map((sticker) => stickers.hydrate({ ...sticker, guild_id: data.guild_id })),
       );
-      return diff(
-        previous,
-        current,
-        GatewayEvents.StickerCreate,
-        GatewayEvents.StickerUpdate,
-        GatewayEvents.StickerDelete,
+      const events: GatewayEventTuple[] = [
+        [GatewayEvents.GuildStickersUpdate, data.guild_id, current],
+      ];
+      if (!previous) return events;
+      return events.concat(
+        diff(
+          previous,
+          current,
+          GatewayEvents.StickerCreate,
+          GatewayEvents.StickerUpdate,
+          GatewayEvents.StickerDelete,
+        ),
       );
     },
   },
 };
+
+// The cached list to diff against, `undefined` when there is none: no store, or one that cannot enumerate.
+async function cachedList<Value>(
+  store: EntityCache<unknown> | undefined,
+  list: () => Promise<Value[]>,
+): Promise<Value[] | undefined> {
+  return store && isIterableCache(store) ? list() : undefined;
+}
 
 type Diffable = { id: string | null; equals(other: never): boolean };
 

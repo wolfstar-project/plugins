@@ -98,7 +98,7 @@ export class GuildScheduledEventManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["scheduledEvents"]): GuildScheduledEvent {
+  public construct(data: CacheEntityTypes["scheduledEvents"]): GuildScheduledEvent {
     return new GuildScheduledEvent(data);
   }
 

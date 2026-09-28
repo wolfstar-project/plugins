@@ -50,7 +50,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     super(client, "roles");
   }
 
-  public createStructure(data: CacheEntityTypes["roles"]): Role {
+  public construct(data: CacheEntityTypes["roles"]): Role {
     return new Role(data);
   }
 

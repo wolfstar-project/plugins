@@ -80,7 +80,7 @@ export class MessageManager extends CachedManager<
     super(client, "messages");
   }
 
-  public createStructure(data: CacheEntityTypes["messages"]): Message {
+  public construct(data: CacheEntityTypes["messages"]): Message {
     return new Message(data);
   }
 
@@ -114,7 +114,7 @@ export class MessageManager extends CachedManager<
       [
         // A webhook is not a user: its author only holds for this message.
         data.webhook_id
-          ? this.client.users.createStructure(author)
+          ? this.client.users.construct(author)
           : this.client.users._resolveData(author),
         member && guildId
           ? this.client.members._resolveData({ ...member, user: author, guild_id: guildId })

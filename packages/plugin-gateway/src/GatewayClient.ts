@@ -11,7 +11,15 @@ import {
 import { Client as DiscordCoreClient, type API } from "@discordjs/core";
 import type { REST } from "@discordjs/rest";
 import { Client, container, type ClientOptions } from "@wolfstar/http-framework";
-import { applyGatewayDispatch, type Cache, type GatewaySessionStore } from "@wolfstar/plugin-cache";
+import {
+  applyGatewayDispatch,
+  createCache,
+  isIterableCache,
+  type Cache,
+  type CacheFactory,
+  type CachePolicies,
+  type GatewaySessionStore,
+} from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
   GatewayIntentBits,
@@ -70,9 +78,58 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    * The cache to write every dispatch into, see `@wolfstar/plugin-cache`. Without one, the managers' `get` always
    * resolve to `undefined`, update events receive `null` as their previous state, and `fetch` always hits the API.
    *
+   * @remarks
+   * Every entity cache is optional: an entity kind the cache does not hold is simply not cached, see
+   * `createInMemoryCache`'s `entities` option.
+   *
    * @default undefined
    */
   cache?: Cache;
+  /**
+   * Creates the store of each entity kind, `null` or `undefined` not to cache it: the `CacheConstructor` of the
+   * discord.js RFC #11426. Called once per entity kind when the client is constructed, and takes precedence over
+   * {@link GatewayClientOptions.cache}.
+   *
+   * @example
+   * ```typescript
+   * import { MemoryEntityCache } from '@wolfstar/plugin-cache';
+   *
+   * // Cache guilds, channels, and roles only.
+   * const client = new GatewayClient({
+   *   intents,
+   *   makeCache: (entity) => (['guilds', 'channels', 'roles'].includes(entity) ? new MemoryEntityCache() : null),
+   * });
+   * ```
+   *
+   * @default undefined
+   */
+  makeCache?: CacheFactory;
+  /**
+   * The policies deciding which entries get cached, and for how long, per entity kind, see `withPolicy`. They apply to
+   * every write, from dispatches as well as from the managers.
+   *
+   * @example
+   * ```typescript
+   * // Do not cache bots, and forget messages after an hour.
+   * policies: { users: { filter: (user) => !user.bot }, messages: { ttl: () => 3_600_000 } }
+   * ```
+   *
+   * @default undefined
+   */
+  policies?: CachePolicies;
+  /**
+   * What the managers do when a cache read or write fails, e.g. while Redis is unreachable. A `cacheError` event is
+   * emitted either way.
+   *
+   * - `"miss"`: treat it as a cache miss, falling back to the API or to the data at hand.
+   * - `"throw"`: reject with the error.
+   *
+   * @remarks
+   * Dispatches follow {@link GatewayClientOptions.cacheFailure} instead.
+   *
+   * @default "miss"
+   */
+  cacheErrors?: "miss" | "throw";
   /**
    * Additional options for the underlying `@discordjs/ws` `WebSocketManager`, e.g. `compression` or
    * `initialPresence`.
@@ -241,6 +298,11 @@ export class GatewayClient extends Client {
   public readonly cacheFailure: "skip" | "emitUncached";
 
   /**
+   * What the managers do when a cache read or write fails, see {@link GatewayClientOptions.cacheErrors}.
+   */
+  public readonly cacheErrors: "miss" | "throw";
+
+  /**
    * See {@link GatewayClientOptions.dispatchTimeout}.
    */
   public readonly dispatchTimeout: number | null;
@@ -295,7 +357,8 @@ export class GatewayClient extends Client {
 
     // Set by the base client's constructor, which validated the token and built the REST manager already.
     this.rest = container.rest;
-    this.cache = options.cache;
+    this.cache = resolveCache(options);
+    this.cacheErrors = options.cacheErrors ?? "miss";
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
     this.partials = Object.freeze([...(options.partials ?? [])]);
@@ -656,6 +719,8 @@ export class GatewayClient extends Client {
    * They are the guilds the bot left while it was disconnected, or while the process was down with a persistent
    * cache. Discord does not replay those removals on a new session, so the cache would otherwise keep them forever.
    *
+   * It needs a guilds cache able to enumerate its entries, and is skipped without one.
+   *
    * It is best effort: any failure (cache unreachable, unknown shard count) is reported through `error` and stops the
    * reconciliation, keeping the remaining guilds, but never fails `READY` itself.
    *
@@ -671,9 +736,11 @@ export class GatewayClient extends Client {
   }
 
   private async dropUnlistedGuilds(data: GatewayReadyDispatchData, shardId: number): Promise<void> {
-    if (!this.cache) return;
+    // Telling the guilds the bot left apart takes the list of the cached ones.
+    const guilds = this.cache?.guilds;
+    if (!guilds || !isIterableCache(guilds)) return;
 
-    const cached = await this.cache.guilds.keys();
+    const cached = await guilds.keys();
     if (cached.length === 0) return;
 
     // Without the shard count, the guilds of this shard cannot be told apart from the others'.
@@ -684,7 +751,7 @@ export class GatewayClient extends Client {
       if (listed.has(id) || Number((BigInt(id) >> 22n) % shardCount) !== shardId) continue;
 
       const guild = (await this.guilds.get(id)) ?? null;
-      await applyGatewayDispatch(this.cache, {
+      await applyGatewayDispatch(this.cache!, {
         op: GatewayOpcodes.Dispatch,
         s: 0,
         t: GatewayDispatchEvents.GuildDelete,
@@ -760,4 +827,19 @@ export class GatewayClient extends Client {
     if (this.listenerCount("error") > 0) this.emit("error", error);
     else this.logger.error(`[Gateway] [Shard ${shardId}] Failed to process ${type}:`, error);
   }
+}
+
+/**
+ * Builds the cache of a client out of its options: the stores of `makeCache` (or `cache`), wrapped by `policies`.
+ * `undefined` when no entity kind is cached.
+ */
+function resolveCache(options: GatewayClientOptions): Cache | undefined {
+  const { makeCache, cache, policies } = options;
+  const source: CacheFactory | undefined =
+    makeCache ?? (cache ? (entity) => cache[entity] : undefined);
+  if (!source) return undefined;
+
+  const resolved =
+    source === makeCache || policies ? createCache({ makeCache: source, policies }) : cache!;
+  return Object.keys(resolved).length === 0 ? undefined : resolved;
 }

@@ -191,7 +191,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     super(client, "guilds");
   }
 
-  public createStructure(data: CacheEntityTypes["guilds"]): Guild {
+  public construct(data: CacheEntityTypes["guilds"]): Guild {
     return new Guild(data);
   }
 
@@ -231,7 +231,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public _getShallow(guildId: string): Awaitable<Guild | undefined> {
     return whenAll([this.cache?.get(guildId)], ([raw]) =>
-      raw === undefined ? undefined : bindClient(this.createStructure(raw), this.client),
+      raw === undefined ? undefined : bindClient(this.construct(raw), this.client),
     );
   }
 

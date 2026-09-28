@@ -23,7 +23,7 @@ export class GuildIntegrationManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["integrations"]): Integration {
+  public construct(data: CacheEntityTypes["integrations"]): Integration {
     return new Integration(data);
   }
 

@@ -61,7 +61,7 @@ const detach = attachCacheToGateway(gateway, cache, {
   onError: (error) => console.error(error),
 });
 
-const guild = await cache.guilds.get(guildId);
+const guild = await cache.guilds?.get(guildId);
 ```
 
 `applyGatewayDispatch` also takes care of the cascades: a `CHANNEL_DELETE` drops that channel's
@@ -197,6 +197,38 @@ interface GatewaySessionStore {
 `GatewaySessionInfo` has the same shape as `@discordjs/ws`'s `SessionInfo`, without the package
 depending on it.
 
+### Cache control
+
+Every entity cache is optional: an entity kind the cache does not hold is simply not cached, and an
+empty cache is a fully supported configuration (see
+[`@wolfstar/plugin-gateway`'s zero caching](../plugin-gateway#zero-caching-and-cache-control)).
+Pick what to cache, and for how long:
+
+```ts
+import { createCache, createInMemoryCache, MemoryEntityCache } from "@wolfstar/plugin-cache";
+
+// Only these entity kinds, with a default time-to-live (milliseconds) and a periodic sweep.
+const cache = createInMemoryCache({
+  entities: ["guilds", "channels", "roles", "users", "messages"],
+  maxSize: { messages: 1_000 },
+  ttl: { messages: 3_600_000 },
+  sweepInterval: 60_000,
+  // Entry by entry: do not cache bots.
+  policies: { users: { filter: (user) => !user.bot } },
+});
+
+// Or any store per entity kind, the `CacheConstructor` of the discord.js RFC #11426.
+const custom = createCache({
+  makeCache: (entity) => (entity === "messages" ? null : new MemoryEntityCache()),
+  policies: { roles: { ttl: () => 600_000 } },
+});
+```
+
+`createRedisCache` takes the same `entities` and `policies` options. A policy's `filter` returning
+`false` skips the write and deletes an entry already cached under the key, so the cache never serves
+outdated data; its `ttl` returns the entry's time-to-live in milliseconds, or `null` for none.
+`withPolicy(store, policy)` applies a policy to any single store.
+
 ### Custom stores
 
 ```ts
@@ -204,23 +236,39 @@ interface EntityCache<Raw> {
   // Optional: `true` when no method ever returns a promise.
   readonly synchronous?: boolean;
   get(key: string): Awaitable<Raw | undefined>;
-  set(key: string, value: Raw): Awaitable<void>;
+  // `ttl` in milliseconds, `null` for none, `undefined` for the store's default.
+  set(key: string, value: Raw, options?: { ttl?: number | null }): Awaitable<void>;
+  // The RFC's `add`: shallow-merges `data` into the entry unless `overwrite`, and returns both.
+  upsert(
+    key: string,
+    data: Partial<Raw>,
+    options?: { overwrite?: boolean; ttl?: number | null },
+  ): Awaitable<{ existing?: Raw; added: Raw }>;
   has(key: string): Awaitable<boolean>;
   delete(key: string): Awaitable<boolean>;
   clear(): Awaitable<void>;
   getSize(): Awaitable<number>;
-  keys(): Awaitable<string[]>;
-  values(): Awaitable<Raw[]>;
-  entries(): Awaitable<[key: string, value: Raw][]>;
   // Optional: `null` when the store does not index its entries by guild.
   deleteGuild?(guildId: string): Awaitable<number | null>;
 }
+
+// Optional extension, see `isIterableCache`.
+interface IterableEntityCache<Raw> extends EntityCache<Raw> {
+  keys(): Awaitable<string[]>;
+  values(): Awaitable<Raw[]>;
+  entries(): Awaitable<[key: string, value: Raw][]>;
+}
 ```
 
-`keys`, `values`, and `entries` return snapshots rather than live iterators, which keeps the
-semantics identical between synchronous and asynchronous stores. A store implementing `deleteGuild`
-lets `applyGatewayDispatch` skip the scans of a `GUILD_DELETE`; without it, or when it resolves to
-`null`, the scans run as before.
+Enumerating a store is optional, since a remote store may not do it cheaply. `keys`, `values`, and
+`entries` return snapshots rather than live iterators, which keeps the semantics identical between
+synchronous and asynchronous stores. A store implementing `deleteGuild` lets `applyGatewayDispatch`
+skip the scans of a `GUILD_DELETE`; without it, or when it resolves to `null`, the scans run as
+before, and a store that cannot enumerate its entries is not scanned at all.
+
+`applyCacheOperations` and `applyGatewayDispatch` resolve to one result per entry written or
+deleted, `{ entity, key, type, existing, added }`, so a caller gets the previous state without a
+second read.
 
 Since an `Awaitable` cannot be told apart from a promise without calling the method, a store tells
 its consumers it never returns one through `synchronous`: the `MemoryEntityCache`s of

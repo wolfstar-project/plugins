@@ -98,7 +98,7 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
     super(client, "threads");
   }
 
-  public createStructure(data: CacheEntityTypes["threads"]): AnyThreadChannel {
+  public construct(data: CacheEntityTypes["threads"]): AnyThreadChannel {
     return createChannel(data) as AnyThreadChannel;
   }
 

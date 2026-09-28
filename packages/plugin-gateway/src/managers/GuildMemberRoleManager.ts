@@ -45,7 +45,16 @@ export class GuildMemberRoleManager {
    */
   public async fetch(): Promise<Role[]> {
     const ids = [...this.#roleIds, this.guildId];
-    const roles = await Promise.all(ids.map((id) => this.client.roles.fetch(this.guildId, id)));
+    const cached = await Promise.all(ids.map((id) => this.client.roles.get(this.guildId, id)));
+    let roles = cached.filter((role) => role !== undefined);
+    if (roles.length !== ids.length) {
+      // One request for every role of the guild, rather than one per missing role.
+      const wanted = new Set(ids);
+      roles = (await this.client.roles.fetchAll(this.guildId)).filter((role) =>
+        wanted.has(role.id),
+      );
+    }
+
     return roles.toSorted((a, b) => b.comparePositionTo(a));
   }
 
