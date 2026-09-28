@@ -9,6 +9,7 @@ export {
   createInMemoryCache,
   MemoryEntityCache,
   type InMemoryCache,
+  type MemoryEntityCacheOptions,
   type InMemoryCacheOptions,
 } from "./lib/memory.js";
 export {

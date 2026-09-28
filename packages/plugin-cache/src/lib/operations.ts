@@ -34,8 +34,11 @@ import {
   threadMemberKey,
   voiceStateKey,
 } from "./keys.js";
+import { isObject, mergeValues } from "./merge.js";
 import { addReaction, countPollVote, removeReaction, removeReactionEmoji } from "./reactions.js";
 import type { Cache, CacheEntityName, EntityCache } from "./types.js";
+
+export { mergeValues };
 
 // A record rather than an array so the compiler enforces that every entity cache is listed.
 const cacheEntityNameRecord: Record<CacheEntityName, true> = {
@@ -843,14 +846,6 @@ export function applyGatewayDispatch(
   return applyCacheOperations(cache, createCacheOperations(payload, context));
 }
 
-/**
- * Shallow-merges `value` onto `existing` when both are plain objects, returning `value` otherwise.
- */
-export function mergeValues<Value>(existing: Value | undefined, value: Value): Value {
-  if (isObject(existing) && isObject(value)) return { ...existing, ...value };
-  return value;
-}
-
 function hydrateGuildCreate(
   operations: CacheOperation[],
   guild: GatewayGuildCreateDispatchData,
@@ -1133,8 +1128,4 @@ function withGuildId<Value extends object>(
   guildId: Snowflake,
 ): Value & { guild_id: Snowflake } {
   return { ...value, guild_id: guildId };
-}
-
-function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
