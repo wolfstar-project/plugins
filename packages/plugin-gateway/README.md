@@ -303,6 +303,44 @@ the copy embedded in its payload.
 Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
 [`@wolfstar/plugin-cache`](../plugin-cache).
 
+### Zero caching and cache control
+
+Every feature works without a cache, following the
+[discord.js RFC #11426](https://github.com/discordjs/discord.js/issues/11426): leave `cache` out
+and every `fetch` hits the API, every event is still emitted, and the previous state of update and
+delete events is `null` (or a partial, see [Partials](#partials)). Each entity kind can be cached,
+or not, on its own:
+
+```ts
+import { MemoryEntityCache } from "@wolfstar/plugin-cache";
+
+const client = new GatewayClient({
+  intents,
+  // Called once per entity kind: `null` not to cache it.
+  makeCache: (entity) =>
+    ["guilds", "channels", "roles"].includes(entity) ? new MemoryEntityCache() : null,
+  // Entry by entry, for dispatches and managers alike.
+  policies: { users: { filter: (user) => !user.bot }, messages: { ttl: () => 3_600_000 } },
+  // A failing store (e.g. Redis down) is a cache miss, reported through `cacheError`.
+  cacheErrors: "miss",
+});
+```
+
+`makeCache` takes precedence over `cache`, and `policies` apply to either. What needs a store:
+
+| Without the store of…        | What happens                                                               |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| any entity                   | `get` resolves to `undefined`, `fetch` hits the API, previous state `null` |
+| `emojis` / `stickers`        | only `guildEmojisUpdate` / `guildStickersUpdate`, no granular diff events  |
+| `guilds` (able to enumerate) | guilds left while offline are not reconciled on `READY`                    |
+| `presences`                  | `presences.fetch` rejects: presences only come from the gateway            |
+| `roles`                      | overwrite types and member roles are read from one `GET /guilds/:id/roles` |
+| `threadMembers`              | `thread.joined` is `null` unless the payload carries the bot's member      |
+| a relation's entity          | the relation getter (`message.guild`, `member.voice`, ...) returns `null`  |
+
+`listCached` resolves to `[]` without a store, and throws a `TypeError` for a store that cannot
+enumerate its entries. With `cacheErrors: "throw"`, a failing store rejects instead of missing.
+
 ### Synchronous reads
 
 Every manager method above is asynchronous since the cache can be Redis, which makes a hot path
@@ -318,7 +356,7 @@ client.on("messageCreate", (message) => {
 });
 ```
 
-It returns `undefined` on a miss, or when the client has no cache, like `get`. An asynchronous cache
+It returns `undefined` on a miss, or when the entity is not cached, like `get`. An asynchronous cache
 cannot tell a miss apart without awaiting it, so there `cached` throws a `TypeError` rather than
 silently returning `undefined`; the same goes for a custom cache mixing both kinds, when a relation
 lives in an asynchronous entity cache. `manager.cache?.synchronous` tells which path to take:
