@@ -6,7 +6,10 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
+import type { BufferResolvable } from "../structures/messages/MessagePayload.js";
 import { whenAll } from "../util/cache.js";
+import { resolveBase64, resolveFile, type ImageResolvable } from "../util/DataResolver.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 
 /**
@@ -29,9 +32,13 @@ export interface SoundboardSoundEditOptions {
 export interface SoundboardSoundCreateOptions extends SoundboardSoundEditOptions {
   name: string;
   /**
-   * The MP3 or OGG sound, as a data URI.
+   * The MP3 or OGG sound: a data URI, or anything `resolveFile` reads (contents, a path, a URL, a stream, a blob).
    */
-  sound: string;
+  sound: ImageResolvable;
+  /**
+   * The content type of the sound, `audio/mpeg` or `audio/ogg`, when it cannot be inferred from a download or a blob.
+   */
+  contentType?: string;
 }
 
 /**
@@ -105,7 +112,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
     const body: RESTPostAPIGuildSoundboardSoundJSONBody = {
       ...toSoundBody(options),
       name: options.name,
-      sound: options.sound,
+      sound: await resolveSound(options.sound, options.contentType),
     };
     const sound = await this.client.api.guilds.createSoundboardSound(this.guildId, body, {
       reason: options.reason,
@@ -169,4 +176,12 @@ function toSoundBody(
   }
 
   return body;
+}
+
+async function resolveSound(sound: ImageResolvable, contentType?: string): Promise<string> {
+  if (typeof sound === "string" && sound.startsWith("data:")) return sound;
+  const file = await resolveFile(sound as BufferResolvable);
+  const type = contentType ?? file.contentType;
+  if (!type) throw new GatewayTypeError("SoundboardSoundContentType");
+  return resolveBase64(file.data, type);
 }

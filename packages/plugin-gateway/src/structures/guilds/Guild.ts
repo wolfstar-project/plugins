@@ -4,7 +4,6 @@ import {
   GuildFeature,
   GuildPremiumTier,
   type APIGuild,
-  type APIIncidentsData,
   type APIVoiceRegion,
   type GuildDefaultMessageNotifications,
   type GuildExplicitContentFilter,
@@ -36,6 +35,8 @@ import type { GuildTemplateCreateOptions } from "../../managers/GuildTemplateMan
 import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
 import { cdn } from "../../util/cdn.js";
+import type { ImageResolvable } from "../../util/DataResolver.js";
+import { transformAPIIncidentsData, type IncidentActions } from "../../util/Transformers.js";
 import type { Webhook } from "../webhooks/Webhook.js";
 import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from "../../util/flags.js";
 import { AnonymousGuild } from "./AnonymousGuild.js";
@@ -77,18 +78,19 @@ export const GuildChannelFields = {
 } as const satisfies Record<keyof GuildRelations, string>;
 
 /**
- * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`), channels are IDs.
+ * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`) or anything `resolveImage`
+ * reads (contents, a path, a URL, a stream, a blob), channels are IDs.
  */
 export interface GuildEditOptions {
   afkChannel?: string | null;
   afkTimeout?: RESTPatchAPIGuildJSONBody["afk_timeout"];
-  banner?: string | null;
+  banner?: ImageResolvable | null;
   defaultMessageNotifications?: GuildDefaultMessageNotifications | null;
   description?: string | null;
-  discoverySplash?: string | null;
+  discoverySplash?: ImageResolvable | null;
   explicitContentFilter?: GuildExplicitContentFilter | null;
   features?: APIGuild["features"];
-  icon?: string | null;
+  icon?: ImageResolvable | null;
   name?: string;
   /**
    * The ID of the member to transfer the ownership to.
@@ -100,7 +102,7 @@ export interface GuildEditOptions {
   reason?: string;
   rulesChannel?: string | null;
   safetyAlertsChannel?: string | null;
-  splash?: string | null;
+  splash?: ImageResolvable | null;
   systemChannel?: string | null;
   systemChannelFlags?: SystemChannelFlagsResolvable;
   verificationLevel?: GuildVerificationLevel | null;
@@ -319,8 +321,9 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   /**
    * Until when invites or direct messages are paused because of raid activity, as set with `setIncidentActions`.
    */
-  public get incidentsData(): APIIncidentsData | null {
-    return this[kData].incidents_data ?? null;
+  public get incidentsData(): IncidentActions | null {
+    const incidents = this[kData].incidents_data;
+    return incidents ? transformAPIIncidentsData(incidents) : null;
   }
 
   /**
@@ -651,30 +654,33 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   }
 
   /**
-   * Sets the icon of this guild, as a data URI, `null` to remove it.
+   * Sets the icon of this guild, `null` to remove it.
    */
-  public setIcon(icon: string | null, reason?: string): Promise<this> {
+  public setIcon(icon: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ icon, reason });
   }
 
   /**
-   * Sets the banner of this guild, as a data URI, `null` to remove it.
+   * Sets the banner of this guild, `null` to remove it.
    */
-  public setBanner(banner: string | null, reason?: string): Promise<this> {
+  public setBanner(banner: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ banner, reason });
   }
 
   /**
-   * Sets the invite splash image of this guild, as a data URI, `null` to remove it.
+   * Sets the invite splash image of this guild, `null` to remove it.
    */
-  public setSplash(splash: string | null, reason?: string): Promise<this> {
+  public setSplash(splash: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ splash, reason });
   }
 
   /**
-   * Sets the discovery splash image of this guild, as a data URI, `null` to remove it.
+   * Sets the discovery splash image of this guild, `null` to remove it.
    */
-  public setDiscoverySplash(discoverySplash: string | null, reason?: string): Promise<this> {
+  public setDiscoverySplash(
+    discoverySplash: ImageResolvable | null,
+    reason?: string,
+  ): Promise<this> {
     return this.edit({ discoverySplash, reason });
   }
 
@@ -777,9 +783,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    *
    * @param options Until when to pause each, `null` to resume.
    */
-  public async setIncidentActions(options: GuildIncidentActionsOptions): Promise<APIIncidentsData> {
+  public async setIncidentActions(options: GuildIncidentActionsOptions): Promise<IncidentActions> {
     const incidents = await this.client.guilds.setIncidentActions(this.id, options);
-    this[kPatch]({ incidents_data: incidents });
+    this[kPatch]({
+      incidents_data: {
+        invites_disabled_until: incidents.invitesDisabledUntil?.toISOString() ?? null,
+        dms_disabled_until: incidents.dmsDisabledUntil?.toISOString() ?? null,
+        dm_spam_detected_at: incidents.dmSpamDetectedAt?.toISOString() ?? null,
+        raid_detected_at: incidents.raidDetectedAt?.toISOString() ?? null,
+      },
+    });
     return incidents;
   }
 

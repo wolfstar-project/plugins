@@ -11,6 +11,7 @@ import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
 import { User } from "../users/User.js";
+import { InvitesPattern } from "../../util/DataResolver.js";
 
 /**
  * The raw data of an invite, from the REST API (`APIExtendedInvite`, with a nested `channel` and `guild`) or from an
@@ -46,6 +47,11 @@ export class BaseInvite<Data extends InviteData = InviteData> extends Invite<"">
    * format, so that {@link BaseInvite.toJSON} returns the invite as received.
    */
   public static override readonly DataTemplate: Partial<APIActualInvite> = {};
+
+  /**
+   * Matches the invite URLs Discord hands out, capturing their `code`, like discord.js's `BaseInvite.InvitesPattern`.
+   */
+  public static readonly InvitesPattern: RegExp = InvitesPattern;
 
   protected override optimizeData(data: Partial<Data>): void {
     super.optimizeData(data as Partial<APIActualInvite>);

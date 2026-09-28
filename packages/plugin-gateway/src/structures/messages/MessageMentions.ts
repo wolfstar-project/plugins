@@ -1,10 +1,11 @@
-import type { APIChannelMention, APIGuildMember, APIMessage, APIUser } from "discord-api-types/v10";
+import type { APIGuildMember, APIMessage, APIUser } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
 import type { Role } from "../guilds/Role.js";
 import { User } from "../users/User.js";
 import { pickCached as pick } from "../../util/cache.js";
+import { transformAPIChannelMention, type CrosspostedChannel } from "../../util/Transformers.js";
 
 /**
  * The mentioned entities, resolved from the cache by `client.messages`, each by ID.
@@ -169,7 +170,7 @@ export class MessageMentions {
   public get channelIds(): string[] {
     return [
       ...new Set([
-        ...this.crosspostedChannels.map((channel) => channel.id),
+        ...this.crosspostedChannels.map((channel) => channel.channelId),
         ...this.parsedChannelIds,
       ]),
     ];
@@ -183,10 +184,11 @@ export class MessageMentions {
   }
 
   /**
-   * The channels a crossposted message mentions, from other guilds.
+   * The channels a crossposted message mentions, from other guilds, camel-cased like discord.js's
+   * `MessageMentions#crosspostedChannels`.
    */
-  public get crosspostedChannels(): readonly APIChannelMention[] {
-    return this.#data.mention_channels ?? [];
+  public get crosspostedChannels(): CrosspostedChannel[] {
+    return (this.#data.mention_channels ?? []).map(transformAPIChannelMention);
   }
 
   /**

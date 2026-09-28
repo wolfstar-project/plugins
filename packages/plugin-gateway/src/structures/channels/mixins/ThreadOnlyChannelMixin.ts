@@ -2,6 +2,12 @@ import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import { kData } from "../../Structure.js";
 import type { GuildForumTagData } from "../../../util/channels.js";
+import {
+  transformAPIGuildDefaultReaction,
+  transformAPIGuildForumTag,
+  type DefaultReactionEmoji,
+  type GuildForumTag,
+} from "../../../util/Transformers.js";
 import { editChannel } from "./edit.js";
 import type {
   APIGuildForumDefaultReactionEmoji,
@@ -24,12 +30,19 @@ export interface ThreadOnlyChannelMixin<
  * Adds the fields of forum and media channels, which only hold threads.
  */
 export class ThreadOnlyChannelMixin<Type extends ChannelType = ChannelType> {
-  public get availableTags(): readonly APIGuildForumTag[] {
-    return (this[kData] as Data).available_tags ?? [];
+  /**
+   * The tags threads can have, camel-cased like discord.js's `ForumChannel#availableTags`.
+   */
+  public get availableTags(): GuildForumTag[] {
+    return ((this[kData] as Data).available_tags ?? []).map(transformAPIGuildForumTag);
   }
 
-  public get defaultReactionEmoji(): APIGuildForumDefaultReactionEmoji | null {
-    return (this[kData] as Data).default_reaction_emoji ?? null;
+  /**
+   * The emoji reacted to new threads with, camel-cased like discord.js's `ForumChannel#defaultReactionEmoji`.
+   */
+  public get defaultReactionEmoji(): DefaultReactionEmoji | null {
+    const reaction = (this[kData] as Data).default_reaction_emoji;
+    return reaction ? transformAPIGuildDefaultReaction(reaction) : null;
   }
 
   public get defaultThreadRateLimitPerUser(): number {
@@ -44,7 +57,7 @@ export class ThreadOnlyChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   public setDefaultReactionEmoji(
-    defaultReactionEmoji: APIGuildForumDefaultReactionEmoji | null,
+    defaultReactionEmoji: DefaultReactionEmoji | APIGuildForumDefaultReactionEmoji | null,
     reason?: string,
   ): Promise<this> {
     return editChannel(this, { defaultReactionEmoji, reason });

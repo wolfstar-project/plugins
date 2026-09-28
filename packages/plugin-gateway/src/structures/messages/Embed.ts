@@ -1,15 +1,14 @@
 import { Embed as BaseEmbed, Structure as BaseStructure } from "@discordjs/structures";
-import type {
-  APIEmbed,
-  APIEmbedAuthor,
-  APIEmbedField,
-  APIEmbedFooter,
-  APIEmbedImage,
-  APIEmbedProvider,
-  APIEmbedThumbnail,
-  APIEmbedVideo,
-} from "discord-api-types/v10";
+import type { APIEmbed, APIEmbedField, APIEmbedProvider } from "discord-api-types/v10";
 import { isDeepEqual } from "../../util/equal.js";
+import {
+  transformAPIEmbedAsset,
+  transformAPIEmbedAuthor,
+  transformAPIEmbedFooter,
+  type EmbedAssetData,
+  type EmbedAuthorData,
+  type EmbedFooterData,
+} from "../../util/Transformers.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, StructureMixin } from "../Structure.js";
 
@@ -47,28 +46,48 @@ export class Embed extends BaseEmbed<""> {
     return this[kData].fields ?? [];
   }
 
-  public get thumbnail(): APIEmbedThumbnail | null {
-    return this[kData].thumbnail ?? null;
+  /**
+   * The thumbnail, camel-cased like discord.js's `Embed#thumbnail`.
+   */
+  public get thumbnail(): EmbedAssetData | null {
+    const { thumbnail } = this[kData];
+    return thumbnail ? transformAPIEmbedAsset(thumbnail) : null;
   }
 
-  public get image(): APIEmbedImage | null {
-    return this[kData].image ?? null;
+  /**
+   * The image, camel-cased like discord.js's `Embed#image`.
+   */
+  public get image(): EmbedAssetData | null {
+    const { image } = this[kData];
+    return image ? transformAPIEmbedAsset(image) : null;
   }
 
-  public get video(): APIEmbedVideo | null {
-    return this[kData].video ?? null;
+  /**
+   * The video, camel-cased like discord.js's `Embed#video`.
+   */
+  public get video(): EmbedAssetData | null {
+    const { video } = this[kData];
+    return video ? transformAPIEmbedAsset(video) : null;
   }
 
-  public get author(): APIEmbedAuthor | null {
-    return this[kData].author ?? null;
+  /**
+   * The author, camel-cased like discord.js's `Embed#author`.
+   */
+  public get author(): EmbedAuthorData | null {
+    const { author } = this[kData];
+    return author ? transformAPIEmbedAuthor(author) : null;
   }
 
   public get provider(): APIEmbedProvider | null {
     return this[kData].provider ?? null;
   }
 
-  public get footer(): APIEmbedFooter | null {
-    return this[kData].footer ?? null;
+  /**
+   * The footer, camel-cased like discord.js's `Embed#footer`.
+   */
+  public get footer(): EmbedFooterData | null {
+    const { footer } = this[kData];
+    return footer ? transformAPIEmbedFooter(footer) : null;
   }
 
   /**

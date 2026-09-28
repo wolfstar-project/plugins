@@ -14,7 +14,12 @@ import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
+import {
+  transformGuildScheduledEventRecurrenceRule,
+  type GuildScheduledEventRecurrenceRuleOptions,
+} from "../util/Transformers.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
 /**
  * The fields of a scheduled event that can be edited.
@@ -39,10 +44,16 @@ export interface GuildScheduledEventEditOptions {
    */
   status?: GuildScheduledEventStatus;
   /**
-   * The cover image, as a data URI.
+   * The cover image: a data URI, or anything `resolveImage` reads. `null` removes it.
    */
-  image?: string | null;
-  recurrenceRule?: APIGuildScheduledEventRecurrenceRule | null;
+  image?: ImageResolvable | null;
+  /**
+   * How the event repeats, camel-cased like discord.js's `GuildScheduledEventRecurrenceRuleOptions` or raw.
+   */
+  recurrenceRule?:
+    | GuildScheduledEventRecurrenceRuleOptions
+    | Partial<APIGuildScheduledEventRecurrenceRule>
+    | null;
   reason?: string;
 }
 
@@ -166,7 +177,7 @@ export class GuildScheduledEventManager extends CachedManager<
   public async create(options: GuildScheduledEventCreateOptions): Promise<GuildScheduledEvent> {
     const event = await this.client.api.guilds.createScheduledEvent(
       this.guildId,
-      toEventBody(options) as RESTPostAPIGuildScheduledEventJSONBody,
+      (await toEventBody(options)) as RESTPostAPIGuildScheduledEventJSONBody,
       {
         reason: options.reason,
       },
@@ -187,7 +198,7 @@ export class GuildScheduledEventManager extends CachedManager<
     const event = await this.client.api.guilds.editScheduledEvent(
       this.guildId,
       eventId,
-      toEventBody(options),
+      await toEventBody(options),
       {
         reason: options.reason,
       },
@@ -247,9 +258,9 @@ function toISO(value: Date | number | null | undefined): string | null | undefin
   return value === undefined || value === null ? value : new Date(value).toISOString();
 }
 
-function toEventBody(
+async function toEventBody(
   options: GuildScheduledEventEditOptions,
-): RESTPatchAPIGuildScheduledEventJSONBody {
+): Promise<RESTPatchAPIGuildScheduledEventJSONBody> {
   const body: Record<string, unknown> = {
     name: options.name,
     description: options.description,
@@ -265,8 +276,9 @@ function toEventBody(
     entity_type: options.entityType,
     entity_metadata: options.entityMetadata,
     status: options.status,
-    image: options.image,
-    recurrence_rule: options.recurrenceRule,
+    image: await resolveImageOption(options.image),
+    recurrence_rule:
+      options.recurrenceRule && transformGuildScheduledEventRecurrenceRule(options.recurrenceRule),
   };
   for (const key of Object.keys(body)) if (body[key] === undefined) delete body[key];
   return body as RESTPatchAPIGuildScheduledEventJSONBody;

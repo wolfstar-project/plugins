@@ -4,6 +4,10 @@ import type { AutoModerationRule } from "./AutoModerationRule.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { kData, kRelations, Structure } from "../Structure.js";
+import {
+  transformAPIAutoModerationAction,
+  type AutoModerationAction,
+} from "../../util/Transformers.js";
 import type { User } from "../users/User.js";
 
 /**
@@ -39,10 +43,11 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
   }
 
   /**
-   * The action taken: blocking the message, alerting a channel, or timing the member out.
+   * The action taken: blocking the message, alerting a channel, or timing the member out. Camel-cased like
+   * discord.js's `AutoModerationActionExecution#action`.
    */
-  public get action() {
-    return this[kData].action;
+  public get action(): AutoModerationAction {
+    return transformAPIAutoModerationAction(this[kData].action);
   }
 
   public get ruleId() {
