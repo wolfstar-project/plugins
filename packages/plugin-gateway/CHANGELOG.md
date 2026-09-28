@@ -1,5 +1,26 @@
 # @wolfstar/plugin-gateway
 
+## 0.8.0
+
+### Minor Changes
+
+- [#157](https://github.com/wolfstar-project/plugins/pull/157) [`3e54036`](https://github.com/wolfstar-project/plugins/commit/3e54036948f43f58ea852bbfe8aa729057a7cbfa) - Add `parseEmoji` and `resolvePartialEmoji` utilities (discord.js `Util` parity). `ReactionEmoji.resolveIdentifier`, `ReactionEmoji.resolvePartial`, and poll answer emojis now share them, so a bare emoji ID given as a poll answer emoji is sent as an ID instead of a name.
+
+- [#160](https://github.com/wolfstar-project/plugins/pull/160) [`b7efc3d`](https://github.com/wolfstar-project/plugins/commit/b7efc3d578280d5859c7288c7fe0dfd3e59f11c0) - Move channels and roles among their sorted siblings like discord.js, and add `transformResolved`:
+
+  - `GuildChannelManager.setPosition` and `fetchSorted`: a channel is now moved among the channels of its category and group (text-like, voice, or categories). `GuildChannel#setPosition`'s position is an index among them (or an offset with `relative`), no longer a raw position.
+  - `RoleManager.setPosition` and `Role#setPosition` move a role among the sorted roles of its guild and accept `{ relative, reason }` (a plain reason string still works). An index out of range leaves the roles where they are.
+  - `computePositions` computes the positions such a move sends. `moveElementInArray` no longer moves the last element when the element is missing.
+  - `transformResolved` resolves users, members, roles, and channels, by ID from the cache or from raw data, into structures. `client.messages` builds a message's `MessageMentions` with it.
+
+- [#154](https://github.com/wolfstar-project/plugins/pull/154) [`8bb49ef`](https://github.com/wolfstar-project/plugins/commit/8bb49efb8e1d336a05bea55c8a1853a67a349f10) - Add every `*Resolvable` type from discord.js (`ChannelResolvable`, `GuildResolvable`, `UserResolvable`, `RoleResolvable`, `MessageResolvable`, `ColorResolvable`, `DateResolvable`, ...) mapped onto the package's structures, the `ThreadChannel`/`GuildBasedChannel`/`NonThreadGuildBasedChannel`/`TextBasedChannel`/`VoiceBasedChannel`/`GuildInvitableChannel` channel groups, `Colors` and `resolveColor`, and `ApplicationFlagsBitField`.
+
+- [#158](https://github.com/wolfstar-project/plugins/pull/158) [`53aee8f`](https://github.com/wolfstar-project/plugins/commit/53aee8f3c5c3adbaae9b1843a4aa213b5ffbccd8) - Add discord.js's serializers: `Transformers` (`toSnakeCase` and a `transformAPI*`/`transform*` pair for auto moderation triggers and actions, forum tags and default reactions, scheduled event recurrence rules and metadata, incidents, role tags, audit log changes, avatar decorations, collectibles, primary guilds, message references, activities, calls, role subscriptions, crossposted channels, interaction metadata, and embed assets), `DataResolver` (`resolveFile`, `resolveBase64`, `resolveImage`, `resolveInviteCode`, `resolveGuildTemplateCode`, `InvitesPattern`, `GuildTemplatesPattern`), and the helpers of `Util` (`flatten`, `cleanContent`, `cleanCodeBlockContent`, `parseWebhookURL`, `verifyString`, `discordSort`, `moveElementInArray`, `getSortableGroupTypes`, `makeError`, `makePlainError`, `basename`, `findName`, `resolveSKUId`).
+
+  **Breaking:** like discord.js, these getters now return camel-cased objects instead of the raw API ones: `AutoModerationRule#triggerMetadata`/`#actions`, `AutoModerationActionExecution#action`, `ForumChannel`/`MediaChannel#availableTags`/`#defaultReactionEmoji`, `GuildScheduledEvent#recurrenceRule`, `Guild#incidentsData` (and `setIncidentActions`' result), `User#avatarDecorationData`/`#collectibles`/`#primaryGuild`, `GuildMember#avatarDecorationData`, `Role#tags`, `Message#reference`/`#activity`/`#interactionMetadata`/`#call`/`#roleSubscriptionData`, `MessageMentions#crosspostedChannels`, `GuildAuditLogsEntry#changes` (`old`/`new`), and `Embed#thumbnail`/`#image`/`#video`/`#author`/`#footer`. `Message#messageSnapshots` now returns `Message` structures. `toJSON()` still returns the raw data.
+
+  Options accept discord.js's camel-cased shapes as well as the raw ones (auto moderation triggers and actions, forum tags, default reactions, recurrence rules), images (icons, avatars, banners, splashes, emojis, scheduled event covers) accept contents, paths, URLs, streams, and blobs besides data URIs, soundboard sounds likewise (with a `contentType` option), and invite and template codes are extracted from their URLs. Adds `GuildScheduledEvent#entityMetadata` and `GuildMember#collectibles`.
+
 ## 0.7.0
 
 ### Minor Changes
