@@ -822,7 +822,7 @@ export async function applyCacheOperations(
     const entity = operation.store;
     switch (operation.type) {
       case "upsert": {
-        const { existing, added } = await store.upsert(operation.key, operation.raw, {
+        const { existing, added } = await store.upsert(operation.key, operation.raw as never, {
           overwrite: !operation.merge,
         });
         results.push({ entity, key: operation.key, type: "upsert", existing, added });
