@@ -27,6 +27,7 @@ import {
   type MessageEditOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
+import { transformResolved } from "../util/Util.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 
@@ -143,7 +144,6 @@ export class MessageManager extends CachedManager<
 
   // The cached copies of the users, members, roles, and channels a message mentions, like discord.js's mentions.
   private resolveMentions(data: CacheEntityTypes["messages"]): Awaitable<MessageMentionsRelations> {
-    const { client } = this;
     const { guild_id: guildId, content = "" } = data;
     const users = [
       ...data.mentions.map((user) => user.id),
@@ -151,23 +151,14 @@ export class MessageManager extends CachedManager<
       ...(data.referenced_message ? [data.referenced_message.author.id] : []),
     ];
     const members = data.mentions.filter((user) => "member" in user).map((user) => user.id);
-    return whenAll(
-      [
-        whenCachedMap(users, (id) => client.users._get(id)),
-        guildId ? whenCachedMap(members, (id) => client.members._get(guildId, id)) : undefined,
-        guildId
-          ? whenCachedMap(data.mention_roles, (id) => client.roles._get(guildId, id))
-          : undefined,
-        whenCachedMap(MessageMentions.parseIds(content, MessageMentions.ChannelsPattern), (id) =>
-          client.channels._get(id),
-        ),
-      ],
-      ([resolvedUsers, resolvedMembers, roles, channels]) => ({
-        users: resolvedUsers,
-        members: resolvedMembers,
-        roles,
-        channels,
-      }),
+    return transformResolved(
+      { client: this.client, guildId },
+      {
+        users,
+        members,
+        roles: data.mention_roles,
+        channels: MessageMentions.parseIds(content, MessageMentions.ChannelsPattern),
+      },
     );
   }
 

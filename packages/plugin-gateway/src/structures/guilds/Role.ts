@@ -2,6 +2,7 @@ import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APIRoleTags } from "discord-api-types/v10";
+import type { SetPositionOptions } from "../../managers/GuildChannelManager.js";
 import type { RoleEditOptions } from "../../managers/RoleManager.js";
 import { cdn } from "../../util/cdn.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
@@ -236,17 +237,16 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Moves the role.
+   * Moves the role among the roles of its guild, like discord.js's `Role#setPosition`.
    *
-   * @param position The new position.
-   * @param reason The reason for the audit log.
+   * @param position The index to move it to, lowest role first, or the offset to move it by with `relative`.
+   * @param options Whether the position is relative and the reason for the audit log, or the reason alone.
    */
-  public async setPosition(position: number, reason?: string): Promise<this> {
-    const roles = await this.client.roles.setPositions(
-      this.guildId,
-      [{ role: this.id, position }],
-      reason,
-    );
+  public async setPosition(
+    position: number,
+    options: SetPositionOptions | string = {},
+  ): Promise<this> {
+    const roles = await this.client.roles.setPosition(this.guildId, this.id, position, options);
     // Discord may clamp or shift the requested position: keep what it actually applied.
     const updated = roles.find((role) => role.id === this.id);
     return updated ? this[kPatch](updated.toJSON()) : this;

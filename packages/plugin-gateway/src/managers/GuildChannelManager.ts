@@ -1,4 +1,9 @@
-import type { APIChannel, RESTPostAPIGuildChannelJSONBody } from "discord-api-types/v10";
+import {
+  ChannelType,
+  type APIChannel,
+  type RESTPostAPIGuildChannelJSONBody,
+} from "discord-api-types/v10";
+import { GatewayError } from "../errors/GatewayError.js";
 import type { GatewayClient } from "../GatewayClient.js";
 import {
   resolveId,
@@ -7,7 +12,22 @@ import {
   type GuildChannelEditOptions,
   type IdResolvable,
 } from "../util/channels.js";
+import { computePositions, discordSort, getSortableGroupTypes } from "../util/Util.js";
 import type { AnyChannel } from "./ChannelManager.js";
+
+/**
+ * The options to move a channel or role among its siblings with.
+ */
+export interface SetPositionOptions {
+  /**
+   * Whether the position is an offset from the current one.
+   */
+  relative?: boolean;
+  /**
+   * The reason for the audit log.
+   */
+  reason?: string;
+}
 
 /**
  * A channel's new position, for {@link GuildChannelManager.setPositions}.
@@ -105,5 +125,65 @@ export class GuildChannelManager {
 
     // The endpoint answers 204: refetch the moved channels rather than guessing the positions Discord shifted.
     await this.fetch();
+  }
+
+  /**
+   * Moves a channel among the channels it is sorted with, like discord.js's `GuildChannelManager#setPosition`: the
+   * channels of its category (the categories, for a category) and of its group, text-like or voice.
+   *
+   * @param channel The channel, or its ID.
+   * @param position The index to move it to, in {@link GuildChannelManager.fetchSorted} order, or the offset to move it
+   * by with `relative`. An index out of range leaves the channels where they are.
+   * @param options Whether the position is relative, and the reason for the audit log.
+   * @returns The moved channel.
+   */
+  public async setPosition(
+    channel: IdResolvable,
+    position: number,
+    options: SetPositionOptions = {},
+  ): Promise<AnyChannel> {
+    const id = resolveId(channel);
+    const sorted = await this.fetchSorted(id);
+    const positions = computePositions(id, position, options.relative ?? false, sorted);
+    await this.setPositions(
+      positions.map((entry) => ({ channel: entry.id, position: entry.position })),
+      options.reason,
+    );
+    return (await this.client.channels.get(id))!;
+  }
+
+  /**
+   * Fetches the channels a channel is sorted with, itself included, and caches them.
+   *
+   * @param channel The channel, or its ID.
+   * @returns The channels, in the order Discord displays them.
+   */
+  public async fetchSorted(channel: IdResolvable): Promise<AnyChannel[]> {
+    const id = resolveId(channel);
+    const channels = new Map((await this.fetch()).map((entry) => [entry.id, entry]));
+    const raw = [...channels.values()].map((entry) => {
+      const data = entry.toJSON() as {
+        type: ChannelType;
+        position?: number;
+        parent_id?: string | null;
+      };
+      return {
+        id: entry.id,
+        type: data.type,
+        position: data.position ?? 0,
+        parent_id: data.parent_id,
+      };
+    });
+    const target = raw.find((entry) => entry.id === id);
+    if (!target) throw new GatewayError("GuildChannelUnknown", this.guildId, id);
+
+    const isCategory = target.type === ChannelType.GuildCategory;
+    const types = getSortableGroupTypes(target.type);
+    const siblings = raw.filter(
+      (entry) =>
+        types.includes(entry.type) &&
+        (isCategory || (entry.parent_id ?? null) === (target.parent_id ?? null)),
+    );
+    return discordSort(siblings).map((entry) => channels.get(entry.id)!);
   }
 }
