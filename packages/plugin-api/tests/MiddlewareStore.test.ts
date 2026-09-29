@@ -1,5 +1,5 @@
-import type { ApiRequest } from "../src/lib/http/ApiRequest";
-import type { ApiResponse } from "../src/lib/http/ApiResponse";
+import type { ApiRequest } from "../src/lib/structures/api/ApiRequest";
+import type { ApiResponse } from "../src/lib/structures/api/ApiResponse";
 import { Middleware } from "../src/lib/structures/Middleware";
 import { MiddlewareStore } from "../src/lib/structures/MiddlewareStore";
 

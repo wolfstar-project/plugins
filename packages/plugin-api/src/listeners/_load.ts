@@ -1,6 +1,7 @@
 import { container } from "@wolfstar/http-framework";
 import { PluginRouteErrorListener } from "./PluginRouteError";
 import { PluginServerMiddlewareErrorListener } from "./PluginServerMiddlewareError";
+import { PluginServerMiddlewareSuccessListener } from "./PluginServerMiddlewareSuccess";
 import { PluginServerRequestListener } from "./PluginServerRequest";
 import { PluginServerRouterBranchMethodNotAllowedListener } from "./PluginServerRouterBranchMethodNotAllowed";
 import { PluginServerRouterBranchNotFoundListener } from "./PluginServerRouterBranchNotFound";
@@ -8,39 +9,44 @@ import { PluginServerRouterFoundListener } from "./PluginServerRouterFound";
 
 /**
  * Registers the built-in dispatch-pipeline listeners into the framework's existing listener
- * store, targeting the `server` container entry (see {@link ApiServer}).
+ * store, targeting the `server` container entry (see {@link Server}).
  */
 export async function loadListeners(): Promise<void> {
   await Promise.all([
     container.stores.loadPiece({
       store: "listeners",
-      name: "pluginServerRequest",
-      piece: PluginServerRequestListener,
+      name: "PluginRouteError",
+      piece: PluginRouteErrorListener,
     }),
     container.stores.loadPiece({
       store: "listeners",
-      name: "pluginServerRouterFound",
-      piece: PluginServerRouterFoundListener,
-    }),
-    container.stores.loadPiece({
-      store: "listeners",
-      name: "pluginServerRouterBranchNotFound",
-      piece: PluginServerRouterBranchNotFoundListener,
-    }),
-    container.stores.loadPiece({
-      store: "listeners",
-      name: "pluginServerRouterBranchMethodNotAllowed",
-      piece: PluginServerRouterBranchMethodNotAllowedListener,
-    }),
-    container.stores.loadPiece({
-      store: "listeners",
-      name: "pluginServerMiddlewareError",
+      name: "PluginServerMiddlewareError",
       piece: PluginServerMiddlewareErrorListener,
     }),
     container.stores.loadPiece({
       store: "listeners",
-      name: "pluginRouteError",
-      piece: PluginRouteErrorListener,
+      name: "PluginServerMiddlewareSuccess",
+      piece: PluginServerMiddlewareSuccessListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "PluginServerRequest",
+      piece: PluginServerRequestListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "PluginServerRouterBranchMethodNotAllowed",
+      piece: PluginServerRouterBranchMethodNotAllowedListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "PluginServerRouterBranchNotFound",
+      piece: PluginServerRouterBranchNotFoundListener,
+    }),
+    container.stores.loadPiece({
+      store: "listeners",
+      name: "PluginServerRouterFound",
+      piece: PluginServerRouterFoundListener,
     }),
   ]);
 }
