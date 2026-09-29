@@ -1,78 +1,103 @@
 import { Piece, type PieceOptions } from "@sapphire/pieces";
-import type { ApiRequest } from "../http/ApiRequest";
-import type { ApiResponse } from "../http/ApiResponse";
-import type { HttpMethod } from "../http/HttpMethod";
+import type { Awaitable } from "../utils/common";
+import type { ApiRequest } from "./api/ApiRequest";
+import type { ApiResponse } from "./api/ApiResponse";
+import type { MethodName } from "./http/HttpMethods";
 import { RouterRoot } from "./router/RouterRoot";
 
-export type Awaitable<T> = T | PromiseLike<T>;
-
 /**
- * A single HTTP endpoint. The route's path and methods are either given explicitly via
- * {@link Route.Options.route}/{@link Route.Options.methods}, or inferred from the piece's file
- * system location: directories become path segments (`(group)`-style directories are skipped,
- * `index` collapses into its parent), `[param]` segments become dynamic, and a `.<method>`
- * filename suffix (e.g. `hello.post.ts`) implies that HTTP method.
+ * The base class for every route. A route answers the `methods` it declares on `path`; a route that
+ * declares no methods (through `options.methods` or a `name.method` piece name) matches nothing.
  */
 export abstract class Route<Options extends Route.Options = Route.Options> extends Piece<
   Options,
   "routes"
 > {
   /**
-   * The normalized path segments this route is registered under, e.g. `['users', '[id]']`.
+   * The path segments of the route, prefix included.
    */
   public readonly path: readonly string[];
 
   /**
-   * The HTTP methods this route responds to.
+   * The methods this route answers.
    */
-  public readonly methods: ReadonlySet<HttpMethod>;
+  public readonly methods: ReadonlySet<MethodName>;
 
-  public constructor(context: Route.LoaderContext, options: Options) {
+  /**
+   * The maximum request body size in bytes for this route.
+   */
+  public readonly maximumBodyLength: number;
+
+  public constructor(context: Route.LoaderContext, options: Options = {} as Options) {
     super(context, options);
 
-    const methods = new Set<HttpMethod>(options.methods ?? []);
+    const api = this.container.server.options;
+    const methods = new Set<MethodName>(options.methods ?? []);
+    const path = RouterRoot.normalize(api.prefix);
 
-    let path: string;
-    if (options.route) {
-      path = options.route;
+    if (options.route !== undefined) {
+      path.push(...RouterRoot.normalize(options.route));
     } else {
-      let name = context.name;
+      const name = this.name;
       const implied = RouterRoot.extractMethod(name);
-      if (implied) {
-        name = name.slice(0, name.length - implied.length - 1);
-        methods.add(implied);
-      }
+      if (implied !== null) methods.add(implied);
 
-      path = RouterRoot.makeRoutePathForPiece(this.location.directories, name);
+      const routeName = implied === null ? name : name.slice(0, name.lastIndexOf("."));
+      path.push(
+        ...RouterRoot.normalize(
+          RouterRoot.makeRoutePathForPiece(this.location.directories, routeName),
+        ),
+      );
     }
 
-    if (methods.size === 0) methods.add("GET");
-
-    this.path = RouterRoot.normalize(path);
+    this.path = path;
     this.methods = methods;
+    this.maximumBodyLength = options.maximumBodyLength ?? api.maximumBodyLength ?? 1024 * 1024 * 50;
   }
 
   /**
-   * Handles every method this route was registered for. Branch on `request.method` when a route
-   * needs to support multiple methods.
+   * Runs when a request matches this route. Errors thrown here are emitted as `ServerEvent.RouteError`.
    */
-  public abstract run(request: ApiRequest, response: ApiResponse): Awaitable<unknown>;
+  public abstract run(request: Route.Request, response: Route.Response): Awaitable<unknown>;
+
+  public override toJSON(): Route.JSON {
+    return {
+      ...super.toJSON(),
+      options: {
+        ...this.options,
+        methods: [...this.methods],
+        route: `/${this.path.join("/")}`,
+        maximumBodyLength: this.maximumBodyLength,
+      },
+    };
+  }
+}
+
+export interface RouteOptions extends PieceOptions {
+  /**
+   * The route the route answers, for example `/users/[id]`. If omitted, it is derived from the file
+   * path and the piece name.
+   */
+  route?: string;
+
+  /**
+   * The maximum request body size in bytes for this route. Falls back to `ServerOptions.maximumBodyLength`.
+   */
+  maximumBodyLength?: number;
+
+  /**
+   * The methods the route answers. A `name.method` piece name adds its method to this list.
+   */
+  methods?: readonly MethodName[];
 }
 
 export namespace Route {
+  /** @deprecated Use {@link Route.LoaderContext} instead. */
+  export type Context = LoaderContext;
   export type LoaderContext = Piece.LoaderContext<"routes">;
-
-  export interface Options extends PieceOptions {
-    /**
-     * An explicit route path, e.g. `/users/[id]`. If omitted, the path is inferred from the
-     * piece's directory structure and file name.
-     */
-    route?: `/${string}`;
-
-    /**
-     * The HTTP methods this route responds to. If omitted, inferred from a `.<method>` filename
-     * suffix (e.g. `hello.post.ts`), defaulting to `GET`.
-     */
-    methods?: readonly HttpMethod[];
-  }
+  export type Options = RouteOptions;
+  export type JSON = Piece.JSON;
+  export type LocationJSON = Piece.LocationJSON;
+  export type Request = ApiRequest;
+  export type Response = ApiResponse;
 }

@@ -7,12 +7,12 @@ import {
   type ClientOptions,
 } from "@wolfstar/http-framework";
 import "./index";
-import { ApiServer } from "./lib/http/ApiServer";
+import { Server } from "./lib/structures/http/Server";
 import { loadListeners } from "./listeners/_load";
 import { loadMiddlewares } from "./middlewares/_load";
 
 /**
- * Registers a standalone {@link ApiServer} for auxiliary REST routes (health checks, dashboards,
+ * Registers a standalone {@link Server} for auxiliary REST routes (health checks, dashboards,
  * webhooks from other services, etc), independent from the Discord interactions webhook server.
  *
  * Activate by importing the side-effecting entrypoint before creating the client:
@@ -21,9 +21,9 @@ import { loadMiddlewares } from "./middlewares/_load";
  * import '@wolfstar/plugin-api/register';
  * ```
  */
-export class ApiPlugin extends Plugin {
+export class Api extends Plugin {
   public static [postInitialization](this: Client, options: ClientOptions): void {
-    const server = new ApiServer(options.api);
+    const server = new Server(options.api);
 
     container.stores //
       .register(server.routes)
@@ -44,7 +44,7 @@ export class ApiPlugin extends Plugin {
 }
 
 Client.plugins.registerPostInitializationHook(
-  ApiPlugin[postInitialization],
+  Api[postInitialization],
   "WolfStar-Api-PostInitialization",
 );
-Client.plugins.registerPostListenHook(ApiPlugin[postListen], "WolfStar-Api-PostListen");
+Client.plugins.registerPostListenHook(Api[postListen], "WolfStar-Api-PostListen");
