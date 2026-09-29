@@ -20,7 +20,6 @@ export class RequestProxy implements Request {
   public readonly redirect = "follow" as const;
   public readonly referrer = "about:client";
   public readonly referrerPolicy = "" as const;
-  public readonly bodyUsed = false;
   public readonly duplex = "half" as const;
 
   public readonly headers: RequestHeadersProxy;
@@ -31,6 +30,7 @@ export class RequestProxy implements Request {
   readonly #url: RequestURLProxy;
   readonly #abortController = new AbortController();
   #body: ReadableStream<Uint8Array> | null = null;
+  #bodyUsed = false;
 
   public constructor(request: IncomingMessage) {
     this.#request = request;
@@ -42,6 +42,10 @@ export class RequestProxy implements Request {
 
   public get url(): string {
     return this.#url.href;
+  }
+
+  public get bodyUsed(): boolean {
+    return this.#bodyUsed;
   }
 
   public get body(): ReadableStream<Uint8Array> | null {
@@ -83,7 +87,10 @@ export class RequestProxy implements Request {
 
   public async arrayBuffer(): Promise<ArrayBuffer> {
     const body = this.body;
-    return body === null ? new ArrayBuffer(0) : arrayBuffer(body);
+    if (body === null) return new ArrayBuffer(0);
+
+    this.#bodyUsed = true;
+    return arrayBuffer(body);
   }
 
   public async bytes(): Promise<Uint8Array<ArrayBuffer>> {
@@ -95,6 +102,7 @@ export class RequestProxy implements Request {
   }
 
   public async formData(): Promise<FormData> {
+    if (this.body !== null) this.#bodyUsed = true;
     return new Response(this.body as never, {
       headers: { "content-type": this.headers.get("content-type") ?? "" },
     }).formData();

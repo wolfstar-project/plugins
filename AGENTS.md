@@ -17,7 +17,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 
 ## Toolchain notes (non-obvious)
 
-- `mise.toml` pins Node 24 + pnpm 12 (matches CI). The root `engines` is `^22.11 || ^24 || >=26` (raised from `>=20` by `@changesets/cli` v3 — the published packages still declare `>=20.0.0`).
+- `mise.toml` pins Node 24 + pnpm 12 (matches CI). The root `engines` is `^22.11 || ^24 || >=26` (raised from `>=20` by `@changesets/cli` v3 — most published packages still declare `>=20.0.0`; `plugin-api` declares `>=20.18.1` (`undici`) and `plugin-gateway` `>=24.17.0`).
 - `pnpm` is provided via `corepack` (pinned by `packageManager` in `package.json`; Renovate bumps it often, so check that field rather than hardcoding a version here). If `pnpm` is ever missing, run `corepack enable`.
 - TypeScript is on the `7.0.2` major (bumped from `~5.8.3`). Typechecking no longer goes through `tsc`/`turbo run typecheck` — see the `pnpm typecheck` entry below.
 

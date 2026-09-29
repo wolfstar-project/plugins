@@ -119,6 +119,19 @@ describe("ApiRequest body readers", () => {
     expect(await result.json()).toStrictEqual({ text: "", bytes: 0 });
   });
 
+  it("given a body then bodyUsed flips to true once it is consumed, and stays false without a body", async () => {
+    const harness = await startHarness(async (request, response) => {
+      const before = request.asWeb().bodyUsed;
+      await request.readBodyText();
+      response.json({ before, after: request.asWeb().bodyUsed });
+    });
+    const withBody = await fetch(harness.baseUrl, { method: "POST", body: "hello" });
+    expect(await withBody.json()).toStrictEqual({ before: false, after: true });
+
+    const withoutBody = await fetch(harness.baseUrl);
+    expect(await withoutBody.json()).toStrictEqual({ before: false, after: false });
+  });
+
   it("given an invalid JSON body then readBodyJson rejects with a SyntaxError", async () => {
     const harness = await startHarness(async (request, response) => {
       try {
