@@ -194,6 +194,17 @@ describe("GatewayClient cache resolution", () => {
     expect(client.cache).toBeUndefined();
   });
 
+  test("GIVEN cacheOptions for an entity without a manager THEN its raw store is bounded", async () => {
+    const client = createClient({ cacheOptions: { entitlements: { maxSize: 1 } } });
+    const store = client.cache!.entitlements!;
+
+    await store.set("1", { id: "1" } as never);
+    await store.set("2", { id: "2" } as never);
+
+    expect(await store.getSize()).toBe(1);
+    expect(await store.has("2")).toBe(true);
+  });
+
   test("GIVEN guild-scoped managers THEN they share one cache per entity", () => {
     const client = createClient();
 

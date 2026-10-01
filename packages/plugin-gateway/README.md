@@ -346,6 +346,11 @@ With the default cache, nothing is evicted unless a dispatch removes it. There a
 
 - **`cacheOptions`** sets a `maxSize` per entity: once reached, the oldest entry is evicted for each new one, and
   `0` holds nothing. It is passed to the `cacheConstructor`, the default `CollectionCache` included.
+  The bound is per entity, not per channel: unlike discord.js, a busy channel can evict the messages of a quiet
+  one.
+
+  `client.channels.cache` spans the channel and the thread caches, so it is a `Cache` but not a `Collection`: it
+  has no `size`, `filter`, `find` or iteration, and `maxSize` applies to channels and threads separately.
 
   ```ts
   // The 1000 most recent messages, and no presence.

@@ -709,7 +709,7 @@ export class GatewayClient extends Client {
       makeCache: (name) =>
         (ManagedEntityNames as readonly string[]).includes(name)
           ? createStructureStoreAdapter(this.CacheConstructor(() => undefined as never, name))
-          : new MemoryEntityCache(),
+          : new MemoryEntityCache(this.#cacheOptions[name]?.maxSize ?? Infinity),
     });
   }
 
