@@ -433,11 +433,10 @@ describe("RFC manager pattern", () => {
     const fetched = await client.users.fetch(user.id);
 
     expect(fetched.id).toBe(user.id);
-    // The read of `fetch`, then the read and the write of `_add`.
+    // The read of `fetch`, then the write of `_add`.
     expect(cacheErrors).toEqual([
       [error, { entity: "users", key: user.id, operation: "get" }],
-      [error, { entity: "users", key: user.id, operation: "get" }],
-      [error, { entity: "users", key: user.id, operation: "set" }],
+      [error, { entity: "users", key: user.id, operation: "upsert" }],
     ]);
   });
 
@@ -465,17 +464,32 @@ describe("RFC manager pattern", () => {
     expect(cacheErrors).toHaveBeenCalledOnce();
   });
 
-  test("GIVEN a store THEN _add reads the entry once and writes it once", async () => {
+  test("GIVEN a store THEN _add writes through a single upsert", async () => {
     const store = new MemoryEntityCache<any>();
     const client = clientWith((entity) => (entity === "users" ? store : null));
+    const upsert = vi.spyOn(store, "upsert");
     const set = vi.spyOn(store, "set");
     const get = vi.spyOn(store, "get");
 
     const added = await client.users._add(user);
 
     expect(added.username).toBe(user.username);
-    expect(get).toHaveBeenCalledExactlyOnceWith(user.id);
-    expect(set).toHaveBeenCalledExactlyOnceWith(user.id, user);
+    expect(upsert).toHaveBeenCalledExactlyOnceWith(user.id, user, { overwrite: false });
+    expect(get).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN a store and a key the data does not tell THEN _add reads the entry and writes it back", async () => {
+    const store = new MemoryEntityCache<any>();
+    const client = clientWith((entity) => (entity === "users" ? store : null));
+    const upsert = vi.spyOn(store, "upsert");
+    const set = vi.spyOn(store, "set");
+
+    const added = await client.users._add(user, true, { id: "alias" });
+
+    expect(added.username).toBe(user.username);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledExactlyOnceWith("alias", user);
   });
 
   test("GIVEN listCached THEN it needs a store able to enumerate", async () => {

@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { memberKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  memberKey,
+  type Awaitable,
+  type CacheEntityTypes,
+  type EntityCache,
+} from "@wolfstar/plugin-cache";
 import {
   GatewayOpcodes,
   type APIGuildMember,
@@ -15,7 +20,7 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildMember, type GuildMemberRelations } from "../structures/guilds/GuildMember.js";
 import { Presence } from "../structures/presences/Presence.js";
-import { bindClient, kPatch } from "../structures/Structure.js";
+import { bindClient } from "../structures/Structure.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
@@ -223,8 +228,8 @@ export class GuildMemberManager extends CachedManager<
       [
         data.user ? client.users._resolveData(data.user) : undefined,
         this.cachedGuild(data.guild_id),
-        key ? client.cache?.voiceStates?.get(key) : undefined,
-        key ? client.cache?.presences?.get(key) : undefined,
+        key ? this.readRelation("voiceStates", key) : undefined,
+        key ? this.readRelation("presences", key) : undefined,
       ],
       ([user, guild, voiceData, presenceData]) => {
         const relations: GuildMemberRelations = { user, guild };
@@ -255,6 +260,15 @@ export class GuildMemberManager extends CachedManager<
         );
       },
     );
+  }
+
+  // Reads the raw voice state or presence of a member: a failing store is reported, and counts as a miss.
+  private readRelation<Name extends "voiceStates" | "presences">(
+    name: Name,
+    key: string,
+  ): Awaitable<CacheEntityTypes[Name] | undefined> {
+    const store = this.client.cache?.[name] as EntityCache<CacheEntityTypes[Name]> | undefined;
+    return this.client.guardCache(name, "get", key, () => store?.get(key), undefined);
   }
 
   public resolveKey(guildId: string, userId: string): string {
@@ -630,11 +644,8 @@ export class GuildMemberManager extends CachedManager<
     userId: string,
     update: (roles: readonly string[]) => string[],
   ): Promise<void> {
-    const key = this.resolveKey(guildId, userId);
-    const cached = await this.cache.get(key);
-    if (cached) {
-      cached[kPatch]({ roles: update(cached.roleIds) } as never);
-      await this.cache.set(key, cached);
-    }
+    await this._patchCached(this.resolveKey(guildId, userId), (cached) => ({
+      roles: update(cached.roleIds),
+    }));
   }
 }

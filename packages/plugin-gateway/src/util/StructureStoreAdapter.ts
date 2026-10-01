@@ -47,6 +47,10 @@ class StructureStoreAdapter<
     );
   }
 
+  /**
+   * Writes an entry. Unlike a raw store's `set`, it merges the value into a cached instance rather than replacing it:
+   * the keys absent from the new value persist.
+   */
   public set(key: string, value: Raw): Awaitable<void> {
     return whenAll([this.read(key)], ([existing]) => {
       // A cached instance is patched rather than replaced, so the references the application holds stay current.

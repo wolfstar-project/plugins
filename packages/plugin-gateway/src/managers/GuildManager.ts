@@ -31,7 +31,7 @@ import {
   type GuildEditOptions,
   type GuildRelations,
 } from "../structures/guilds/Guild.js";
-import { bindClient, kPatch } from "../structures/Structure.js";
+import { bindClient } from "../structures/Structure.js";
 import { resolveAuditLogTarget, type AuditLogEntities } from "../util/auditLogs.js";
 import { whenAll } from "../util/cache.js";
 import { GuildPreview } from "../structures/guilds/GuildPreview.js";
@@ -231,7 +231,8 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @internal
    */
   public _getShallow(guildId: string): Awaitable<Guild | undefined> {
-    return whenAll([this.rawStore?.get(guildId)], ([raw]) =>
+    const read = this.guard("get", guildId, () => this.rawStore?.get(guildId), undefined);
+    return whenAll([read], ([raw]) =>
       raw === undefined ? undefined : bindClient(this.createStructure(raw), this.client),
     );
   }
@@ -343,7 +344,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     const settings = await this.client.api.guilds.editWidgetSettings(guildId, body, {
       reason: options.reason,
     });
-    await this.patchCached(guildId, {
+    await this._patchCached(guildId, {
       widget_enabled: settings.enabled,
       widget_channel_id: settings.channel_id,
     });
@@ -654,7 +655,7 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       dms_disabled_until: toISO(options.dmsDisabledUntil),
     };
     const incidents = await this.client.api.guilds.editIncidentActions(guildId, body);
-    await this.patchCached(guildId, { incidents_data: incidents });
+    await this._patchCached(guildId, { incidents_data: incidents });
     return transformAPIIncidentsData(incidents);
   }
 
@@ -664,18 +665,6 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 
   private store(guild: APIGuild): Promise<Guild> {
     return this._add(guild);
-  }
-
-  // Patches the cached guild with the fields an endpoint answered without the guild itself.
-  private async patchCached(
-    guildId: string,
-    patch: Partial<CacheEntityTypes["guilds"]>,
-  ): Promise<void> {
-    const cached = await this.cache.get(guildId);
-    if (cached) {
-      cached[kPatch](patch as never);
-      await this.cache.set(guildId, cached);
-    }
   }
 
   // Resolves the guild of a welcome screen, and the channels and custom emojis of its welcome channels.

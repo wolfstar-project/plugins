@@ -1,6 +1,6 @@
 import { OverwriteType, type APIOverwrite } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { bindClient, kPatch } from "../structures/Structure.js";
+import { bindClient } from "../structures/Structure.js";
 import type { AnyChannel } from "./ChannelManager.js";
 import { PermissionOverwrites } from "../structures/channels/PermissionOverwrites.js";
 import {
@@ -189,11 +189,11 @@ export class PermissionOverwriteManager extends BaseManager {
   private async patchCached(
     update: (overwrites: readonly APIOverwrite[]) => APIOverwrite[],
   ): Promise<void> {
-    const { cache } = this.client.channels;
-    const cached = await cache.get(this.channelId);
-    const data = cached?.toJSON() as { permission_overwrites?: APIOverwrite[] } | undefined;
-    if (!cached || !data || !("permission_overwrites" in data)) return;
-    cached[kPatch]({ permission_overwrites: update(data.permission_overwrites ?? []) } as never);
-    await cache.set(this.channelId, cached);
+    await this.client.channels._patchCached(this.channelId, (cached) => {
+      const data = cached.toJSON() as { permission_overwrites?: APIOverwrite[] };
+      return "permission_overwrites" in data
+        ? ({ permission_overwrites: update(data.permission_overwrites ?? []) } as never)
+        : undefined;
+    });
   }
 }

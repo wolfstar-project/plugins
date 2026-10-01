@@ -14,7 +14,6 @@ import {
   ReactionEmoji,
   type EmojiIdentifierResolvable,
 } from "../structures/emojis/ReactionEmoji.js";
-import { kPatch } from "../structures/Structure.js";
 import { type User } from "../structures/users/User.js";
 import { whenAll, whenCachedMap } from "../util/cache.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
@@ -330,7 +329,7 @@ export class MessageManager extends CachedManager<
    */
   public async pin(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.pinMessage(channelId, messageId, { reason });
-    await this.patchCached(channelId, messageId, { pinned: true });
+    await this._patchCached(this.resolveKey(channelId, messageId), { pinned: true });
   }
 
   /**
@@ -342,7 +341,7 @@ export class MessageManager extends CachedManager<
    */
   public async unpin(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.unpinMessage(channelId, messageId, { reason });
-    await this.patchCached(channelId, messageId, { pinned: false });
+    await this._patchCached(this.resolveKey(channelId, messageId), { pinned: false });
   }
 
   /**
@@ -402,7 +401,7 @@ export class MessageManager extends CachedManager<
    */
   public async removeAllReactions(channelId: string, messageId: string): Promise<void> {
     await this.client.api.channels.deleteAllMessageReactions(channelId, messageId);
-    await this.patchCached(channelId, messageId, { reactions: [] });
+    await this._patchCached(this.resolveKey(channelId, messageId), { reactions: [] });
   }
 
   /**
@@ -468,18 +467,5 @@ export class MessageManager extends CachedManager<
 
   private store(message: APIMessage): Promise<Message> {
     return this._add(message);
-  }
-
-  private async patchCached(
-    channelId: string,
-    messageId: string,
-    patch: Partial<CacheEntityTypes["messages"]>,
-  ): Promise<void> {
-    const key = this.resolveKey(channelId, messageId);
-    const cached = await this.cache.get(key);
-    if (cached) {
-      cached[kPatch](patch as never);
-      await this.cache.set(key, cached);
-    }
   }
 }

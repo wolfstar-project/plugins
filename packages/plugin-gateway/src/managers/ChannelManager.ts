@@ -221,15 +221,32 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     const recipient = data.type === ChannelType.DM ? data.recipients?.[0] : undefined;
     const guildId = channelGuildId(data) ?? guild?.id;
     const thread = isThreadChannelType(data.type);
+    const stageKey =
+      data.type === ChannelType.GuildStageVoice && guildId
+        ? stageInstanceKey(guildId, data.id)
+        : null;
+    const meKey = thread ? threadMemberKey(data.id, client.user?.id ?? client.id) : null;
     return whenAll(
       [
-        parentId && depth < MaxParentDepth ? this.rawStore?.get(parentId) : undefined,
+        parentId && depth < MaxParentDepth ? this.readRaw(parentId) : undefined,
         recipient ? client.users._resolveData(recipient) : undefined,
-        data.type === ChannelType.GuildStageVoice && guildId
-          ? client.cache?.stageInstances?.get(stageInstanceKey(guildId, data.id))
+        stageKey
+          ? client.guardCache(
+              "stageInstances",
+              "get",
+              stageKey,
+              () => client.cache?.stageInstances?.get(stageKey),
+              undefined,
+            )
           : undefined,
-        thread
-          ? client.cache?.threadMembers?.get(threadMemberKey(data.id, client.user?.id ?? client.id))
+        meKey
+          ? client.guardCache(
+              "threadMembers",
+              "get",
+              meKey,
+              () => client.cache?.threadMembers?.get(meKey),
+              undefined,
+            )
           : undefined,
       ],
       ([parentData, resolvedRecipient, stageData, me]) =>
@@ -261,9 +278,14 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * @internal
    */
   public _getInGuild(channelId: string, guild: Guild): Awaitable<AnyChannel | null> {
-    return whenAll([this.rawStore?.get(channelId)], ([data]) =>
+    return whenAll([this.readRaw(channelId)], ([data]) =>
       data ? this._hydrateInGuild(data, guild) : null,
     );
+  }
+
+  // Reads a raw channel, without building its structure: a failing store is reported, and counts as a miss.
+  private readRaw(channelId: string): Awaitable<CacheEntityTypes["channels"] | undefined> {
+    return this.guard("get", channelId, () => this.rawStore?.get(channelId), undefined);
   }
 
   public resolveKey(channelId: string): string {

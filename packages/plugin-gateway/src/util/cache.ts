@@ -1,5 +1,5 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
-import type { StructureMixin } from "../structures/Structure.js";
+import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
 /**
  * The raw API data a {@link StructureMixin | structure} wraps.
@@ -40,6 +40,26 @@ export function whenAll<const T extends readonly unknown[], R>(
   return values.some(isPromiseLike)
     ? Promise.all(values).then(callback)
     : callback(values as { -readonly [Index in keyof T]: Awaited<T[Index]> });
+}
+
+/**
+ * Resolves the relations of a structure again from its current data, and assigns them to that same structure: what
+ * keeps a long-lived instance from holding the relations of the day it was built. Synchronous when `hydrate` is.
+ *
+ * @param value The structure.
+ * @param hydrate Builds a structure of the same data, with its relations.
+ * @returns The structure it was given.
+ * @internal
+ */
+export function refreshRelations<Value extends StructureMixin<object>>(
+  value: Value,
+  hydrate: (data: RawAPIType<Value>) => Awaitable<StructureMixin<object>>,
+): Awaitable<Value> {
+  const data = (value as unknown as { toJSON(): RawAPIType<Value> }).toJSON();
+  return whenAll([hydrate(data)], ([fresh]) => {
+    value[kRelations] = fresh[kRelations];
+    return value;
+  });
 }
 
 /**
@@ -145,8 +165,8 @@ export interface Cache<
 }
 
 /**
- * Builds the {@link Cache} of an entity: the `CacheConstructor` of the discord.js RFC #11426, see the client's
- * `cacheConstructor` option.
+ * A class building the {@link Cache} of an entity, as in the discord.js RFC #11426: what the client's
+ * `cacheConstructor` option takes.
  */
 export type CacheConstructor = new <Value extends StructureMixin<object>>(
   creator: StructureCreator<Value>,

@@ -54,7 +54,8 @@ export class PresenceManager extends CachedManager<
    */
   public async listCached(guildId: string): Promise<Presence[]> {
     const prefix = `${guildId}:`;
-    const entries = (await this.iterableCache()?.entries()) ?? [];
+    const cache = this.iterableCache();
+    const entries = cache ? await this.guard("entries", null, () => cache.entries(), []) : [];
     return Promise.all(
       entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this._build(raw)),
     );

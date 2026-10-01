@@ -8,14 +8,8 @@ import {
 } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
-import {
-  bindClient,
-  kClone,
-  kPatch,
-  kRelations,
-  type StructureMixin,
-} from "../structures/Structure.js";
-import { whenAll, type Cache } from "../util/cache.js";
+import { bindClient, kClone, kPatch, type StructureMixin } from "../structures/Structure.js";
+import { refreshRelations, whenAll, type Cache } from "../util/cache.js";
 import type { CacheErrorContext } from "../util/events.js";
 import { GatewayTypeError } from "../errors/GatewayError.js";
 import { DataManager } from "./DataManager.js";
@@ -122,10 +116,13 @@ export abstract class CachedManager<
    * Adds an API payload to the cache and returns its structure, as in the RFC.
    *
    * @remarks
-   * A cached entry is patched and returned: with a cache of instances (`CollectionCache`), that is the very instance
-   * the application may already hold. With `cache` set to `false`, a patched clone is returned and the cache is left
-   * untouched. Either way, its relations are resolved again from the patched data. An entity that is not cached is
-   * built, and stored unless `cache` is `false`.
+   * The payload is written with `cache.add`: a cached entry is patched and returned, and with a cache of instances
+   * (`CollectionCache`) that is the very instance the application may already hold. An entity that is not cached is
+   * built and stored.
+   *
+   * With `cache` set to `false`, a patched clone is returned (or the entity is built) and the cache is left
+   * untouched. The same goes for an entry the `filter` of the entity's policy rejects, whose cached entry is deleted
+   * on top of that: a rejected update must not leave the outdated entry behind.
    *
    * @param data The raw data.
    * @param cache Whether to write to the cache.
@@ -135,27 +132,101 @@ export abstract class CachedManager<
   public async _add(
     data: CacheEntityTypes[Name],
     cache = true,
-    { id = this.keyOf(data), extras = [] }: AddOptions = {},
+    { id, extras = [] }: AddOptions = {},
   ): Promise<Value> {
-    const existing = await this.cache.get(id);
+    // Data that cannot be keyed (a member without its user) needs the explicit key, and throws without one.
+    const derived = id === undefined ? this.keyOf(data) : this.derivedKey(data);
+    const key = id ?? derived!;
+    if (!cache) return this.detached(await this.cache.get(key), data, extras);
+
+    if (this.client.cacheFilter(this.name)) {
+      const existing = await this.cache.get(key);
+      if (!this.accepts(key, existing, data)) {
+        if (existing) await this.cache.delete(key);
+        return this.detached(existing, data, extras);
+      }
+    }
+
+    // One atomic write: an upsert on a raw store, a patch of the cached instance on a cache of instances.
+    if (key === derived && extras.length === 0) return this.cache.add(data as never);
+
+    // `cache.add` keys the entry by its data, and builds it without extras.
+    const existing = await this.cache.get(key);
     if (existing) {
-      if (!cache) return this.resolveRelations(existing[kClone](data as never), extras);
       existing[kPatch](data as never);
-      await this.cache.set(id, existing);
+      await this.cache.set(key, existing);
       return this.resolveRelations(existing, extras);
     }
 
     const entry = await this._build(data, extras);
-    if (cache) await this.cache.set(id, entry);
+    await this.cache.set(key, entry);
     return entry;
+  }
+
+  /**
+   * Patches the cached entry of a key, if any, with the fields an endpoint answered without the entity itself.
+   *
+   * @remarks
+   * Like every write of the managers, it follows the `filter` of the entity's policy: an entry whose patched data is
+   * rejected is deleted from the cache.
+   *
+   * @param key The cache key of the entry.
+   * @param patch The fields to patch, or a function computing them from the cached entry, `undefined` to leave it.
+   * @internal
+   */
+  public async _patchCached(
+    key: string,
+    patch:
+      | Partial<CacheEntityTypes[Name]>
+      | ((cached: Value) => Partial<CacheEntityTypes[Name]> | undefined),
+  ): Promise<void> {
+    const cached = await this.cache.get(key);
+    if (!cached) return;
+
+    const data = typeof patch === "function" ? patch(cached) : patch;
+    if (data === undefined) return;
+    if (!this.accepts(key, cached, data)) {
+      await this.cache.delete(key);
+      return;
+    }
+
+    cached[kPatch](data as never);
+    await this.cache.set(key, cached);
+  }
+
+  // Whether the policy of this entity lets an entry be cached, judging it merged with the cached one like
+  // plugin-cache's `withPolicy`. Raw stores are wrapped by their policy already, see `GatewayClient.cacheFilter`.
+  private accepts(key: string, existing: Value | undefined, data: object): boolean {
+    const filter = this.client.cacheFilter(this.name);
+    if (!filter) return true;
+
+    const cached = (existing as unknown as { toJSON(): object } | undefined)?.toJSON();
+    return filter(cached ? { ...cached, ...data } : data, key);
+  }
+
+  // The structure of data that is not written to the cache: a patched clone of the cached entry, or a new structure.
+  private detached(
+    existing: Value | undefined,
+    data: CacheEntityTypes[Name],
+    extras: unknown[],
+  ): Awaitable<Value> {
+    return existing
+      ? this.resolveRelations(existing[kClone](data as never), extras)
+      : this._build(data, extras);
+  }
+
+  private derivedKey(data: CacheEntityTypes[Name]): string | undefined {
+    try {
+      return this.keyOf(data);
+    } catch {
+      return undefined;
+    }
   }
 
   // Resolves the relations of a structure again once it is patched: the patch drops the ones it invalidates (the
   // parent of a channel moved to another category), and a clone copies the ones of its original.
-  private async resolveRelations(value: Value, extras: unknown[]): Promise<Value> {
-    const data = (value as unknown as { toJSON(): CacheEntityTypes[Name] }).toJSON();
-    value[kRelations] = (await this._build(data, extras))[kRelations];
-    return value;
+  private resolveRelations(value: Value, extras: unknown[]): Awaitable<Value> {
+    return refreshRelations(value, (data) => this._build(data as never, extras));
   }
 
   /**

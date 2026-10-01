@@ -21,6 +21,7 @@ import {
   type CacheEntityName,
   type CacheFactory,
   type CachePolicies,
+  type CachePolicy,
   type EntityCache,
   type GatewaySessionStore,
 } from "@wolfstar/plugin-cache";
@@ -48,7 +49,7 @@ import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
 import type { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
-import { bindClient, kRelations, type StructureMixin } from "./structures/Structure.js";
+import { bindClient, type StructureMixin } from "./structures/Structure.js";
 import { Sticker } from "./structures/stickers/Sticker.js";
 import type { Webhook } from "./structures/webhooks/Webhook.js";
 import type { GuildTemplate } from "./structures/guilds/GuildTemplate.js";
@@ -64,6 +65,7 @@ import { GatewaySessionMirror } from "./util/sessions.js";
 import { GatewayTypeError } from "./errors/GatewayError.js";
 import {
   isPromiseLike,
+  refreshRelations,
   type Cache,
   type CacheConstructor,
   type StructureCreator,
@@ -121,9 +123,10 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    */
   cache?: EntityCaches | null;
   /**
-   * Creates the store of each entity kind, `null` or `undefined` not to cache it: the `CacheConstructor` of the
-   * discord.js RFC #11426. Called once per entity kind when the client is constructed, and takes precedence over
-   * {@link GatewayClientOptions.cache}.
+   * Creates the raw `@wolfstar/plugin-cache` store of each entity kind, `null` or `undefined` not to cache it. Called
+   * once per entity kind when the client is constructed, and takes precedence over
+   * {@link GatewayClientOptions.cache}. Not to be confused with {@link GatewayClientOptions.cacheConstructor}, which
+   * builds caches of structure instances.
    *
    * @example
    * ```typescript
@@ -141,7 +144,13 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
   makeCache?: CacheFactory;
   /**
    * The policies deciding which entries get cached, and for how long, per entity kind, see `withPolicy`. They apply to
-   * every write, from dispatches as well as from the managers.
+   * every write, from dispatches as well as from the managers: an entry its `filter` rejects is not cached, and the
+   * entry already cached under its key is deleted.
+   *
+   * @remarks
+   * `ttl` only applies to `@wolfstar/plugin-cache` stores ({@link GatewayClientOptions.cache},
+   * {@link GatewayClientOptions.makeCache}): the caches of instances built by
+   * {@link GatewayClientOptions.cacheConstructor}, the default included, have no per-entry time-to-live.
    *
    * @example
    * ```typescript
@@ -372,6 +381,13 @@ export class GatewayClient extends Client {
   // The plugin-cache stores backing the managers, `undefined` with caches built by a constructor or without cache.
   readonly #stores: EntityCaches | undefined;
 
+  // Whether every plugin-cache store answers synchronously: structures read their relations from any of them.
+  readonly #storesSynchronous: boolean;
+
+  // The policies of the caches of instances, which the managers write into without going through `client.cache`.
+  // `undefined` with plugin-cache stores, which are wrapped by their policies already.
+  readonly #policies: CachePolicies | undefined;
+
   readonly #shardCount: number | null;
 
   readonly #intents: number;
@@ -407,8 +423,12 @@ export class GatewayClient extends Client {
     if (options.cacheConstructor && storeBacked) throw new GatewayTypeError("ClientCacheConflict");
     const stores = resolveCache(options);
     this.#stores = stores;
+    this.#storesSynchronous = Object.values(stores ?? {}).every(
+      (store) => (store as EntityCache<unknown>).synchronous === true,
+    );
     this.#cacheConstructor =
       options.cache === null || storeBacked ? null : (options.cacheConstructor ?? CollectionCache);
+    this.#policies = this.#cacheConstructor ? options.policies : undefined;
     this.cacheErrors = options.cacheErrors ?? "miss";
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
@@ -580,6 +600,19 @@ export class GatewayClient extends Client {
     }
   }
 
+  /**
+   * Gets the `filter` of an entity's policy the managers must apply themselves before writing to its cache, see
+   * {@link GatewayClientOptions.policies}.
+   *
+   * @param name The name of the entity.
+   * @returns The filter, or `undefined` when there is none or when the entity's store applies it already.
+   * @internal
+   */
+  public cacheFilter(name: CacheEntityName): ((value: object, key: string) => boolean) | undefined {
+    const policy = this.#policies?.[name] as CachePolicy<object> | undefined;
+    return policy?.filter ? (value, key) => policy.filter!(value, key) : undefined;
+  }
+
   #createCache(creator: StructureCreator<any>, name: CacheEntityName): Cache<any> {
     const managed = (ManagedEntityNames as readonly string[]).includes(name);
     // Managed entities are built by their manager, whoever asked for the cache first: `construct` wraps the data
@@ -598,25 +631,27 @@ export class GatewayClient extends Client {
       // Re-resolves the relations of a long-lived instance, which would otherwise keep the ones of the day it was
       // built: a member's voice state would not follow `VOICE_STATE_UPDATE`.
       const refresh = (value: StructureMixin<object>) => {
-        const fresh = hydrate((value as unknown as { toJSON(): object }).toJSON());
-        if (isPromiseLike(fresh)) {
+        const refreshed = refreshRelations(value, hydrate);
+        if (isPromiseLike(refreshed)) {
           // Nothing awaits the promise, so its rejection must not go unhandled.
-          fresh.catch(() => undefined);
+          refreshed.catch(() => undefined);
           throw new GatewayTypeError("CacheConstructorAsynchronous", name);
         }
 
-        value[kRelations] = fresh[kRelations];
-        return value;
+        return refreshed;
       };
       return new this.#cacheConstructor(construct, name, { keyOf, refresh });
     }
 
     const store = this.#stores?.[name] as EntityCache<any> | undefined;
-    if (store === undefined) return new NullCache(construct, name);
+    // Relations may be read from any store, so no cache is synchronous unless every store is.
+    const synchronous = () => this.#storesSynchronous;
+    if (store === undefined) return new NullCache(construct, name, { hydrate, synchronous });
     return new EntityStoreCache(construct, name, {
       store,
       keyOf,
       hydrate,
+      synchronous,
       guard: (operation, key, run, fallback) =>
         this.guardCache(name, operation, key, run, fallback),
     });

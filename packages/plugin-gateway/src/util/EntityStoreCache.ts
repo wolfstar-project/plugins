@@ -32,6 +32,13 @@ export interface EntityStoreCacheOptions<Value, Raw> {
    */
   hydrate?: (data: Raw) => Awaitable<Value>;
   /**
+   * Whether every method answers synchronously. The structures read their relations from other stores, so a view over
+   * a synchronous store is only synchronous when those are too.
+   *
+   * @default () => store.synchronous === true
+   */
+  synchronous?: () => boolean;
+  /**
    * Guards every store call.
    *
    * @default Lets errors through.
@@ -70,6 +77,8 @@ export class EntityStoreCache<
 
   readonly #guard: CacheGuard;
 
+  readonly #synchronous: (() => boolean) | undefined;
+
   public constructor(
     creator: StructureCreator<Value, Raw>,
     name: CacheEntityName,
@@ -81,10 +90,11 @@ export class EntityStoreCache<
     this.#keyOf = options.keyOf;
     this.#hydrate = options.hydrate ?? creator;
     this.#guard = options.guard ?? unguarded;
+    this.#synchronous = options.synchronous;
   }
 
   public get synchronous(): boolean {
-    return this.store.synchronous === true;
+    return this.#synchronous ? this.#synchronous() : this.store.synchronous === true;
   }
 
   public add(data: Partial<Raw>, overwrite = false): Awaitable<Value> {
