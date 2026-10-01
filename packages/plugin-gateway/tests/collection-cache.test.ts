@@ -61,13 +61,24 @@ describe("CollectionCache", () => {
     const refresh = vi.fn((value: User) => value);
     const cache = createCache({ refresh });
     const added = cache.add(user);
+
+    // Assert refresh was called once with the newly constructed instance
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(added);
+
     refresh.mockClear();
 
+    // Test get calls refresh
     expect(cache.get(user.id)).toBe(added);
-    expect(refresh).toHaveBeenCalledTimes(1);
-    expect(refresh).toHaveBeenCalledWith(added);
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(added);
     expect(cache.get("missing")).toBeUndefined();
     expect(refresh).toHaveBeenCalledTimes(1);
+
+    refresh.mockClear();
+
+    // Test add with existing entry also calls refresh with the patched instance
+    const updated = cache.add({ id: user.id, username: "howl" });
+    expect(updated).toBe(added);
+    expect(refresh).toHaveBeenCalledExactlyOnceWith(updated);
   });
 
   test("GIVEN maxSize THEN the oldest entry is evicted on insert", () => {
