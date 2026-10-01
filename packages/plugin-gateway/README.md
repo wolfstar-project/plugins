@@ -338,6 +338,8 @@ but `message.guild !== client.guilds.cache.get(message.guildId)`. Compare guilds
 The same goes for what the client hands out outside of `manager.cache`: the structures delivered by events (the
 message of `messageCreate`, the `new` of update events such as `guildMemberUpdate`, ...) and the ones `listCached`
 returns are freshly built from the cache, they are not the cached instances and later dispatches do not patch them.
+The previous state of update and delete events is a copy of the cached instance taken before the write; with the
+default cache it carries the relations of the entity's last read rather than re-resolving them.
 Only `manager.cache.get` (and `fetch`, `resolve`, which read it) returns the cached instance.
 
 ### Bounding memory

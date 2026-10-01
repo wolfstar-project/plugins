@@ -34,7 +34,7 @@ The spec `../specs/2026-10-01-cache-core-design.md` predates the rulings below: 
 - Final review: minor (deferred): `client.CacheConstructor(creator, <unmanaged name>)` builds a cache dispatches never fill
 - Final review: minor (deferred): guessType falls to "member" for an uncached role ID in default mode
 - PR review (#163): `client.channels.cache` (`ChannelCache`, channels + threads) is not a `Collection`: no `size`, `filter`, `find`, iteration; give it a `Collection`-backed view in sub-project C
-- PR review (#163): `before` hooks read through `cache.get`, so hot dispatches resolve relations up to two extra times; read the snapshot without `refresh` if stale relations on the previous state are acceptable
+- PR review (#163), done: `before` hooks copy the cached instance without `refresh` (`peekCache`); the previous state of an event carries the relations of the entity's last read, and an instance never read is read in full
 - Final fix wave: `Cache.add(data, true)` on `CollectionCache` still replaces the cached instance (no internal caller)
 - Final fix wave: an overwriting upsert merges, so a full payload omitting a key no longer clears it on a cached instance
 - Final fix wave: the recursion guard test fails as a worker crash/timeout rather than a clean assertion

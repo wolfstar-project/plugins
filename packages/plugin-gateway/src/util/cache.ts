@@ -238,3 +238,20 @@ export type CacheConstructor = new <Value extends StructureMixin<object>>(
   name: CacheEntityName,
   options: CacheConstructorOptions<Value>,
 ) => Cache<Value>;
+
+/**
+ * Reads what a {@link Cache} holds under a key as is: for a cache of instances (a `Map`, e.g. `CollectionCache`), the
+ * instance itself, without re-resolving its relations as `get` does. Other caches are read with `get`.
+ *
+ * @param cache The cache.
+ * @param key The key of the entry.
+ * @internal
+ */
+export function peekCache<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value> = RawAPIType<Value>,
+>(cache: Cache<Value, Raw>, key: string): Awaitable<Value | undefined> {
+  return cache instanceof Map
+    ? (Map.prototype.get.call(cache, key) as Value | undefined)
+    : cache.get(key);
+}

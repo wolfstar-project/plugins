@@ -16,7 +16,13 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
 import { ClientUser } from "../structures/users/ClientUser.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
-import { bindClient, kClone, kPatch, type StructureMixin } from "../structures/Structure.js";
+import {
+  bindClient,
+  kClone,
+  kPatch,
+  kRelations,
+  type StructureMixin,
+} from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import { createChannel } from "../managers/ChannelManager.js";
 import type { DataManager } from "../managers/DataManager.js";
@@ -34,15 +40,27 @@ import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { User } from "../structures/users/User.js";
 import { Typing } from "../structures/channels/Typing.js";
 import { resolveAuditLogTarget } from "./auditLogs.js";
+import { peekCache } from "./cache.js";
 import { GatewayEvents, type GatewayEventMap, type GatewayEventName } from "./events.js";
 import { Partials } from "./Partials.js";
 
 // The state of an entity before its dispatch is written. A cache of instances patches that very instance, so the
 // previous state is a copy of it, like discord.js's `_update`.
-async function previousOf<Value extends { [kClone](): Value }>(
-  value: Awaitable<Value | undefined>,
+//
+// The copy is taken from the instance as the cache holds it (`peekCache`), without re-resolving its relations: the
+// dispatch's event reads the entity again right after the write, and resolving them twice per dispatch is what makes
+// hot dispatches (presences, voice states, messages) expensive. The previous state therefore carries the relations of
+// the entity's last read. An instance that was never read has none yet, and is read in full.
+async function previousOf<Value extends StructureMixin<object>, Args extends readonly string[]>(
+  manager: DataManager<Value, Args>,
+  ...args: Args
 ): Promise<Value | undefined> {
-  return (await value)?.[kClone]();
+  const key = manager.resolveKey(...args);
+  const held = await peekCache(manager.cache, key);
+  if (held === undefined) return undefined;
+
+  const value = Object.keys(held[kRelations]).length === 0 ? await manager.cache.get(key) : held;
+  return value?.[kClone]() as Value | undefined;
 }
 
 // Reads an entity from the cache of its manager, by the arguments identifying it.
@@ -148,12 +166,12 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildUpdate]: {
     event: GatewayEvents.GuildUpdate,
-    before: (client, data) => previousOf(client.guilds.cache.get(data.id)),
+    before: (client, data) => previousOf(client.guilds, data.id),
     build: async (client, data, previous) => [previous ?? null, await client.guilds._build(data)],
   },
   [GatewayDispatchEvents.GuildDelete]: {
     event: GatewayEvents.GuildDelete,
-    before: (client, data) => previousOf(client.guilds.cache.get(data.id)),
+    before: (client, data) => previousOf(client.guilds, data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -163,7 +181,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.ChannelUpdate]: {
     event: GatewayEvents.ChannelUpdate,
-    before: (client, data) => previousOf(client.channels.cache.get(data.id)),
+    before: (client, data) => previousOf(client.channels, data.id),
     build: async (client, data, previous) => [previous ?? null, await client.channels._build(data)],
   },
   [GatewayDispatchEvents.ChannelDelete]: {
@@ -186,12 +204,12 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.ThreadUpdate]: {
     event: GatewayEvents.ThreadUpdate,
-    before: (client, data) => previousOf(client.threads.cache.get(data.id)),
+    before: (client, data) => previousOf(client.threads, data.id),
     build: async (client, data, previous) => [previous ?? null, await client.threads._build(data)],
   },
   [GatewayDispatchEvents.ThreadDelete]: {
     event: GatewayEvents.ThreadDelete,
-    before: (client, data) => previousOf(client.threads.cache.get(data.id)),
+    before: (client, data) => previousOf(client.threads, data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -211,7 +229,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.ThreadMemberUpdate,
     before: (client, data) =>
       data.id && data.user_id
-        ? previousOf(cachedOf(client.threadMembers, data.id, data.user_id))
+        ? previousOf(client.threadMembers, data.id, data.user_id)
         : Promise.resolve(undefined),
     build: async (client, data, previous) => [
       previous ??
@@ -226,7 +244,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     before: async (client, data) => {
       const removed = await Promise.all(
         (data.removed_member_ids ?? []).map((userId) =>
-          previousOf(cachedOf(client.threadMembers, data.id, userId)),
+          previousOf(client.threadMembers, data.id, userId),
         ),
       );
       return removed.filter((member) => member !== undefined);
@@ -251,7 +269,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.MessageUpdate]: {
     event: GatewayEvents.MessageUpdate,
-    before: (client, data) => previousOf(cachedOf(client.messages, data.channel_id, data.id)),
+    before: (client, data) => previousOf(client.messages, data.channel_id, data.id),
     build: async (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
       await client.messages._build(data),
@@ -259,7 +277,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.MessageDelete]: {
     event: GatewayEvents.MessageDelete,
-    before: (client, data) => previousOf(cachedOf(client.messages, data.channel_id, data.id)),
+    before: (client, data) => previousOf(client.messages, data.channel_id, data.id),
     build: (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
       data,
@@ -269,7 +287,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.MessageDeleteBulk,
     before: async (client, data) => {
       const messages = await Promise.all(
-        data.ids.map((id) => previousOf(cachedOf(client.messages, data.channel_id, id))),
+        data.ids.map((id) => previousOf(client.messages, data.channel_id, id)),
       );
       return messages.filter((message) => message !== undefined);
     },
@@ -302,8 +320,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.MessageReactionRemoveAll]: {
     event: GatewayEvents.MessageReactionRemoveAll,
     before: async (client, data) =>
-      (await previousOf(cachedOf(client.messages, data.channel_id, data.message_id)))?.reactions
-        .cache ?? [],
+      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.cache ?? [],
     build: async (client, data, previous: MessageReaction[] | undefined) => [
       (await cachedOrUndefined(() =>
         cachedOf(client.messages, data.channel_id, data.message_id),
@@ -315,9 +332,9 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.MessageReactionRemoveEmoji]: {
     event: GatewayEvents.MessageReactionRemoveEmoji,
     before: async (client, data) =>
-      (
-        await previousOf(cachedOf(client.messages, data.channel_id, data.message_id))
-      )?.reactions.resolve(data.emoji) ?? undefined,
+      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.resolve(
+        data.emoji,
+      ) ?? undefined,
     build: async (client, data, previous: MessageReaction | undefined) => [
       previous ?? (await partialReaction(client, data)),
     ],
@@ -337,7 +354,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildMemberUpdate]: {
     event: GatewayEvents.GuildMemberUpdate,
-    before: (client, data) => previousOf(cachedOf(client.members, data.guild_id, data.user.id)),
+    before: (client, data) => previousOf(client.members, data.guild_id, data.user.id),
     // The payload is partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
       previous ?? partialMember(client, data.guild_id, { id: data.user.id }),
@@ -347,7 +364,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildMemberRemove]: {
     event: GatewayEvents.GuildMemberRemove,
-    before: (client, data) => previousOf(cachedOf(client.members, data.guild_id, data.user.id)),
+    before: (client, data) => previousOf(client.members, data.guild_id, data.user.id),
     build: (client, data, previous) => [
       previous ?? partialMember(client, data.guild_id, data.user),
       data,
@@ -378,7 +395,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildRoleUpdate]: {
     event: GatewayEvents.GuildRoleUpdate,
-    before: (client, data) => previousOf(cachedOf(client.roles, data.guild_id, data.role.id)),
+    before: (client, data) => previousOf(client.roles, data.guild_id, data.role.id),
     build: async (client, data, previous) => [
       previous ?? null,
       await client.roles._build({ ...data.role, guild_id: data.guild_id }),
@@ -386,7 +403,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildRoleDelete]: {
     event: GatewayEvents.GuildRoleDelete,
-    before: (client, data) => previousOf(cachedOf(client.roles, data.guild_id, data.role_id)),
+    before: (client, data) => previousOf(client.roles, data.guild_id, data.role_id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -407,9 +424,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.InviteDelete]: {
     event: GatewayEvents.InviteDelete,
     before: async (client, data) =>
-      data.guild_id
-        ? previousOf(cachedOf(client.guilds.invites(data.guild_id), data.code))
-        : undefined,
+      data.guild_id ? previousOf(client.guilds.invites(data.guild_id), data.code) : undefined,
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -420,9 +435,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.VoiceStateUpdate]: {
     event: GatewayEvents.VoiceStateUpdate,
     before: async (client, data) =>
-      data.guild_id
-        ? previousOf(cachedOf(client.voiceStates, data.guild_id, data.user_id))
-        : undefined,
+      data.guild_id ? previousOf(client.voiceStates, data.guild_id, data.user_id) : undefined,
     build: async (client, data, previous) => [
       previous ?? null,
       await client.voiceStates._build(data),
@@ -430,7 +443,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.PresenceUpdate]: {
     event: GatewayEvents.PresenceUpdate,
-    before: (client, data) => previousOf(cachedOf(client.presences, data.guild_id, data.user.id)),
+    before: (client, data) => previousOf(client.presences, data.guild_id, data.user.id),
     // The payload may be partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
       previous ?? null,
@@ -446,8 +459,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildScheduledEventUpdate]: {
     event: GatewayEvents.GuildScheduledEventUpdate,
-    before: (client, data) =>
-      previousOf(cachedOf(client.guilds.scheduledEvents(data.guild_id), data.id)),
+    before: (client, data) => previousOf(client.guilds.scheduledEvents(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? partialScheduledEvent(client, data.guild_id, data.id),
       await client.guilds.scheduledEvents(data.guild_id)._build(data),
@@ -488,7 +500,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.StageInstanceUpdate]: {
     event: GatewayEvents.StageInstanceUpdate,
     before: (client, data) =>
-      previousOf(cachedOf(client.guilds.stageInstances(data.guild_id), data.channel_id)),
+      previousOf(client.guilds.stageInstances(data.guild_id), data.channel_id),
     build: async (client, data, previous) => [
       previous ?? null,
       await client.guilds.stageInstances(data.guild_id)._build(data),
@@ -507,7 +519,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildSoundboardSoundUpdate]: {
     event: GatewayEvents.GuildSoundboardSoundUpdate,
     before: (client, data) =>
-      previousOf(cachedOf(client.guilds.soundboardSounds(data.guild_id!), data.sound_id)),
+      previousOf(client.guilds.soundboardSounds(data.guild_id!), data.sound_id),
     build: async (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id!, data.sound_id),
       await client.guilds.soundboardSounds(data.guild_id!)._build(data),
@@ -516,7 +528,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildSoundboardSoundDelete]: {
     event: GatewayEvents.GuildSoundboardSoundDelete,
     before: (client, data) =>
-      previousOf(cachedOf(client.guilds.soundboardSounds(data.guild_id), data.sound_id)),
+      previousOf(client.guilds.soundboardSounds(data.guild_id), data.sound_id),
     build: (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id, data.sound_id),
       data,
@@ -549,7 +561,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.GuildBanRemove]: {
     event: GatewayEvents.GuildBanRemove,
-    before: (client, data) => previousOf(cachedOf(client.guilds.bans(data.guild_id), data.user.id)),
+    before: (client, data) => previousOf(client.guilds.bans(data.guild_id), data.user.id),
     build: async (client, data, previous) => [
       previous ?? (await client.guilds.bans(data.guild_id)._build(data)),
     ],
@@ -583,8 +595,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.AutoModerationRuleUpdate]: {
     event: GatewayEvents.AutoModerationRuleUpdate,
-    before: (client, data) =>
-      previousOf(cachedOf(client.guilds.autoModerationRules(data.guild_id), data.id)),
+    before: (client, data) => previousOf(client.guilds.autoModerationRules(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? null,
       await client.guilds.autoModerationRules(data.guild_id)._build(data),
@@ -609,8 +620,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.IntegrationUpdate]: {
     event: GatewayEvents.IntegrationUpdate,
-    before: (client, data) =>
-      previousOf(cachedOf(client.guilds.integrations(data.guild_id), data.id)),
+    before: (client, data) => previousOf(client.guilds.integrations(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? null,
       await client.guilds.integrations(data.guild_id)._build(data),
@@ -618,8 +628,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   },
   [GatewayDispatchEvents.IntegrationDelete]: {
     event: GatewayEvents.IntegrationDelete,
-    before: (client, data) =>
-      previousOf(cachedOf(client.guilds.integrations(data.guild_id), data.id)),
+    before: (client, data) => previousOf(client.guilds.integrations(data.guild_id), data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -657,7 +666,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.UserUpdate]: {
     event: GatewayEvents.UserUpdate,
-    before: (client, data) => previousOf(client.users.cache.get(data.id)),
+    before: (client, data) => previousOf(client.users, data.id),
     build: async (client, data, previous) => {
       // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
       if (client.user?.id === data.id) {

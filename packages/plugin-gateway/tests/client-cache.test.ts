@@ -22,6 +22,7 @@ import {
   BaseManager,
   CachedManager,
   CollectionCache,
+  DispatchHandlers,
   DataManager,
   EntityStoreCache,
   GatewayClient,
@@ -220,6 +221,42 @@ describe("GatewayClient cache resolution", () => {
     expect(client.users).toBeInstanceOf(BaseManager);
     expect(client.webhooks).toBeInstanceOf(BaseManager);
     expect(client.webhooks).not.toBeInstanceOf(DataManager);
+  });
+});
+
+describe("previous state of a dispatch", () => {
+  const member = { user, roles: [], joined_at: "2026-01-01T00:00:00.000Z", guild_id: guildId };
+  const update = { ...member, nick: "howl" };
+  const before = (client: GatewayClient) =>
+    DispatchHandlers[GatewayDispatchEvents.GuildMemberUpdate]!.before!(client, update as never);
+
+  test("GIVEN an entity read before THEN its previous state is copied without resolving relations again", async () => {
+    const client = createClient();
+    await dispatch(client, GatewayDispatchEvents.GuildMemberAdd, member);
+    const key = client.members.resolveKey(guildId, user.id);
+    const cached = await client.members.cache.get(key);
+    const build = vi.spyOn(client.members, "_build");
+
+    const previous = (await before(client)) as typeof cached;
+
+    expect(build).not.toHaveBeenCalled();
+    expect(previous).not.toBe(cached);
+    expect(previous?.user?.id).toBe(user.id);
+
+    await dispatch(client, GatewayDispatchEvents.GuildMemberUpdate, update);
+    expect(previous?.nickname).toBeNull();
+    expect(cached?.nickname).toBe("howl");
+  });
+
+  test("GIVEN an entity never read THEN its previous state resolves its relations once", async () => {
+    const client = createClient();
+    await client.cache!.members!.set(client.members.resolveKey(guildId, user.id), member as never);
+    const build = vi.spyOn(client.members, "_build");
+
+    const previous = (await before(client)) as { user: { id: string } | null } | undefined;
+
+    expect(build).toHaveBeenCalledTimes(1);
+    expect(previous?.user?.id).toBe(user.id);
   });
 });
 

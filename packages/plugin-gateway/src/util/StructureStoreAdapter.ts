@@ -6,7 +6,7 @@ import type {
   IterableEntityCache,
 } from "@wolfstar/plugin-cache";
 import { kPatch, type StructureMixin } from "../structures/Structure.js";
-import { whenAll, type Cache, type RawAPIType } from "./cache.js";
+import { peekCache, whenAll, type Cache, type RawAPIType } from "./cache.js";
 
 function toRaw<Raw>(value: StructureMixin<object>): Raw {
   // A copy: the structure's own data keeps changing as it is patched.
@@ -35,10 +35,7 @@ class StructureStoreAdapter<
   // Reads the instance a `Map` cache holds as is: `CollectionCache#get` refreshes its relations, which the raw readers
   // exist to avoid (a guild refreshing its channels, which read their guild, would never end).
   protected read(key: string): Awaitable<Value | undefined> {
-    const { cache } = this;
-    return cache instanceof Map
-      ? (Map.prototype.get.call(cache, key) as Value | undefined)
-      : cache.get(key);
+    return peekCache(this.cache, key);
   }
 
   public get(key: string): Awaitable<Raw | undefined> {
