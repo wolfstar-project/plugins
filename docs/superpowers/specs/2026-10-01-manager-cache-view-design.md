@@ -1,7 +1,7 @@
 # Manager cache view (`manager.cache.<method>`) — design
 
 Date: 2026-10-01
-Package: `@wolfstar/plugin-gateway` (breaking, major changeset)
+Package: `@wolfstar/plugin-gateway` (breaking; `minor` changeset, as for every breaking change under 0.x)
 
 ## Goal
 
@@ -17,8 +17,9 @@ Reads go through `client.users.cache.get(id)` instead of `client.users.get(id)` 
 | ------------- | ----------------------------------------------------------------------------------------------------------- |
 | Compatibility | Clean break. No deprecated aliases.                                                                         |
 | Storage       | Unchanged: `@wolfstar/plugin-cache` keeps holding raw API data. `manager.cache` is a structure-facing view. |
-| Cache keys    | `cache.get(key)` takes one key, like the reference. Managers build keys with `resolveId`.                   |
-| Resolvers     | `resolveKey` is removed. `resolve` / `resolveId` follow discord.js v14's `DataManager`.                     |
+| Cache keys    | `cache.get(key)` takes one key, like the reference. Managers build keys with the existing `resolveKey`.     |
+| Resolvers     | `resolveKey` and `resolve(value \| key)` are kept as they are today.                                        |
+| Member roles  | `GuildMemberRoleManager` mirrors discord.js's API as closely as an asynchronous cache allows (section 7).   |
 
 ## Out of scope
 
@@ -107,8 +108,8 @@ export abstract class CachedManager<
     { id, extras = [] }: { id?: string; extras?: unknown[] } = {},
   ): Promise<Value>;
 
-  public resolve(...args: Args | [value: Value]): Awaitable<Value | null>;
-  public resolveId(...args: Args | [value: Value]): string;
+  public abstract resolveKey(...args: Args): string;
+  public resolve(value: Value | string): Promise<Value | null>;
 
   public fetch(...args: [...Args] | [...Args, FetchOptions]): Promise<Value>;
   public refresh(...args: Args): Promise<Value>;
@@ -117,17 +118,14 @@ export abstract class CachedManager<
 
 Changes against today:
 
-- **Removed (public):** `get`, `cached`, `_get`, `entity`, `construct`, `resolveKey`, `resolveData`, `hydrate`,
+- **Removed (public):** `get`, `cached`, `_get`, `entity`, `construct`, `resolveData`, `hydrate`,
   the deprecated public `createStructure`, the `BaseManager` export alias, and the `EntityCache`-typed `cache` getter.
   The raw store stays reachable as `client.cache?.<name>`.
 - **`createStructure`** becomes the abstract, protected creator (today's `construct`), as in the reference.
 - **`_add`** keeps its merge semantics; its options are renamed to the reference's `{ id, extras }` (`id` replaces
   `key`). `extras` are forwarded to `createStructure`.
-- **`resolve`** (discord.js `DataManager#resolve`): a structure is returned as is; identifying arguments are looked up
-  in the cache. Returns `null` on a miss. `Awaitable`, since the cache can be remote.
-- **`resolveId`** (discord.js `DataManager#resolveId`): a structure → its cache key (via `keyOf(value.toJSON())`);
-  identifying arguments → the cache key. Replaces `resolveKey`. Subclasses implement the argument case in a protected
-  `keyFor(...args)`.
+- **`resolveKey`** and **`resolve`** are unchanged: `resolveKey(...args)` builds the cache key, `resolve(value)`
+  returns a structure as is or looks a key up in the cache (`null` on a miss).
 - **Kept, `@internal`/protected:** `keyOf`, `fetchRaw`, `_hydrate`, `_resolveData`, `build`, `guard`, `cachedGuild`,
   `iterableCache`, `storeRaw`.
 
@@ -135,8 +133,8 @@ Usage:
 
 ```ts
 const user = await client.users.cache.get(userId);
-const member = await client.members.cache.get(client.members.resolveId(guildId, userId));
-const role = await client.roles.resolve(guildId, roleId); // null when not cached
+const member = await client.members.cache.get(client.members.resolveKey(guildId, userId));
+const role = await client.roles.resolve(client.roles.resolveKey(guildId, roleId)); // null when not cached
 const fetched = await client.users.fetch(userId); // cache first, then REST
 ```
 
@@ -159,13 +157,11 @@ type-level consumption test and the README:
 | Before                          | After                                                                                           |
 | ------------------------------- | ----------------------------------------------------------------------------------------------- |
 | `manager.get(id)`               | `manager.cache.get(id)`                                                                         |
-| `manager.get(a, b)`             | `manager.cache.get(manager.resolveId(a, b))`                                                    |
+| `manager.get(a, b)`             | `manager.cache.get(manager.resolveKey(a, b))`                                                   |
 | `manager.cached(id)`            | `manager.cache.get(id)` (guarded by `cache.synchronous` where the caller must stay synchronous) |
 | `manager._get(...)`             | `manager.cache.get(...)`                                                                        |
 | `manager.cache?.get(key)` (raw) | `client.cache?.<name>?.get(key)`                                                                |
-| `manager.resolveKey(...)`       | `manager.resolveId(...)`                                                                        |
 | `manager.construct(data)`       | `manager.cache.construct(data)`                                                                 |
-| `manager.resolve(key)`          | `manager.resolve(...args)`                                                                      |
 
 The `CacheAsynchronous` / `CacheRelationsAsynchronous` error codes are dropped if nothing else throws them.
 
@@ -176,10 +172,43 @@ Test-first:
 - `tests/entity-cache-view.test.ts` (new): each method against a synchronous store, an asynchronous store, no store,
   and a throwing store under both `cacheErrors` modes; `set` round-trips through `toJSON`; `add` merges unless
   `overwrite`.
-- `tests/cached-manager.test.ts`: rewritten for `cache.*`, `_add({ id, extras })`, `resolve`, `resolveId`, `fetch`.
+- `tests/cached-manager.test.ts`: rewritten for `cache.*`, `_add({ id, extras })`, `resolve`, `fetch`.
 - `tests/zero-cache.test.ts`: `cache` is defined and empty without a store.
 - `tests/channels.test.ts` / `threads.test.ts`: thread fallback through `channels.cache`.
 - Remaining suites: call-site migration only.
 
-Done when `pnpm lint`, `pnpm build`, `pnpm typecheck`, `pnpm test` pass, a **major** changeset for
+Done when `pnpm lint`, `pnpm build`, `pnpm typecheck`, `pnpm test` pass, a **minor** changeset for
 `@wolfstar/plugin-gateway` documents the migration table above, and the README examples use `cache.<method>`.
+
+## 7. `GuildMemberRoleManager` — discord.js parity
+
+Reference: discord.js
+[`GuildMemberRoleManager.js`](https://github.com/discordjs/discord.js/blob/main/packages/discord.js/src/managers/GuildMemberRoleManager.js).
+The goal is that code written against discord.js keeps working with at most an added `await`.
+
+| discord.js                                                              | Today here                           | After                                                                                         |
+| ----------------------------------------------------------------------- | ------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `new GuildMemberRoleManager(member)`                                    | `(client, guildId, userId, roleIds)` | `(member)`                                                                                    |
+| `member`, `guild`                                                       | missing                              | `member: GuildMember`, `guild: Guild \| null` (the member's cached guild)                     |
+| `cache: Collection<Snowflake, Role>`                                    | missing (`fetch(): Role[]`)          | `cache: Awaitable<Collection<Snowflake, Role>>`, `@everyone` included, uncached roles skipped |
+| `highest`, `hoist`, `color`, `icon`, `premiumSubscriberRole`, `botRole` | `fetchHighest()`, `fetchHoist()`, …  | getters returning `Awaitable<Role \| null>`, read from `cache`; the `fetch*` methods are kept |
+| `add(RoleResolvable \| RoleResolvable[] \| Collection, reason)`         | `add(string \| string[], reason)`    | same input as discord.js; always resolves to the updated `GuildMember`                        |
+| `remove(...)`                                                           | same gap                             | same input as discord.js; always resolves to the updated `GuildMember`                        |
+| `set(Collection \| RoleResolvable[], reason)`                           | `set(string[], reason)`              | same input as discord.js                                                                      |
+| `clone()`                                                               | missing                              | `clone()`                                                                                     |
+| `TypeError` on an invalid element / type                                | `IdUnresolvable` only                | `GatewayTypeError` with new codes `InvalidType` / `InvalidElement` (discord.js's messages)    |
+
+Details:
+
+- `cache` and the getters are `Awaitable`: synchronous with `createInMemoryCache`, a promise with Redis. This is the
+  only deviation from discord.js, and the same rule as `manager.cache.get`.
+- `highest` is `Role | null` (discord.js: `Role`): `@everyone` may not be cached.
+- `color` picks the highest role with `colors.primaryColor`, as discord.js does (today: `color !== 0`).
+- A single role goes through the idempotent `PUT` / `DELETE` member-role routes and returns a clone of the member with
+  the updated role IDs; several roles go through `set`, which `PATCH`es the member.
+- `GuildMemberEditOptions.roles` accepts `readonly RoleResolvable[] | ReadonlyCollection<Snowflake, Role>`, so
+  `member.edit({ roles })` matches discord.js too.
+- Kept, not in discord.js: `guildId`, `userId`, `ids`, `fetch()` and the `fetch*` variants (they fall back to REST when
+  a role is not cached).
+- New dependency: `@discordjs/collection` (already installed transitively through `@discordjs/core`).
+- `RoleResolvable` already exists in `src/types.ts`.
