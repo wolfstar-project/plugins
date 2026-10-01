@@ -95,7 +95,8 @@ As in the reference: `extends Collection<string, Value> implements Cache<Value, 
 - `synchronous` is `true`; `getSize()` returns `size`; `get`/`set`/`has`/`delete`/`clear` are `Collection`'s.
 - `add(data, overwrite = false)`: when the key exists and `overwrite` is false, `existing[kPatch](data)` and return the
   **same instance**; otherwise `construct(data)`, `set`, and return it.
-- Constructor: `(creator, name, options?: { maxSize?: number })`. With `maxSize`, the oldest entry is evicted on
+- Constructor: `(creator, name, options?: { keyOf?, refresh?, maxSize? })`. `keyOf` defaults to `data.id`; `refresh` is
+  described in section 6. With `maxSize`, the oldest entry is evicted on
   insert (insertion order), mirroring `MemoryEntityCache`'s bound. Default: unbounded.
 - New dependency: `@discordjs/collection` (`^2.1.1`, already installed transitively).
 
@@ -147,6 +148,9 @@ Resolution, once, in the constructor:
 | none                             | `CollectionCache`                                                  | raw adapters over them, wrapped by `policies` |
 
 `cacheConstructor` together with `cache` / `makeCache` throws `GatewayTypeError("ClientCacheConflict")`.
+
+Entities of plugin-cache without a manager (`applicationCommandPermissions`, `auditLogEntries`, `entitlements`,
+`subscriptions`, …) have no structure: in the last two rows they are backed by a plain `MemoryEntityCache`.
 
 `CacheConstructor(creator, name)` memoizes per `name`: guild-scoped managers are created on demand
 (`client.guilds.emojis(guildId)`) and must share one cache per entity. The first creator registered for a name wins;
@@ -229,9 +233,15 @@ These apply with `CollectionCache` (and any structure-holding cache):
 - **Update events.** `Action.before()` reads the previous state before the write. Since the write now patches that
   very instance, every `before` handler returns a `[kClone]()` of what it read, as discord.js's `_update` does.
   Listeners keep receiving `(old, new)` with `old !== new`.
-- **Relations.** A structure resolves its relations (a message's author, a channel's guild, …) when it is built.
-  They stay current because related instances are patched in place; they go stale only when the related entity is
-  deleted and created again. `[kPatchRelations]` keeps dropping the relations a patch invalidates.
+- **Relations.** A structure resolves its relations (a member's voice state, a channel's parent, a guild's channels,
+  …) when it is built, and several are built by hand from raw entries rather than taken from the cache. Today that is
+  always fresh, because every read builds a new structure. A long-lived instance would keep the relations of the day
+  it was built: `member.voice` would not follow `VOICE_STATE_UPDATE`. So `CollectionCache` takes a `refresh` hook, set
+  by the client, that re-resolves the relations of an instance on every `get` / `add` and assigns them to that same
+  instance. The cost per read is what it is today (one relation resolution); identity is preserved.
+  Limits, documented: instances reached by iterating the collection (`values()`, `find()`, …) carry the relations of
+  their last `get`; a hand-built relation pointing back (`member.voice.member`) is not the cached instance. Resolving
+  relations lazily in the structures' getters, as discord.js does, removes both limits and belongs to sub-project D.
 - **Synchronous relations.** With a synchronous cache, `_hydrate` is synchronous (it already uses `whenAll`), so
   `CollectionCache#add` and the adapter's `upsert` stay synchronous. A creator returning a promise (asynchronous
   relations behind a structure cache) is rejected with `GatewayTypeError("CacheConstructorAsynchronous")`.
