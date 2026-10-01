@@ -64,6 +64,7 @@ On top of the `Client` options:
 | --------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `intents`             | —                 | The gateway intents.                                                                                                               |
 | `cacheConstructor`    | `CollectionCache` | Builds `manager.cache`, the cache of structure instances each manager reads through, see [Cache](#cache).                          |
+| `cacheOptions`        | `undefined`       | Per-entity options of those caches, e.g. `{ messages: { maxSize: 1_000 } }`, see [Bounding memory](#bounding-memory).              |
 | `cache`               | `undefined`       | A `@wolfstar/plugin-cache` cache whose raw stores back the managers instead, see [Cache](#cache).                                  |
 | `shardCount`          | `null`            | Total shards across every process, `null` for Discord's recommendation.                                                            |
 | `shardIds`            | `null`            | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                                              |
@@ -285,8 +286,13 @@ import { createRedisCache } from "@wolfstar/plugin-cache";
 new GatewayClient({ intents }); // CollectionCache, in memory
 new GatewayClient({ intents, cache: createRedisCache(redis) }); // raw data in Redis
 new GatewayClient({ intents, cache: null }); // nothing is cached
-new GatewayClient({ intents, cacheConstructor: MyCache }); // your own Cache implementation
+new GatewayClient({ intents, cacheConstructor: MyCache }); // your own Cache, see "Custom caches"
 ```
+
+> [!IMPORTANT]
+> The default keeps **every entity the gateway sends in memory until a dispatch removes it** (`MESSAGE_DELETE`,
+> `GUILD_DELETE`, ...): nothing expires, so messages, users, and presences grow for as long as the process runs.
+> See [Bounding memory](#bounding-memory).
 
 With a `@wolfstar/plugin-cache` store, the cache holds raw API data and builds a structure on every read: the
 methods return promises when the store is remote (`await` works with every cache, `manager.cache.synchronous` tells
@@ -318,10 +324,111 @@ Every API payload is written to the cache: a cached entry is patched with it (th
 keep their cached value) and the patched instance, or the newly built structure, is returned. Relations are
 resolved from the cache too: `message.author` is the entry of `client.users`, `message.member` the one of
 `client.members`, and the same goes for `member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. Every
-structure of a guild (channels, threads, members, roles, messages, emojis, stickers, invites) has `guild`, the
-cached guild, and messages have `channel`. These are `null` when the entity is not cached; `fetchGuild()` and
-`fetchChannel()` always get it. A structure built by hand, with `new Message(data)`, falls back to the copy
+structure of a guild (channels, threads, members, roles, messages, emojis, stickers, invites) has `guild`, built
+from the cached guild, and messages have `channel`. These are `null` when the entity is not cached; `fetchGuild()`
+and `fetchChannel()` always get it. A structure built by hand, with `new Message(data)`, falls back to the copy
 embedded in its payload.
+
+Which object a relation is depends on the relation. With the default cache, `message.author` and `message.channel`
+are the cached instances, the very objects `client.users.cache.get(id)` and `client.channels.cache.get(id)` return.
+`guild` is not: it is a shallow copy of the cached guild, holding the same data at the time the structure was read,
+but `message.guild !== client.guilds.cache.get(message.guildId)`. Compare guilds by `id`, and read
+`client.guilds.cache.get(id)` when you need the instance that later updates patch.
+
+The same goes for what the client hands out outside of `manager.cache`: the structures delivered by events (the
+message of `messageCreate`, the `new` of update events such as `guildMemberUpdate`, ...) and the ones `listCached`
+returns are freshly built from the cache, they are not the cached instances and later dispatches do not patch them.
+Only `manager.cache.get` (and `fetch`, `resolve`, which read it) returns the cached instance.
+
+### Bounding memory
+
+With the default cache, nothing is evicted unless a dispatch removes it. There are three ways to bound it:
+
+- **`cacheOptions`** sets a `maxSize` per entity: once reached, the oldest entry is evicted for each new one, and
+  `0` holds nothing. It is passed to the `cacheConstructor`, the default `CollectionCache` included.
+
+  ```ts
+  // The 1000 most recent messages, and no presence.
+  new GatewayClient({
+    intents,
+    cacheOptions: { messages: { maxSize: 1_000 }, presences: { maxSize: 0 } },
+  });
+  ```
+
+- **`policies.filter`** decides entry by entry: a rejected entry is not cached, and the entry already cached under
+  its key is deleted.
+
+  ```ts
+  // No bot user, and no message written by a bot.
+  new GatewayClient({
+    intents,
+    policies: {
+      users: { filter: (user) => !user.bot },
+      messages: { filter: (message) => !message.author.bot },
+    },
+  });
+  ```
+
+- **`cache: null`** caches nothing at all: `cache.get` resolves to `undefined` and `fetch` always hits the API.
+
+  ```ts
+  new GatewayClient({ intents, cache: null });
+  ```
+
+`cacheOptions` only applies to caches built by a constructor: like `cacheConstructor`, combining it with `cache` or
+`makeCache` throws (those stores have their own bounds), and it is ignored with `cache: null`.
+
+### Custom caches
+
+`cacheConstructor` takes a class implementing `Cache`, instantiated once per entity with
+`(creator, name, options)`:
+
+- `creator` builds a structure out of raw data: it is the cache's `construct`;
+- `name` is the entity's name, e.g. `"users"`;
+- `options` (`CacheConstructorOptions`) carries:
+  - `keyOf(data)`, the cache key of raw data. `add` **must** key its entries with it: most entities are not keyed
+    by `id` (a member is keyed by guild and user, a message by channel and ID, ...);
+  - `refresh(value)`, which resolves the relations of an instance again and returns it. Call it on what `get` and
+    `add` hand out, or long-lived instances keep the relations of the day they were built (`member.voice` would
+    not follow `VOICE_STATE_UPDATE`);
+  - the entity's `cacheOptions`, i.e. `maxSize`.
+
+The recommended way is to extend `CollectionCache`, which does all of this:
+
+```ts
+import {
+  CollectionCache,
+  type CacheConstructorOptions,
+  type RawAPIType,
+  type StructureCreator,
+  type StructureMixin,
+} from "@wolfstar/plugin-gateway";
+import type { CacheEntityName } from "@wolfstar/plugin-cache";
+
+class BoundedCache<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value> = RawAPIType<Value>,
+> extends CollectionCache<Value, Raw> {
+  public constructor(
+    creator: StructureCreator<Value, Raw>,
+    name: CacheEntityName,
+    options: CacheConstructorOptions<Value, Raw>,
+  ) {
+    // Forward `keyOf` and `refresh`, with a default bound for the entities `cacheOptions` does not set.
+    super(creator, name, { ...options, maxSize: options.maxSize ?? 10_000 });
+  }
+}
+
+new GatewayClient({ intents, cacheConstructor: BoundedCache });
+```
+
+- The cache must be synchronous: structures are built synchronously from it.
+- A cache that is not a `Map` cannot be enumerated, so what needs to list its entries does not work with it: the
+  dispatch cascades (`GUILD_DELETE` and `CHANNEL_DELETE` leave the guild's or channel's entries behind), the
+  reconciliation of guilds left while offline on `READY`, the granular emoji and sticker diff events, and
+  `listCached`.
+- `cacheConstructor` cannot be combined with `cache` or `makeCache` (it throws). With `cache: null`, `null` wins:
+  nothing is cached and the class is never instantiated.
 
 ### Store-backed caches
 
