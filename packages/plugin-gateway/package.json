@@ -53,6 +53,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
+    "@discordjs/collection": "^2.1.1",
     "@discordjs/core": "^2.6.0",
     "@discordjs/rest": "^2.6.3",
     "@discordjs/structures": "1.0.0-pr-11602.1789066132-275cd4b42",

@@ -12,6 +12,7 @@ export * from "./util/channels.js";
 export * from "./util/Colors.js";
 export * from "./util/components.js";
 export type * from "./util/cache.js";
+export * from "./util/CollectionCache.js";
 export { getGatewayClient } from "./util/container.js";
 export * from "./util/DataResolver.js";
 export * from "./util/decorators.js";

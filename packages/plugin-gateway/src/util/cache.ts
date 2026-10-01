@@ -1,4 +1,4 @@
-import type { Awaitable } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
 import type { StructureMixin } from "../structures/Structure.js";
 
 /**
@@ -13,7 +13,7 @@ export type RawAPIType<Value extends StructureMixin<object>> =
 export type StructureCreator<
   Value extends StructureMixin<object>,
   Raw extends RawAPIType<Value> = RawAPIType<Value>,
-> = (data: Raw) => Value;
+> = (data: Partial<Raw>) => Value;
 
 /**
  * Whether an {@link Awaitable} is a promise, rather than the value itself.
@@ -82,3 +82,74 @@ export function whenCachedMap<Value>(
     return map;
   });
 }
+
+/**
+ * The cache of a manager, as in the discord.js RFC #11426: it hands out {@link StructureMixin | structures}.
+ *
+ * @remarks
+ * Every method is {@link Awaitable}: synchronous on an in-memory cache ({@link Cache.synchronous}), a promise on a
+ * remote one. `await` works with both.
+ *
+ * @typeParam Value The structure the cache hands out.
+ * @typeParam Raw The raw API data the structure wraps.
+ */
+export interface Cache<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value> = RawAPIType<Value>,
+> {
+  /**
+   * Whether every method answers synchronously, never with a promise.
+   */
+  readonly synchronous: boolean;
+
+  /**
+   * The function used to construct instances of the structure this cache holds.
+   */
+  readonly construct: StructureCreator<Value, Raw>;
+
+  /**
+   * Adds or updates data in the cache, returning the instantiated structure. If the item exists, it patches it with
+   * the new data unless `overwrite` is true. If it does not exist, it constructs a new instance and stores it.
+   */
+  add(data: Partial<Raw>, overwrite?: boolean): Awaitable<Value>;
+
+  /**
+   * Clears all items from the cache.
+   */
+  clear(): Awaitable<void>;
+
+  /**
+   * Deletes an item from the cache.
+   */
+  delete(key: string): Awaitable<boolean>;
+
+  /**
+   * Retrieves an item from the cache.
+   */
+  get(key: string): Awaitable<Value | undefined>;
+
+  /**
+   * Gets the number of items in the cache.
+   */
+  getSize(): Awaitable<number>;
+
+  /**
+   * Checks if an item exists in the cache.
+   */
+  has(key: string): Awaitable<boolean>;
+
+  /**
+   * Sets an item in the cache.
+   */
+  set(key: string, value: Value): Awaitable<this>;
+}
+
+/**
+ * Builds the {@link Cache} of an entity: the `CacheConstructor` of the discord.js RFC #11426, see the client's
+ * `cacheConstructor` option.
+ */
+export type CacheConstructor = new <Value extends StructureMixin<object>>(
+  creator: StructureCreator<Value>,
+  name: CacheEntityName,
+  ...args: any[]
+) => Cache<Value>;
