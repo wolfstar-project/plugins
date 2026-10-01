@@ -15,7 +15,7 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildMember, type GuildMemberRelations } from "../structures/guilds/GuildMember.js";
 import { Presence } from "../structures/presences/Presence.js";
-import { bindClient } from "../structures/Structure.js";
+import { bindClient, kPatch } from "../structures/Structure.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
@@ -183,7 +183,7 @@ export class GuildMemberManager extends CachedManager<
     super(client, "members");
   }
 
-  public construct(data: CacheEntityTypes["members"]): GuildMember {
+  protected createStructure(data: CacheEntityTypes["members"]): GuildMember {
     return new GuildMember(data);
   }
 
@@ -230,7 +230,7 @@ export class GuildMemberManager extends CachedManager<
         const relations: GuildMemberRelations = { user, guild };
         const member = bindClient(new GuildMember(data, relations), client);
         return whenAll(
-          [voiceData?.channel_id ? client.channels._get(voiceData.channel_id) : undefined],
+          [voiceData?.channel_id ? client.channels.cache.get(voiceData.channel_id) : undefined],
           ([channel]) => {
             // Only a cached relation is known to be absent, otherwise it stays unknown (`undefined`).
             if (key && client.cache?.voiceStates) {
@@ -487,7 +487,7 @@ export class GuildMemberManager extends CachedManager<
    */
   public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.removeMember(guildId, userId, { reason });
-    await this.cache?.delete(this.resolveKey(guildId, userId));
+    await this.cache.delete(this.resolveKey(guildId, userId));
   }
 
   /**
@@ -502,7 +502,7 @@ export class GuildMemberManager extends CachedManager<
       delete_message_seconds: options.deleteMessageSeconds,
     };
     await this.client.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
-    await this.cache?.delete(this.resolveKey(guildId, userId));
+    await this.cache.delete(this.resolveKey(guildId, userId));
   }
 
   /**
@@ -537,7 +537,7 @@ export class GuildMemberManager extends CachedManager<
       reason: options.reason,
     });
     await Promise.all(
-      result.banned_users.map((userId) => this.cache?.delete(this.resolveKey(guildId, userId))),
+      result.banned_users.map((userId) => this.cache.delete(this.resolveKey(guildId, userId))),
     );
     return { bannedUsers: result.banned_users, failedUsers: result.failed_users };
   }
@@ -613,9 +613,9 @@ export class GuildMemberManager extends CachedManager<
   }
 
   // Members without their user cannot be keyed, so they are built without being cached.
-  private store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
+  private async store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
     const raw = { ...member, guild_id: guildId };
-    return raw.user ? this._add(raw) : this.hydrate(raw);
+    return raw.user ? this._add(raw) : this._build(raw);
   }
 
   // Drops a request that resolved, was rejected, or timed out.
@@ -631,7 +631,10 @@ export class GuildMemberManager extends CachedManager<
     update: (roles: readonly string[]) => string[],
   ): Promise<void> {
     const key = this.resolveKey(guildId, userId);
-    const cached = await this.cache?.get(key);
-    if (cached) await this.cache!.set(key, { ...cached, roles: update(cached.roles) });
+    const cached = await this.cache.get(key);
+    if (cached) {
+      cached[kPatch]({ roles: update(cached.roleIds) } as never);
+      await this.cache.set(key, cached);
+    }
   }
 }

@@ -2,24 +2,26 @@ import type { GatewayClient } from "../GatewayClient.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { FetchOptions } from "./CachedManager.js";
 import type { ThreadMemberListOptions } from "./ThreadMemberManager.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the members of one thread: `client.threadMembers`, with the thread's ID filled in.
  */
-export class ThreadChannelMemberManager {
-  public readonly client: GatewayClient;
+export class ThreadChannelMemberManager extends BaseManager {
   public readonly threadId: string;
 
   public constructor(client: GatewayClient, threadId: string) {
-    this.client = client;
+    super(client);
     this.threadId = threadId;
   }
 
   /**
    * Gets a member of the thread from the cache.
    */
-  public get(userId: string): Promise<ThreadMember | undefined> {
-    return this.client.threadMembers.get(this.threadId, userId);
+  public async get(userId: string): Promise<ThreadMember | undefined> {
+    return this.client.threadMembers.cache.get(
+      this.client.threadMembers.resolveKey(this.threadId, userId),
+    );
   }
 
   /**

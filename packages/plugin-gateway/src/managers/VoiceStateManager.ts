@@ -21,7 +21,7 @@ export class VoiceStateManager extends CachedManager<
     super(client, "voiceStates");
   }
 
-  public construct(data: CacheEntityTypes["voiceStates"]): VoiceState {
+  protected createStructure(data: CacheEntityTypes["voiceStates"]): VoiceState {
     return new VoiceState(data);
   }
 
@@ -42,10 +42,10 @@ export class VoiceStateManager extends CachedManager<
         member?.user && guildId
           ? this.client.members._resolveData({ ...member, guild_id: guildId })
           : guildId
-            ? this.client.members._get(guildId, userId)
+            ? this.client.members.cache.get(this.client.members.resolveKey(guildId, userId))
             : null,
         this.cachedGuild(guildId),
-        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+        data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
       ],
       ([resolvedMember, guild, channel]) =>
         new VoiceState(data, { member: resolvedMember ?? null, guild, channel: channel ?? null }),
@@ -63,7 +63,7 @@ export class VoiceStateManager extends CachedManager<
     const prefix = `${guildId}:`;
     const entries = (await this.iterableCache()?.entries()) ?? [];
     return Promise.all(
-      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this.hydrate(raw)),
+      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this._build(raw)),
     );
   }
 

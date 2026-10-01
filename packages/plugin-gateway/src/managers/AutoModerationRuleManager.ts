@@ -68,7 +68,7 @@ export class AutoModerationRuleManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public construct(data: CacheEntityTypes["autoModerationRules"]): AutoModerationRule {
+  protected createStructure(data: CacheEntityTypes["autoModerationRules"]): AutoModerationRule {
     return new AutoModerationRule(data);
   }
 
@@ -145,7 +145,7 @@ export class AutoModerationRuleManager extends CachedManager<
    */
   public async delete(ruleId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteAutoModerationRule(this.guildId, ruleId, { reason });
-    await this.cache?.delete(this.resolveKey(ruleId));
+    await this.cache.delete(this.resolveKey(ruleId));
   }
 
   protected async fetchRaw(ruleId: string) {

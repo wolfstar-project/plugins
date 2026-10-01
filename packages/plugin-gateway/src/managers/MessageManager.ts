@@ -14,6 +14,7 @@ import {
   ReactionEmoji,
   type EmojiIdentifierResolvable,
 } from "../structures/emojis/ReactionEmoji.js";
+import { kPatch } from "../structures/Structure.js";
 import { type User } from "../structures/users/User.js";
 import { whenAll, whenCachedMap } from "../util/cache.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
@@ -81,7 +82,7 @@ export class MessageManager extends CachedManager<
     super(client, "messages");
   }
 
-  public construct(data: CacheEntityTypes["messages"]): Message {
+  protected createStructure(data: CacheEntityTypes["messages"]): Message {
     return new Message(data);
   }
 
@@ -115,16 +116,16 @@ export class MessageManager extends CachedManager<
       [
         // A webhook is not a user: its author only holds for this message.
         data.webhook_id
-          ? this.client.users.construct(author)
+          ? this.client.users.cache.construct(author)
           : this.client.users._resolveData(author),
         member && guildId
           ? this.client.members._resolveData({ ...member, user: author, guild_id: guildId })
           : null,
         this.cachedGuild(guildId),
-        this.client.channels._get(data.channel_id),
+        this.client.channels.cache.get(data.channel_id),
         (data as { thread?: unknown }).thread !== undefined ||
         ((data.flags ?? 0) & MessageFlags.HasThread) !== 0
-          ? this.client.threads._get(data.id)
+          ? this.client.threads.cache.get(data.id)
           : undefined,
         this.resolveMentions(data),
         guildId ? this.resolveEmojis(guildId, data) : undefined,
@@ -172,7 +173,7 @@ export class MessageManager extends CachedManager<
       ...(data.poll?.answers ?? []).map((answer) => answer.poll_media.emoji?.id),
     ].filter((id): id is string => Boolean(id));
     const emojis = this.client.guilds.emojis(guildId);
-    return whenCachedMap(ids, (id) => emojis._get(id));
+    return whenCachedMap(ids, (id) => emojis.cache.get(emojis.resolveKey(id)));
   }
 
   public resolveKey(channelId: string, messageId: string): string {
@@ -257,7 +258,7 @@ export class MessageManager extends CachedManager<
    */
   public async delete(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.deleteMessage(channelId, messageId, { reason });
-    await this.cache?.delete(this.resolveKey(channelId, messageId));
+    await this.cache.delete(this.resolveKey(channelId, messageId));
   }
 
   /**
@@ -288,7 +289,7 @@ export class MessageManager extends CachedManager<
       await this.delete(channelId, ids[0]!);
     } else {
       await this.client.api.channels.bulkDeleteMessages(channelId, ids);
-      await Promise.all(ids.map((id) => this.cache?.delete(this.resolveKey(channelId, id))));
+      await Promise.all(ids.map((id) => this.cache.delete(this.resolveKey(channelId, id))));
     }
 
     return ids;
@@ -475,7 +476,10 @@ export class MessageManager extends CachedManager<
     patch: Partial<CacheEntityTypes["messages"]>,
   ): Promise<void> {
     const key = this.resolveKey(channelId, messageId);
-    const cached = await this.cache?.get(key);
-    if (cached) await this.cache!.set(key, { ...cached, ...patch });
+    const cached = await this.cache.get(key);
+    if (cached) {
+      cached[kPatch](patch as never);
+      await this.cache.set(key, cached);
+    }
   }
 }

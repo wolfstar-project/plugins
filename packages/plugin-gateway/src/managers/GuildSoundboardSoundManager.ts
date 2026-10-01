@@ -1,4 +1,9 @@
-import { soundboardSoundKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  emojiKey,
+  soundboardSoundKey,
+  type Awaitable,
+  type CacheEntityTypes,
+} from "@wolfstar/plugin-cache";
 import {
   type APISoundboardSound,
   type RESTPatchAPIGuildSoundboardSoundJSONBody,
@@ -56,12 +61,12 @@ export class GuildSoundboardSoundManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public construct(data: CacheEntityTypes["soundboardSounds"]): SoundboardSound {
+  protected createStructure(data: CacheEntityTypes["soundboardSounds"]): SoundboardSound {
     return new SoundboardSound(data);
   }
 
   public keyOf(data: CacheEntityTypes["soundboardSounds"]): string {
-    return this.resolveKey(data.sound_id);
+    return soundboardSoundKey(data.guild_id ?? this.guildId, data.sound_id);
   }
 
   public resolveKey(soundId: string): string {
@@ -88,7 +93,9 @@ export class GuildSoundboardSoundManager extends CachedManager<
         data.user ? this.client.users._resolveData(data.user) : null,
         this.cachedGuild(data.guild_id),
         data.emoji_id && data.guild_id
-          ? this.client.guilds.emojis(data.guild_id)._get(data.emoji_id)
+          ? this.client.guilds
+              .emojis(data.guild_id)
+              .cache.get(emojiKey(data.guild_id, data.emoji_id))
           : undefined,
       ],
       ([user, guild, emoji]) => new SoundboardSound(data, { user, guild, emoji: emoji ?? null }),
@@ -149,7 +156,7 @@ export class GuildSoundboardSoundManager extends CachedManager<
    */
   public async delete(soundId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteSoundboardSound(this.guildId, soundId, { reason });
-    await this.cache?.delete(this.resolveKey(soundId));
+    await this.cache.delete(this.resolveKey(soundId));
   }
 
   protected async fetchRaw(soundId: string) {

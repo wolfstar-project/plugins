@@ -14,24 +14,26 @@ import type {
   MessageEditOptions,
   MessagePayloadResolvable,
 } from "../util/messages.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the messages of one channel: `client.messages`, with the channel's ID filled in.
  */
-export class ChannelMessageManager {
-  public readonly client: GatewayClient;
+export class ChannelMessageManager extends BaseManager {
   public readonly channelId: string;
 
   public constructor(client: GatewayClient, channelId: string) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
   }
 
   /**
    * Gets a message of the channel from the cache.
    */
-  public get(messageId: string): Promise<Message | undefined> {
-    return this.client.messages.get(this.channelId, messageId);
+  public async get(messageId: string): Promise<Message | undefined> {
+    return this.client.messages.cache.get(
+      this.client.messages.resolveKey(this.channelId, messageId),
+    );
   }
 
   /**

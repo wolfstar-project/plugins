@@ -25,7 +25,7 @@ import { VoiceChannel } from "../structures/channels/VoiceChannel.js";
 import type { Guild } from "../structures/guilds/Guild.js";
 import { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import { bindClient } from "../structures/Structure.js";
-import { whenAll } from "../util/cache.js";
+import { whenAll, type Cache } from "../util/cache.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
@@ -106,10 +106,70 @@ function channelGuildId(data: CacheEntityTypes["channels"]): string | undefined 
 }
 
 /**
+ * The cache of {@link ChannelManager}: the channel cache, falling back to the thread cache.
+ */
+class ChannelCache implements Cache<AnyChannel> {
+  readonly #channels: Cache<AnyChannel>;
+
+  // A function: `client.threads` is constructed after `client.channels`.
+  readonly #threads: () => Cache<AnyChannel>;
+
+  public constructor(channels: Cache<AnyChannel>, threads: () => Cache<AnyChannel>) {
+    this.#channels = channels;
+    this.#threads = threads;
+  }
+
+  public get synchronous(): boolean {
+    return this.#channels.synchronous && this.#threads().synchronous;
+  }
+
+  public get construct() {
+    return this.#channels.construct;
+  }
+
+  public add(
+    data: Partial<CacheEntityTypes["channels"]>,
+    overwrite = false,
+  ): Awaitable<AnyChannel> {
+    return data.type !== undefined && isThreadChannelType(data.type)
+      ? this.#threads().add(data as never, overwrite)
+      : this.#channels.add(data as never, overwrite);
+  }
+
+  public set(key: string, value: AnyChannel): Awaitable<this> {
+    const target = isThreadChannelType(value.type) ? this.#threads() : this.#channels;
+    return whenAll([target.set(key, value)], () => this);
+  }
+
+  public get(key: string): Awaitable<AnyChannel | undefined> {
+    return whenAll([this.#channels.get(key)], ([channel]) => channel ?? this.#threads().get(key));
+  }
+
+  public has(key: string): Awaitable<boolean> {
+    return whenAll([this.#channels.has(key)], ([has]) => has || this.#threads().has(key));
+  }
+
+  public delete(key: string): Awaitable<boolean> {
+    return whenAll(
+      [this.#channels.delete(key)],
+      ([deleted]) => deleted || this.#threads().delete(key),
+    );
+  }
+
+  public getSize(): Awaitable<number> {
+    return whenAll([this.#channels.getSize(), this.#threads().getSize()], ([a, b]) => a + b);
+  }
+
+  public clear(): Awaitable<void> {
+    return whenAll([this.#channels.clear(), this.#threads().clear()], () => undefined);
+  }
+}
+
+/**
  * Manages the channels known to the client, threads included.
  *
  * @remarks
- * Threads live in their own entity cache, managed by `client.threads`, which {@link ChannelManager.get} falls back
+ * Threads live in their own entity cache, managed by `client.threads`, which {@link ChannelManager.cache} falls back
  * to, so a thread ID resolves like any other channel ID.
  */
 export class ChannelManager extends CachedManager<"channels", AnyChannel, [channelId: string]> {
@@ -117,7 +177,15 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     super(client, "channels");
   }
 
-  public construct(data: CacheEntityTypes["channels"]): AnyChannel {
+  // A thread ID resolves like any other channel ID: threads live in their own cache, behind `client.threads`.
+  protected override createCache(): Cache<AnyChannel> {
+    return new ChannelCache(
+      super.createCache(),
+      () => this.client.threads.cache as unknown as Cache<AnyChannel>,
+    );
+  }
+
+  protected createStructure(data: CacheEntityTypes["channels"]): AnyChannel {
     return createChannel(data);
   }
 
@@ -155,7 +223,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     const thread = isThreadChannelType(data.type);
     return whenAll(
       [
-        parentId && depth < MaxParentDepth ? this.cache?.get(parentId) : undefined,
+        parentId && depth < MaxParentDepth ? this.rawStore?.get(parentId) : undefined,
         recipient ? client.users._resolveData(recipient) : undefined,
         data.type === ChannelType.GuildStageVoice && guildId
           ? client.cache?.stageInstances?.get(stageInstanceKey(guildId, data.id))
@@ -193,7 +261,7 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * @internal
    */
   public _getInGuild(channelId: string, guild: Guild): Awaitable<AnyChannel | null> {
-    return whenAll([this.cache?.get(channelId)], ([data]) =>
+    return whenAll([this.rawStore?.get(channelId)], ([data]) =>
       data ? this._hydrateInGuild(data, guild) : null,
     );
   }
@@ -215,36 +283,6 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     return isThreadChannelType(data.type)
       ? this.client.threads._add(data as CacheEntityTypes["threads"], cache, options)
       : super._add(data, cache, options);
-  }
-
-  /**
-   * Gets a channel from the cache, looking it up in the thread cache as well, which `get` and `cached` rely on.
-   *
-   * @param channelId The ID of the channel.
-   * @internal
-   */
-  public override _get(channelId: string): Awaitable<AnyChannel | undefined> {
-    return whenAll(
-      [super._get(channelId)],
-      ([channel]) => channel ?? this.client.threads._get(channelId),
-    );
-  }
-
-  /**
-   * Writes a channel to the cache, threads to the thread cache.
-   *
-   * @param channelId The ID of the channel.
-   * @param raw The raw channel.
-   */
-  protected override async storeRaw(
-    channelId: string,
-    raw: CacheEntityTypes["channels"],
-  ): Promise<void> {
-    if (isThreadChannelType(raw.type)) {
-      await this.client.cache?.threads?.set(channelId, raw as CacheEntityTypes["threads"]);
-    } else {
-      await this.cache?.set(channelId, raw);
-    }
   }
 
   /**

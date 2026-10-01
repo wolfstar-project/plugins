@@ -14,7 +14,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
     super(client, "users");
   }
 
-  public construct(data: CacheEntityTypes["users"]): User {
+  protected createStructure(data: CacheEntityTypes["users"]): User {
     return new User(data);
   }
 
@@ -49,7 +49,7 @@ export class UserManager extends CachedManager<"users", User, [userId: string]> 
   public async deleteDM(userId: string): Promise<DMChannel> {
     const channel = await this.createDM(userId);
     await this.client.api.channels.delete(channel.id);
-    await this.client.cache?.channels?.delete(channel.id);
+    await this.client.channels.cache.delete(channel.id);
     return channel;
   }
 

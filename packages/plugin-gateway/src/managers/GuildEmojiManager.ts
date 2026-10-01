@@ -54,7 +54,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     this.guildId = guildId;
   }
 
-  public construct(data: CacheEntityTypes["emojis"]): GuildEmoji {
+  protected createStructure(data: CacheEntityTypes["emojis"]): GuildEmoji {
     return new GuildEmoji(data);
   }
 
@@ -141,7 +141,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    */
   public async delete(emojiId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteEmoji(this.guildId, emojiId, { reason });
-    await this.cache?.delete(this.resolveKey(emojiId));
+    await this.cache.delete(this.resolveKey(emojiId));
   }
 
   /**
@@ -172,7 +172,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     const keys = (await cache.keys()).filter((key) => key.startsWith(prefix));
     const values = await Promise.all(keys.map((key) => cache.get(key)));
     return Promise.all(
-      values.filter((value) => value !== undefined).map((value) => this.hydrate(value)),
+      values.filter((value) => value !== undefined).map((value) => this._build(value)),
     );
   }
 

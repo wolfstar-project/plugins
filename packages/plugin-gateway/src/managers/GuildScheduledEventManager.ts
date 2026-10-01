@@ -109,7 +109,7 @@ export class GuildScheduledEventManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public construct(data: CacheEntityTypes["scheduledEvents"]): GuildScheduledEvent {
+  protected createStructure(data: CacheEntityTypes["scheduledEvents"]): GuildScheduledEvent {
     return new GuildScheduledEvent(data);
   }
 
@@ -143,10 +143,10 @@ export class GuildScheduledEventManager extends CachedManager<
         data.creator
           ? this.client.users._resolveData(data.creator)
           : data.creator_id
-            ? this.client.users._get(data.creator_id)
+            ? this.client.users.cache.get(data.creator_id)
             : undefined,
         this.cachedGuild(data.guild_id),
-        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+        data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
       ],
       ([creator, guild, channel]) =>
         new GuildScheduledEvent(data, {
@@ -214,7 +214,7 @@ export class GuildScheduledEventManager extends CachedManager<
    */
   public async delete(eventId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteScheduledEvent(this.guildId, eventId, { reason });
-    await this.cache?.delete(this.resolveKey(eventId));
+    await this.cache.delete(this.resolveKey(eventId));
   }
 
   /**

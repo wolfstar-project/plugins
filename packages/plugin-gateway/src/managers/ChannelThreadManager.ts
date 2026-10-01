@@ -6,17 +6,17 @@ import type {
   ThreadCreateOptions,
 } from "./ThreadManager.js";
 import { GatewayError } from "../errors/GatewayError.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the threads of one channel: `client.threads`, with the channel's ID filled in.
  */
-export class ChannelThreadManager {
-  public readonly client: GatewayClient;
+export class ChannelThreadManager extends BaseManager {
   public readonly channelId: string;
   public readonly guildId: string | null;
 
   public constructor(client: GatewayClient, channelId: string, guildId: string | null) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
     this.guildId = guildId;
   }

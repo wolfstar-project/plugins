@@ -8,12 +8,12 @@ import {
   ReactionEmoji,
   type EmojiIdentifierResolvable,
 } from "../structures/emojis/ReactionEmoji.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the reactions of one message, as they were in the message's payload.
  */
-export class ReactionManager {
-  public readonly client: GatewayClient;
+export class ReactionManager extends BaseManager {
   public readonly channelId: string;
   public readonly messageId: string;
 
@@ -39,7 +39,7 @@ export class ReactionManager {
     message: Message | null = null,
     emojis?: ReadonlyMap<string, GuildEmoji>,
   ) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
     this.messageId = messageId;
     this.#reactions = reactions;

@@ -7,6 +7,7 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
+import type { DataManager } from "../managers/DataManager.js";
 import { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { Guild } from "../structures/guilds/Guild.js";
@@ -18,7 +19,7 @@ import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
 import { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import { Sticker } from "../structures/stickers/Sticker.js";
-import { bindClient } from "../structures/Structure.js";
+import { bindClient, type StructureMixin } from "../structures/Structure.js";
 import type { User } from "../structures/users/User.js";
 import { Webhook } from "../structures/webhooks/Webhook.js";
 
@@ -139,8 +140,15 @@ function changesReduce(
 }
 
 // A cache read that never rejects, so a failing cache degrades to the fallback target.
-async function read<Value>(value: Promise<Value | undefined>): Promise<Value | undefined> {
-  return value.catch(() => undefined);
+async function read<Value extends StructureMixin<object>, Args extends readonly string[]>(
+  manager: DataManager<Value, Args>,
+  ...args: Args
+): Promise<Value | undefined> {
+  try {
+    return await manager.cache.get(manager.resolveKey(...args));
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -165,23 +173,23 @@ export async function resolveAuditLogTarget(
 
   if (type === "Unknown") return changesReduce(changes, { id: targetId });
   const user = async (userId: string) =>
-    entities.users?.get(userId) ?? (await read(client.users.get(userId))) ?? null;
+    entities.users?.get(userId) ?? (await read(client.users, userId)) ?? null;
   if (type === "User") return targetId ? user(targetId) : null;
   if (!targetId && type !== "Invite") return null;
   const id = targetId!;
 
   switch (type) {
     case "Guild":
-      return (await read(guilds.get(id))) ?? { id };
+      return (await read(guilds, id)) ?? { id };
     case "Channel":
     case "Thread":
-      return (await read(client.channels.get(id))) ?? changesReduce(changes, { id });
+      return (await read(client.channels, id)) ?? changesReduce(changes, { id });
     case "Role":
-      return (await read(client.roles.get(guildId, id))) ?? { id };
+      return (await read(client.roles, guildId, id)) ?? { id };
     case "Invite": {
       const { id: _id, ...changed } = changesReduce(changes);
       const code = changed.code as string | undefined;
-      const cached = code ? await read(guilds.invites(guildId).get(code)) : undefined;
+      const cached = code ? await read(guilds.invites(guildId), code) : undefined;
       return cached ?? built(new GuildInvite({ ...changed, code: code ?? "", guild_id: guildId }));
     }
     case "Webhook":
@@ -192,23 +200,21 @@ export async function resolveAuditLogTarget(
         )
       );
     case "Emoji":
-      return (await read(guilds.emojis(guildId).get(id))) ?? { id };
+      return (await read(guilds.emojis(guildId), id)) ?? { id };
     case "Message":
       // Discord sends the channel's ID for bulk deletions, the author's otherwise.
       return entry.action_type === AuditLogEvent.MessageBulkDelete
-        ? ((await read(client.channels.get(id))) ?? { id })
+        ? ((await read(client.channels, id)) ?? { id })
         : user(id);
     case "Integration":
       return (
         entities.integrations?.get(id) ??
-        (await read(guilds.integrations(guildId).get(id))) ??
+        (await read(guilds.integrations(guildId), id)) ??
         built(new Integration(changesReduce(changes, { id, guild_id: guildId }) as never))
       );
     case "StageInstance": {
       const channelId = options?.channel_id;
-      const cached = channelId
-        ? await read(guilds.stageInstances(guildId).get(channelId))
-        : undefined;
+      const cached = channelId ? await read(guilds.stageInstances(guildId), channelId) : undefined;
       return (
         cached ??
         built(
@@ -220,21 +226,21 @@ export async function resolveAuditLogTarget(
     }
     case "Sticker":
       return (
-        (await read(guilds.stickers(guildId).get(id))) ??
+        (await read(guilds.stickers(guildId), id)) ??
         built(new Sticker(changesReduce(changes, { id }) as never))
       );
     case "GuildScheduledEvent":
       return (
-        (await read(guilds.scheduledEvents(guildId).get(id))) ??
+        (await read(guilds.scheduledEvents(guildId), id)) ??
         built(new GuildScheduledEvent(changesReduce(changes, { id, guild_id: guildId }) as never))
       );
     case "ApplicationCommand":
       return entities.applicationCommands?.get(id) ?? { id };
     case "SoundboardSound":
-      return (await read(guilds.soundboardSounds(guildId).get(id))) ?? { id };
+      return (await read(guilds.soundboardSounds(guildId), id)) ?? { id };
     case "AutoModeration":
       return (
-        (await read(guilds.autoModerationRules(guildId).get(id))) ??
+        (await read(guilds.autoModerationRules(guildId), id)) ??
         built(new AutoModerationRule(changesReduce(changes, { id, guild_id: guildId }) as never))
       );
     case "GuildOnboardingPrompt":
