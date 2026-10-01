@@ -23,9 +23,9 @@ interactions continue to use the framework's existing client.
 The gateway connection uses [`@discordjs/ws`](https://www.npmjs.com/package/@discordjs/ws) for
 sharding, reconnects, and session resumes. Actions turn dispatches into events containing structures
 such as `Message`, `User`, and `Guild`; `EventGatewayListener` lets pieces in the `listeners`
-directory handle those events. Managers such as `client.users` and `client.guilds` read from an
-optional [`@wolfstar/plugin-cache`](../plugin-cache) cache and fetch missing data through
-`@discordjs/core`. The same core API is available as `client.api`.
+directory handle those events. Managers such as `client.users` and `client.guilds` read through
+`manager.cache`, in memory by default, optionally backed by an [`@wolfstar/plugin-cache`](../plugin-cache)
+store, and fetch missing data through `@discordjs/core`. The same core API is available as `client.api`.
 
 > [!NOTE]
 > A gateway connection is long-lived: a `GatewayClient` needs a persistent process, unlike a bot
@@ -40,18 +40,16 @@ pnpm add @wolfstar/plugin-gateway @wolfstar/plugin-cache
 ## Usage
 
 ```ts
-import { createInMemoryCache } from "@wolfstar/plugin-cache";
 import { GatewayClient } from "@wolfstar/plugin-gateway";
 import { GatewayIntentBits } from "discord-api-types/v10";
 
 const client = new GatewayClient({
   intents:
     GatewayIntentBits.Guilds | GatewayIntentBits.GuildMessages | GatewayIntentBits.MessageContent,
-  cache: createInMemoryCache(),
 });
 
-client.on("messageCreate", async (message) => {
-  const guild = message.guildId ? await client.guilds.get(message.guildId) : undefined;
+client.on("messageCreate", (message) => {
+  const guild = message.guildId ? client.guilds.cache.get(message.guildId) : undefined;
   console.log(`${message.author.username} in ${guild?.name ?? "a DM"}: ${message.content}`);
 });
 
@@ -62,19 +60,20 @@ await client.start({ listen: { port: 8080 } }); // loads pieces, starts HTTP, co
 
 On top of the `Client` options:
 
-| Option                | Default     | Description                                                                                                                        |
-| --------------------- | ----------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `intents`             | —           | The gateway intents.                                                                                                               |
-| `cache`               | `undefined` | A `Cache` from `@wolfstar/plugin-cache`, see [Caching](#caching).                                                                  |
-| `shardCount`          | `null`      | Total shards across every process, `null` for Discord's recommendation.                                                            |
-| `shardIds`            | `null`      | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                                              |
-| `gateway`             | `{}`        | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...).                                          |
-| `cacheFailure`        | `"skip"`    | On a cache read/write failure, `"skip"` drops the event, `"emitUncached"` emits it from the payload.                               |
-| `dispatchTimeout`     | `30_000`    | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it.                  |
-| `sessionStore`        | `undefined` | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
-| `sessionStoreTimeout` | `5_000`     | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
-| `partials`            | `[]`        | The structures to build partially for uncached entities, see [Partials](#partials).                                                |
-| `waitGuildTimeout`    | `15_000`    | Milliseconds `clientReady` waits for initially unavailable guilds before emitting anyway, see [Events](#events).                   |
+| Option                | Default           | Description                                                                                                                        |
+| --------------------- | ----------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `intents`             | —                 | The gateway intents.                                                                                                               |
+| `cacheConstructor`    | `CollectionCache` | Builds `manager.cache`, the cache of structure instances each manager reads through, see [Cache](#cache).                          |
+| `cache`               | `undefined`       | A `@wolfstar/plugin-cache` cache whose raw stores back the managers instead, see [Cache](#cache).                                  |
+| `shardCount`          | `null`            | Total shards across every process, `null` for Discord's recommendation.                                                            |
+| `shardIds`            | `null`            | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                                              |
+| `gateway`             | `{}`              | Extra `@discordjs/ws` `WebSocketManager` options (`compression`, `initialPresence`, ...).                                          |
+| `cacheFailure`        | `"skip"`          | On a cache read/write failure, `"skip"` drops the event, `"emitUncached"` emits it from the payload.                               |
+| `dispatchTimeout`     | `30_000`          | Milliseconds after which a dispatch still processing is reported as a `DispatchTimeoutError`. `null` disables it.                  |
+| `sessionStore`        | `undefined`       | A `GatewaySessionStore` keeping the shards' sessions across restarts, see [Resuming sessions](#resuming-sessions-across-restarts). |
+| `sessionStoreTimeout` | `5_000`           | Milliseconds a shard waits for `sessionStore` to read its session before identifying. `null` waits forever.                        |
+| `partials`            | `[]`              | The structures to build partially for uncached entities, see [Partials](#partials).                                                |
+| `waitGuildTimeout`    | `15_000`          | Milliseconds `clientReady` waits for initially unavailable guilds before emitting anyway, see [Events](#events).                   |
 
 `client.gateway` exposes the underlying `WebSocketManager`, e.g. to send presence updates.
 
@@ -263,53 +262,72 @@ framework's `container.client`. The latter stays typed as the base `Client`: a m
 cannot redeclare it with another type (TypeScript reports TS2717, or silently keeps `Client` under
 `skipLibCheck`).
 
-## Caching
+## Cache
 
-The cache only holds raw API data, managers build the structures:
+Every manager exposes its cache as `manager.cache`, the `Cache` of the discord.js RFC:
 
-Unlike the structure cache in `discordjs/next`, each cache read here builds a fresh structure. This
-keeps the same behavior with in-memory and Redis stores and preserves the previous state of update
-events.
+```typescript
+const user = client.users.cache.get(userId);
+const member = client.members.cache.get(client.members.resolveKey(guildId, userId));
 
-| Manager           | `get` / `fetch` / `refresh` arguments |
-| ----------------- | ------------------------------------- |
-| `client.users`    | `userId`                              |
-| `client.guilds`   | `guildId`                             |
-| `client.channels` | `channelId` (threads included)        |
-| `client.threads`  | `threadId`                            |
-| `client.messages` | `channelId`, `messageId`              |
-| `client.members`  | `guildId`, `userId`                   |
-| `client.roles`    | `guildId`, `roleId`                   |
+client.users.cache.has(userId);
+client.users.cache.getSize();
+```
 
-- `get` only reads the cache, resolving to `undefined` on a miss;
+By default, entities are kept in memory by `CollectionCache`, a `Collection` of structure instances: updates patch
+the cached instance in place, as in discord.js, and every method is synchronous. Its relations (e.g. `member.voice`)
+are re-resolved on every `cache.get`; instances reached by iterating the collection itself (`find`, `filter`, `map`,
+...) carry the relations of their last `get`.
+
+```typescript
+import { createRedisCache } from "@wolfstar/plugin-cache";
+
+new GatewayClient({ intents }); // CollectionCache, in memory
+new GatewayClient({ intents, cache: createRedisCache(redis) }); // raw data in Redis
+new GatewayClient({ intents, cache: null }); // nothing is cached
+new GatewayClient({ intents, cacheConstructor: MyCache }); // your own Cache implementation
+```
+
+With a `@wolfstar/plugin-cache` store, the cache holds raw API data and builds a structure on every read: the
+methods return promises when the store is remote (`await` works with every cache, `manager.cache.synchronous` tells
+them apart, see [Synchronous reads](#synchronous-reads)), and two reads return two objects. `policies` apply to
+every write, in every mode (dispatches and manager writes alike); their `ttl` only applies to plugin-cache stores,
+see [Store-backed caches](#store-backed-caches).
+
+`manager.fetch(...)` reads the cache first and falls back to the REST API. `manager.cache` is keyed by a single ID
+for most managers, and by `manager.resolveKey(...)` for the ones taking more than one argument:
+
+| Manager           | `resolveKey` / `fetch` / `refresh` arguments |
+| ----------------- | -------------------------------------------- |
+| `client.users`    | `userId`                                     |
+| `client.guilds`   | `guildId`                                    |
+| `client.channels` | `channelId` (threads included)               |
+| `client.threads`  | `threadId`                                   |
+| `client.messages` | `channelId`, `messageId`                     |
+| `client.members`  | `guildId`, `userId`                          |
+| `client.roles`    | `guildId`, `roleId`                          |
+
+- `cache.get` only reads the cache, resolving to `undefined` on a miss;
 - `fetch` reads the cache, falling back to the REST API (and caching the result). Pass
   `{ force: true }` after the IDs to always hit the API, `{ cache: false }` not to store the result:
   `client.messages.fetch(channelId, messageId, { force: true })`;
 - `refresh` is `fetch` with `{ force: true }`;
-- `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`;
-- `cached` is `get` without the `await`, for a synchronous cache, see below.
+- `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`.
 
-Like discord.js's `CachedManager#_add`, every API payload goes through the manager's `_add`, which
-merges it into the cached entry (the fields a partial payload lacks keep their cached value) and
-builds the structure. Relations are resolved from the cache too: `message.author` is the entry of
-`client.users`, `message.member` the one of `client.members`, and the same goes for
-`member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. Every structure of a guild
-(channels, threads, members, roles, messages, emojis, stickers, invites) has `guild`, the cached
-guild, and messages have `channel`. These are `null` when the entity is not cached; `fetchGuild()`
-and `fetchChannel()` always get it. `_add` is asynchronous,
-since the cache can be Redis. A structure built by hand, with `new Message(data)`, falls back to
-the copy embedded in its payload.
+Every API payload is written to the cache: a cached entry is patched with it (the fields a partial payload lacks
+keep their cached value) and the patched instance, or the newly built structure, is returned. Relations are
+resolved from the cache too: `message.author` is the entry of `client.users`, `message.member` the one of
+`client.members`, and the same goes for `member.user`, `emoji.author`, `sticker.user`, and `invite.inviter`. Every
+structure of a guild (channels, threads, members, roles, messages, emojis, stickers, invites) has `guild`, the
+cached guild, and messages have `channel`. These are `null` when the entity is not cached; `fetchGuild()` and
+`fetchChannel()` always get it. A structure built by hand, with `new Message(data)`, falls back to the copy
+embedded in its payload.
 
-Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
-[`@wolfstar/plugin-cache`](../plugin-cache).
+### Store-backed caches
 
-### Zero caching and cache control
-
-Every feature works without a cache, following the
-[discord.js RFC #11426](https://github.com/discordjs/discord.js/issues/11426): leave `cache` out
-and every `fetch` hits the API, every event is still emitted, and the previous state of update and
-delete events is `null` (or a partial, see [Partials](#partials)). Each entity kind can be cached,
-or not, on its own:
+`cache` and `makeCache` (`@wolfstar/plugin-cache`) keep the managers backed by raw stores, in memory or Redis,
+instead of `CollectionCache`: a structure is built on every read. `makeCache` takes precedence over `cache`, and is
+called once per entity kind, `null` not to cache that kind. `cacheConstructor` cannot be combined with either.
 
 ```ts
 import { MemoryEntityCache } from "@wolfstar/plugin-cache";
@@ -319,52 +337,54 @@ const client = new GatewayClient({
   // Called once per entity kind: `null` not to cache it.
   makeCache: (entity) =>
     ["guilds", "channels", "roles"].includes(entity) ? new MemoryEntityCache() : null,
-  // Entry by entry, for dispatches and managers alike.
+  // Entry by entry, for dispatches and managers alike; `ttl` only applies to these stores.
   policies: { users: { filter: (user) => !user.bot }, messages: { ttl: () => 3_600_000 } },
   // A failing store (e.g. Redis down) is a cache miss, reported through `cacheError`.
   cacheErrors: "miss",
 });
 ```
 
-`makeCache` takes precedence over `cache`, and `policies` apply to either. What needs a store:
+Swapping `createInMemoryCache()` for `createRedisCache({ redis })` changes nothing else, see
+[`@wolfstar/plugin-cache`](../plugin-cache). Every feature still works without a store for an entity kind (or with
+`cache: null`, for every entity), following the
+[discord.js RFC #11426](https://github.com/discordjs/discord.js/issues/11426): every event is still emitted, and
+the previous state of update and delete events is `null` (or a partial, see [Partials](#partials)). What else needs
+a store:
 
-| Without the store of…        | What happens                                                               |
-| ---------------------------- | -------------------------------------------------------------------------- |
-| any entity                   | `get` resolves to `undefined`, `fetch` hits the API, previous state `null` |
-| `emojis` / `stickers`        | only `guildEmojisUpdate` / `guildStickersUpdate`, no granular diff events  |
-| `guilds` (able to enumerate) | guilds left while offline are not reconciled on `READY`                    |
-| `presences`                  | `presences.fetch` rejects: presences only come from the gateway            |
-| `roles`                      | overwrite types and member roles are read from one `GET /guilds/:id/roles` |
-| `threadMembers`              | `thread.joined` is `null` unless the payload carries the bot's member      |
-| a relation's entity          | the relation getter (`message.guild`, `member.voice`, ...) returns `null`  |
+| Without the store of…        | What happens                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------- |
+| any entity                   | `cache.get` resolves to `undefined`, `fetch` hits the API, previous state `null` |
+| `emojis` / `stickers`        | only `guildEmojisUpdate` / `guildStickersUpdate`, no granular diff events        |
+| `guilds` (able to enumerate) | guilds left while offline are not reconciled on `READY`                          |
+| `presences`                  | `presences.fetch` rejects: presences only come from the gateway                  |
+| `roles`                      | overwrite types and member roles are read from one `GET /guilds/:id/roles`       |
+| `threadMembers`              | `thread.joined` is `null` unless the payload carries the bot's member            |
+| a relation's entity          | the relation getter (`message.guild`, `member.voice`, ...) returns `null`        |
 
 `listCached` resolves to `[]` without a store, and throws a `TypeError` for a store that cannot
 enumerate its entries. With `cacheErrors: "throw"`, a failing store rejects instead of missing.
 
 ### Synchronous reads
 
-Every manager method above is asynchronous since the cache can be Redis, which makes a hot path
-such as a message filter await every lookup even when the cache lives in memory. With a synchronous
-cache (`createInMemoryCache()`), `cached` takes the same arguments as `get` and returns the same
-structure, relations included, without a promise:
+`manager.cache`'s methods are `Awaitable`: synchronous with the default `CollectionCache`, a promise with a
+`@wolfstar/plugin-cache` store, unless every store the entity's relations are read from is synchronous too.
+`manager.cache.synchronous` tells them apart, so a hot path such as a message filter can skip `await` when it can:
 
 ```ts
-client.on("messageCreate", (message) => {
-  const member = client.members.cached(message.guildId!, message.author.id);
+const user = client.users.cache.synchronous
+  ? client.users.cache.get(userId)
+  : await client.users.cache.get(userId);
+```
+
+`await` works either way, since a non-promise value resolves to itself:
+
+```ts
+client.on("messageCreate", async (message) => {
+  const key = message.guildId && client.members.resolveKey(message.guildId, message.author.id);
+  const member = key ? await client.members.cache.get(key) : undefined;
   if (member?.roleIds.includes(mutedRoleId)) return;
   // ...
 });
-```
-
-It returns `undefined` on a miss, or when the entity is not cached, like `get`. An asynchronous cache
-cannot tell a miss apart without awaiting it, so there `cached` throws a `TypeError` rather than
-silently returning `undefined`; the same goes for a custom cache mixing both kinds, when a relation
-lives in an asynchronous entity cache. `manager.cache?.synchronous` tells which path to take:
-
-```ts
-const user = client.users.cache?.synchronous
-  ? client.users.cached(userId)
-  : await client.users.get(userId);
 ```
 
 ## Resuming sessions across restarts
@@ -394,8 +414,8 @@ process.once("SIGTERM", async () => {
 ```
 
 - **Pair it with a persistent cache.** A resumed session only replays the missed events, not the
-  guilds: with `createInMemoryCache()`, a restarted process resumes with an empty cache that
-  `GUILD_CREATE` never refills.
+  guilds: with an in-memory cache, the default `CollectionCache` or `createInMemoryCache()`, a
+  restarted process resumes with an empty cache that `GUILD_CREATE` never refills.
 - **Shut down with `destroy({ resumable: true })`.** By default `destroy()` closes the connections
   with code `1000`, which makes Discord invalidate the sessions, and `@discordjs/ws` drops them from
   the store. With `resumable`, the shards close with code `4200` and their sessions stay stored.
@@ -512,9 +532,9 @@ The client also has discord.js's `fetchSticker`, `fetchStickerPacks`, and `fetch
 
 ### Users, members and roles
 
-They follow discord.js's API, with one difference: anything discord.js reads synchronously from its
-cache is asynchronous here, since the cache can be Redis. With an in-memory cache, `cached` reads
-`client.users`, `client.members` and `client.roles` synchronously, see
+They follow discord.js's API. `client.users.cache`, `client.members.cache`, and `client.roles.cache`
+read synchronously with the default `CollectionCache`, like discord.js; only a `@wolfstar/plugin-cache`
+store that is not synchronous (e.g. Redis) makes them asynchronous, see
 [Synchronous reads](#synchronous-reads).
 
 ```ts
@@ -544,7 +564,7 @@ apply through `member.fetchPermissionsIn(channel)`, see below.
 `guild.members.fetch()`) asks the guild's shard for its members over the gateway instead of REST:
 every member by default, those matching a `query` (with a `limit`), or up to 100 `userIds`, with
 their `presences` if asked. It resolves with the `GuildMember`s once Discord's last
-`GUILD_MEMBERS_CHUNK` for its `nonce` is cached, so `client.members.get` sees them, and rejects
+`GUILD_MEMBERS_CHUNK` for its `nonce` is cached, so `client.members.cache.get` sees them, and rejects
 with a `GuildMembersTimeoutError` when no chunk arrives for `time` milliseconds (120 seconds by
 default), or a `GuildMembersRateLimitError` when Discord answers with `RATE_LIMITED`. Every chunk
 is also emitted as `guildMembersChunk`, whose `data.not_found` lists the requested IDs that are
