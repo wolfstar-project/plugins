@@ -165,11 +165,76 @@ export interface Cache<
 }
 
 /**
+ * The options of the cache of one entity, set per entity through the client's `cacheOptions` option.
+ */
+export interface CacheEntityOptions {
+  /**
+   * The maximum amount of entries the cache holds, the oldest one being evicted when a new one would exceed it. `0`
+   * holds nothing.
+   *
+   * @default Infinity
+   */
+  maxSize?: number;
+}
+
+/**
+ * What a {@link CacheConstructor} receives as its third argument: how the client keys and refreshes the entity, and
+ * the entity's `cacheOptions`.
+ */
+export interface CacheConstructorOptions<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value> = RawAPIType<Value>,
+> extends CacheEntityOptions {
+  /**
+   * Gets the cache key of raw data. {@link Cache.add} must store under it: most entities are not keyed by their
+   * `id` alone (a member is keyed by its guild and user, a message by its channel and ID, ...).
+   */
+  keyOf: (data: Partial<Raw>) => string;
+  /**
+   * Resolves the relations of an instance again (e.g. `member.voice`), and returns that same instance. Call it on
+   * what {@link Cache.get} and {@link Cache.add} hand out, or long-lived instances keep the relations of the day
+   * they were built.
+   */
+  refresh: (value: Value) => Value;
+}
+
+/**
  * A class building the {@link Cache} of an entity, as in the discord.js RFC #11426: what the client's
- * `cacheConstructor` option takes.
+ * `cacheConstructor` option takes. It is instantiated once per entity.
+ *
+ * @remarks
+ * The constructor receives `(creator, name, options)`:
+ *
+ * - `creator` builds a structure out of raw data, it is the cache's {@link Cache.construct};
+ * - `name` is the name of the entity, e.g. `"users"`;
+ * - `options` are the {@link CacheConstructorOptions}: `keyOf`, which `add` must key its entries with, `refresh`,
+ *   to call on what `get` and `add` hand out, and the entity's `cacheOptions` (`maxSize`).
+ *
+ * Extending `CollectionCache` and forwarding the three arguments to `super` is the recommended way: it does all of
+ * the above. The cache must be synchronous.
+ *
+ * A cache that is not a `Map` cannot be enumerated, so what needs to list its entries does not work with it: the
+ * dispatch cascades (`GUILD_DELETE` and `CHANNEL_DELETE` leave the entries of the guild or channel behind), the
+ * reconciliation of the guilds left while offline on `READY`, the granular emoji and sticker diff events, and
+ * `listCached`.
+ *
+ * @example
+ * ```typescript
+ * class LoggingCache<
+ *   Value extends StructureMixin<object>,
+ *   Raw extends RawAPIType<Value> = RawAPIType<Value>,
+ * > extends CollectionCache<Value, Raw> {
+ *   public override delete(key: string): boolean {
+ *     console.log(`${this.name}: ${key} removed`);
+ *     return super.delete(key);
+ *   }
+ * }
+ *
+ * const client = new GatewayClient({ intents, cacheConstructor: LoggingCache });
+ * ```
  */
 export type CacheConstructor = new <Value extends StructureMixin<object>>(
   creator: StructureCreator<Value>,
   name: CacheEntityName,
-  ...args: any[]
+  options: CacheConstructorOptions<Value>,
 ) => Cache<Value>;

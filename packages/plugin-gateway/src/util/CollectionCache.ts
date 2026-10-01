@@ -19,7 +19,8 @@ export interface CollectionCacheOptions<Value, Raw> {
    */
   refresh?: (value: Value) => Value;
   /**
-   * The maximum amount of entries, the oldest one being evicted when a new one would exceed it.
+   * The maximum amount of entries, the oldest one being evicted when a new one would exceed it. `0` holds nothing:
+   * `add` still builds the structure, without keeping it.
    *
    * @default Infinity
    */
@@ -93,6 +94,8 @@ export class CollectionCache<
   }
 
   public override set(key: string, value: Value): this {
+    // Nothing fits: evicting the oldest entry would still leave this one in.
+    if (this.#maxSize <= 0) return this;
     if (this.size >= this.#maxSize && !super.has(key)) {
       const oldest = this.keys().next();
       if (!oldest.done) super.delete(oldest.value);

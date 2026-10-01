@@ -92,6 +92,18 @@ describe("CollectionCache", () => {
     expect([...cache.keys()]).toEqual(["2", "3"]);
   });
 
+  test("GIVEN maxSize 0 THEN nothing is held, and add still builds the structure", () => {
+    const cache = createCache({ maxSize: 0 });
+
+    const added = cache.add(user);
+    cache.set(user.id, added);
+
+    expect(added).toBeInstanceOf(User);
+    expect(added.username).toBe("wolf");
+    expect(cache.getSize()).toBe(0);
+    expect(cache.get(user.id)).toBeUndefined();
+  });
+
   test("GIVEN filter THEN the result is a plain Collection", () => {
     const cache = createCache();
     cache.add(user);

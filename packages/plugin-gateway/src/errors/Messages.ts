@@ -12,7 +12,7 @@ export const GatewayErrorMessages = {
   ClientSessionStoreConflict:
     "sessionStore replaces gateway.retrieveSessionInfo and gateway.updateSessionInfo, pass one or the other",
   ClientCacheConflict:
-    "cacheConstructor cannot be combined with cache or makeCache, pass one or the other",
+    "cacheConstructor and cacheOptions cannot be combined with cache or makeCache, pass one or the other",
   ClientNotConstructed: "No GatewayClient has been constructed yet",
 
   DispatchHandlerConflict: (event: string) =>

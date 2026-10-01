@@ -117,6 +117,83 @@ describe("GatewayClient cache resolution", () => {
     ).toThrow(expect.objectContaining({ code: GatewayErrorCodes.ClientCacheConflict }));
   });
 
+  test("GIVEN cacheOptions THEN maxSize bounds the cache of that entity only", async () => {
+    const client = createClient({ cacheOptions: { messages: { maxSize: 2 } } });
+    const channelId = "200000000000000020";
+
+    for (const id of ["1", "2", "3"]) {
+      await dispatch(client, GatewayDispatchEvents.MessageCreate, {
+        id,
+        channel_id: channelId,
+        author: { ...user, id: `60000000000000060${id}` },
+        content: id,
+        timestamp: "2026-01-01T00:00:00.000Z",
+        mentions: [],
+        mention_roles: [],
+        attachments: [],
+        embeds: [],
+        type: MessageType.Default,
+      });
+    }
+
+    expect(client.messages.cache.getSize()).toBe(2);
+    expect(client.messages.cache.get(messageKey(channelId, "1"))).toBeUndefined();
+    expect(client.messages.cache.get(messageKey(channelId, "3"))?.content).toBe("3");
+    // The other entities stay unbounded.
+    expect(client.users.cache.getSize()).toBe(3);
+  });
+
+  test("GIVEN cacheOptions with a cacheConstructor THEN the constructor receives them next to keyOf and refresh", () => {
+    const seen: Record<string, unknown>[] = [];
+    class Custom extends CollectionCache<never> {
+      public constructor(creator: never, name: never, options: Record<string, unknown>) {
+        super(creator, name, options);
+        seen.push({ name, ...options });
+      }
+    }
+    const client = createClient({
+      cacheConstructor: Custom as unknown as CacheConstructor,
+      cacheOptions: { users: { maxSize: 5 } },
+    });
+
+    expect(client.users.cache).toBeInstanceOf(Custom);
+    expect(client.guilds.cache).toBeInstanceOf(Custom);
+    expect(seen.find((options) => options.name === "users")).toEqual({
+      name: "users",
+      keyOf: expect.any(Function),
+      refresh: expect.any(Function),
+      maxSize: 5,
+    });
+    expect(seen.find((options) => options.name === "guilds")).toEqual({
+      name: "guilds",
+      keyOf: expect.any(Function),
+      refresh: expect.any(Function),
+    });
+  });
+
+  test("GIVEN cacheOptions with cache or makeCache THEN the client refuses to start", () => {
+    const cacheOptions = { messages: { maxSize: 2 } };
+
+    expect(() => createClient({ cacheOptions, cache: createInMemoryCache() })).toThrow(
+      expect.objectContaining({ code: GatewayErrorCodes.ClientCacheConflict }),
+    );
+    expect(() => createClient({ cacheOptions, makeCache: () => null })).toThrow(
+      expect.objectContaining({ code: GatewayErrorCodes.ClientCacheConflict }),
+    );
+  });
+
+  test("GIVEN cacheOptions or a cacheConstructor with cache null THEN nothing is cached: null wins", () => {
+    const client = createClient({
+      cache: null,
+      cacheConstructor: CollectionCache as never,
+      cacheOptions: { messages: { maxSize: 2 } },
+    });
+
+    expect(client.messages.cache).toBeInstanceOf(NullCache);
+    expect(client.users.cache).toBeInstanceOf(NullCache);
+    expect(client.cache).toBeUndefined();
+  });
+
   test("GIVEN guild-scoped managers THEN they share one cache per entity", () => {
     const client = createClient();
 
