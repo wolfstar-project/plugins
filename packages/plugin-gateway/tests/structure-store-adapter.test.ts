@@ -64,13 +64,24 @@ describe("StructureStoreAdapter", () => {
     expect(result.added).toMatchObject({ username: "howl", global_name: "Wolf" });
   });
 
-  test("GIVEN upsert with overwrite THEN the entry is replaced", () => {
+  test("GIVEN upsert with overwrite on a cached entry THEN the instance is kept and patched, like set", () => {
     const { cache, store } = create();
     store.set(user.id, { ...user, banner: "banner" });
+    const instance = cache.get(user.id);
 
-    store.upsert(user.id, user, { overwrite: true });
+    const result = store.upsert(user.id, { ...user, username: "howl" }, { overwrite: true }) as {
+      existing?: APIUser;
+      added: APIUser;
+    };
 
-    expect(cache.get(user.id)?.banner).toBeFalsy();
+    expect(cache.get(user.id)).toBe(instance);
+    expect(instance?.username).toBe("howl");
+    // The state before the patch, not a view of the instance.
+    expect(result.existing).toMatchObject({ username: "wolf", banner: "banner" });
+    expect(result.added.username).toBe("howl");
+    // A structure is patched, not rebuilt: the keys absent from the new data persist.
+    expect(instance?.banner).toBe("banner");
+    expect(result.added.banner).toBe("banner");
   });
 
   test("GIVEN upsert on a missing entry THEN it is created under the given key", () => {

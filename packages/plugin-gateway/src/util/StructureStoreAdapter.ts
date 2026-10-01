@@ -60,17 +60,25 @@ class StructureStoreAdapter<
     });
   }
 
+  /**
+   * Merges data into an entry, creating it when it is missing.
+   *
+   * @remarks
+   * A cached instance is always patched in place, with or without `overwrite`: replacing it would leave the
+   * application holding a stale instance. Since a structure's patch merges, an `overwrite` on a structure cache
+   * behaves like {@link StructureStoreAdapter.set}: the keys absent from the new data keep their cached value,
+   * where a raw store would drop them.
+   */
   public upsert(
     key: string,
     data: Partial<Raw>,
-    options?: CacheUpsertOptions,
+    _options?: CacheUpsertOptions,
   ): Awaitable<CacheUpsertResult<Raw>> {
     return whenAll([this.read(key)], ([existing]) => {
-      if (existing === undefined || options?.overwrite) {
-        const before = existing === undefined ? undefined : toRaw<Raw>(existing);
+      if (existing === undefined) {
         const value = this.cache.construct(data);
         return whenAll([this.cache.set(key, value)], () => ({
-          existing: before,
+          existing: undefined,
           added: toRaw<Raw>(value),
         }));
       }

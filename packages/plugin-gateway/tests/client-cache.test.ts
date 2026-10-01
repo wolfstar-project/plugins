@@ -189,6 +189,74 @@ describe("instance identity", () => {
     expect(cached.username).toBe("howl");
   });
 
+  test("GIVEN two MESSAGE_CREATE from the same author THEN the cached user stays the same instance", async () => {
+    const client = createClient();
+    const message = {
+      channel_id: "200000000000000020",
+      content: "hello",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      edited_timestamp: null,
+      tts: false,
+      mention_everyone: false,
+      mentions: [],
+      mention_roles: [],
+      attachments: [],
+      embeds: [],
+      pinned: false,
+      type: MessageType.Default,
+    };
+
+    await dispatch(client, GatewayDispatchEvents.MessageCreate, {
+      ...message,
+      id: "1200000000000000001",
+      author: user,
+    });
+    const cached = client.users.cache.get(user.id);
+    expect(cached).toBeInstanceOf(User);
+    await dispatch(client, GatewayDispatchEvents.MessageCreate, {
+      ...message,
+      id: "1200000000000000002",
+      author: { ...user, username: "howl" },
+    });
+
+    expect(client.users.cache.get(user.id)).toBe(cached);
+    expect(cached?.username).toBe("howl");
+  });
+
+  test("GIVEN a second GUILD_CREATE THEN the guild, channel, and role instances are kept and updated", async () => {
+    const client = createClient();
+    const channelId = "200000000000000020";
+    const roleId = "300000000000000030";
+    const guild = (name: string) => ({
+      id: guildId,
+      name: `${name} guild`,
+      channels: [{ id: channelId, type: ChannelType.GuildText, name: `${name}-channel` }],
+      roles: [{ id: roleId, name: `${name} role`, permissions: "0", position: 1 }],
+      members: [],
+      emojis: [],
+      stickers: [],
+      voice_states: [],
+    });
+
+    await dispatch(client, GatewayDispatchEvents.GuildCreate, guild("old"));
+    const roleKey = client.roles.resolveKey(guildId, roleId);
+    const cachedGuild = client.guilds.cache.get(guildId);
+    const cachedChannel = client.channels.cache.get(channelId) as TextChannel | undefined;
+    const cachedRole = client.roles.cache.get(roleKey);
+    expect(cachedGuild?.name).toBe("old guild");
+    expect(cachedChannel?.name).toBe("old-channel");
+    expect(cachedRole?.name).toBe("old role");
+
+    await dispatch(client, GatewayDispatchEvents.GuildCreate, guild("new"));
+
+    expect(client.guilds.cache.get(guildId)).toBe(cachedGuild);
+    expect(client.channels.cache.get(channelId)).toBe(cachedChannel);
+    expect(client.roles.cache.get(roleKey)).toBe(cachedRole);
+    expect(cachedGuild?.name).toBe("new guild");
+    expect(cachedChannel?.name).toBe("new-channel");
+    expect(cachedRole?.name).toBe("new role");
+  });
+
   test("GIVEN an update dispatch THEN the event receives the previous state as a separate object", async () => {
     const client = createClient();
     await client.users._add(user);
