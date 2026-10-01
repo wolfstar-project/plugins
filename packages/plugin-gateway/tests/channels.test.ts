@@ -130,8 +130,8 @@ describe("channel permissions", () => {
   test("GIVEN a member THEN fetchPermissionsFor applies the channel's overwrites", async () => {
     const client = createClient();
     await seedGuild(client, [overwrite(guildId, OverwriteType.Role, 0n, SendMessages)]);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
-    const member = await client.members.get(guildId, userId);
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
+    const member = await client.members.cache.get(client.members.resolveKey(guildId, userId));
 
     const permissions = await channel.fetchPermissionsFor(member!);
     const inChannel = await member!.fetchPermissionsIn(channelId);
@@ -144,8 +144,8 @@ describe("channel permissions", () => {
   test("GIVEN a role THEN fetchPermissionsFor combines it with @everyone", async () => {
     const client = createClient();
     await seedGuild(client, [overwrite(roleId, OverwriteType.Role, ManageMessages)]);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
-    const role = await client.roles.get(guildId, roleId);
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
+    const role = await client.roles.cache.get(client.roles.resolveKey(guildId, roleId));
 
     const permissions = await channel.fetchPermissionsFor(role!);
 
@@ -159,7 +159,7 @@ describe("permission overwrites", () => {
     const client = createClient();
     await seedGuild(client, [overwrite(roleId, OverwriteType.Role, ManageMessages)]);
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     const edited = await channel.permissionOverwrites.edit(roleId, { SendMessages: false });
 
@@ -172,7 +172,7 @@ describe("permission overwrites", () => {
       },
       reason: undefined,
     });
-    const cached = (await client.channels.get(channelId)) as TextChannel;
+    const cached = (await client.channels.cache.get(channelId)) as TextChannel;
     expect(cached.permissionOverwrites.resolve(roleId)?.deny.has(SendMessages)).toBe(true);
   });
 
@@ -180,7 +180,7 @@ describe("permission overwrites", () => {
     const client = createClient();
     await seedGuild(client);
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.permissionOverwrites.create(roleId, { ViewChannel: true });
     await channel.permissionOverwrites.create(userId, { ViewChannel: true });
@@ -194,11 +194,11 @@ describe("permission overwrites", () => {
     const client = createClient();
     await seedGuild(client, [overwrite(roleId, OverwriteType.Role, ManageMessages)]);
     vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.permissionOverwrites.delete(roleId);
 
-    const cached = (await client.channels.get(channelId)) as TextChannel;
+    const cached = (await client.channels.cache.get(channelId)) as TextChannel;
     expect(cached.permissionOverwrites.cache).toEqual([]);
   });
 });
@@ -210,7 +210,7 @@ describe("channel editing", () => {
     const patch = vi
       .spyOn(container.rest, "patch")
       .mockResolvedValue(textChannel({ topic: "Howling", rate_limit_per_user: 5 }));
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.setTopic("Howling");
     await channel.setRateLimitPerUser(5, "calm");
@@ -241,7 +241,7 @@ describe("channel editing", () => {
     const patch = vi
       .spyOn(container.rest, "patch")
       .mockResolvedValue(textChannel({ parent_id: categoryId }));
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.setParent(categoryId);
 
@@ -267,7 +267,7 @@ describe("channel editing", () => {
     await seedGuild(client);
     await client.cache!.messages.set(messageKey(channelId, "1"), { id: "1" } as never);
     vi.spyOn(container.rest, "delete").mockResolvedValue(textChannel());
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.delete("cleanup");
 
@@ -293,7 +293,7 @@ describe("channel editing", () => {
       body: [{ id: channelId, position: 3 }],
       reason: undefined,
     });
-    expect(((await client.channels.get(channelId)) as TextChannel).position).toBe(3);
+    expect(((await client.channels.cache.get(channelId)) as TextChannel).position).toBe(3);
   });
 
   test("GIVEN setPosition THEN the channel moves among the channels of its category and group", async () => {
@@ -312,7 +312,7 @@ describe("channel editing", () => {
     ];
     vi.spyOn(container.rest, "get").mockResolvedValue(channels);
     const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(undefined);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     await channel.setPosition(1, { relative: true, reason: "reorder" });
 

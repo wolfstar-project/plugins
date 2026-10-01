@@ -16,9 +16,16 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { AutoModerationActionExecution } from "../structures/automoderation/AutoModerationActionExecution.js";
 import { ClientUser } from "../structures/users/ClientUser.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
-import { bindClient, kPatch } from "../structures/Structure.js";
+import {
+  bindClient,
+  kClone,
+  kPatch,
+  kRelations,
+  type StructureMixin,
+} from "../structures/Structure.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import { createChannel } from "../managers/ChannelManager.js";
+import type { DataManager } from "../managers/DataManager.js";
 import type { DMChannel } from "../structures/channels/DMChannel.js";
 import { GuildMember } from "../structures/guilds/GuildMember.js";
 import { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
@@ -33,8 +40,36 @@ import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { User } from "../structures/users/User.js";
 import { Typing } from "../structures/channels/Typing.js";
 import { resolveAuditLogTarget } from "./auditLogs.js";
+import { peekCache } from "./cache.js";
 import { GatewayEvents, type GatewayEventMap, type GatewayEventName } from "./events.js";
 import { Partials } from "./Partials.js";
+
+// The state of an entity before its dispatch is written. A cache of instances patches that very instance, so the
+// previous state is a copy of it, like discord.js's `_update`.
+//
+// The copy is taken from the instance as the cache holds it (`peekCache`), without re-resolving its relations: the
+// dispatch's event reads the entity again right after the write, and resolving them twice per dispatch is what makes
+// hot dispatches (presences, voice states, messages) expensive. The previous state therefore carries the relations of
+// the entity's last read. An instance that was never read has none yet, and is read in full.
+async function previousOf<Value extends StructureMixin<object>, Args extends readonly string[]>(
+  manager: DataManager<Value, Args>,
+  ...args: Args
+): Promise<Value | undefined> {
+  const key = manager.resolveKey(...args);
+  const held = await peekCache(manager.cache, key);
+  if (held === undefined) return undefined;
+
+  const value = Object.keys(held[kRelations]).length === 0 ? await manager.cache.get(key) : held;
+  return value?.[kClone]() as Value | undefined;
+}
+
+// Reads an entity from the cache of its manager, by the arguments identifying it.
+function cachedOf<Value extends StructureMixin<object>, Args extends readonly string[]>(
+  manager: DataManager<Value, Args>,
+  ...args: Args
+): Awaitable<Value | undefined> {
+  return manager.cache.get(manager.resolveKey(...args));
+}
 
 /**
  * The data of the dispatch of type `Type`.
@@ -125,36 +160,33 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.GuildCreate,
     // The cached entry has the collections stripped, prefer it over the (much larger) payload.
     build: async (client, data) => [
-      (await cachedOrUndefined(client.guilds.get(data.id))) ??
-        (await client.guilds.hydrate(data as CacheEntityTypes["guilds"])),
+      (await cachedOrUndefined(() => client.guilds.cache.get(data.id))) ??
+        (await client.guilds._build(data as CacheEntityTypes["guilds"])),
     ],
   },
   [GatewayDispatchEvents.GuildUpdate]: {
     event: GatewayEvents.GuildUpdate,
-    before: (client, data) => client.guilds.get(data.id),
-    build: async (client, data, previous) => [previous ?? null, await client.guilds.hydrate(data)],
+    before: (client, data) => previousOf(client.guilds, data.id),
+    build: async (client, data, previous) => [previous ?? null, await client.guilds._build(data)],
   },
   [GatewayDispatchEvents.GuildDelete]: {
     event: GatewayEvents.GuildDelete,
-    before: (client, data) => client.guilds.get(data.id),
+    before: (client, data) => previousOf(client.guilds, data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.ChannelCreate]: {
     event: GatewayEvents.ChannelCreate,
-    build: async (client, data) => [await client.channels.hydrate(data)],
+    build: async (client, data) => [await client.channels._build(data)],
   },
   [GatewayDispatchEvents.ChannelUpdate]: {
     event: GatewayEvents.ChannelUpdate,
-    before: (client, data) => client.channels.get(data.id),
-    build: async (client, data, previous) => [
-      previous ?? null,
-      await client.channels.hydrate(data),
-    ],
+    before: (client, data) => previousOf(client.channels, data.id),
+    build: async (client, data, previous) => [previous ?? null, await client.channels._build(data)],
   },
   [GatewayDispatchEvents.ChannelDelete]: {
     event: GatewayEvents.ChannelDelete,
-    build: async (client, data) => [await client.channels.hydrate(data)],
+    build: async (client, data) => [await client.channels._build(data)],
   },
 
   [GatewayDispatchEvents.ChannelPinsUpdate]: {
@@ -168,26 +200,26 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.ThreadCreate]: {
     event: GatewayEvents.ThreadCreate,
-    build: async (client, data) => [await client.threads.hydrate(data)],
+    build: async (client, data) => [await client.threads._build(data)],
   },
   [GatewayDispatchEvents.ThreadUpdate]: {
     event: GatewayEvents.ThreadUpdate,
-    before: (client, data) => client.threads.get(data.id),
-    build: async (client, data, previous) => [previous ?? null, await client.threads.hydrate(data)],
+    before: (client, data) => previousOf(client.threads, data.id),
+    build: async (client, data, previous) => [previous ?? null, await client.threads._build(data)],
   },
   [GatewayDispatchEvents.ThreadDelete]: {
     event: GatewayEvents.ThreadDelete,
-    before: (client, data) => client.threads.get(data.id),
+    before: (client, data) => previousOf(client.threads, data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.ThreadListSync]: {
     event: GatewayEvents.ThreadListSync,
     build: async (client, data) => [
-      await Promise.all(data.threads.map((thread) => client.threads.hydrate(thread as never))),
+      await Promise.all(data.threads.map((thread) => client.threads._build(thread as never))),
       await Promise.all(
         data.members.map((member) =>
-          client.threadMembers.hydrate({ ...member, guild_id: data.guild_id }),
+          client.threadMembers._build({ ...member, guild_id: data.guild_id }),
         ),
       ),
       data,
@@ -197,53 +229,55 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.ThreadMemberUpdate,
     before: (client, data) =>
       data.id && data.user_id
-        ? client.threadMembers.get(data.id, data.user_id)
+        ? previousOf(client.threadMembers, data.id, data.user_id)
         : Promise.resolve(undefined),
     build: async (client, data, previous) => [
       previous ??
         (data.id && data.user_id
           ? partialThreadMember(client, data.id, data.user_id, data.guild_id)
           : null),
-      await client.threadMembers.hydrate(data),
+      await client.threadMembers._build(data),
     ],
   },
   [GatewayDispatchEvents.ThreadMembersUpdate]: {
     event: GatewayEvents.ThreadMembersUpdate,
     before: async (client, data) => {
       const removed = await Promise.all(
-        (data.removed_member_ids ?? []).map((userId) => client.threadMembers.get(data.id, userId)),
+        (data.removed_member_ids ?? []).map((userId) =>
+          previousOf(client.threadMembers, data.id, userId),
+        ),
       );
       return removed.filter((member) => member !== undefined);
     },
     build: async (client, data, previous: ThreadMember[] | undefined) => [
       await Promise.all(
         (data.added_members ?? []).map((member) =>
-          client.threadMembers.hydrate({ ...member, id: data.id, guild_id: data.guild_id }),
+          client.threadMembers._build({ ...member, id: data.id, guild_id: data.guild_id }),
         ),
       ),
       withPartials(previous ?? [], data.removed_member_ids ?? [], (userId) =>
         partialThreadMember(client, data.id, userId, data.guild_id),
       ),
-      (await cachedOrUndefined(client.threads.get(data.id))) ?? null,
+      (await cachedOrUndefined(() => client.threads.cache.get(data.id))) ?? null,
       data,
     ],
   },
 
   [GatewayDispatchEvents.MessageCreate]: {
     event: GatewayEvents.MessageCreate,
-    build: async (client, data) => [await client.messages.hydrate(data)],
+    build: async (client, data) => [await client.messages._build(data)],
   },
   [GatewayDispatchEvents.MessageUpdate]: {
     event: GatewayEvents.MessageUpdate,
-    before: (client, data) => client.messages.get(data.channel_id, data.id),
+    before: (client, data) => previousOf(client.messages, data.channel_id, data.id),
     build: async (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
-      await client.messages.hydrate(data),
+      await client.messages._build(data),
     ],
   },
   [GatewayDispatchEvents.MessageDelete]: {
     event: GatewayEvents.MessageDelete,
-    before: (client, data) => client.messages.get(data.channel_id, data.id),
+    before: (client, data) => previousOf(client.messages, data.channel_id, data.id),
     build: (client, data, previous) => [
       previous ?? partialMessage(client, data.channel_id, data.id, data.guild_id),
       data,
@@ -253,7 +287,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.MessageDeleteBulk,
     before: async (client, data) => {
       const messages = await Promise.all(
-        data.ids.map((id) => client.messages.get(data.channel_id, id)),
+        data.ids.map((id) => previousOf(client.messages, data.channel_id, id)),
       );
       return messages.filter((message) => message !== undefined);
     },
@@ -269,7 +303,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.MessageReactionAdd,
     build: async (client, data) => [
       await reactionOf(client, data),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+      (await cachedOrUndefined(() => client.users.cache.get(data.user_id))) ??
         partialUser(client, data.user_id),
       { userId: data.user_id, type: data.type, burst: data.burst },
     ],
@@ -278,7 +312,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.MessageReactionRemove,
     build: async (client, data) => [
       await reactionOf(client, data),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+      (await cachedOrUndefined(() => client.users.cache.get(data.user_id))) ??
         partialUser(client, data.user_id),
       { userId: data.user_id, type: data.type, burst: data.burst },
     ],
@@ -286,10 +320,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.MessageReactionRemoveAll]: {
     event: GatewayEvents.MessageReactionRemoveAll,
     before: async (client, data) =>
-      (await client.messages.get(data.channel_id, data.message_id))?.reactions.cache ?? [],
+      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.cache ?? [],
     build: async (client, data, previous: MessageReaction[] | undefined) => [
-      (await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id))) ??
-        partialMessage(client, data.channel_id, data.message_id, data.guild_id),
+      (await cachedOrUndefined(() =>
+        cachedOf(client.messages, data.channel_id, data.message_id),
+      )) ?? partialMessage(client, data.channel_id, data.message_id, data.guild_id),
       previous ?? [],
       data,
     ],
@@ -297,7 +332,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.MessageReactionRemoveEmoji]: {
     event: GatewayEvents.MessageReactionRemoveEmoji,
     before: async (client, data) =>
-      (await client.messages.get(data.channel_id, data.message_id))?.reactions.resolve(
+      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.resolve(
         data.emoji,
       ) ?? undefined,
     build: async (client, data, previous: MessageReaction | undefined) => [
@@ -315,21 +350,21 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.GuildMemberAdd]: {
     event: GatewayEvents.GuildMemberAdd,
-    build: async (client, data) => [await client.members.hydrate(data)],
+    build: async (client, data) => [await client.members._build(data)],
   },
   [GatewayDispatchEvents.GuildMemberUpdate]: {
     event: GatewayEvents.GuildMemberUpdate,
-    before: (client, data) => client.members.get(data.guild_id, data.user.id),
+    before: (client, data) => previousOf(client.members, data.guild_id, data.user.id),
     // The payload is partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
       previous ?? partialMember(client, data.guild_id, { id: data.user.id }),
-      (await cachedOrUndefined(client.members.get(data.guild_id, data.user.id))) ??
-        (await client.members.hydrate(data as CacheEntityTypes["members"])),
+      (await cachedOrUndefined(() => cachedOf(client.members, data.guild_id, data.user.id))) ??
+        (await client.members._build(data as CacheEntityTypes["members"])),
     ],
   },
   [GatewayDispatchEvents.GuildMemberRemove]: {
     event: GatewayEvents.GuildMemberRemove,
-    before: (client, data) => client.members.get(data.guild_id, data.user.id),
+    before: (client, data) => previousOf(client.members, data.guild_id, data.user.id),
     build: (client, data, previous) => [
       previous ?? partialMember(client, data.guild_id, data.user),
       data,
@@ -341,10 +376,10 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
       const [members, guild] = await Promise.all([
         Promise.all(
           data.members.map((member) =>
-            client.members.hydrate({ ...member, guild_id: data.guild_id }),
+            client.members._build({ ...member, guild_id: data.guild_id }),
           ),
         ),
-        cachedOrUndefined(client.guilds.get(data.guild_id)),
+        cachedOrUndefined(() => client.guilds.cache.get(data.guild_id)),
       ]);
       // The chunk is cached by now, so a request resolving with it is followed by reads that see it.
       client.members.handleChunk(members, data);
@@ -355,20 +390,20 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildRoleCreate]: {
     event: GatewayEvents.GuildRoleCreate,
     build: async (client, data) => [
-      await client.roles.hydrate({ ...data.role, guild_id: data.guild_id }),
+      await client.roles._build({ ...data.role, guild_id: data.guild_id }),
     ],
   },
   [GatewayDispatchEvents.GuildRoleUpdate]: {
     event: GatewayEvents.GuildRoleUpdate,
-    before: (client, data) => client.roles.get(data.guild_id, data.role.id),
+    before: (client, data) => previousOf(client.roles, data.guild_id, data.role.id),
     build: async (client, data, previous) => [
       previous ?? null,
-      await client.roles.hydrate({ ...data.role, guild_id: data.guild_id }),
+      await client.roles._build({ ...data.role, guild_id: data.guild_id }),
     ],
   },
   [GatewayDispatchEvents.GuildRoleDelete]: {
     event: GatewayEvents.GuildRoleDelete,
-    before: (client, data) => client.roles.get(data.guild_id, data.role_id),
+    before: (client, data) => previousOf(client.roles, data.guild_id, data.role_id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -376,10 +411,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.InviteCreate,
     build: async (client, data) => [
       data.guild_id
-        ? await client.guilds.invites(data.guild_id).hydrate(data)
+        ? await client.guilds.invites(data.guild_id)._build(data)
         : bindClient(
             new GuildInvite(data, {
-              channel: (await cachedOrUndefined(client.channels.get(data.channel_id))) ?? null,
+              channel:
+                (await cachedOrUndefined(() => client.channels.cache.get(data.channel_id))) ?? null,
             }),
             client,
           ),
@@ -388,7 +424,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.InviteDelete]: {
     event: GatewayEvents.InviteDelete,
     before: async (client, data) =>
-      data.guild_id ? client.guilds.invites(data.guild_id).get(data.code) : undefined,
+      data.guild_id ? previousOf(client.guilds.invites(data.guild_id), data.code) : undefined,
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
@@ -399,49 +435,49 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.VoiceStateUpdate]: {
     event: GatewayEvents.VoiceStateUpdate,
     before: async (client, data) =>
-      data.guild_id ? client.voiceStates.get(data.guild_id, data.user_id) : undefined,
+      data.guild_id ? previousOf(client.voiceStates, data.guild_id, data.user_id) : undefined,
     build: async (client, data, previous) => [
       previous ?? null,
-      await client.voiceStates.hydrate(data),
+      await client.voiceStates._build(data),
     ],
   },
   [GatewayDispatchEvents.PresenceUpdate]: {
     event: GatewayEvents.PresenceUpdate,
-    before: (client, data) => client.presences.get(data.guild_id, data.user.id),
+    before: (client, data) => previousOf(client.presences, data.guild_id, data.user.id),
     // The payload may be partial: prefer the cached entry, which it was merged into.
     build: async (client, data, previous) => [
       previous ?? null,
-      (await cachedOrUndefined(client.presences.get(data.guild_id, data.user.id))) ??
-        (await client.presences.hydrate(data)),
+      (await cachedOrUndefined(() => cachedOf(client.presences, data.guild_id, data.user.id))) ??
+        (await client.presences._build(data)),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventCreate]: {
     event: GatewayEvents.GuildScheduledEventCreate,
     build: async (client, data) => [
-      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+      await client.guilds.scheduledEvents(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventUpdate]: {
     event: GatewayEvents.GuildScheduledEventUpdate,
-    before: (client, data) => client.guilds.scheduledEvents(data.guild_id).get(data.id),
+    before: (client, data) => previousOf(client.guilds.scheduledEvents(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? partialScheduledEvent(client, data.guild_id, data.id),
-      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+      await client.guilds.scheduledEvents(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventDelete]: {
     event: GatewayEvents.GuildScheduledEventDelete,
     build: async (client, data) => [
-      await client.guilds.scheduledEvents(data.guild_id).hydrate(data),
+      await client.guilds.scheduledEvents(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildScheduledEventUserAdd]: {
     event: GatewayEvents.GuildScheduledEventUserAdd,
     build: async (client, data) => [
-      (await cachedOrUndefined(
-        client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
+      (await cachedOrUndefined(() =>
+        cachedOf(client.guilds.scheduledEvents(data.guild_id), data.guild_scheduled_event_id),
       )) ?? partialScheduledEvent(client, data.guild_id, data.guild_scheduled_event_id),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+      (await cachedOrUndefined(() => client.users.cache.get(data.user_id))) ??
         partialUser(client, data.user_id),
       data,
     ],
@@ -449,51 +485,50 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.GuildScheduledEventUserRemove]: {
     event: GatewayEvents.GuildScheduledEventUserRemove,
     build: async (client, data) => [
-      (await cachedOrUndefined(
-        client.guilds.scheduledEvents(data.guild_id).get(data.guild_scheduled_event_id),
+      (await cachedOrUndefined(() =>
+        cachedOf(client.guilds.scheduledEvents(data.guild_id), data.guild_scheduled_event_id),
       )) ?? partialScheduledEvent(client, data.guild_id, data.guild_scheduled_event_id),
-      (await cachedOrUndefined(client.users.get(data.user_id))) ??
+      (await cachedOrUndefined(() => client.users.cache.get(data.user_id))) ??
         partialUser(client, data.user_id),
       data,
     ],
   },
   [GatewayDispatchEvents.StageInstanceCreate]: {
     event: GatewayEvents.StageInstanceCreate,
-    build: async (client, data) => [
-      await client.guilds.stageInstances(data.guild_id).hydrate(data),
-    ],
+    build: async (client, data) => [await client.guilds.stageInstances(data.guild_id)._build(data)],
   },
   [GatewayDispatchEvents.StageInstanceUpdate]: {
     event: GatewayEvents.StageInstanceUpdate,
-    before: (client, data) => client.guilds.stageInstances(data.guild_id).get(data.channel_id),
+    before: (client, data) =>
+      previousOf(client.guilds.stageInstances(data.guild_id), data.channel_id),
     build: async (client, data, previous) => [
       previous ?? null,
-      await client.guilds.stageInstances(data.guild_id).hydrate(data),
+      await client.guilds.stageInstances(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.StageInstanceDelete]: {
     event: GatewayEvents.StageInstanceDelete,
-    build: async (client, data) => [
-      await client.guilds.stageInstances(data.guild_id).hydrate(data),
-    ],
+    build: async (client, data) => [await client.guilds.stageInstances(data.guild_id)._build(data)],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundCreate]: {
     event: GatewayEvents.GuildSoundboardSoundCreate,
     build: async (client, data) => [
-      await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
+      await client.guilds.soundboardSounds(data.guild_id!)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundUpdate]: {
     event: GatewayEvents.GuildSoundboardSoundUpdate,
-    before: (client, data) => client.guilds.soundboardSounds(data.guild_id!).get(data.sound_id),
+    before: (client, data) =>
+      previousOf(client.guilds.soundboardSounds(data.guild_id!), data.sound_id),
     build: async (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id!, data.sound_id),
-      await client.guilds.soundboardSounds(data.guild_id!).hydrate(data),
+      await client.guilds.soundboardSounds(data.guild_id!)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildSoundboardSoundDelete]: {
     event: GatewayEvents.GuildSoundboardSoundDelete,
-    before: (client, data) => client.guilds.soundboardSounds(data.guild_id).get(data.sound_id),
+    before: (client, data) =>
+      previousOf(client.guilds.soundboardSounds(data.guild_id), data.sound_id),
     build: (client, data, previous) => [
       previous ?? partialSoundboardSound(client, data.guild_id, data.sound_id),
       data,
@@ -504,7 +539,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data) => {
       const sounds = client.guilds.soundboardSounds(data.guild_id);
       return [
-        await Promise.all(data.soundboard_sounds.map((sound) => sounds.hydrate(sound))),
+        await Promise.all(data.soundboard_sounds.map((sound) => sounds._build(sound))),
         data.guild_id,
       ];
     },
@@ -514,7 +549,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: async (client, data) => {
       const sounds = client.guilds.soundboardSounds(data.guild_id);
       return [
-        await Promise.all(data.soundboard_sounds.map((sound) => sounds.hydrate(sound))),
+        await Promise.all(data.soundboard_sounds.map((sound) => sounds._build(sound))),
         data.guild_id,
       ];
     },
@@ -522,21 +557,22 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.GuildBanAdd]: {
     event: GatewayEvents.GuildBanAdd,
-    build: async (client, data) => [await client.guilds.bans(data.guild_id).hydrate(data)],
+    build: async (client, data) => [await client.guilds.bans(data.guild_id)._build(data)],
   },
   [GatewayDispatchEvents.GuildBanRemove]: {
     event: GatewayEvents.GuildBanRemove,
-    before: (client, data) => client.guilds.bans(data.guild_id).get(data.user.id),
+    before: (client, data) => previousOf(client.guilds.bans(data.guild_id), data.user.id),
     build: async (client, data, previous) => [
-      previous ?? (await client.guilds.bans(data.guild_id).hydrate(data)),
+      previous ?? (await client.guilds.bans(data.guild_id)._build(data)),
     ],
   },
   [GatewayDispatchEvents.GuildAuditLogEntryCreate]: {
     event: GatewayEvents.GuildAuditLogEntryCreate,
     build: async (client, data) => {
+      const { user_id: userId } = data;
       const [executor, guild, target] = await Promise.all([
-        data.user_id ? cachedOrUndefined(client.users.get(data.user_id)) : undefined,
-        cachedOrUndefined(client.guilds.get(data.guild_id)),
+        userId ? cachedOrUndefined(() => client.users.cache.get(userId)) : undefined,
+        cachedOrUndefined(() => client.guilds.cache.get(data.guild_id)),
         resolveAuditLogTarget(client, data),
       ]);
       return [
@@ -554,57 +590,60 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.AutoModerationRuleCreate]: {
     event: GatewayEvents.AutoModerationRuleCreate,
     build: async (client, data) => [
-      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+      await client.guilds.autoModerationRules(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.AutoModerationRuleUpdate]: {
     event: GatewayEvents.AutoModerationRuleUpdate,
-    before: (client, data) => client.guilds.autoModerationRules(data.guild_id).get(data.id),
+    before: (client, data) => previousOf(client.guilds.autoModerationRules(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? null,
-      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+      await client.guilds.autoModerationRules(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.AutoModerationRuleDelete]: {
     event: GatewayEvents.AutoModerationRuleDelete,
     build: async (client, data) => [
-      await client.guilds.autoModerationRules(data.guild_id).hydrate(data),
+      await client.guilds.autoModerationRules(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.GuildIntegrationsUpdate]: {
     event: GatewayEvents.GuildIntegrationsUpdate,
     build: async (client, data) => [
-      (await cachedOrUndefined(client.guilds.get(data.guild_id))) ?? null,
+      (await cachedOrUndefined(() => client.guilds.cache.get(data.guild_id))) ?? null,
       data,
     ],
   },
   [GatewayDispatchEvents.IntegrationCreate]: {
     event: GatewayEvents.IntegrationCreate,
-    build: async (client, data) => [await client.guilds.integrations(data.guild_id).hydrate(data)],
+    build: async (client, data) => [await client.guilds.integrations(data.guild_id)._build(data)],
   },
   [GatewayDispatchEvents.IntegrationUpdate]: {
     event: GatewayEvents.IntegrationUpdate,
-    before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
+    before: (client, data) => previousOf(client.guilds.integrations(data.guild_id), data.id),
     build: async (client, data, previous) => [
       previous ?? null,
-      await client.guilds.integrations(data.guild_id).hydrate(data),
+      await client.guilds.integrations(data.guild_id)._build(data),
     ],
   },
   [GatewayDispatchEvents.IntegrationDelete]: {
     event: GatewayEvents.IntegrationDelete,
-    before: (client, data) => client.guilds.integrations(data.guild_id).get(data.id),
+    before: (client, data) => previousOf(client.guilds.integrations(data.guild_id), data.id),
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
   [GatewayDispatchEvents.AutoModerationActionExecution]: {
     event: GatewayEvents.AutoModerationActionExecution,
     build: async (client, data) => {
+      const { channel_id: channelId } = data;
       const [user, guild, member, channel, autoModerationRule] = await Promise.all([
-        cachedOrUndefined(client.users.get(data.user_id)),
-        cachedOrUndefined(client.guilds.get(data.guild_id)),
-        cachedOrUndefined(client.members.get(data.guild_id, data.user_id)),
-        data.channel_id ? cachedOrUndefined(client.channels.get(data.channel_id)) : undefined,
-        cachedOrUndefined(client.guilds.autoModerationRules(data.guild_id).get(data.rule_id)),
+        cachedOrUndefined(() => client.users.cache.get(data.user_id)),
+        cachedOrUndefined(() => client.guilds.cache.get(data.guild_id)),
+        cachedOrUndefined(() => cachedOf(client.members, data.guild_id, data.user_id)),
+        channelId ? cachedOrUndefined(() => client.channels.cache.get(channelId)) : undefined,
+        cachedOrUndefined(() =>
+          cachedOf(client.guilds.autoModerationRules(data.guild_id), data.rule_id),
+        ),
       ]);
       return [
         bindClient(
@@ -627,7 +666,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
 
   [GatewayDispatchEvents.UserUpdate]: {
     event: GatewayEvents.UserUpdate,
-    before: (client, data) => client.users.get(data.id),
+    before: (client, data) => previousOf(client.users, data.id),
     build: async (client, data, previous) => {
       // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
       if (client.user?.id === data.id) {
@@ -635,7 +674,7 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
         return [previous ?? partialUser(client, data.id), client.user];
       }
 
-      return [previous ?? partialUser(client, data.id), await client.users.hydrate(data)];
+      return [previous ?? partialUser(client, data.id), await client.users._build(data)];
     },
   },
 };
@@ -656,7 +695,7 @@ export const MultiDispatchHandlers: {
     emit: async (client, data, previous: GuildEmoji[] | undefined) => {
       const emojis = client.guilds.emojis(data.guild_id);
       const current = await Promise.all(
-        data.emojis.map((emoji) => emojis.hydrate({ ...emoji, guild_id: data.guild_id })),
+        data.emojis.map((emoji) => emojis._build({ ...emoji, guild_id: data.guild_id })),
       );
       const events: GatewayEventTuple[] = [
         [GatewayEvents.GuildEmojisUpdate, data.guild_id, current],
@@ -679,7 +718,7 @@ export const MultiDispatchHandlers: {
     emit: async (client, data, previous: Sticker[] | undefined) => {
       const stickers = client.guilds.stickers(data.guild_id);
       const current = await Promise.all(
-        data.stickers.map((sticker) => stickers.hydrate({ ...sticker, guild_id: data.guild_id })),
+        data.stickers.map((sticker) => stickers._build({ ...sticker, guild_id: data.guild_id })),
       );
       const events: GatewayEventTuple[] = [
         [GatewayEvents.GuildStickersUpdate, data.guild_id, current],
@@ -699,11 +738,13 @@ export const MultiDispatchHandlers: {
 };
 
 // The cached list to diff against, `undefined` when there is none: no store, or one that cannot enumerate.
-async function cachedList<Value>(
+async function cachedList<Value extends { [kClone](): Value }>(
   store: EntityCache<unknown> | undefined,
   list: () => Promise<Value[]>,
 ): Promise<Value[] | undefined> {
-  return store && isIterableCache(store) ? list() : undefined;
+  if (!store || !isIterableCache(store)) return undefined;
+  // Copies, like every previous state, see `previousOf`.
+  return (await list()).map((value) => value[kClone]());
 }
 
 type Diffable = { id: string | null; equals(other: never): boolean };
@@ -729,10 +770,6 @@ function diff<Value extends Diffable>(
   return events as GatewayEventTuple[];
 }
 
-/**
- * Resolves a cache read, or `undefined` when the cache cannot be read, so an event can still be built from its
- * payload. The failure itself was already reported while applying the dispatch.
- */
 type ReactionData = {
   channel_id: string;
   message_id: string;
@@ -744,7 +781,9 @@ type ReactionData = {
 // The reaction as the cache holds it after the dispatch. When the message is cached but the reaction is gone (its
 // last user removed it), the counts are known to be zero; only an uncached message leaves them unknown.
 async function reactionOf(client: GatewayClient, data: ReactionData): Promise<MessageReaction> {
-  const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
+  const message = await cachedOrUndefined(() =>
+    cachedOf(client.messages, data.channel_id, data.message_id),
+  );
   if (!message) return partialReaction(client, data);
   return message.reactions.resolve(data.emoji) ?? partialReaction(client, data, true, message);
 }
@@ -758,9 +797,10 @@ async function partialReaction(
   message: Message | null = partialMessage(client, data.channel_id, data.message_id, data.guild_id),
 ): Promise<MessageReaction> {
   const { guild_id: guildId, emoji } = data;
+  const emojiId = emoji.id;
   const cachedEmoji =
-    guildId && emoji.id
-      ? await cachedOrUndefined(client.guilds.emojis(guildId).get(emoji.id))
+    guildId && emojiId
+      ? await cachedOrUndefined(() => cachedOf(client.guilds.emojis(guildId), emojiId))
       : undefined;
   return bindClient(
     new MessageReaction(
@@ -784,7 +824,9 @@ async function pollAnswerOf(
   client: GatewayClient,
   data: GatewayMessagePollVoteDispatchData,
 ): Promise<PollAnswer> {
-  const message = await cachedOrUndefined(client.messages.get(data.channel_id, data.message_id));
+  const message = await cachedOrUndefined(() =>
+    cachedOf(client.messages, data.channel_id, data.message_id),
+  );
   return (
     message?.poll?.answers.find((answer) => answer.id === data.answer_id) ??
     bindClient(
@@ -809,16 +851,16 @@ async function typingOf(
 ): Promise<Typing> {
   const { guild_id: guildId, member, user_id: userId } = data;
   const [channel, user, guild, resolvedMember] = await Promise.all([
-    cachedOrUndefined(client.channels.get(data.channel_id)),
-    cachedOrUndefined(
-      member?.user ? client.users.resolveData(member.user) : client.users.get(userId),
+    cachedOrUndefined(() => client.channels.cache.get(data.channel_id)),
+    cachedOrUndefined(() =>
+      member?.user ? client.users._resolveData(member.user) : client.users.cache.get(userId),
     ),
-    guildId ? cachedOrUndefined(Promise.resolve(client.guilds._getShallow(guildId))) : undefined,
+    guildId ? cachedOrUndefined(() => client.guilds._getShallow(guildId)) : undefined,
     guildId
-      ? cachedOrUndefined(
+      ? cachedOrUndefined(() =>
           member?.user
-            ? client.members.resolveData({ ...member, guild_id: guildId })
-            : client.members.get(guildId, userId),
+            ? client.members._resolveData({ ...member, guild_id: guildId })
+            : cachedOf(client.members, guildId, userId),
         )
       : undefined,
   ]);
@@ -939,6 +981,16 @@ function partialDMChannel(
   );
 }
 
-function cachedOrUndefined<Value>(read: Promise<Value | undefined>): Promise<Value | undefined> {
-  return read.catch(() => undefined);
+/**
+ * Resolves a cache read, or `undefined` when the cache cannot be read, so an event can still be built from its
+ * payload. The failure itself was already reported while applying the dispatch.
+ */
+async function cachedOrUndefined<Value>(
+  read: () => Awaitable<Value | undefined>,
+): Promise<Value | undefined> {
+  try {
+    return await read();
+  } catch {
+    return undefined;
+  }
 }

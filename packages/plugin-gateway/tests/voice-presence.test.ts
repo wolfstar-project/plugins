@@ -4,6 +4,7 @@ import { container } from "@wolfstar/http-framework";
 import { createInMemoryCache, memberKey, voiceStateKey } from "@wolfstar/plugin-cache";
 import {
   ActivityType,
+  ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
   PresenceUpdateStatus,
@@ -16,6 +17,7 @@ import {
   GatewayClient,
   GuildMember,
   VoiceState,
+  type GatewayClientOptions,
   type GatewayEventMap,
   type GatewayEventName,
 } from "../src/index.js";
@@ -26,13 +28,14 @@ const userId = "600000000000000600";
 const user = { id: userId, username: "wolf", discriminator: "0", global_name: null, avatar: null };
 const member = { user, roles: [], joined_at: "2026-01-01T00:00:00.000Z", deaf: false, mute: false };
 
-function createClient() {
+// Pass `{}` for the default cache of structure instances.
+function createClient(options: Partial<GatewayClientOptions> = { cache: createInMemoryCache() }) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: createInMemoryCache(),
+    ...options,
   });
 }
 
@@ -95,7 +98,7 @@ describe("voice states", () => {
   test("GIVEN setMute THEN the member is edited", async () => {
     const client = createClient();
     const patch = vi.spyOn(container.rest, "patch").mockResolvedValue({ ...member, mute: true });
-    const state = await client.voiceStates.hydrate(voiceState());
+    const state = await client.voiceStates._build(voiceState());
 
     await state.setMute(true, "noise");
 
@@ -107,7 +110,7 @@ describe("voice states", () => {
 
   test("GIVEN another member's state THEN requesting to speak throws", async () => {
     const client = createClient();
-    const state = await client.voiceStates.hydrate(voiceState());
+    const state = await client.voiceStates._build(voiceState());
 
     await expect(state.setRequestToSpeak()).rejects.toThrow(/own voice state/);
   });
@@ -116,7 +119,7 @@ describe("voice states", () => {
     const client = createClient();
     await client.cache!.members.set(memberKey(guildId, userId), { ...member, guild_id: guildId });
     await client.cache!.voiceStates.set(voiceStateKey(guildId, userId), voiceState() as never);
-    const cachedMember = await client.members.get(guildId, userId);
+    const cachedMember = await client.members.cache.get(client.members.resolveKey(guildId, userId));
 
     expect((await cachedMember!.fetchVoiceState())?.sessionId).toBe("session");
 
@@ -175,9 +178,44 @@ describe("presences", () => {
   test("GIVEN an uncached presence THEN fetch rejects and fetchPresence is null", async () => {
     const client = createClient();
     await client.cache!.members.set(memberKey(guildId, userId), { ...member, guild_id: guildId });
-    const cachedMember = await client.members.get(guildId, userId);
+    const cachedMember = await client.members.cache.get(client.members.resolveKey(guildId, userId));
 
     await expect(client.presences.fetch(guildId, userId)).rejects.toThrow(/cannot be fetched/);
     expect(await cachedMember!.fetchPresence()).toBeNull();
+  });
+});
+
+describe("default cache", () => {
+  test("GIVEN a cached member THEN its voice relation follows VOICE_STATE_UPDATE on the same instance", async () => {
+    const client = createClient({});
+    await dispatch(client, GatewayDispatchEvents.GuildCreate, {
+      id: guildId,
+      name: "Pack",
+      channels: [{ id: channelId, type: ChannelType.GuildVoice, name: "den" }],
+      members: [member],
+      roles: [],
+      emojis: [],
+      stickers: [],
+      voice_states: [],
+    });
+    const key = client.members.resolveKey(guildId, userId);
+    const cachedMember = await client.members.cache.get(key);
+    expect(cachedMember).toBeInstanceOf(GuildMember);
+    expect(cachedMember?.voice ?? null).toBeNull();
+
+    await dispatch(client, GatewayDispatchEvents.VoiceStateUpdate, voiceState());
+
+    const again = await client.members.cache.get(key);
+    expect(again).toBe(cachedMember);
+    expect(again?.voice?.channelId).toBe(channelId);
+
+    await dispatch(
+      client,
+      GatewayDispatchEvents.VoiceStateUpdate,
+      voiceState({ channel_id: null }),
+    );
+
+    expect(await client.members.cache.get(key)).toBe(cachedMember);
+    expect(cachedMember?.voice?.channelId ?? null).toBeNull();
   });
 });

@@ -1,5 +1,6 @@
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Role } from "../structures/guilds/Role.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the roles of one {@link GuildMember}, reading them through the client's role manager.
@@ -8,8 +9,7 @@ import type { Role } from "../structures/guilds/Role.js";
  * discord.js's synchronous `member.roles.cache`, `highest`, `color`, ... become the `fetch*` methods here: the roles
  * are read from the (possibly asynchronous) cache, falling back to the API.
  */
-export class GuildMemberRoleManager {
-  public readonly client: GatewayClient;
+export class GuildMemberRoleManager extends BaseManager {
   public readonly guildId: string;
   public readonly userId: string;
 
@@ -27,7 +27,7 @@ export class GuildMemberRoleManager {
     userId: string,
     roleIds: readonly string[],
   ) {
-    this.client = client;
+    super(client);
     this.guildId = guildId;
     this.userId = userId;
     this.#roleIds = roleIds;
@@ -45,7 +45,9 @@ export class GuildMemberRoleManager {
    */
   public async fetch(): Promise<Role[]> {
     const ids = [...this.#roleIds, this.guildId];
-    const cached = await Promise.all(ids.map((id) => this.client.roles.get(this.guildId, id)));
+    const cached = await Promise.all(
+      ids.map((id) => this.client.roles.cache.get(this.client.roles.resolveKey(this.guildId, id))),
+    );
     let roles = cached.filter((role) => role !== undefined);
     if (roles.length !== ids.length) {
       // One request for every role of the guild, rather than one per missing role.

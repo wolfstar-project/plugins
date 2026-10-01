@@ -54,12 +54,12 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
     this.guildId = guildId;
   }
 
-  public construct(data: CacheEntityTypes["invites"]): GuildInvite {
+  protected createStructure(data: CacheEntityTypes["invites"]): GuildInvite {
     return new GuildInvite(data);
   }
 
   public keyOf(data: CacheEntityTypes["invites"]): string {
-    return this.resolveKey(data.code);
+    return inviteKey(data.guild_id ?? this.guildId, resolveInviteCode(data.code));
   }
 
   /**
@@ -83,8 +83,8 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
       [
         data.inviter ? users._resolveData(data.inviter) : undefined,
         data.target_user ? users._resolveData(data.target_user) : undefined,
-        this.cachedGuild(this.guildId),
-        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+        this.cachedGuild(data.guild_id ?? this.guildId),
+        data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
       ],
       ([inviter, targetUser, guild, channel]) =>
         new GuildInvite(data, { inviter, targetUser, guild, channel: channel ?? null }),
@@ -143,7 +143,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    */
   public async delete(code: string, reason?: string): Promise<void> {
     await this.client.api.invites.delete(resolveInviteCode(code), { reason });
-    await this.cache?.delete(this.resolveKey(code));
+    await this.cache.delete(this.resolveKey(code));
   }
 
   protected async fetchRaw(code: string) {

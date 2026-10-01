@@ -14,6 +14,7 @@ import {
   resolveImageOption,
   type ImageResolvable,
 } from "../util/DataResolver.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * The options to create a template with.
@@ -45,11 +46,9 @@ export interface GuildTemplateCreateGuildOptions {
 /**
  * Manages guild templates. Discord does not send them over the gateway, so they are never cached.
  */
-export class GuildTemplateManager {
-  public readonly client: GatewayClient;
-
+export class GuildTemplateManager extends BaseManager {
   public constructor(client: GatewayClient) {
-    this.client = client;
+    super(client);
   }
 
   /**
@@ -149,7 +148,7 @@ export class GuildTemplateManager {
 
   private async build(template: APITemplate): Promise<GuildTemplate> {
     const creator = await this.client.users._add(template.creator);
-    const guild = (await this.client.guilds.get(template.source_guild_id)) ?? null;
+    const guild = (await this.client.guilds.cache.get(template.source_guild_id)) ?? null;
     return new GuildTemplate(template, { guild, creator });
   }
 }

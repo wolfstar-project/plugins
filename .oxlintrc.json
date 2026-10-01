@@ -26,11 +26,13 @@
           {
             "allow": [
               "_add",
-              "_get",
+              "_build",
+              "_construct",
               "_getInGuild",
               "_getShallow",
               "_hydrate",
               "_hydrateInGuild",
+              "_patchCached",
               "_resolveData"
             ],
             "allowAfterThis": true

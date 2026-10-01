@@ -336,7 +336,11 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * @returns The presence, or `null` when it is not cached (the bot needs the `GuildPresences` intent).
    */
   public async fetchPresence(): Promise<Presence | null> {
-    return (await this.client.presences.get(this.guildId, this.requireId())) ?? null;
+    return (
+      (await this.client.presences.cache.get(
+        this.client.presences.resolveKey(this.guildId, this.requireId()),
+      )) ?? null
+    );
   }
 
   /**

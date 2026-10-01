@@ -15,9 +15,14 @@ import {
   applyGatewayDispatch,
   createCache,
   isIterableCache,
-  type Cache,
+  MemoryEntityCache,
+  type Awaitable,
+  type Cache as EntityCaches,
+  type CacheEntityName,
   type CacheFactory,
   type CachePolicies,
+  type CachePolicy,
+  type EntityCache,
   type GatewaySessionStore,
 } from "@wolfstar/plugin-cache";
 import {
@@ -44,7 +49,7 @@ import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
 import type { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
-import { bindClient } from "./structures/Structure.js";
+import { bindClient, type StructureMixin } from "./structures/Structure.js";
 import { Sticker } from "./structures/stickers/Sticker.js";
 import type { Webhook } from "./structures/webhooks/Webhook.js";
 import type { GuildTemplate } from "./structures/guilds/GuildTemplate.js";
@@ -58,6 +63,20 @@ import type { GatewayClientMessageDefaults } from "./structures/messages/Message
 import type { Partials } from "./util/Partials.js";
 import { GatewaySessionMirror } from "./util/sessions.js";
 import { GatewayTypeError } from "./errors/GatewayError.js";
+import {
+  isPromiseLike,
+  refreshRelations,
+  type Cache,
+  type CacheConstructor,
+  type CacheEntityOptions,
+  type StructureCreator,
+} from "./util/cache.js";
+import { CollectionCache } from "./util/CollectionCache.js";
+import { EntityStoreCache } from "./util/EntityStoreCache.js";
+import { ManagedEntityNames, managerOf, type ManagedEntityName } from "./util/entityManagers.js";
+import type { CacheErrorContext } from "./util/events.js";
+import { NullCache } from "./util/NullCache.js";
+import { createStructureStoreAdapter } from "./util/StructureStoreAdapter.js";
 
 export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
   /**
@@ -77,8 +96,58 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    */
   shardIds?: number[] | ShardRange | null;
   /**
-   * The cache to write every dispatch into, see `@wolfstar/plugin-cache`. Without one, the managers' `get` always
-   * resolve to `undefined`, update events receive `null` as their previous state, and `fetch` always hits the API.
+   * Builds the cache of each entity, the one its managers expose as `manager.cache`: the `cacheConstructor` of the
+   * discord.js RFC #11426. The caches hold structure instances, which dispatches patch in place.
+   *
+   * @remarks
+   * The class is instantiated once per entity with `(creator, name, options)`, see {@link CacheConstructor}:
+   * `options` carries `keyOf`, the key of raw data, which `add` must use since most entities are not keyed by their
+   * `id`, `refresh`, to call on what `get` and `add` hand out so that relations are resolved again, and the entity's
+   * {@link GatewayClientOptions.cacheOptions}. Extending {@link CollectionCache} is the recommended way.
+   *
+   * A cache that is not a `Map` cannot be enumerated: the dispatch cascades (`GUILD_DELETE`, `CHANNEL_DELETE`), the
+   * reconciliation on `READY`, the emoji and sticker diff events, and `listCached` do not work with it.
+   *
+   * It cannot be combined with {@link GatewayClientOptions.cache} or {@link GatewayClientOptions.makeCache}, which
+   * back the managers with raw `@wolfstar/plugin-cache` stores instead: passing both throws. `cache: null` wins over
+   * it: nothing is cached, and the class is never instantiated.
+   *
+   * The structures of a cache of instances are built synchronously, so the caches their relations are read from
+   * must be synchronous too.
+   *
+   * @default CollectionCache
+   */
+  cacheConstructor?: CacheConstructor;
+  /**
+   * The options of the cache of each entity, passed to {@link GatewayClientOptions.cacheConstructor} (the default
+   * `CollectionCache` included) next to `keyOf` and `refresh`. `maxSize` bounds the amount of entries of an entity,
+   * the oldest one being evicted first.
+   *
+   * @remarks
+   * By default every received entity stays in memory until a dispatch removes it: this is what bounds it, next to
+   * {@link GatewayClientOptions.policies} and `cache: null`.
+   *
+   * It only applies to caches built by a constructor. Like `cacheConstructor`, it cannot be combined with
+   * {@link GatewayClientOptions.cache} or {@link GatewayClientOptions.makeCache}, whose stores have their own
+   * bounds: passing both throws. With `cache: null` it is ignored.
+   *
+   * @example
+   * ```typescript
+   * // Keep the 1000 most recent messages, and no presence.
+   * const client = new GatewayClient({
+   *   intents,
+   *   cacheOptions: { messages: { maxSize: 1_000 }, presences: { maxSize: 0 } },
+   * });
+   * ```
+   *
+   * @default undefined
+   */
+  cacheOptions?: Partial<Record<CacheEntityName, CacheEntityOptions>>;
+  /**
+   * A `@wolfstar/plugin-cache` cache (in memory or Redis) whose raw stores back the managers, instead of the
+   * in-memory caches of instances built by {@link GatewayClientOptions.cacheConstructor}: structures are then built
+   * on every read. `null` disables caching: the managers' `cache.get` always answer `undefined`, update events
+   * receive `null` as their previous state, and `fetch` always hits the API.
    *
    * @remarks
    * Every entity cache is optional: an entity kind the cache does not hold is simply not cached, see
@@ -86,11 +155,12 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    *
    * @default undefined
    */
-  cache?: Cache;
+  cache?: EntityCaches | null;
   /**
-   * Creates the store of each entity kind, `null` or `undefined` not to cache it: the `CacheConstructor` of the
-   * discord.js RFC #11426. Called once per entity kind when the client is constructed, and takes precedence over
-   * {@link GatewayClientOptions.cache}.
+   * Creates the raw `@wolfstar/plugin-cache` store of each entity kind, `null` or `undefined` not to cache it. Called
+   * once per entity kind when the client is constructed, and takes precedence over
+   * {@link GatewayClientOptions.cache}. Not to be confused with {@link GatewayClientOptions.cacheConstructor}, which
+   * builds caches of structure instances.
    *
    * @example
    * ```typescript
@@ -108,7 +178,13 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
   makeCache?: CacheFactory;
   /**
    * The policies deciding which entries get cached, and for how long, per entity kind, see `withPolicy`. They apply to
-   * every write, from dispatches as well as from the managers.
+   * every write, from dispatches as well as from the managers: an entry its `filter` rejects is not cached, and the
+   * entry already cached under its key is deleted.
+   *
+   * @remarks
+   * `ttl` only applies to `@wolfstar/plugin-cache` stores ({@link GatewayClientOptions.cache},
+   * {@link GatewayClientOptions.makeCache}): the caches of instances built by
+   * {@link GatewayClientOptions.cacheConstructor}, the default included, have no per-entry time-to-live.
    *
    * @example
    * ```typescript
@@ -222,7 +298,7 @@ export interface GatewayClientDestroyOptions {
 
 /**
  * A {@link Client} that, on top of serving HTTP interactions, connects to the Discord gateway, writes every dispatch
- * into an optional {@link Cache}, and emits {@link GatewayEventMap} events carrying structures.
+ * into its cache, and emits {@link GatewayEventMap} events carrying structures.
  *
  * @example
  * ```typescript
@@ -242,9 +318,10 @@ export interface GatewayClientDestroyOptions {
  */
 export class GatewayClient extends Client {
   /**
-   * The cache every dispatch is written into, if any.
+   * The raw cache every dispatch is written into, if any: the `@wolfstar/plugin-cache` cache passed as
+   * {@link GatewayClientOptions.cache}, or a raw view of the managers' caches of instances.
    */
-  public readonly cache: Cache | undefined;
+  public readonly cache: EntityCaches | undefined;
 
   /**
    * The REST manager the gateway (for its gateway bot info) and every manager's API calls go through, like
@@ -329,6 +406,25 @@ export class GatewayClient extends Client {
   // guilds proceed concurrently.
   readonly #queue = new DispatchQueue();
 
+  // One cache per entity, shared by every manager of that entity.
+  readonly #caches = new Map<CacheEntityName, Cache<any>>();
+
+  // `null` when the managers view plugin-cache stores (or nothing) instead of caches built by a constructor.
+  readonly #cacheConstructor: CacheConstructor | null;
+
+  // The options of each entity's cache, for the constructor above.
+  readonly #cacheOptions: Partial<Record<CacheEntityName, CacheEntityOptions>>;
+
+  // The plugin-cache stores backing the managers, `undefined` with caches built by a constructor or without cache.
+  readonly #stores: EntityCaches | undefined;
+
+  // Whether every plugin-cache store answers synchronously: structures read their relations from any of them.
+  readonly #storesSynchronous: boolean;
+
+  // The policies of the caches of instances, which the managers write into without going through `client.cache`.
+  // `undefined` with plugin-cache stores, which are wrapped by their policies already.
+  readonly #policies: CachePolicies | undefined;
+
   readonly #shardCount: number | null;
 
   readonly #intents: number;
@@ -359,7 +455,21 @@ export class GatewayClient extends Client {
 
     // Set by the base client's constructor, which validated the token and built the REST manager already.
     this.rest = container.rest;
-    this.cache = resolveCache(options);
+    // Asking for plugin-cache stores rules the caches of instances out, even when no entity ends up stored.
+    const storeBacked = Boolean(options.cache || options.makeCache);
+    if ((options.cacheConstructor || options.cacheOptions) && storeBacked) {
+      throw new GatewayTypeError("ClientCacheConflict");
+    }
+
+    this.#cacheOptions = options.cacheOptions ?? {};
+    const stores = resolveCache(options);
+    this.#stores = stores;
+    this.#storesSynchronous = Object.values(stores ?? {}).every(
+      (store) => (store as EntityCache<unknown>).synchronous === true,
+    );
+    this.#cacheConstructor =
+      options.cache === null || storeBacked ? null : (options.cacheConstructor ?? CollectionCache);
+    this.#policies = this.#cacheConstructor ? options.policies : undefined;
     this.cacheErrors = options.cacheErrors ?? "miss";
     this.cacheFailure = options.cacheFailure ?? "skip";
     this.dispatchTimeout = options.dispatchTimeout === undefined ? 30_000 : options.dispatchTimeout;
@@ -381,6 +491,7 @@ export class GatewayClient extends Client {
     this.templates = new GuildTemplateManager(this);
     this.voiceStates = new VoiceStateManager(this);
     this.presences = new PresenceManager(this);
+    this.cache = this.#cacheConstructor ? this.#createStructureStores(options.policies) : stores;
 
     this.gateway = new WebSocketManager({
       ...options.gateway,
@@ -484,6 +595,125 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * Gets the cache of an entity, building it on first use: the `CacheConstructor` of the discord.js RFC #11426.
+   * Every manager of the same entity shares the same cache.
+   *
+   * @param creator Builds a structure from raw data, for entities the client does not know how to build.
+   * @param name The name of the entity.
+   */
+  public CacheConstructor<Value extends StructureMixin<object>>(
+    creator: StructureCreator<Value>,
+    name: CacheEntityName,
+  ): Cache<Value> {
+    let cache = this.#caches.get(name);
+    if (cache === undefined) {
+      cache = this.#createCache(creator, name);
+      this.#caches.set(name, cache);
+    }
+
+    return cache as Cache<Value>;
+  }
+
+  /**
+   * Runs a raw store operation, reporting its failure through `cacheError`, see
+   * {@link GatewayClientOptions.cacheErrors}. Synchronous when the operation is.
+   *
+   * @internal
+   */
+  public guardCache<T>(
+    entity: CacheEntityName,
+    operation: CacheErrorContext["operation"],
+    key: string | null,
+    run: () => Awaitable<T>,
+    fallback: T,
+  ): Awaitable<T> {
+    const fail = (error: unknown): T => {
+      this.emit("cacheError", error, { entity, key, operation });
+      if (this.cacheErrors === "throw") throw error;
+      return fallback;
+    };
+
+    try {
+      const result = run();
+      return isPromiseLike(result) ? result.catch(fail) : result;
+    } catch (error) {
+      return fail(error);
+    }
+  }
+
+  /**
+   * Gets the `filter` of an entity's policy the managers must apply themselves before writing to its cache, see
+   * {@link GatewayClientOptions.policies}.
+   *
+   * @param name The name of the entity.
+   * @returns The filter, or `undefined` when there is none or when the entity's store applies it already.
+   * @internal
+   */
+  public cacheFilter(name: CacheEntityName): ((value: object, key: string) => boolean) | undefined {
+    const policy = this.#policies?.[name] as CachePolicy<object> | undefined;
+    return policy?.filter ? (value, key) => policy.filter!(value, key) : undefined;
+  }
+
+  #createCache(creator: StructureCreator<any>, name: CacheEntityName): Cache<any> {
+    const managed = (ManagedEntityNames as readonly string[]).includes(name);
+    // Managed entities are built by their manager, whoever asked for the cache first: `construct` wraps the data
+    // alone, synchronously, while `hydrate` also resolves the relations, from caches that may be asynchronous.
+    const construct: StructureCreator<any> = managed
+      ? (data) => managerOf(this, name as ManagedEntityName, data)._construct(data)
+      : creator;
+    const hydrate: (data: object) => Awaitable<StructureMixin<object>> = managed
+      ? (data) => managerOf(this, name as ManagedEntityName, data)._build(data)
+      : creator;
+    const keyOf = managed
+      ? (data: object) => managerOf(this, name as ManagedEntityName, data).keyOf(data)
+      : (data: object) => (data as { id: string }).id;
+
+    if (this.#cacheConstructor) {
+      // Re-resolves the relations of a long-lived instance, which would otherwise keep the ones of the day it was
+      // built: a member's voice state would not follow `VOICE_STATE_UPDATE`.
+      const refresh = (value: StructureMixin<object>) => {
+        const refreshed = refreshRelations(value, hydrate);
+        if (isPromiseLike(refreshed)) {
+          // Nothing awaits the promise, so its rejection must not go unhandled.
+          refreshed.catch(() => undefined);
+          throw new GatewayTypeError("CacheConstructorAsynchronous", name);
+        }
+
+        return refreshed;
+      };
+      return new this.#cacheConstructor(construct, name, {
+        keyOf,
+        refresh,
+        ...this.#cacheOptions[name],
+      });
+    }
+
+    const store = this.#stores?.[name] as EntityCache<any> | undefined;
+    // Relations may be read from any store, so no cache is synchronous unless every store is.
+    const synchronous = () => this.#storesSynchronous;
+    if (store === undefined) return new NullCache(construct, name, { hydrate, synchronous });
+    return new EntityStoreCache(construct, name, {
+      store,
+      keyOf,
+      hydrate,
+      synchronous,
+      guard: (operation, key, run, fallback) =>
+        this.guardCache(name, operation, key, run, fallback),
+    });
+  }
+
+  // The raw view of the structure caches, which dispatches are written into.
+  #createStructureStores(policies: CachePolicies | undefined): EntityCaches {
+    return createCache({
+      policies,
+      makeCache: (name) =>
+        (ManagedEntityNames as readonly string[]).includes(name)
+          ? createStructureStoreAdapter(this.CacheConstructor(() => undefined as never, name))
+          : new MemoryEntityCache(this.#cacheOptions[name]?.maxSize ?? Infinity),
+    });
+  }
+
+  /**
    * Resolves once every dispatch received so far has been processed.
    */
   public async idle(): Promise<void> {
@@ -541,10 +771,10 @@ export class GatewayClient extends Client {
       guild_scheduled_event_id: options.guildScheduledEventId,
     });
     const [guild, channel, inviter, targetUser] = await Promise.all([
-      invite.guild ? this.guilds.get(invite.guild.id) : undefined,
-      invite.channel ? this.channels.get(invite.channel.id) : undefined,
-      invite.inviter ? this.users.resolveData(invite.inviter) : undefined,
-      invite.target_user ? this.users.resolveData(invite.target_user) : undefined,
+      invite.guild ? this.guilds.cache.get(invite.guild.id) : undefined,
+      invite.channel ? this.channels.cache.get(invite.channel.id) : undefined,
+      invite.inviter ? this.users._resolveData(invite.inviter) : undefined,
+      invite.target_user ? this.users._resolveData(invite.target_user) : undefined,
     ]);
     return bindClient(
       createInvite(invite, { guild: guild ?? null, channel: channel ?? null, inviter, targetUser }),
@@ -737,8 +967,9 @@ export class GatewayClient extends Client {
 
   private async dropUnlistedGuilds(data: GatewayReadyDispatchData, shardId: number): Promise<void> {
     // Telling the guilds the bot left apart takes the list of the cached ones.
-    const guilds = this.cache?.guilds;
-    if (!guilds || !isIterableCache(guilds)) return;
+    const { cache } = this;
+    const guilds = cache?.guilds;
+    if (!cache || !guilds || !isIterableCache(guilds)) return;
 
     const cached = await guilds.keys();
     if (cached.length === 0) return;
@@ -750,8 +981,8 @@ export class GatewayClient extends Client {
     for (const id of cached) {
       if (listed.has(id) || Number((BigInt(id) >> 22n) % shardCount) !== shardId) continue;
 
-      const guild = (await this.guilds.get(id)) ?? null;
-      await applyGatewayDispatch(this.cache!, {
+      const guild = (await this.guilds.cache.get(id)) ?? null;
+      await applyGatewayDispatch(cache, {
         op: GatewayOpcodes.Dispatch,
         s: 0,
         t: GatewayDispatchEvents.GuildDelete,
@@ -828,10 +1059,10 @@ export class GatewayClient extends Client {
 }
 
 /**
- * Builds the cache of a client out of its options: the stores of `makeCache` (or `cache`), wrapped by `policies`.
- * `undefined` when no entity kind is cached.
+ * Builds the raw stores of a client out of its options: the stores of `makeCache` (or `cache`), wrapped by
+ * `policies`. `undefined` when no entity kind is stored, which `cache: null` asks for.
  */
-function resolveCache(options: GatewayClientOptions): Cache | undefined {
+function resolveCache(options: GatewayClientOptions): EntityCaches | undefined {
   const { makeCache, cache, policies } = options;
   const source: CacheFactory | undefined =
     makeCache ?? (cache ? (entity) => cache[entity] : undefined);

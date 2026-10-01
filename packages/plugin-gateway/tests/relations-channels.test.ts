@@ -42,7 +42,7 @@ function createClient(cache = true) {
     discordToken: "test-token",
     clientId: botId,
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
   });
 }
 
@@ -99,18 +99,20 @@ describe("channel relations", () => {
     const client = createClient();
     await seed(client);
 
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     expect(channel.parent?.id).toBe(categoryId);
     expect(channel.parent?.guild?.id).toBe(guildId);
-    expect(client.channels.cached(channelId)?.id).toBe(channelId);
+    // A synchronous store answers without a promise.
+    expect(client.channels.cache.synchronous).toBe(true);
+    expect((client.channels.cache.get(channelId) as TextChannel).id).toBe(channelId);
   });
 
   test("GIVEN an uncached parent THEN channel.parent is null", async () => {
     const client = createClient();
     await client.cache!.channels.set(channelId, text as never);
 
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     expect(channel.parentId).toBe(categoryId);
     expect(channel.parent).toBeNull();
@@ -119,7 +121,7 @@ describe("channel relations", () => {
   test("GIVEN a patch moving the channel THEN the stale parent is dropped", async () => {
     const client = createClient();
     await seed(client);
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     channel[kPatch]({ topic: "howl" } as never);
     expect(channel.parent?.id).toBe(categoryId);
@@ -131,7 +133,7 @@ describe("channel relations", () => {
     const client = createClient();
     await seed(client);
 
-    const resolved = (await client.channels.get(threadId)) as PublicThreadChannel;
+    const resolved = (await client.channels.cache.get(threadId)) as PublicThreadChannel;
 
     expect(resolved.parent?.id).toBe(channelId);
     expect((resolved.parent as TextChannel).parent?.id).toBe(categoryId);
@@ -140,7 +142,7 @@ describe("channel relations", () => {
   test("GIVEN the bot's thread member THEN thread.joined is true, false otherwise", async () => {
     const client = createClient();
     await seed(client);
-    expect(((await client.threads.get(threadId)) as PublicThreadChannel).joined).toBe(false);
+    expect(((await client.threads.cache.get(threadId)) as PublicThreadChannel).joined).toBe(false);
 
     await client.cache!.threadMembers.set(threadMemberKey(threadId, botId), {
       id: threadId,
@@ -148,24 +150,24 @@ describe("channel relations", () => {
       join_timestamp: "2026-01-01T00:00:00.000Z",
       flags: 0,
     } as never);
-    expect(((await client.threads.get(threadId)) as PublicThreadChannel).joined).toBe(true);
+    expect(((await client.threads.cache.get(threadId)) as PublicThreadChannel).joined).toBe(true);
   });
 
   test("GIVEN a DM THEN recipient is the cached user, else the payload's", async () => {
     const client = createClient();
     await seed(client);
-    const cached = (await client.channels.get(dmId)) as DMChannel;
+    const cached = (await client.channels.cache.get(dmId)) as DMChannel;
     expect(cached.recipientId).toBe(userId);
     expect(cached.recipient?.username).toBe("wolf");
 
-    const uncached = client.channels.createStructure(dm as never) as DMChannel;
+    const uncached = client.channels.cache.construct(dm as never) as DMChannel;
     expect(uncached.recipient?.username).toBe("stale");
   });
 
   test("GIVEN a live stage THEN stageChannel.stageInstance resolves it", async () => {
     const client = createClient();
     await seed(client);
-    expect(((await client.channels.get(stageId)) as StageChannel).stageInstance).toBeNull();
+    expect(((await client.channels.cache.get(stageId)) as StageChannel).stageInstance).toBeNull();
 
     await client.cache!.stageInstances.set(stageInstanceKey(guildId, stageId), {
       id: "300000000000000030",
@@ -176,7 +178,7 @@ describe("channel relations", () => {
       discoverable_disabled: true,
       guild_scheduled_event_id: null,
     } as never);
-    const resolved = (await client.channels.get(stageId)) as StageChannel;
+    const resolved = (await client.channels.cache.get(stageId)) as StageChannel;
     expect(resolved.stageInstance?.topic).toBe("Howling");
     expect(resolved.stageInstance?.channel).toBe(resolved);
   });
@@ -195,7 +197,7 @@ describe("guild channel relations", () => {
       widget_channel_id: null,
     } as never);
 
-    const resolved = (await client.guilds.get(guildId))!;
+    const resolved = (await client.guilds.cache.get(guildId))!;
 
     expect(resolved.afkChannel?.id).toBe(stageId);
     expect(resolved.systemChannel?.id).toBe(channelId);
@@ -214,14 +216,14 @@ describe("guild channel relations", () => {
     await seed(client);
     await client.cache!.guilds.set(guildId, { ...guild, system_channel_id: channelId } as never);
 
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     expect((channel.guild as Guild).systemChannel?.id).toBe(channelId);
   });
 
   test("GIVEN no cache THEN the guild's channels are null", () => {
     const client = createClient(false);
-    const built = client.guilds.createStructure({
+    const built = client.guilds.cache.construct({
       ...guild,
       system_channel_id: channelId,
     } as never);
@@ -247,7 +249,9 @@ describe("voice state and thread member relations", () => {
       request_to_speak_timestamp: null,
     } as never);
 
-    const state = (await client.voiceStates.get(guildId, userId))!;
+    const state = (await client.voiceStates.cache.get(
+      client.voiceStates.resolveKey(guildId, userId),
+    ))!;
     expect(state.channel?.id).toBe(stageId);
 
     state[kPatch]({ channel_id: null });
@@ -264,11 +268,13 @@ describe("voice state and thread member relations", () => {
       flags: 0,
     } as never);
 
-    const resolved = (await client.threadMembers.get(threadId, userId))!;
+    const resolved = (await client.threadMembers.cache.get(
+      client.threadMembers.resolveKey(threadId, userId),
+    ))!;
     expect(resolved.thread?.id).toBe(threadId);
     expect(resolved.user?.username).toBe("wolf");
 
-    const bare = client.threadMembers.createStructure({
+    const bare = client.threadMembers.cache.construct({
       id: threadId,
       user_id: userId,
       join_timestamp: "2026-01-01T00:00:00.000Z",
@@ -341,17 +347,23 @@ describe("permission overwrite relations", () => {
       ...text,
       permission_overwrites: [overwrite],
     } as never);
-    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBe(true);
+    expect(((await client.channels.cache.get(channelId)) as TextChannel).permissionsLocked).toBe(
+      true,
+    );
 
     await client.cache!.channels.set(channelId, { ...text, permission_overwrites: [] } as never);
-    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBe(false);
+    expect(((await client.channels.cache.get(channelId)) as TextChannel).permissionsLocked).toBe(
+      false,
+    );
   });
 
   test("GIVEN an uncached category THEN permissionsLocked is null", async () => {
     const client = createClient();
     await client.cache!.channels.set(channelId, text as never);
 
-    expect(((await client.channels.get(channelId)) as TextChannel).permissionsLocked).toBeNull();
+    expect(
+      ((await client.channels.cache.get(channelId)) as TextChannel).permissionsLocked,
+    ).toBeNull();
   });
 
   test("GIVEN a channel's overwrites THEN each one knows its channel", async () => {
@@ -362,7 +374,7 @@ describe("permission overwrite relations", () => {
       permission_overwrites: [overwrite],
     } as never);
 
-    const channel = (await client.channels.get(channelId)) as TextChannel;
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
 
     expect(channel.permissionOverwrites.cache[0]!.channel).toBe(channel);
   });

@@ -63,7 +63,7 @@ export interface CacheErrorContext {
   /**
    * The operation that failed.
    */
-  operation: "get" | "set" | "upsert" | "delete";
+  operation: "get" | "set" | "upsert" | "delete" | "has" | "clear" | "getSize" | "keys" | "entries";
 }
 
 /**

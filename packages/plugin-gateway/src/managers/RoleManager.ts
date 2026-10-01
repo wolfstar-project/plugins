@@ -54,7 +54,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     super(client, "roles");
   }
 
-  public construct(data: CacheEntityTypes["roles"]): Role {
+  protected createStructure(data: CacheEntityTypes["roles"]): Role {
     return new Role(data);
   }
 
@@ -130,7 +130,7 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    */
   public async delete(guildId: string, roleId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteRole(guildId, roleId, { reason });
-    await this.cache?.delete(this.resolveKey(guildId, roleId));
+    await this.cache.delete(this.resolveKey(guildId, roleId));
   }
 
   /**

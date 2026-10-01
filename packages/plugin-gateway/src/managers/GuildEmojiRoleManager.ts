@@ -1,12 +1,12 @@
 import type { GatewayClient } from "../GatewayClient.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { Role } from "../structures/guilds/Role.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the roles allowed to use one custom emoji. When it has none, everyone can use it.
  */
-export class GuildEmojiRoleManager {
-  public readonly client: GatewayClient;
+export class GuildEmojiRoleManager extends BaseManager {
   public readonly guildId: string;
   public readonly emojiId: string;
 
@@ -18,7 +18,7 @@ export class GuildEmojiRoleManager {
     emojiId: string,
     roleIds: readonly string[],
   ) {
-    this.client = client;
+    super(client);
     this.guildId = guildId;
     this.emojiId = emojiId;
     this.#roleIds = roleIds;

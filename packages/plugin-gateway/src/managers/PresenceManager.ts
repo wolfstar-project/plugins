@@ -10,7 +10,7 @@ import { GatewayError } from "../errors/GatewayError.js";
  *
  * @remarks
  * Presences only come from the gateway, with the `GuildPresences` intent: there is no API to fetch them, so `fetch`
- * rejects on a cache miss. Use `get`, which resolves to `undefined` instead.
+ * rejects on a cache miss. Use `cache.get`, which answers `undefined` instead.
  */
 export class PresenceManager extends CachedManager<
   "presences",
@@ -21,7 +21,7 @@ export class PresenceManager extends CachedManager<
     super(client, "presences");
   }
 
-  public construct(data: CacheEntityTypes["presences"]): Presence {
+  protected createStructure(data: CacheEntityTypes["presences"]): Presence {
     return new Presence(data);
   }
 
@@ -36,8 +36,8 @@ export class PresenceManager extends CachedManager<
   public override _hydrate(data: CacheEntityTypes["presences"]): Awaitable<Presence> {
     return whenAll(
       [
-        this.client.users._get(data.user.id),
-        this.client.members._get(data.guild_id, data.user.id),
+        this.client.users.cache.get(data.user.id),
+        this.client.members.cache.get(this.client.members.resolveKey(data.guild_id, data.user.id)),
         this.cachedGuild(data.guild_id),
       ],
       ([user, member, guild]) =>
@@ -54,9 +54,10 @@ export class PresenceManager extends CachedManager<
    */
   public async listCached(guildId: string): Promise<Presence[]> {
     const prefix = `${guildId}:`;
-    const entries = (await this.iterableCache()?.entries()) ?? [];
+    const cache = this.iterableCache();
+    const entries = cache ? await this.guard("entries", null, () => cache.entries(), []) : [];
     return Promise.all(
-      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this.hydrate(raw)),
+      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this._build(raw)),
     );
   }
 

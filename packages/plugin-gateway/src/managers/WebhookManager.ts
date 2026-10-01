@@ -18,6 +18,7 @@ import {
   type WebhookThreadOptions,
 } from "../util/messages.js";
 import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
+import { BaseManager } from "./BaseManager.js";
 
 export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThreadOptions };
 
@@ -56,11 +57,9 @@ export interface WebhookEditOptions {
  * Methods taking a webhook's token call the API with it rather than with the bot's authorization, so they work for
  * webhooks of other applications too.
  */
-export class WebhookManager {
-  public readonly client: GatewayClient;
-
+export class WebhookManager extends BaseManager {
   public constructor(client: GatewayClient) {
-    this.client = client;
+    super(client);
   }
 
   /**
@@ -244,11 +243,11 @@ export class WebhookManager {
    */
   public async hydrate(data: APIWebhook): Promise<Webhook> {
     const [guild, channel, sourceGuild, sourceChannel, owner] = await Promise.all([
-      data.guild_id ? this.client.guilds.get(data.guild_id) : undefined,
-      data.channel_id ? this.client.channels.get(data.channel_id) : undefined,
-      data.source_guild ? this.client.guilds.get(data.source_guild.id) : undefined,
-      data.source_channel ? this.client.channels.get(data.source_channel.id) : undefined,
-      data.user ? this.client.users.resolveData(data.user) : undefined,
+      data.guild_id ? this.client.guilds.cache.get(data.guild_id) : undefined,
+      data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
+      data.source_guild ? this.client.guilds.cache.get(data.source_guild.id) : undefined,
+      data.source_channel ? this.client.channels.cache.get(data.source_channel.id) : undefined,
+      data.user ? this.client.users._resolveData(data.user) : undefined,
     ]);
     return bindClient(
       new Webhook(data, {

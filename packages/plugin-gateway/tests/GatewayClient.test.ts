@@ -36,7 +36,7 @@ function createClient(cache: Cache | null = createInMemoryCache()) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
   });
 }
 
@@ -161,8 +161,10 @@ describe("GatewayClient", () => {
     expect(emitted.member).toBeInstanceOf(GuildMember);
     expect(emitted.url).toBe("https://discord.com/channels/10/20/30");
 
-    expect((await client.messages.get("20", "30"))?.content).toBe("hello");
-    expect((await client.users.get(user.id))?.username).toBe("wolf");
+    expect((await client.messages.cache.get(client.messages.resolveKey("20", "30")))?.content).toBe(
+      "hello",
+    );
+    expect((await client.users.cache.get(user.id))?.username).toBe("wolf");
   });
 
   test("GIVEN MESSAGE_UPDATE THEN the previous state comes from the cache", async () => {
@@ -187,7 +189,7 @@ describe("GatewayClient", () => {
     const [[deleted, data]] = calls;
     expect(deleted?.content).toBe("bye");
     expect(data).toEqual({ id: "30", channel_id: "20" });
-    expect(await client.messages.get("20", "30")).toBeUndefined();
+    expect(await client.messages.cache.get(client.messages.resolveKey("20", "30"))).toBeUndefined();
   });
 
   test("GIVEN GUILD_CREATE THEN the guild and its collections are reachable through the managers", async () => {
@@ -200,8 +202,10 @@ describe("GatewayClient", () => {
     expect(created).toBeInstanceOf(Guild);
     expect(created.name).toBe("Pack");
     expect(created.toJSON()).not.toHaveProperty("channels");
-    expect(await client.channels.get("20")).toBeInstanceOf(Channel);
-    expect((await client.members.get("10", user.id))?.user?.id).toBe(user.id);
+    expect(await client.channels.cache.get("20")).toBeInstanceOf(Channel);
+    expect(
+      (await client.members.cache.get(client.members.resolveKey("10", user.id)))?.user?.id,
+    ).toBe(user.id);
   });
 
   test("GIVEN GUILD_MEMBER_UPDATE THEN the new member is merged with the cached one", async () => {
@@ -262,7 +266,7 @@ describe("GatewayClient", () => {
     const [[previous, current]] = calls;
     expect(previous).toBeNull();
     expect(current.content).toBe("after");
-    expect(await client.messages.get("20", "30")).toBeUndefined();
+    expect(await client.messages.cache.get(client.messages.resolveKey("20", "30"))).toBeUndefined();
   });
 
   test("GIVEN a failing cache THEN the error is emitted and later dispatches still run", async () => {
@@ -370,8 +374,8 @@ describe("ChannelManager", () => {
     });
 
     expect(calls[0]![0]).toBeInstanceOf(PublicThreadChannel);
-    expect(await client.threads.get("40")).toBeInstanceOf(PublicThreadChannel);
-    expect(await client.channels.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.threads.cache.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.channels.cache.get("40")).toBeInstanceOf(PublicThreadChannel);
     expect(await client.cache!.channels.has("40")).toBe(false);
   });
 

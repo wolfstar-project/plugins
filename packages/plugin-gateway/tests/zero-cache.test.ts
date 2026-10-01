@@ -27,7 +27,7 @@ const channelId = "200000000000000020";
 const roleId = "300000000000000030";
 const userId = "600000000000000600";
 
-function createClient(cache?: Cache) {
+function createClient(cache: Cache | null = null) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
@@ -181,8 +181,8 @@ describe("threads", () => {
       },
     };
 
-    const unknown = await client.threads.hydrate(thread as never);
-    const joined = await client.threads.hydrate({
+    const unknown = await client.threads._build(thread as never);
+    const joined = await client.threads._build({
       ...thread,
       member: {
         id: thread.id,
@@ -203,7 +203,7 @@ describe("member roles", () => {
     const get = vi
       .spyOn(container.rest, "get")
       .mockResolvedValue([role(guildId, 0), role("1", 1), role("2", 2), role("3", 3)]);
-    const member = client.members.construct({
+    const member = client.members.cache.construct({
       guild_id: guildId,
       user: { id: userId, username: "wolf", discriminator: "0", global_name: null, avatar: null },
       roles: ["1", "2", "3"],

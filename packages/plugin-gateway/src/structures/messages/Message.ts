@@ -328,7 +328,7 @@ export class Message extends BaseMessage<""> {
     const resolved = this[kRelations].thread;
     if (resolved) return resolved;
     const { thread } = this[kData] as APIMessage & { thread?: APIThreadChannel };
-    return thread ? this.client.threads.construct(thread) : null;
+    return thread ? this.client.threads.cache.construct(thread) : null;
   }
 
   /**

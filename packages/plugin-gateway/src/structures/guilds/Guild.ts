@@ -34,6 +34,7 @@ import type {
 import type { GuildTemplateCreateOptions } from "../../managers/GuildTemplateManager.js";
 import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
+import { isPromiseLike } from "../../util/cache.js";
 import { cdn } from "../../util/cdn.js";
 import type { ImageResolvable } from "../../util/DataResolver.js";
 import { transformAPIIncidentsData, type IncidentActions } from "../../util/Transformers.js";
@@ -259,11 +260,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
     const channelId = (this[kData] as unknown as Record<string, string | null | undefined>)[
       GuildChannelFields[name]
     ];
-    if (!channelId || this.client.cache?.channels?.synchronous !== true) return null;
+    const { cache } = this.client.channels;
+    if (!channelId || !cache.synchronous) return null;
     try {
-      return this.client.channels.cached(channelId) ?? null;
+      const channel = cache.get(channelId);
+      if (!isPromiseLike(channel)) return channel ?? null;
+      // A relation of the channel is read from an asynchronous cache. Nothing awaits the promise anymore, so its
+      // rejection must not go unhandled.
+      channel.catch(() => undefined);
+      return null;
     } catch {
-      // A relation of the channel is read from an asynchronous cache.
       return null;
     }
   }

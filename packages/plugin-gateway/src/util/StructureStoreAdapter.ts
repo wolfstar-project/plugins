@@ -1,0 +1,145 @@
+import type {
+  Awaitable,
+  CacheUpsertOptions,
+  CacheUpsertResult,
+  EntityCache,
+  IterableEntityCache,
+} from "@wolfstar/plugin-cache";
+import { kPatch, type StructureMixin } from "../structures/Structure.js";
+import { peekCache, whenAll, type Cache, type RawAPIType } from "./cache.js";
+
+function toRaw<Raw>(value: StructureMixin<object>): Raw {
+  // A copy: the structure's own data keeps changing as it is patched.
+  return { ...(value as unknown as { toJSON(): Raw }).toJSON() };
+}
+
+/**
+ * A raw `@wolfstar/plugin-cache` store over a structure {@link Cache}, so that what writes raw data (the gateway
+ * dispatches, their cascades, the policies) works against a cache of structures.
+ *
+ * @remarks
+ * Writes patch the cached instance in place. Time-to-live options are ignored: structure caches have none.
+ *
+ * @internal
+ */
+class StructureStoreAdapter<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value>,
+> implements EntityCache<Raw> {
+  public constructor(protected readonly cache: Cache<Value, Raw>) {}
+
+  public get synchronous(): boolean {
+    return this.cache.synchronous;
+  }
+
+  // Reads the instance a `Map` cache holds as is: `CollectionCache#get` refreshes its relations, which the raw readers
+  // exist to avoid (a guild refreshing its channels, which read their guild, would never end).
+  protected read(key: string): Awaitable<Value | undefined> {
+    return peekCache(this.cache, key);
+  }
+
+  public get(key: string): Awaitable<Raw | undefined> {
+    return whenAll([this.read(key)], ([value]) =>
+      value === undefined ? undefined : toRaw<Raw>(value),
+    );
+  }
+
+  /**
+   * Writes an entry. Unlike a raw store's `set`, it merges the value into a cached instance rather than replacing it:
+   * the keys absent from the new value persist.
+   */
+  public set(key: string, value: Raw): Awaitable<void> {
+    return whenAll([this.read(key)], ([existing]) => {
+      // A cached instance is patched rather than replaced, so the references the application holds stay current.
+      const entry = existing === undefined ? this.cache.construct(value) : existing;
+      if (existing !== undefined) existing[kPatch](value as never);
+      return whenAll([this.cache.set(key, entry)], () => undefined);
+    });
+  }
+
+  /**
+   * Merges data into an entry, creating it when it is missing.
+   *
+   * @remarks
+   * A cached instance is always patched in place, with or without `overwrite`: replacing it would leave the
+   * application holding a stale instance. Since a structure's patch merges, an `overwrite` on a structure cache
+   * behaves like {@link StructureStoreAdapter.set}: the keys absent from the new data keep their cached value,
+   * where a raw store would drop them.
+   */
+  public upsert(
+    key: string,
+    data: Partial<Raw>,
+    _options?: CacheUpsertOptions,
+  ): Awaitable<CacheUpsertResult<Raw>> {
+    return whenAll([this.read(key)], ([existing]) => {
+      if (existing === undefined) {
+        const value = this.cache.construct(data);
+        return whenAll([this.cache.set(key, value)], () => ({
+          existing: undefined,
+          added: toRaw<Raw>(value),
+        }));
+      }
+
+      const before = toRaw<Raw>(existing);
+      existing[kPatch](data as never);
+      // Written back for caches that do not hold the instance itself.
+      return whenAll([this.cache.set(key, existing)], () => ({
+        existing: before,
+        added: toRaw<Raw>(existing),
+      }));
+    });
+  }
+
+  public has(key: string): Awaitable<boolean> {
+    return this.cache.has(key);
+  }
+
+  public delete(key: string): Awaitable<boolean> {
+    return this.cache.delete(key);
+  }
+
+  public clear(): Awaitable<void> {
+    return this.cache.clear();
+  }
+
+  public getSize(): Awaitable<number> {
+    return this.cache.getSize();
+  }
+}
+
+class IterableStructureStoreAdapter<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value>,
+>
+  extends StructureStoreAdapter<Value, Raw>
+  implements IterableEntityCache<Raw>
+{
+  declare protected readonly cache: Cache<Value, Raw> & Map<string, Value>;
+
+  public keys(): string[] {
+    return [...this.cache.keys()];
+  }
+
+  public values(): Raw[] {
+    return [...this.cache.values()].map((value) => toRaw<Raw>(value));
+  }
+
+  public entries(): [key: string, value: Raw][] {
+    return [...this.cache.entries()].map(([key, value]) => [key, toRaw<Raw>(value)]);
+  }
+}
+
+/**
+ * Creates the raw store of a structure cache, enumerable when the cache is a `Map` (e.g. `CollectionCache`).
+ *
+ * @param cache The structure cache.
+ * @internal
+ */
+export function createStructureStoreAdapter<
+  Value extends StructureMixin<object>,
+  Raw extends RawAPIType<Value> = RawAPIType<Value>,
+>(cache: Cache<Value, Raw>): EntityCache<Raw> {
+  return cache instanceof Map
+    ? new IterableStructureStoreAdapter<Value, Raw>(cache)
+    : new StructureStoreAdapter<Value, Raw>(cache);
+}

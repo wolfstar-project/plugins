@@ -46,7 +46,7 @@ function createClient(cache = true) {
     discordToken: "test-token",
     clientId: author.id,
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
   });
 }
 
@@ -139,7 +139,7 @@ describe("message mentions", () => {
     const client = createClient();
     await seed(client);
 
-    const resolved = await client.messages.hydrate(mentioning);
+    const resolved = await client.messages._build(mentioning);
     const { mentions } = resolved;
 
     expect(mentions.users[0]!.username).toBe("howl");
@@ -154,7 +154,7 @@ describe("message mentions", () => {
   test("GIVEN no cache THEN mentions fall back to the payload", async () => {
     const client = createClient(false);
 
-    const built = await client.messages.hydrate(mentioning);
+    const built = await client.messages._build(mentioning);
     const { mentions } = built;
 
     expect(mentions.users[0]!.username).toBe("stale");
@@ -168,7 +168,7 @@ describe("message mentions", () => {
   test("GIVEN a content patch THEN the resolved mentions are dropped", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(mentioning);
+    const resolved = await client.messages._build(mentioning);
 
     resolved[kPatch]({ content: "quiet", mentions: [], mention_roles: [] });
 
@@ -197,10 +197,10 @@ describe("message thread, reactions, and poll", () => {
     await seed(client);
     await client.cache!.threads.set(messageId, thread as never);
 
-    const withCopy = await client.messages.hydrate(
+    const withCopy = await client.messages._build(
       message({ thread: { ...thread, name: "stale" } } as never),
     );
-    const flagged = await client.messages.hydrate(message({ flags: MessageFlags.HasThread }));
+    const flagged = await client.messages._build(message({ flags: MessageFlags.HasThread }));
 
     expect(withCopy.thread?.name).toBe("fresh");
     expect(withCopy.thread?.parent?.id).toBe(channelId);
@@ -210,18 +210,18 @@ describe("message thread, reactions, and poll", () => {
   test("GIVEN no cached thread THEN message.thread is the payload's copy, else null", async () => {
     const client = createClient();
 
-    const withCopy = await client.messages.hydrate(
+    const withCopy = await client.messages._build(
       message({ thread: { ...thread, name: "stale" } } as never),
     );
 
     expect(withCopy.thread?.name).toBe("stale");
-    expect((await client.messages.hydrate(message())).thread).toBeNull();
+    expect((await client.messages._build(message())).thread).toBeNull();
   });
 
   test("GIVEN reactions THEN they know their message, and cached custom emojis resolve", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(
+    const resolved = await client.messages._build(
       message({
         reactions: [
           {
@@ -277,7 +277,7 @@ describe("message thread, reactions, and poll", () => {
   test("GIVEN a poll THEN it knows its message and channel, and its answers their poll and emoji", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(
+    const resolved = await client.messages._build(
       message({
         poll: {
           question: { text: "Hunt?" },

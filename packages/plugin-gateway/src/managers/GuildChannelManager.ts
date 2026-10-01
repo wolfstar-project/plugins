@@ -14,6 +14,7 @@ import {
 } from "../util/channels.js";
 import { computePositions, discordSort, getSortableGroupTypes } from "../util/Util.js";
 import type { AnyChannel } from "./ChannelManager.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * The options to move a channel or role among its siblings with.
@@ -48,12 +49,11 @@ export interface ChannelPosition {
 /**
  * Manages the channels of one guild. Channels are cached by `client.channels`, which this manager writes to.
  */
-export class GuildChannelManager {
-  public readonly client: GatewayClient;
+export class GuildChannelManager extends BaseManager {
   public readonly guildId: string;
 
   public constructor(client: GatewayClient, guildId: string) {
-    this.client = client;
+    super(client);
     this.guildId = guildId;
   }
 
@@ -149,7 +149,7 @@ export class GuildChannelManager {
       positions.map((entry) => ({ channel: entry.id, position: entry.position })),
       options.reason,
     );
-    return (await this.client.channels.get(id))!;
+    return (await this.client.channels.cache.get(id))!;
   }
 
   /**

@@ -11,6 +11,8 @@
 export const GatewayErrorMessages = {
   ClientSessionStoreConflict:
     "sessionStore replaces gateway.retrieveSessionInfo and gateway.updateSessionInfo, pass one or the other",
+  ClientCacheConflict:
+    "cacheConstructor and cacheOptions cannot be combined with cache or makeCache, pass one or the other",
   ClientNotConstructed: "No GatewayClient has been constructed yet",
 
   DispatchHandlerConflict: (event: string) =>
@@ -22,9 +24,9 @@ export const GatewayErrorMessages = {
   SessionStoreTimeout: (timeout: number) => `Timed out after ${timeout}ms`,
 
   CacheAsynchronous: (entity: string) =>
-    `The ${entity} cache is asynchronous, use get instead of cached`,
-  CacheRelationsAsynchronous: (entity: string) =>
-    `The relations of the ${entity} cache are read from an asynchronous cache, use get instead of cached`,
+    `The ${entity} cache is asynchronous, await cache.get instead`,
+  CacheConstructorAsynchronous: (entity: string) =>
+    `The ${entity} structures resolve relations from an asynchronous cache, which a cache of instances cannot await`,
   CacheNotIterable: (entity: string) =>
     `The ${entity} cache cannot enumerate its entries (it has no keys/values/entries)`,
   CacheKeyUnresolvable: (entity: string, reason: string) => `Cannot key a ${entity} ${reason}`,

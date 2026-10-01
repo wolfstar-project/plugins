@@ -44,7 +44,7 @@ function createClient(cache: Cache | null = createInMemoryCache()) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
   });
   vi.spyOn(client.gateway, "getShardCount").mockResolvedValue(2);
   const send = vi.spyOn(client.gateway, "send").mockResolvedValue();
@@ -177,7 +177,9 @@ describe("GuildMemberManager#request", () => {
     expect(members[0]).toBeInstanceOf(GuildMember);
     expect(order.at(-1)).toBe("resolved");
     expect(order.filter((entry) => entry.startsWith("cached"))).toHaveLength(3);
-    expect(await client.members.get(guildId, "3")).toBeInstanceOf(GuildMember);
+    expect(await client.members.cache.get(client.members.resolveKey(guildId, "3"))).toBeInstanceOf(
+      GuildMember,
+    );
   });
 
   test("GIVEN two concurrent requests THEN each resolves with the chunks of its nonce", async () => {
@@ -230,7 +232,7 @@ describe("GuildMemberManager#request", () => {
     await dispatch(client, GatewayDispatchEvents.GuildMembersChunk, chunk("late", 0, 1, ["1"]));
     void client.members.request(guildId, { nonce: "late" }).catch(() => {});
     await sent(send, 2);
-    expect(await client.members.get(guildId, "1")).toBeDefined();
+    expect(await client.members.cache.get(client.members.resolveKey(guildId, "1"))).toBeDefined();
   });
 
   test("GIVEN chunks keep arriving THEN each one restarts the timeout", async () => {

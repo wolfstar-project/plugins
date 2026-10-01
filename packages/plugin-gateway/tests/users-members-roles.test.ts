@@ -251,7 +251,7 @@ describe("ClientUser", () => {
 
     expect(patch).toHaveBeenCalledWith(Routes.user("@me"), { body: { username: "renamed" } });
     expect(me.username).toBe("renamed");
-    expect((await client.users.get(botId))?.username).toBe("renamed");
+    expect((await client.users.cache.get(botId))?.username).toBe("renamed");
   });
 });
 
@@ -286,7 +286,7 @@ describe("Role", () => {
     const patch = vi
       .spyOn(container.rest, "patch")
       .mockResolvedValue(role("21", 1, PermissionFlagsBits.Administrator, { name: "admin" }));
-    const structure = (await client.roles.get(guildId, "21"))!;
+    const structure = (await client.roles.cache.get(client.roles.resolveKey(guildId, "21")))!;
 
     await structure.edit({ name: "admin", permissions: ["Administrator"], reason: "promotion" });
 
@@ -298,7 +298,9 @@ describe("Role", () => {
       reason: "promotion",
     });
     expect(structure.name).toBe("admin");
-    expect((await client.roles.get(guildId, "21"))?.name).toBe("admin");
+    expect((await client.roles.cache.get(client.roles.resolveKey(guildId, "21")))?.name).toBe(
+      "admin",
+    );
   });
 
   test("GIVEN fetchAll THEN the roles are cached and sorted highest first", async () => {
@@ -312,7 +314,7 @@ describe("Role", () => {
     const roles = await client.roles.fetchAll(guildId);
 
     expect(roles.map((structure) => structure.id)).toEqual(["20", "21", guildId]);
-    expect(await client.roles.get(guildId, "21")).toBeDefined();
+    expect(await client.roles.cache.get(client.roles.resolveKey(guildId, "21"))).toBeDefined();
   });
 
   test("GIVEN setPosition THEN the role is moved among the sorted roles and takes the position Discord applied", async () => {
@@ -327,7 +329,7 @@ describe("Role", () => {
     const patch = vi
       .spyOn(container.rest, "patch")
       .mockResolvedValue([role(guildId, 0, 0n), role("20", 2, 0n), role("21", 3, 0n)]);
-    const structure = (await client.roles.get(guildId, "21"))!;
+    const structure = (await client.roles.cache.get(client.roles.resolveKey(guildId, "21")))!;
 
     await structure.setPosition(1, { relative: true, reason: "promotion" });
 
@@ -340,7 +342,9 @@ describe("Role", () => {
       reason: "promotion",
     });
     expect(structure.position).toBe(3);
-    expect((await client.roles.get(guildId, "21"))?.position).toBe(3);
+    expect((await client.roles.cache.get(client.roles.resolveKey(guildId, "21")))?.position).toBe(
+      3,
+    );
   });
 
   test("GIVEN setPosition out of range THEN the roles keep their order", async () => {
@@ -373,9 +377,9 @@ describe("Role", () => {
     await seedGuild(client);
     vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
 
-    await (await client.roles.get(guildId, "21"))!.delete("cleanup");
+    await (await client.roles.cache.get(client.roles.resolveKey(guildId, "21")))!.delete("cleanup");
 
-    expect(await client.roles.get(guildId, "21")).toBeUndefined();
+    expect(await client.roles.cache.get(client.roles.resolveKey(guildId, "21"))).toBeUndefined();
   });
 });
 
@@ -400,7 +404,9 @@ describe("GuildMember", () => {
     const client = createClient();
     await seedGuild(client);
 
-    const permissions = await (await client.members.get(guildId, userId))!.fetchPermissions();
+    const permissions = await (await client.members.cache.get(
+      client.members.resolveKey(guildId, userId),
+    ))!.fetchPermissions();
 
     expect(permissions.has("ViewChannel")).toBe(true);
     expect(permissions.has("SendMessages")).toBe(true);
@@ -415,8 +421,12 @@ describe("GuildMember", () => {
       guild_id: guildId,
     });
 
-    const admin = await (await client.members.get(guildId, botId))!.fetchPermissions();
-    const owner = await (await client.members.get(guildId, ownerId))!.fetchPermissions();
+    const admin = await (await client.members.cache.get(
+      client.members.resolveKey(guildId, botId),
+    ))!.fetchPermissions();
+    const owner = await (await client.members.cache.get(
+      client.members.resolveKey(guildId, ownerId),
+    ))!.fetchPermissions();
 
     expect(admin.bitField).toBe(PermissionsBitField.All);
     expect(owner.bitField).toBe(PermissionsBitField.All);
@@ -430,8 +440,8 @@ describe("GuildMember", () => {
       guild_id: guildId,
     });
 
-    const target = (await client.members.get(guildId, userId))!;
-    const owner = (await client.members.get(guildId, ownerId))!;
+    const target = (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!;
+    const owner = (await client.members.cache.get(client.members.resolveKey(guildId, ownerId)))!;
 
     expect(await target.fetchKickable()).toBe(true);
     expect(await target.fetchBannable()).toBe(false);
@@ -444,7 +454,10 @@ describe("GuildMember", () => {
     vi.useFakeTimers({ now: Date.parse("2024-06-01T00:00:00.000Z") });
     const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(member(user, ["21"]));
 
-    await (await client.members.get(guildId, userId))!.timeout(60_000, "spam");
+    await (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!.timeout(
+      60_000,
+      "spam",
+    );
     vi.useRealTimers();
 
     expect(patch).toHaveBeenCalledWith(Routes.guildMember(guildId, userId), {
@@ -458,12 +471,16 @@ describe("GuildMember", () => {
     await seedGuild(client);
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
 
-    await (await client.members.get(guildId, userId))!.roles.add("20");
+    await (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!.roles.add(
+      "20",
+    );
 
     expect(put).toHaveBeenCalledWith(Routes.guildMemberRole(guildId, userId, "20"), {
       reason: undefined,
     });
-    expect((await client.members.get(guildId, userId))?.roleIds).toEqual(["21", "20"]);
+    expect(
+      (await client.members.cache.get(client.members.resolveKey(guildId, userId)))?.roleIds,
+    ).toEqual(["21", "20"]);
   });
 
   test("GIVEN roles.remove with several roles THEN the member's roles are replaced", async () => {
@@ -471,7 +488,9 @@ describe("GuildMember", () => {
     await seedGuild(client);
     const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(member(user, []));
 
-    await (await client.members.get(guildId, userId))!.roles.remove(["21"]);
+    await (await client.members.cache.get(
+      client.members.resolveKey(guildId, userId),
+    ))!.roles.remove(["21"]);
 
     expect(patch).toHaveBeenCalledWith(Routes.guildMember(guildId, userId), {
       body: expect.objectContaining({ roles: [] }),
@@ -484,9 +503,11 @@ describe("GuildMember", () => {
     await seedGuild(client);
     vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
 
-    await (await client.members.get(guildId, userId))!.kick("bye");
+    await (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!.kick("bye");
 
-    expect(await client.members.get(guildId, userId)).toBeUndefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, userId)),
+    ).toBeUndefined();
   });
 });
 
@@ -506,7 +527,9 @@ describe("GuildMemberManager", () => {
       "query=wo&limit=1",
     );
     expect(found[0]?.displayName).toBe("Wolf");
-    expect(await client.members.get(guildId, userId)).toBeDefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, userId)),
+    ).toBeDefined();
   });
 
   test("GIVEN bulkBan THEN banned users leave the cache and failures are reported", async () => {
@@ -522,6 +545,8 @@ describe("GuildMemberManager", () => {
     });
 
     expect(result).toEqual({ bannedUsers: [userId], failedUsers: ["7"] });
-    expect(await client.members.get(guildId, userId)).toBeUndefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, userId)),
+    ).toBeUndefined();
   });
 });

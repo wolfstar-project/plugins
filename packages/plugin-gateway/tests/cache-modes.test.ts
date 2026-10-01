@@ -72,7 +72,7 @@ function createClient(mode: CacheMode) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cacheModes[mode](),
+    ...cacheModes[mode](),
   });
 }
 
@@ -200,7 +200,7 @@ describe.each(Object.keys(cacheModes) as CacheMode[])("with a %s cache", (mode) 
       guildRoleDelete: calls("guildRoleDelete")[0]![0],
     };
     for (const [event, value] of Object.entries(previous)) {
-      if (mode === "full") expect(value, event).not.toBeNull();
+      if (mode === "full" || mode === "collection") expect(value, event).not.toBeNull();
       else expect(value, event).toBeNull();
     }
 

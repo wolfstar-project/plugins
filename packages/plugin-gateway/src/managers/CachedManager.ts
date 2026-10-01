@@ -1,6 +1,5 @@
 import {
   isIterableCache,
-  mergeValues,
   type Awaitable,
   type CacheEntityName,
   type CacheEntityTypes,
@@ -9,10 +8,11 @@ import {
 } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
-import { bindClient, type StructureMixin } from "../structures/Structure.js";
-import { isPromiseLike, whenAll } from "../util/cache.js";
+import { bindClient, kClone, kPatch, type StructureMixin } from "../structures/Structure.js";
+import { refreshRelations, whenAll, type Cache } from "../util/cache.js";
 import type { CacheErrorContext } from "../util/events.js";
 import { GatewayTypeError } from "../errors/GatewayError.js";
+import { DataManager } from "./DataManager.js";
 
 /**
  * The options to fetch an entity with.
@@ -39,30 +39,25 @@ export interface AddOptions {
   /**
    * The cache key of the entity, when it cannot be derived from its data.
    */
-  key?: string;
+  id?: string;
+  /**
+   * Extra arguments handed to the manager's `createStructure`.
+   */
+  extras?: unknown[];
 }
 
 /**
- * The base class of every manager, the `BaseManager` of the discord.js RFC #11426: it reads raw data from one of the
- * client's entity caches, falls back to the REST API when asked to, and wraps the result in a
- * {@link StructureMixin | structure} with {@link CachedManager.construct}.
+ * Manages the API methods of a data model with a mutable cache of instances: the `CachedManager` of the discord.js
+ * RFC #11426.
  *
  * @remarks
- * The cache only ever holds raw API data, building structures is always the manager's job. Without a store for its
- * entity (see the client's `makeCache`), `get` always resolves to `undefined` and `fetch` always hits the API.
+ * Reads go through {@link CachedManager.cache}: `client.users.cache.get(id)`. The cache is built by the client's
+ * `cacheConstructor` (`CollectionCache` by default) and shared by every manager of the same entity.
  *
- * A failing store (e.g. Redis being unreachable) emits `cacheError` and, with the client's default
- * `cacheErrors: "miss"`, is treated as a cache miss.
+ * Caches keyed by more than an ID take the key built by `resolveKey`:
+ * `client.members.cache.get(client.members.resolveKey(guildId, userId))`.
  *
- * Every method is asynchronous since the cache can be Redis, except {@link CachedManager.cached}, which reads a
- * synchronous cache (`createInMemoryCache`) without awaiting it.
- *
- * Like discord.js's `CachedManager`, every payload coming from the API goes through {@link CachedManager._add}, which
- * patches the cached entry and builds the structure. Structures are built by {@link CachedManager.hydrate}, which
- * resolves their relations (a message's author, a member's user, ...) from the cache, so they carry the latest known
- * data rather than the copy embedded in the payload.
- *
- * @typeParam Name The name of the entity cache this manager reads from.
+ * @typeParam Name The name of the entity this manager holds.
  * @typeParam Value The structure this manager builds.
  * @typeParam Args The arguments identifying an entity, e.g. `[id]` or `[guildId, userId]`.
  */
@@ -70,162 +65,188 @@ export abstract class CachedManager<
   Name extends CacheEntityName,
   Value extends StructureMixin<object>,
   Args extends readonly string[],
-> {
+> extends DataManager<Value, Args> {
   /**
-   * The client this manager belongs to.
-   */
-  public readonly client: GatewayClient;
-
-  /**
-   * The name of the entity cache this manager reads from.
-   */
-  public readonly entity: Name;
-
-  public constructor(client: GatewayClient, entity: Name) {
-    this.client = client;
-    this.entity = entity;
-  }
-
-  /**
-   * The entity cache this manager reads from, or `undefined` when the client has no cache.
-   */
-  public get cache(): EntityCache<CacheEntityTypes[Name]> | undefined {
-    return this.client.cache?.[this.entity] as EntityCache<CacheEntityTypes[Name]> | undefined;
-  }
-
-  /**
-   * Gets an entity from the cache.
-   *
-   * @param args The arguments identifying the entity.
-   * @returns The entity, or `undefined` if it is not cached.
-   */
-  public async get(...args: Args): Promise<Value | undefined> {
-    return this._get(...args);
-  }
-
-  /**
-   * Gets an entity from a synchronous cache, without awaiting it: the synchronous counterpart of
-   * {@link CachedManager.get}, for hot paths such as message filters.
-   *
-   * @remarks
-   * It builds the same structure as `get`, relations included, so the entity caches they are read from must be
-   * synchronous too, which they all are with `createInMemoryCache`. `manager.cache?.synchronous` tells whether it can
-   * be called.
-   *
-   * An asynchronous cache throws rather than returning `undefined`: it cannot tell whether the entity is cached, and
-   * reporting a miss would silently skip whatever the caller does with cached entities, e.g. a filter.
+   * The cache of this manager's entity.
    *
    * @example
    * ```typescript
-   * const member = client.members.cached(guildId, userId);
+   * const user = await client.users.cache.get(userId);
    * ```
-   *
-   * @param args The arguments identifying the entity.
-   * @returns The entity, or `undefined` if it is not cached or the client has no cache.
-   * @throws {TypeError} When the entity cache, or one of the caches its relations are read from, is asynchronous.
    */
-  public cached(...args: Args): Value | undefined {
-    const { cache } = this;
-    if (cache === undefined) return undefined;
-    if (cache.synchronous !== true) {
-      throw new GatewayTypeError("CacheAsynchronous", this.entity);
-    }
-
-    const value = this._get(...args);
-    if (isPromiseLike(value)) {
-      // Nothing awaits the promise anymore, so its rejection must not go unhandled.
-      value.catch(() => undefined);
-      throw new GatewayTypeError("CacheRelationsAsynchronous", this.entity);
-    }
-
-    return value;
-  }
+  public readonly cache: Cache<Value>;
 
   /**
-   * Gets an entity from the cache, synchronously when every cache it reads is: the {@link Awaitable} counterpart of
-   * {@link CachedManager.get}, which both `get` and {@link CachedManager.cached} rely on.
-   *
-   * @param args The arguments identifying the entity.
-   * @internal
+   * The name of the entity this manager holds.
    */
-  public _get(...args: Args): Awaitable<Value | undefined> {
-    return this.getByKey(this.resolveKey(...args));
-  }
+  protected readonly name: Name;
 
   /**
-   * Resolves a structure or a cache key to a structure, like discord.js's `DataManager#resolve`.
-   *
-   * @param value A structure, returned as is, or the cache key of an entity (its ID, for managers keyed by ID).
-   * @returns The structure, or `null` if the key is not cached.
-   */
-  public async resolve(value: Value | string): Promise<Value | null> {
-    if (typeof value !== "string") return value;
-    return (await this.getByKey(value)) ?? null;
-  }
-
-  /**
-   * Adds an API payload to the cache, patching the cached entry with it, and builds its structure. The counterpart of
-   * discord.js's `CachedManager#_add`, asynchronous since the cache can be remote.
-   *
-   * @remarks
-   * Like discord.js's `_patch`, the payload is shallowly merged into the cached entry, so the fields a partial payload
-   * lacks keep their cached value. With `cache` set to `false`, the merged entry is built but not written.
-   *
-   * The merge is a read followed by a write, not an atomic operation: on a shared cache, a write landing in between
-   * (another process, or a dispatch outside the guild's queue) is overwritten. `@wolfstar/plugin-cache` merges partial
-   * dispatches the same way, and the fields at stake are refreshed by the next payload of the entity.
+   * Wraps raw data in this manager's structure: the RFC's `StructureCreator`.
    *
    * @param data The raw data.
-   * @param cache Whether to write the merged entry to the cache.
-   * @param options The cache key, when it cannot be derived from the data.
+   * @param extras The extra arguments passed to {@link CachedManager._add}.
+   */
+  protected abstract createStructure(data: CacheEntityTypes[Name], ...extras: unknown[]): Value;
+
+  public constructor(client: GatewayClient, name: Name) {
+    super(client);
+    this.name = name;
+    this.cache = this.createCache();
+  }
+
+  /**
+   * Gets {@link CachedManager.cache} from the client. Managers whose entity spans several caches override it.
+   */
+  protected createCache(): Cache<Value> {
+    return this.client.CacheConstructor<Value>(
+      (data) => this.createStructure(data as unknown as CacheEntityTypes[Name]),
+      this.name,
+    );
+  }
+
+  /**
+   * The raw store of this manager's entity, or `undefined` when it is not cached.
+   */
+  protected get rawStore(): EntityCache<CacheEntityTypes[Name]> | undefined {
+    return this.client.cache?.[this.name] as EntityCache<CacheEntityTypes[Name]> | undefined;
+  }
+
+  /**
+   * Adds an API payload to the cache and returns its structure, as in the RFC.
+   *
+   * @remarks
+   * The payload is written with `cache.add`: a cached entry is patched and returned, and with a cache of instances
+   * (`CollectionCache`) that is the very instance the application may already hold. An entity that is not cached is
+   * built and stored.
+   *
+   * With `cache` set to `false`, a patched clone is returned (or the entity is built) and the cache is left
+   * untouched. The same goes for an entry the `filter` of the entity's policy rejects, whose cached entry is deleted
+   * on top of that: a rejected update must not leave the outdated entry behind.
+   *
+   * @param data The raw data.
+   * @param cache Whether to write to the cache.
+   * @param options The cache key, when it cannot be derived from the data, and the extras of `createStructure`.
    * @internal
    */
   public async _add(
     data: CacheEntityTypes[Name],
     cache = true,
-    { key = this.keyOf(data) }: AddOptions = {},
+    { id, extras = [] }: AddOptions = {},
   ): Promise<Value> {
-    const store = this.cache;
-    if (store === undefined) return this.hydrate(data);
+    // Data that cannot be keyed (a member without its user) needs the explicit key, and throws without one.
+    const derived = id === undefined ? this.keyOf(data) : this.derivedKey(data);
+    const key = id ?? derived!;
+    if (!cache) return this.detached(await this.cache.get(key), data, extras);
 
-    if (!cache) {
-      const existing = await this.guard("get", key, () => store.get(key), undefined);
-      return this.hydrate(mergeValues(existing, data));
+    if (this.client.cacheFilter(this.name)) {
+      const existing = await this.cache.get(key);
+      if (!this.accepts(key, existing, data)) {
+        if (existing) await this.cache.delete(key);
+        return this.detached(existing, data, extras);
+      }
     }
 
-    const { added } = await this.guard("upsert", key, () => store.upsert(key, data), {
-      added: data,
-    });
-    return this.hydrate(added);
+    // One atomic write: an upsert on a raw store, a patch of the cached instance on a cache of instances.
+    if (key === derived && extras.length === 0) return this.cache.add(data as never);
+
+    // `cache.add` keys the entry by its data, and builds it without extras.
+    const existing = await this.cache.get(key);
+    if (existing) {
+      existing[kPatch](data as never);
+      await this.cache.set(key, existing);
+      return this.resolveRelations(existing, extras);
+    }
+
+    const entry = await this._build(data, extras);
+    await this.cache.set(key, entry);
+    return entry;
+  }
+
+  /**
+   * Patches the cached entry of a key, if any, with the fields an endpoint answered without the entity itself.
+   *
+   * @remarks
+   * Like every write of the managers, it follows the `filter` of the entity's policy: an entry whose patched data is
+   * rejected is deleted from the cache.
+   *
+   * @param key The cache key of the entry.
+   * @param patch The fields to patch, or a function computing them from the cached entry, `undefined` to leave it.
+   * @internal
+   */
+  public async _patchCached(
+    key: string,
+    patch:
+      | Partial<CacheEntityTypes[Name]>
+      | ((cached: Value) => Partial<CacheEntityTypes[Name]> | undefined),
+  ): Promise<void> {
+    const cached = await this.cache.get(key);
+    if (!cached) return;
+
+    const data = typeof patch === "function" ? patch(cached) : patch;
+    if (data === undefined) return;
+    if (!this.accepts(key, cached, data)) {
+      await this.cache.delete(key);
+      return;
+    }
+
+    cached[kPatch](data as never);
+    await this.cache.set(key, cached);
+  }
+
+  // Whether the policy of this entity lets an entry be cached, judging it merged with the cached one like
+  // plugin-cache's `withPolicy`. Raw stores are wrapped by their policy already, see `GatewayClient.cacheFilter`.
+  private accepts(key: string, existing: Value | undefined, data: object): boolean {
+    const filter = this.client.cacheFilter(this.name);
+    if (!filter) return true;
+
+    const cached = (existing as unknown as { toJSON(): object } | undefined)?.toJSON();
+    return filter(cached ? { ...cached, ...data } : data, key);
+  }
+
+  // The structure of data that is not written to the cache: a patched clone of the cached entry, or a new structure.
+  private detached(
+    existing: Value | undefined,
+    data: CacheEntityTypes[Name],
+    extras: unknown[],
+  ): Awaitable<Value> {
+    return existing
+      ? this.resolveRelations(existing[kClone](data as never), extras)
+      : this._build(data, extras);
+  }
+
+  private derivedKey(data: CacheEntityTypes[Name]): string | undefined {
+    try {
+      return this.keyOf(data);
+    } catch {
+      return undefined;
+    }
+  }
+
+  // Resolves the relations of a structure again once it is patched: the patch drops the ones it invalidates (the
+  // parent of a channel moved to another category), and a clone copies the ones of its original.
+  private resolveRelations(value: Value, extras: unknown[]): Awaitable<Value> {
+    return refreshRelations(value, (data) => this._build(data as never, extras));
   }
 
   /**
    * Gets the cached structure of the entity raw data describes, or builds one from the data when it is not cached.
-   * Used to resolve the relations of other structures, e.g. a message's author.
-   *
-   * @param data The raw data.
-   */
-  public async resolveData(data: CacheEntityTypes[Name]): Promise<Value> {
-    return this._resolveData(data);
-  }
-
-  /**
-   * The {@link Awaitable} counterpart of {@link CachedManager.resolveData}, synchronous when every cache it reads is.
+   * Used to resolve the relations of other structures, e.g. a message's author. Synchronous when the cache is.
    *
    * @param data The raw data.
    * @internal
    */
   public _resolveData(data: CacheEntityTypes[Name]): Awaitable<Value> {
-    return whenAll([this.getByKey(this.keyOf(data))], ([cached]) => cached ?? this.build(data));
+    return whenAll([this.cache.get(this.keyOf(data))], ([cached]) => cached ?? this._build(data));
   }
 
   /**
    * Gets a guild from the cache, to resolve the `guild` of a structure. Synchronous when the guild cache is.
    *
-   * @param guildId The ID of the guild, if the structure belongs to one.
    * @remarks
    * The guild does not resolve its own channel relations, see `GuildManager._getShallow`.
    *
+   * @param guildId The ID of the guild, if the structure belongs to one.
    * @returns The guild, or `null` when there is no ID or the guild is not cached.
    */
   protected cachedGuild(guildId: string | null | undefined): Awaitable<Guild | null> {
@@ -235,25 +256,38 @@ export abstract class CachedManager<
   }
 
   /**
-   * Builds the structure of raw data, resolving its relations from the cache. Without relations to resolve, the same
-   * as {@link CachedManager.construct}.
+   * Builds the structure of raw data, resolving its relations from the cache; synchronous when every cache the
+   * relations are read from is. Without relations to resolve, the same as `createStructure`.
    *
    * @param data The raw data.
+   * @param extras The extra arguments passed to {@link CachedManager._add}.
+   * @internal
    */
-  public async hydrate(data: CacheEntityTypes[Name]): Promise<Value> {
-    return this.build(data);
+  public _hydrate(data: CacheEntityTypes[Name], ...extras: unknown[]): Awaitable<Value> {
+    return this.createStructure(data, ...extras);
   }
 
   /**
-   * The {@link Awaitable} counterpart of {@link CachedManager.hydrate}, synchronous when every cache the relations
-   * are read from is. Managers resolving relations override this one, so `hydrate` and
-   * {@link CachedManager.cached} build the same structures.
+   * Wraps raw data in this manager's structure, bound to this manager's client, without resolving its relations: the
+   * creator handed to this entity's cache, always synchronous.
    *
    * @param data The raw data.
+   * @param extras The extra arguments passed to {@link CachedManager._add}.
    * @internal
    */
-  public _hydrate(data: CacheEntityTypes[Name]): Awaitable<Value> {
-    return this.construct(data);
+  public _construct(data: CacheEntityTypes[Name], ...extras: unknown[]): Value {
+    return bindClient(this.createStructure(data, ...extras), this.client);
+  }
+
+  /**
+   * Builds the structure of raw data with {@link CachedManager._hydrate}, bound to this manager's client.
+   *
+   * @param data The raw data.
+   * @param extras The extra arguments passed to {@link CachedManager._add}.
+   * @internal
+   */
+  public _build(data: CacheEntityTypes[Name], extras: unknown[] = []): Awaitable<Value> {
+    return whenAll([this._hydrate(data, ...extras)], ([value]) => bindClient(value, this.client));
   }
 
   /**
@@ -271,14 +305,15 @@ export abstract class CachedManager<
   public async fetch(...args: [...Args] | [...Args, FetchOptions]): Promise<Value> {
     const ids = args.slice(0, this.resolveKey.length) as unknown as Args;
     const { force = false, cache = true } = (args[this.resolveKey.length] ?? {}) as FetchOptions;
+    const id = this.resolveKey(...ids);
 
     if (!force) {
-      const cached = await this.get(...ids);
+      const cached = await this.cache.get(id);
       if (cached) return cached;
     }
 
     const raw = await this.fetchRaw(...ids);
-    return this._add(raw, cache, { key: this.resolveKey(...ids) });
+    return this._add(raw, cache, { id });
   }
 
   /**
@@ -291,36 +326,11 @@ export abstract class CachedManager<
   }
 
   /**
-   * Wraps raw data in this manager's structure: the RFC's `StructureCreator`, which lives on the manager since the
-   * cache only holds raw data.
-   *
-   * @param data The raw data.
-   */
-  public abstract construct(data: CacheEntityTypes[Name]): Value;
-
-  /**
-   * Wraps raw data in this manager's structure.
-   *
-   * @param data The raw data.
-   * @deprecated Use {@link CachedManager.construct}.
-   */
-  public createStructure(data: CacheEntityTypes[Name]): Value {
-    return this.construct(data);
-  }
-
-  /**
    * Gets the cache key of raw data.
    *
    * @param data The raw data.
    */
   public abstract keyOf(data: CacheEntityTypes[Name]): string;
-
-  /**
-   * Gets the cache key of an entity.
-   *
-   * @param args The arguments identifying the entity.
-   */
-  public abstract resolveKey(...args: Args): string;
 
   /**
    * Fetches the raw data of an entity from the API.
@@ -330,53 +340,24 @@ export abstract class CachedManager<
   protected abstract fetchRaw(...args: Args): Promise<CacheEntityTypes[Name]>;
 
   /**
-   * Writes raw data to the cache.
-   *
-   * @param key The cache key of the entity.
-   * @param raw The raw data of the entity.
-   */
-  protected async storeRaw(key: string, raw: CacheEntityTypes[Name]): Promise<void> {
-    const { cache } = this;
-    if (cache) await this.guard("set", key, () => cache.set(key, raw), undefined);
-  }
-
-  /**
-   * Gets this manager's store when it can enumerate its entries, for the `listCached` methods.
+   * Gets this entity's raw store when it can enumerate its entries, for the `listCached` methods.
    *
    * @returns The store, or `undefined` when this entity is not cached.
    * @throws {TypeError} When the store cannot enumerate its entries.
    */
   protected iterableCache(): IterableEntityCache<CacheEntityTypes[Name]> | undefined {
-    const { cache } = this;
-    if (cache === undefined) return undefined;
-    if (!isIterableCache(cache)) {
-      throw new GatewayTypeError("CacheNotIterable", this.entity);
+    const store = this.rawStore;
+    if (store === undefined) return undefined;
+    if (!isIterableCache(store)) {
+      throw new GatewayTypeError("CacheNotIterable", this.name);
     }
 
-    return cache;
+    return store;
   }
 
   /**
-   * Gets an entity from the cache by its key, synchronously when every cache it reads is.
-   *
-   * @param key The cache key of the entity.
-   */
-  protected getByKey(key: string): Awaitable<Value | undefined> {
-    const { cache } = this;
-    return whenAll(
-      [cache ? this.guard("get", key, () => cache.get(key), undefined) : undefined],
-      ([raw]) => (raw === undefined ? undefined : this.build(raw)),
-    );
-  }
-
-  /**
-   * Runs a cache operation, reporting its failure through `cacheError`. With the client's `cacheErrors: "miss"`, a
-   * failure resolves to `fallback`, otherwise it is rethrown. Synchronous when the operation is.
-   *
-   * @param operation The operation, for `cacheError`.
-   * @param key The key of the entry, for `cacheError`.
-   * @param run Runs the operation.
-   * @param fallback What a failure resolves to under `cacheErrors: "miss"`.
+   * Runs a raw store operation, reporting its failure through `cacheError`. With the client's `cacheErrors: "miss"`,
+   * a failure resolves to `fallback`, otherwise it is rethrown. Synchronous when the operation is.
    */
   protected guard<T>(
     operation: CacheErrorContext["operation"],
@@ -384,33 +365,6 @@ export abstract class CachedManager<
     run: () => Awaitable<T>,
     fallback: T,
   ): Awaitable<T> {
-    const fail = (error: unknown): T => {
-      this.client.emit("cacheError", error, { entity: this.entity, key, operation });
-      if (this.client.cacheErrors === "throw") throw error;
-      return fallback;
-    };
-
-    try {
-      const result = run();
-      return isPromiseLike(result) ? result.catch(fail) : result;
-    } catch (error) {
-      return fail(error);
-    }
-  }
-
-  /**
-   * Builds the structure of raw data with {@link CachedManager._hydrate}, bound to this manager's client.
-   *
-   * @param data The raw data.
-   */
-  protected build(data: CacheEntityTypes[Name]): Awaitable<Value> {
-    return whenAll([this._hydrate(data)], ([value]) => bindClient(value, this.client));
+    return this.client.guardCache(this.name, operation, key, run, fallback);
   }
 }
-
-export {
-  /**
-   * The name of {@link CachedManager} in the discord.js RFC #11426.
-   */
-  CachedManager as BaseManager,
-};

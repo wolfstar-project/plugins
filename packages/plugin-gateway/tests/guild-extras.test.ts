@@ -62,7 +62,7 @@ async function cacheGuild(client: GatewayClient, extra: object = {}) {
     features: [],
     ...extra,
   } as never);
-  return (await client.guilds.get(guildId))!;
+  return (await client.guilds.cache.get(guildId))!;
 }
 
 function integration(extra: Partial<APIGuildIntegration> = {}): APIGuildIntegration {
@@ -132,7 +132,11 @@ describe("integrations", () => {
     expect(remove).toHaveBeenCalledWith(Routes.guildIntegration(guildId, twitch.id), {
       reason: "Gone",
     });
-    expect(await client.guilds.integrations(guildId).get(twitch.id)).toBeUndefined();
+    expect(
+      await client.guilds
+        .integrations(guildId)
+        .cache.get(client.guilds.integrations(guildId).resolveKey(twitch.id)),
+    ).toBeUndefined();
   });
 
   test("GIVEN integration dispatches THEN update and delete carry the cached integration", async () => {
@@ -246,7 +250,7 @@ describe("widget", () => {
 
     expect(guild.widgetEnabled).toBe(true);
     expect(guild.widgetChannelId).toBe(channelId);
-    expect((await client.guilds.get(guildId))?.widgetChannelId).toBe(channelId);
+    expect((await client.guilds.cache.get(guildId))?.widgetChannelId).toBe(channelId);
   });
 
   test("GIVEN fetchWidget THEN its members and image URL are exposed", async () => {

@@ -507,13 +507,13 @@ export function transformResolved(
       users &&
         resolveEach(
           users,
-          (id) => client.users._get(id),
+          (id) => client.users.cache.get(id),
           (raw) => client.users._resolveData(raw),
         ),
       guildId && members
         ? resolveEach(
             members,
-            (id) => client.members._get(guildId, id),
+            (id) => client.members.cache.get(client.members.resolveKey(guildId, id)),
             (raw) => client.members._resolveData({ ...raw, guild_id: guildId }),
             (raw) => raw.user.id,
           )
@@ -521,14 +521,14 @@ export function transformResolved(
       guildId && roles
         ? resolveEach(
             roles,
-            (id) => client.roles._get(guildId, id),
+            (id) => client.roles.cache.get(client.roles.resolveKey(guildId, id)),
             (raw) => client.roles._resolveData({ ...raw, guild_id: guildId }),
           )
         : undefined,
       channels &&
         resolveEach(
           channels,
-          (id) => client.channels._get(id),
+          (id) => client.channels.cache.get(id),
           (raw) => client.channels._resolveData(raw),
         ),
     ],
