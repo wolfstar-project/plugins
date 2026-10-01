@@ -1,6 +1,6 @@
 import { isIterableCache } from "@wolfstar/plugin-cache";
 import type { APIUser } from "discord-api-types/v10";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { CollectionCache, NullCache, User } from "../src/index.js";
 import { createStructureStoreAdapter } from "../src/util/StructureStoreAdapter.js";
 
@@ -35,6 +35,17 @@ describe("StructureStoreAdapter", () => {
     expect(store.get("missing")).toBeUndefined();
     expect(store.has(user.id)).toBe(true);
     expect(store.getSize()).toBe(1);
+  });
+
+  test("GIVEN set on a cached entry THEN the instance is patched in place", () => {
+    const { cache, store } = create();
+    store.set(user.id, user);
+    const instance = cache.get(user.id);
+
+    store.set(user.id, { ...user, username: "howl" });
+
+    expect(cache.get(user.id)).toBe(instance);
+    expect(instance?.username).toBe("howl");
   });
 
   test("GIVEN upsert on a cached entry THEN the instance is patched and both states returned", () => {
@@ -89,6 +100,23 @@ describe("StructureStoreAdapter", () => {
     store.set(user.id, user);
     store.clear();
     expect(cache.size).toBe(0);
+  });
+
+  test("GIVEN a CollectionCache with a refresh hook THEN the adapter's reads and writes do not trigger it", () => {
+    const refresh = vi.fn((value: User) => value);
+    const cache = new CollectionCache<User>((data) => new User(data as APIUser), "users", {
+      refresh,
+    });
+    const store = createStructureStoreAdapter<User, APIUser>(cache);
+    store.set(user.id, user);
+
+    expect(store.get(user.id)).toEqual(user);
+    store.upsert(user.id, { username: "howl" });
+    store.set(user.id, { ...user, username: "wolf" });
+
+    expect(refresh).not.toHaveBeenCalled();
+    expect(cache.get(user.id)?.username).toBe("wolf");
+    expect(refresh).toHaveBeenCalledOnce();
   });
 
   test("GIVEN a cache that is not a Map THEN the adapter is not iterable", () => {

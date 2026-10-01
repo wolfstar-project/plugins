@@ -32,14 +32,28 @@ class StructureStoreAdapter<
     return this.cache.synchronous;
   }
 
+  // Reads the instance a `Map` cache holds as is: `CollectionCache#get` refreshes its relations, which the raw readers
+  // exist to avoid (a guild refreshing its channels, which read their guild, would never end).
+  protected read(key: string): Awaitable<Value | undefined> {
+    const { cache } = this;
+    return cache instanceof Map
+      ? (Map.prototype.get.call(cache, key) as Value | undefined)
+      : cache.get(key);
+  }
+
   public get(key: string): Awaitable<Raw | undefined> {
-    return whenAll([this.cache.get(key)], ([value]) =>
+    return whenAll([this.read(key)], ([value]) =>
       value === undefined ? undefined : toRaw<Raw>(value),
     );
   }
 
   public set(key: string, value: Raw): Awaitable<void> {
-    return whenAll([this.cache.set(key, this.cache.construct(value))], () => undefined);
+    return whenAll([this.read(key)], ([existing]) => {
+      // A cached instance is patched rather than replaced, so the references the application holds stay current.
+      const entry = existing === undefined ? this.cache.construct(value) : existing;
+      if (existing !== undefined) existing[kPatch](value as never);
+      return whenAll([this.cache.set(key, entry)], () => undefined);
+    });
   }
 
   public upsert(
@@ -47,7 +61,7 @@ class StructureStoreAdapter<
     data: Partial<Raw>,
     options?: CacheUpsertOptions,
   ): Awaitable<CacheUpsertResult<Raw>> {
-    return whenAll([this.cache.get(key)], ([existing]) => {
+    return whenAll([this.read(key)], ([existing]) => {
       if (existing === undefined || options?.overwrite) {
         const before = existing === undefined ? undefined : toRaw<Raw>(existing);
         const value = this.cache.construct(data);
