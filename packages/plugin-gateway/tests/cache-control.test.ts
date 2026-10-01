@@ -15,7 +15,13 @@ import {
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "vitest";
-import { GatewayClient, GatewayEvents } from "../src/index.js";
+import {
+  EntityStoreCache,
+  GatewayClient,
+  GatewayEvents,
+  NullCache,
+  type User,
+} from "../src/index.js";
 
 const user: APIUser = {
   id: "600000000000000600",
@@ -75,10 +81,12 @@ describe("makeCache", () => {
       flags: 0,
     });
 
-    expect(client.members.cache).toBeUndefined();
+    expect(client.members.cache).toBeInstanceOf(NullCache);
     expect(client.cache?.members).toBeUndefined();
-    expect(await client.users.get(user.id)).toBeDefined();
-    expect(await client.members.get("10", user.id)).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeDefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey("10", user.id)),
+    ).toBeUndefined();
   });
 
   test("GIVEN a factory caching nothing THEN the client has no cache", () => {
@@ -92,8 +100,9 @@ describe("makeCache", () => {
       makeCache: (entity) => (entity === "users" ? users : null),
     });
 
-    expect(client.users.cache).toBe(users);
-    expect(client.guilds.cache).toBeUndefined();
+    expect(client.users.cache).toBeInstanceOf(EntityStoreCache);
+    expect((client.users.cache as EntityStoreCache<User>).store).toBe(users);
+    expect(client.guilds.cache).toBeInstanceOf(NullCache);
   });
 });
 
@@ -121,8 +130,8 @@ describe("policies", () => {
       stickers: [],
     });
 
-    expect(await client.users.get(user.id)).toBeDefined();
-    expect(await client.users.get(bot.id)).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeDefined();
+    expect(await client.users.cache.get(bot.id)).toBeUndefined();
   });
 
   test("GIVEN a policy with a factory THEN manager writes follow it", async () => {
@@ -134,8 +143,8 @@ describe("policies", () => {
     await client.users._add(bot);
     await client.users._add(user);
 
-    expect(await client.users.get(bot.id)).toBeUndefined();
-    expect(await client.users.get(user.id)).toBeDefined();
+    expect(await client.users.cache.get(bot.id)).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeDefined();
   });
 });
 

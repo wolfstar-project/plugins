@@ -106,7 +106,7 @@ describe("reaction events", () => {
     expect(first![2]).toEqual({ userId: botId, type: 0, burst: false });
     expect(second![0].count).toBe(2);
     expect(second![1]).toBeInstanceOf(User);
-    const cached = await client.messages.get("20", "30");
+    const cached = await client.messages.cache.get(client.messages.resolveKey("20", "30"));
     expect(cached?.reactions.resolve("🐺")?.count).toBe(2);
   });
 

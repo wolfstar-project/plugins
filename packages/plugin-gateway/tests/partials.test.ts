@@ -33,7 +33,7 @@ function createClient(partials: readonly Partials[] = [], cache = true) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
     partials,
   });
 }

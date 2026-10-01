@@ -96,11 +96,15 @@ describe.each([
 
     await dispatch(client, GatewayDispatchEvents.GuildCreate, guild);
 
-    expect((await client.guilds.get("10"))?.name).toBe("Pack");
-    expect((await client.channels.get("20"))?.id).toBe("20");
-    expect((await client.members.get("10", user.id))?.user?.id).toBe(user.id);
-    expect((await client.roles.get("10", "100"))?.name).toBe("@everyone");
-    expect((await client.users.get(user.id))?.username).toBe("wolf");
+    expect((await client.guilds.cache.get("10"))?.name).toBe("Pack");
+    expect((await client.channels.cache.get("20"))?.id).toBe("20");
+    expect(
+      (await client.members.cache.get(client.members.resolveKey("10", user.id)))?.user?.id,
+    ).toBe(user.id);
+    expect((await client.roles.cache.get(client.roles.resolveKey("10", "100")))?.name).toBe(
+      "@everyone",
+    );
+    expect((await client.users.cache.get(user.id))?.username).toBe("wolf");
   });
 
   test("GIVEN a message update and delete THEN old state comes from the store and the entry is dropped", async () => {
@@ -115,7 +119,7 @@ describe.each([
     expect(updates[0]![0]?.content).toBe("before");
     expect(updates[0]![1].content).toBe("after");
     expect(deletes[0]![0]?.content).toBe("after");
-    expect(await client.messages.get("20", "30")).toBeUndefined();
+    expect(await client.messages.cache.get(client.messages.resolveKey("20", "30"))).toBeUndefined();
   });
 
   test("GIVEN a partial member update THEN fields it omits are kept", async () => {
@@ -152,10 +156,12 @@ describe.each([
     await dispatch(client, GatewayDispatchEvents.GuildCreate, guild);
     await dispatch(client, GatewayDispatchEvents.GuildDelete, { id: "10" });
 
-    expect(await client.guilds.get("10")).toBeUndefined();
-    expect(await client.members.get("10", user.id)).toBeUndefined();
-    expect(await client.channels.get("20")).toBeUndefined();
-    expect(await client.users.get(user.id)).toBeDefined();
+    expect(await client.guilds.cache.get("10")).toBeUndefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey("10", user.id)),
+    ).toBeUndefined();
+    expect(await client.channels.cache.get("20")).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeDefined();
   });
 });
 
@@ -174,6 +180,8 @@ describe("managers with an unreachable Redis", () => {
     expect(errors).toHaveLength(1);
     expect((errors[0]![0] as Error).message).toBe("ECONNREFUSED");
     expect(created.map(([emitted]) => emitted.content)).toEqual(["kept"]);
-    await expect(client.messages.get("20", "31")).resolves.toBeDefined();
+    await expect(
+      client.messages.cache.get(client.messages.resolveKey("20", "31")),
+    ).resolves.toBeDefined();
   });
 });

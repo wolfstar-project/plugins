@@ -33,7 +33,7 @@ function createClient(cache: Cache | null, options: Partial<GatewayClientOptions
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
     ...options,
   });
 }
@@ -289,7 +289,7 @@ describe("CachedManager fetch options", () => {
 
     expect(get).toHaveBeenCalledOnce();
     expect(fetched.username).toBe("renamed");
-    expect((await client.users.get(user.id))?.username).toBe("renamed");
+    expect((await client.users.cache.get(user.id))?.username).toBe("renamed");
   });
 
   test("GIVEN cache false THEN the fetched entity is not stored", async () => {
@@ -298,7 +298,7 @@ describe("CachedManager fetch options", () => {
 
     await client.users.fetch(user.id, { cache: false });
 
-    expect(await client.users.get(user.id)).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeUndefined();
   });
 
   test("GIVEN a two-key manager THEN options still come after both keys", async () => {
@@ -338,10 +338,10 @@ describe("READY reconciliation", () => {
     expect(deleted).toHaveLength(1);
     expect(deleted[0]![0]?.name).toBe("Guild 11");
     expect(deleted[0]![1]).toEqual({ id: "11" });
-    expect(await client.guilds.get("11")).toBeUndefined();
-    expect(await client.guilds.get("10")).toBeDefined();
+    expect(await client.guilds.cache.get("11")).toBeUndefined();
+    expect(await client.guilds.cache.get("10")).toBeDefined();
     // Another shard's guild is never touched by this shard's READY.
-    expect(await client.guilds.get(otherShardGuild)).toBeDefined();
+    expect(await client.guilds.cache.get(otherShardGuild)).toBeDefined();
   });
 
   test("GIVEN an unreachable cache THEN READY is still emitted under the default skip policy", async () => {
@@ -377,6 +377,6 @@ describe("READY reconciliation", () => {
     expect(ready).toHaveLength(1);
     expect(client.user?.id).toBe(user.id);
     expect(errors).toHaveLength(1);
-    expect(await client.guilds.get("11")).toBeDefined();
+    expect(await client.guilds.cache.get("11")).toBeDefined();
   });
 });
