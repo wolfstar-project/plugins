@@ -335,6 +335,7 @@ export class BrokerConsumer implements Listener.Emitter {
 
     const record = fieldsToRecord(fields);
     const shard = record.shard === undefined ? Number.NaN : Number(record.shard);
+    const sequence = record.sequence === undefined ? Number.NaN : Number(record.sequence);
 
     let payload: unknown;
     let state: unknown;
@@ -353,6 +354,7 @@ export class BrokerConsumer implements Listener.Emitter {
       event: record.event ?? "",
       ...(record.state === undefined ? {} : { state }),
       ...(Number.isInteger(shard) ? { shard } : {}),
+      ...(Number.isInteger(sequence) ? { sequence } : {}),
     };
 
     this.#pending = [];

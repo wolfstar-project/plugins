@@ -15,6 +15,10 @@ export interface GatewayDispatchLike {
    * The dispatch data.
    */
   d: unknown;
+  /**
+   * The sequence number of the dispatch on its shard.
+   */
+  s?: number;
 }
 
 export type GatewayDispatchListener = (
@@ -83,10 +87,18 @@ export function forwardGatewayDispatches(
   options: ForwardGatewayDispatchesOptions = {},
 ): () => void {
   const events = options.events ? new Set(options.events) : null;
-  const onError =
+  const handleError =
     options.onError ??
     ((error: unknown, payload: GatewayDispatchLike) =>
       container.logger.error(`[Broker] Failed to forward the ${payload.t} dispatch:`, error));
+  // A reporter that throws must neither drop the in-process event nor leave a rejection unhandled.
+  const onError = (error: unknown, payload: GatewayDispatchLike) => {
+    try {
+      handleError(error, payload);
+    } catch {
+      // Nothing is left to report it to.
+    }
+  };
 
   const listener: GatewayDispatchListener = (payload, shardId, state) => {
     if (events && !events.has(payload.t)) return;
@@ -103,6 +115,7 @@ export function forwardGatewayDispatches(
       }
     }
     if (shardId !== 0) publishOptions.shard = shardId;
+    if (typeof payload.s === "number") publishOptions.sequence = payload.s;
 
     const published =
       Object.keys(publishOptions).length === 0
@@ -124,7 +137,7 @@ export interface GatewayReplayTargetLike {
    */
   readonly replayDispatchTypes: readonly string[];
   replayDispatch(
-    payload: { t: string; d: unknown },
+    payload: { t: string; d: unknown; s?: number },
     shardId: number,
     state?: unknown,
   ): Promise<void>;
@@ -176,7 +189,11 @@ export function replayGatewayDispatches(
     const listener = async (...args: readonly unknown[]): Promise<void> => {
       const [data, message] = args as [unknown, BrokerMessage];
       const state = await client.reviveDispatchState(type, message.state, data);
-      await client.replayDispatch({ t: type, d: data }, message.shard ?? 0, state);
+      const dispatch =
+        message.sequence === undefined
+          ? { t: type, d: data }
+          : { t: type, d: data, s: message.sequence };
+      await client.replayDispatch(dispatch, message.shard ?? 0, state);
     };
 
     consumer.on(type, listener);

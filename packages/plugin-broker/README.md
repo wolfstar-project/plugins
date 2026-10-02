@@ -165,8 +165,11 @@ A worker's `messageUpdate` listener receives the message as it was before the ed
 process ships that previous state with the dispatch (serialized as raw API data), and the worker
 rebuilds it. Relations of that previous state (author, guild, …) resolve from the cache when the
 worker handles the entry, so they can be newer than the dispatch. `READY`, `INTERACTION_CREATE` and
-shard lifecycle events (`shardReady`, `shardClose`, …) are not replayed. An entry is acknowledged
-once its listeners resolved, so a worker listener that throws leaves it pending for redelivery.
+shard lifecycle events (`shardReady`, `shardClose`, …) are not replayed, so a worker's `client.user`
+stays `null`. Each entry also carries the shard that received the dispatch and its gateway sequence
+number, so `raw` listeners get the same payload (`op`, `s`, `t`, `d`) on both sides. An entry is
+acknowledged once its listeners resolved (async ones included), so a worker listener that throws or
+rejects leaves it pending for redelivery.
 
 ### `BrokerListener` piece
 

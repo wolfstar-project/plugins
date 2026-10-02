@@ -112,6 +112,16 @@ describe("forwardGatewayDispatches", () => {
     expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_CREATE", { id: "1" }, { shard: 2 });
   });
 
+  test("GIVEN a dispatch with a sequence number THEN it is published", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const client = gateway();
+
+    forwardGatewayDispatches(client, { publish });
+    client.emit("dispatch", { t: "MESSAGE_CREATE", d: { id: "1" }, s: 7 }, 0);
+
+    expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_CREATE", { id: "1" }, { sequence: 7 });
+  });
+
   test("GIVEN a state and an emitter that cannot serialize it THEN no state is published", () => {
     const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
     const client = gateway();
@@ -138,5 +148,43 @@ describe("forwardGatewayDispatches", () => {
 
     expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_UPDATE", { id: "1" });
     expect(onError).toHaveBeenCalledExactlyOnceWith(error, payload);
+  });
+
+  test("GIVEN a serializer and an onError that both throw THEN the dispatch is still published", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const client = Object.assign(gateway(), {
+      serializeDispatchState: () => {
+        throw new Error("cannot serialize");
+      },
+    });
+    const onError = vi.fn(() => {
+      throw new Error("cannot report");
+    });
+
+    forwardGatewayDispatches(client, { publish }, { onError });
+    client.emit("dispatch", { t: "MESSAGE_UPDATE", d: { id: "1" } }, 0, { cached: true });
+
+    expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_UPDATE", { id: "1" });
+  });
+
+  test("GIVEN a failing publish and an onError that throws THEN the failure is not left unhandled", async () => {
+    const publish = vi.fn<Broker["publish"]>().mockRejectedValue(new Error("redis down"));
+    const onError = vi.fn(() => {
+      throw new Error("cannot report");
+    });
+    const unhandled = vi.fn();
+    process.on("unhandledRejection", unhandled);
+
+    try {
+      const client = gateway();
+      forwardGatewayDispatches(client, { publish }, { onError });
+      client.emit("dispatch", { t: "MESSAGE_CREATE", d: { id: "1" } }, 0);
+      await new Promise((resolve) => setTimeout(resolve, 20));
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect(unhandled).not.toHaveBeenCalled();
+    } finally {
+      process.off("unhandledRejection", unhandled);
+    }
   });
 });

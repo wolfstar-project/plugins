@@ -146,6 +146,44 @@ describe("replayGatewayDispatches", () => {
     });
   });
 
+  test("GIVEN an entry with a sequence number THEN the replayed dispatch carries it", async () => {
+    const { broker, consumer } = setup();
+    const replayDispatch = vi.fn<GatewayReplayTargetLike["replayDispatch"]>().mockResolvedValue();
+    replayGatewayDispatches(consumer, {
+      replayDispatchTypes: ["MESSAGE_CREATE"],
+      replayDispatch,
+      reviveDispatchState: vi.fn().mockResolvedValue(undefined),
+    });
+
+    await consumer.start();
+    await broker.publish("MESSAGE_CREATE", { id: "1" }, { sequence: 9 });
+
+    await vi.waitFor(() =>
+      expect(replayDispatch).toHaveBeenCalledExactlyOnceWith(
+        { t: "MESSAGE_CREATE", d: { id: "1" }, s: 9 },
+        0,
+        undefined,
+      ),
+    );
+  });
+
+  test("GIVEN a dispatch THEN the raw event of the worker carries the payload the producer saw", async () => {
+    const { broker, consumer, producer, worker } = setup();
+    forwardGatewayDispatches(producer, broker);
+    replayGatewayDispatches(consumer, worker);
+    const produced: unknown[] = [];
+    const replayed: unknown[] = [];
+    producer.on("raw", (payload) => produced.push(payload));
+    worker.on("raw", (payload) => replayed.push(payload));
+
+    await consumer.start();
+    await feed(producer, "MESSAGE_CREATE", message());
+
+    await vi.waitFor(() => expect(replayed).toHaveLength(1));
+    expect(replayed).toEqual(produced);
+    expect(replayed[0]).toMatchObject({ op: 0, s: 1, t: "MESSAGE_CREATE" });
+  });
+
   test("GIVEN an entry with state THEN a plain listener still gets the payload", async () => {
     const { broker, consumer } = setup();
     const plainListener = vi.fn();

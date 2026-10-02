@@ -36,6 +36,10 @@ export interface BrokerPublishOptions {
    * The shard the event came from, handed to listeners as {@link BrokerMessage.shard}.
    */
   shard?: number;
+  /**
+   * The sequence number of the dispatch on its shard, handed to listeners as {@link BrokerMessage.sequence}.
+   */
+  sequence?: number;
 }
 
 export interface Broker {
@@ -43,7 +47,7 @@ export interface Broker {
    * Publishes an event to the stream.
    * @param event The event name, read by {@link BrokerListener} pieces to route the payload.
    * @param payload The payload, encoded with the configured codec.
-   * @param options The state and shard to publish next to the payload.
+   * @param options The state, shard and sequence number to publish next to the payload.
    * @returns The ID of the published entry.
    */
   publish(event: string, payload: unknown, options?: BrokerPublishOptions): Promise<string>;
@@ -68,6 +72,9 @@ export function createBroker(options: CreateBrokerOptions): Broker {
       if (publishOptions?.state !== undefined)
         fields.push("state", toBase64(codec, publishOptions.state));
       if (publishOptions?.shard !== undefined) fields.push("shard", String(publishOptions.shard));
+      if (publishOptions?.sequence !== undefined) {
+        fields.push("sequence", String(publishOptions.sequence));
+      }
 
       const id =
         maxLength === undefined

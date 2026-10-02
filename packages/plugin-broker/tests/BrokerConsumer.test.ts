@@ -70,7 +70,7 @@ describe("BrokerConsumer", () => {
     await vi.waitFor(async () => expect(await pending(redis)).toHaveLength(1));
   });
 
-  test("GIVEN an entry published with a state and shard THEN the message carries both", async () => {
+  test("GIVEN an entry published with a state, shard and sequence THEN the message carries all three", async () => {
     const redis = new FakeStreamRedis();
     const broker = createBroker({ redis, stream: "events" });
     const consumer = start(options(redis));
@@ -78,13 +78,22 @@ describe("BrokerConsumer", () => {
     consumer.on("messageCreate", (_payload: unknown, message: unknown) => messages.push(message));
 
     await consumer.start();
-    await broker.publish("messageCreate", { id: "1" }, { state: { content: "old" }, shard: 3 });
+    await broker.publish(
+      "messageCreate",
+      { id: "1" },
+      {
+        state: { content: "old" },
+        shard: 3,
+        sequence: 9,
+      },
+    );
 
     await vi.waitFor(() => expect(messages).toHaveLength(1));
     expect(messages[0]).toMatchObject({
       event: "messageCreate",
       state: { content: "old" },
       shard: 3,
+      sequence: 9,
     });
   });
 
@@ -101,6 +110,7 @@ describe("BrokerConsumer", () => {
     await vi.waitFor(() => expect(messages).toHaveLength(1));
     expect("state" in messages[0]!).toBe(false);
     expect("shard" in messages[0]!).toBe(false);
+    expect("sequence" in messages[0]!).toBe(false);
   });
 
   test("GIVEN an entry whose state cannot be decoded THEN it is left pending and no listener runs", async () => {

@@ -18,4 +18,8 @@ export interface BrokerMessage {
    * The shard the event came from. Absent when none was published.
    */
   readonly shard?: number;
+  /**
+   * The sequence number of the dispatch on its shard. Absent when none was published.
+   */
+  readonly sequence?: number;
 }

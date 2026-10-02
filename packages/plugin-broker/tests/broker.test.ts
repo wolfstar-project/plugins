@@ -54,17 +54,26 @@ describe("createBroker", () => {
     expect(decoded).toEqual({ id: "42", content: "hi" });
   });
 
-  test("GIVEN publish options THEN the entry carries an encoded state and the shard", async () => {
+  test("GIVEN publish options THEN the entry carries an encoded state, the shard and the sequence", async () => {
     const redis = new FakeStreamRedis();
     const codec = jsonCodec();
     const broker = createBroker({ redis, stream: "events", codec });
 
-    await broker.publish("messageUpdate", { id: "1" }, { state: { content: "old" }, shard: 2 });
+    await broker.publish(
+      "messageUpdate",
+      { id: "1" },
+      {
+        state: { content: "old" },
+        shard: 2,
+        sequence: 9,
+      },
+    );
 
     const [{ fields }] = redis.entriesOf("events");
     const record = fieldsToRecord(fields);
     expect(codec.decode(Buffer.from(record.state!, "base64"))).toEqual({ content: "old" });
     expect(record.shard).toBe("2");
+    expect(record.sequence).toBe("9");
   });
 
   test("GIVEN no publish options THEN the entry holds only the event and payload", async () => {
