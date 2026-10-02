@@ -171,6 +171,17 @@ number, so `raw` listeners get the same payload (`op`, `s`, `t`, `d`) on both si
 acknowledged once its listeners resolved (async ones included), so a worker listener that throws or
 rejects leaves it pending for redelivery.
 
+Delivery is at-least-once, and a failure is per entry: when one of several listeners of an event throws,
+the redelivery runs the ones that already succeeded again, which a connected `GatewayClient` would not
+do. Keep worker listeners idempotent, and keep slow work off the replay path (enqueue it instead of
+awaiting it): a consumer handles one entry at a time, and an entry pending for longer than `claimIdle`
+can be claimed by another worker while it still runs.
+
+Ordering holds per consumer, not across the group. Workers in one consumer group take different
+entries and run them concurrently, so two events of the same guild can be replayed out of order
+across workers, and the relations a listener resolves from the cache can differ from the gateway
+process's. The previous state shipped with each entry is a snapshot, so `old` stays right.
+
 ### `BrokerListener` piece
 
 Like `EventGatewayListener` in `@wolfstar/plugin-gateway`, a `BrokerListener` piece typed by event

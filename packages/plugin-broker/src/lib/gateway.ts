@@ -164,6 +164,18 @@ export interface ReplayGatewayDispatchesOptions {
  * failing {@link BrokerListener} entry. Relations of the previous state (author, guild, …) resolve from the cache as
  * it is when the worker handles the entry, so they can be newer than the dispatch.
  *
+ * Delivery is at-least-once, and a failure is per entry rather than per listener: when one of several listeners of
+ * an event throws, the redelivery runs the ones that already succeeded again (a connected `GatewayClient` would only
+ * report the failure through `error`). Listeners must therefore be idempotent. The consumer also awaits the
+ * listeners of an entry before it reads the next one, and an entry pending for longer than
+ * `claimIdle` can be claimed by another worker while it still runs, so slow work belongs
+ * off the replay path (enqueue it instead of awaiting it).
+ *
+ * Entries of one guild are replayed in order by a single consumer, but workers of a consumer group take different
+ * entries and run them concurrently: across the group, the order listeners observe can differ from the gateway
+ * process's, and so can the cached relations they resolve. The previous state shipped with each entry is a snapshot,
+ * so `old` stays right.
+ *
  * @example
  * ```typescript
  * // On a gateway process
