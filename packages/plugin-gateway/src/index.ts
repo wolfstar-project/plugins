@@ -19,6 +19,7 @@ export { getGatewayClient } from "./util/container.js";
 export * from "./util/DataResolver.js";
 export * from "./util/decorators.js";
 export * from "./util/dispatch.js";
+export * from "./util/dispatchState.js";
 export * from "./util/equal.js";
 export * from "./util/DispatchQueue.js";
 export * from "./util/errors.js";

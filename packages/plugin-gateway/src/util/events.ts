@@ -105,8 +105,11 @@ export interface GatewayEventMap {
    * @remarks
    * Not emitted for `INTERACTION_CREATE`, served by the HTTP endpoint, nor for a dispatch dropped because its cache
    * write failed with {@link GatewayClientOptions.cacheFailure} set to `"skip"`.
+   *
+   * `state` is what the dispatch's handler read before the cache write, e.g. the cached message a `MESSAGE_UPDATE`
+   * replaces, or `undefined`. It is what {@link GatewayClient.serializeDispatchState} serializes for other processes.
    */
-  dispatch: [payload: GatewayDispatchPayload, shardId: number];
+  dispatch: [payload: GatewayDispatchPayload, shardId: number, state: unknown];
   /**
    * Emitted when a shard receives `READY`.
    */

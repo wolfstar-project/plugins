@@ -334,15 +334,28 @@ export class BrokerConsumer implements Listener.Emitter {
     }
 
     const record = fieldsToRecord(fields);
-    const message: BrokerMessage = { id, event: record.event ?? "" };
+    const shard = record.shard === undefined ? Number.NaN : Number(record.shard);
+    const sequence = record.sequence === undefined ? Number.NaN : Number(record.sequence);
 
     let payload: unknown;
+    let state: unknown;
     try {
       payload = this.#codec.decode(Buffer.from(record.payload ?? "", "base64"));
+      if (record.state !== undefined) {
+        state = this.#codec.decode(Buffer.from(record.state, "base64"));
+      }
     } catch {
       // Left pending like a throwing listener's entry, so it ends up dead-lettered rather than silently dropped.
       return;
     }
+
+    const message: BrokerMessage = {
+      id,
+      event: record.event ?? "",
+      ...(record.state === undefined ? {} : { state }),
+      ...(Number.isInteger(shard) ? { shard } : {}),
+      ...(Number.isInteger(sequence) ? { sequence } : {}),
+    };
 
     this.#pending = [];
     const dispatched = this.emit(message.event, payload, message);

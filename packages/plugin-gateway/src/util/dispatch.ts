@@ -668,9 +668,11 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     event: GatewayEvents.UserUpdate,
     before: (client, data) => previousOf(client.users, data.id),
     build: async (client, data, previous) => {
-      // The bot's own updates keep `client.user` a `ClientUser`, with its presence.
+      // The bot's own updates keep `client.user` a `ClientUser`, with its presence. A client that never received
+      // `READY` (a worker replaying another process's dispatches) has none yet: it builds it from the update.
+      if (client.user === null && client.id === data.id) client.user = new ClientUser(data);
+      else if (client.user?.id === data.id) client.user[kPatch](data);
       if (client.user?.id === data.id) {
-        client.user[kPatch](data);
         return [previous ?? partialUser(client, data.id), client.user];
       }
 

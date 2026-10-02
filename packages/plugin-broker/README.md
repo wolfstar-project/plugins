@@ -136,6 +136,52 @@ With [`@wolfstar/plugin-sharder`](https://www.npmjs.com/package/@wolfstar/plugin
 every shard process: they all publish onto the same stream, and the workers share the load through
 their consumer group.
 
+### Gateway process and workers
+
+Run one `GatewayClient` that connects to Discord and forwards its dispatches, and any number of
+workers that never connect but replay them on their own `GatewayClient`, so `EventGatewayListener`
+pieces behave as if the dispatch happened in-process, `old` arguments included. Both clients must
+use the same Redis cache.
+
+```ts
+// Gateway process
+const gatewayClient = new GatewayClient({ ...options, cache: redisCache });
+forwardGatewayDispatches(gatewayClient, broker);
+await gatewayClient.start();
+
+// Worker: same cache, never connected
+const worker = new GatewayClient({ ...options, cache: redisCache });
+const consumer = new BrokerConsumer({
+  redis,
+  stream: "wolfstar:events",
+  group: "workers",
+  consumer: "worker-1",
+});
+replayGatewayDispatches(consumer, worker);
+await consumer.start();
+```
+
+A worker's `messageUpdate` listener receives the message as it was before the edit: the gateway
+process ships that previous state with the dispatch (serialized as raw API data), and the worker
+rebuilds it. Relations of that previous state (author, guild, …) resolve from the cache when the
+worker handles the entry, so they can be newer than the dispatch. `READY`, `INTERACTION_CREATE` and
+shard lifecycle events (`shardReady`, `shardClose`, …) are not replayed, so a worker's `client.user`
+stays `null`. Each entry also carries the shard that received the dispatch and its gateway sequence
+number, so `raw` listeners get the same payload (`op`, `s`, `t`, `d`) on both sides. An entry is
+acknowledged once its listeners resolved (async ones included), so a worker listener that throws or
+rejects leaves it pending for redelivery.
+
+Delivery is at-least-once, and a failure is per entry: when one of several listeners of an event throws,
+the redelivery runs the ones that already succeeded again, which a connected `GatewayClient` would not
+do. Keep worker listeners idempotent, and keep slow work off the replay path (enqueue it instead of
+awaiting it): a consumer handles one entry at a time, and an entry pending for longer than `claimIdle`
+can be claimed by another worker while it still runs.
+
+Ordering holds per consumer, not across the group. Workers in one consumer group take different
+entries and run them concurrently, so two events of the same guild can be replayed out of order
+across workers, and the relations a listener resolves from the cache can differ from the gateway
+process's. The previous state shipped with each entry is a snapshot, so `old` stays right.
+
 ### `BrokerListener` piece
 
 Like `EventGatewayListener` in `@wolfstar/plugin-gateway`, a `BrokerListener` piece typed by event

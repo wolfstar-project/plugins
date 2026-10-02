@@ -58,6 +58,8 @@ import { StickerPack } from "./structures/stickers/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { resolveInviteCode } from "./util/DataResolver.js";
+import { DispatchStateCodecs } from "./util/dispatchState.js";
+import { emitAndWait } from "./util/emitAndWait.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import type { Partials } from "./util/Partials.js";
@@ -830,6 +832,99 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * Serializes the previous state a dispatch's handler read (the `state` of the `dispatch` event) to plain data other
+   * processes can {@link GatewayClient.reviveDispatchState revive}.
+   *
+   * @param type The dispatch type, e.g. `MESSAGE_UPDATE`.
+   * @param state The state, as passed to the `dispatch` event.
+   * @returns The plain data, `undefined` when there is no state or the type keeps none.
+   */
+  public serializeDispatchState(type: string, state: unknown): unknown {
+    if (state === undefined) return undefined;
+    return DispatchStateCodecs[type as GatewayDispatchEvents]?.serialize(state);
+  }
+
+  /**
+   * Builds the structures of a state {@link GatewayClient.serializeDispatchState serialized} on another process, to
+   * hand to {@link GatewayClient.replayDispatch}. Relations resolve from this client's cache as it is now, so they can
+   * be newer than the dispatch.
+   *
+   * @param type The dispatch type.
+   * @param state The serialized state, `undefined` when there was none.
+   * @param data The dispatch data.
+   */
+  public async reviveDispatchState(type: string, state: unknown, data: unknown): Promise<unknown> {
+    if (state === undefined) return undefined;
+    return DispatchStateCodecs[type as GatewayDispatchEvents]?.revive(this, state, data);
+  }
+
+  /**
+   * Like `emit`, but resolves once the listeners' promises settled and rejects with the first failure.
+   *
+   * @internal
+   */
+  public emitAndWait(event: string, args: readonly unknown[]): Promise<void> {
+    return emitAndWait(this, event, args);
+  }
+
+  /**
+   * The dispatch types {@link GatewayClient.replayDispatch} turns into events.
+   */
+  public get replayDispatchTypes(): readonly string[] {
+    return this.actions.types().filter((type) => type !== GatewayDispatchEvents.Ready);
+  }
+
+  /**
+   * Handles a dispatch another process received and wrote to the shared cache: emits `raw`, then the matching
+   * {@link GatewayEventMap} event, exactly as {@link GatewayClient.handleDispatch} would for a dispatch of this
+   * client, but without reading or writing the cache and without emitting `dispatch`, so a worker that never
+   * connects to Discord sees the events of the gateway process's client.
+   *
+   * @remarks
+   * Dispatches of a guild are handled in the order they were replayed, like the ones of a connected client.
+   * `READY` and `INTERACTION_CREATE` are ignored.
+   *
+   * @param payload The dispatch type and data, and its sequence number on the shard that received it, `0` when
+   * unknown. `raw` listeners get it as a full gateway payload, with its `op`.
+   * @param shardId The ID of the shard that received it, on the process that did.
+   * @param state The previous state, revived with {@link GatewayClient.reviveDispatchState}.
+   * @returns A promise rejecting when a listener or the handler throws, so the caller can retry the dispatch.
+   */
+  public async replayDispatch(
+    payload: { t: string; d: unknown; s?: number },
+    shardId: number,
+    state?: unknown,
+  ): Promise<void> {
+    const dispatch = {
+      op: GatewayOpcodes.Dispatch,
+      s: payload.s ?? 0,
+      t: payload.t,
+      d: payload.d,
+    } as GatewayDispatchPayload;
+    const outcome: { failed: boolean; error?: unknown } = { failed: false };
+
+    // The queue never sees a rejection (its chain would break): the failure is carried out and rethrown below.
+    await this.#queue.enqueue(shardId, dispatchPartition(dispatch), async () => {
+      try {
+        await this.emitAndWait("raw", [dispatch, shardId]);
+        if (
+          dispatch.t === GatewayDispatchEvents.InteractionCreate ||
+          dispatch.t === GatewayDispatchEvents.Ready
+        ) {
+          return;
+        }
+
+        await this.actions.get(dispatch.t)?.handle(dispatch.d, state, shardId, true);
+      } catch (error) {
+        outcome.failed = true;
+        outcome.error = error;
+      }
+    });
+
+    if (outcome.failed) throw outcome.error;
+  }
+
+  /**
    * Processes a gateway dispatch: emits it as `raw`, writes it into the cache, emits it as `dispatch`, and emits the
    * matching {@link GatewayEventMap} event, if any.
    *
@@ -866,7 +961,7 @@ export class GatewayClient extends Client {
       state = undefined;
     }
 
-    this.emit("dispatch", payload, shardId);
+    this.emit("dispatch", payload, shardId, state);
     await action?.handle(payload.d, state, shardId);
 
     if (this.clientReadyTimestamp === null) {

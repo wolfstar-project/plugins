@@ -1,11 +1,20 @@
 export { BrokerConsumer, type BrokerConsumerOptions } from "./BrokerConsumer.js";
 export { BrokerListener } from "./BrokerListener.js";
-export { createBroker, type Broker, type CreateBrokerOptions } from "./lib/broker.js";
+export {
+  createBroker,
+  type Broker,
+  type BrokerPublishOptions,
+  type CreateBrokerOptions,
+} from "./lib/broker.js";
 export type { BrokerEventName, BrokerEvents } from "./lib/events.js";
 export {
   forwardGatewayDispatches,
+  replayGatewayDispatches,
+  type ReplayGatewayDispatchesOptions,
   type ForwardGatewayDispatchesOptions,
   type GatewayDispatchEmitterLike,
+  type GatewayDispatchListener,
+  type GatewayReplayTargetLike,
   type GatewayDispatchLike,
 } from "./lib/gateway.js";
 export {

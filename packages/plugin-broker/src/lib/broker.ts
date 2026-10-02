@@ -26,14 +26,36 @@ export interface CreateBrokerOptions {
   codec?: CacheCodec;
 }
 
+export interface BrokerPublishOptions {
+  /**
+   * Context published next to the payload, encoded with the configured codec, and handed to listeners as
+   * {@link BrokerMessage.state}.
+   */
+  state?: unknown;
+  /**
+   * The shard the event came from, handed to listeners as {@link BrokerMessage.shard}.
+   */
+  shard?: number;
+  /**
+   * The sequence number of the dispatch on its shard, handed to listeners as {@link BrokerMessage.sequence}.
+   */
+  sequence?: number;
+}
+
 export interface Broker {
   /**
    * Publishes an event to the stream.
    * @param event The event name, read by {@link BrokerListener} pieces to route the payload.
    * @param payload The payload, encoded with the configured codec.
+   * @param options The state, shard and sequence number to publish next to the payload.
    * @returns The ID of the published entry.
    */
-  publish(event: string, payload: unknown): Promise<string>;
+  publish(event: string, payload: unknown, options?: BrokerPublishOptions): Promise<string>;
+}
+
+function toBase64(codec: CacheCodec, value: unknown): string {
+  const encoded = codec.encode(value);
+  return (typeof encoded === "string" ? Buffer.from(encoded, "utf8") : encoded).toString("base64");
 }
 
 /**
@@ -45,10 +67,14 @@ export function createBroker(options: CreateBrokerOptions): Broker {
   const { redis, stream, maxLength, codec = jsonCodec() } = options;
 
   return {
-    async publish(event, payload) {
-      const encoded = codec.encode(payload);
-      const bytes = typeof encoded === "string" ? Buffer.from(encoded, "utf8") : encoded;
-      const fields = ["event", event, "payload", bytes.toString("base64")];
+    async publish(event, payload, publishOptions) {
+      const fields = ["event", event, "payload", toBase64(codec, payload)];
+      if (publishOptions?.state !== undefined)
+        fields.push("state", toBase64(codec, publishOptions.state));
+      if (publishOptions?.shard !== undefined) fields.push("shard", String(publishOptions.shard));
+      if (publishOptions?.sequence !== undefined) {
+        fields.push("sequence", String(publishOptions.sequence));
+      }
 
       const id =
         maxLength === undefined
