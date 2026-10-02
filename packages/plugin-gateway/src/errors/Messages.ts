@@ -31,6 +31,10 @@ export const GatewayErrorMessages = {
     `The ${entity} cache cannot enumerate its entries (it has no keys/values/entries)`,
   CacheKeyUnresolvable: (entity: string, reason: string) => `Cannot key a ${entity} ${reason}`,
   IdUnresolvable: "Cannot resolve an ID from a structure without one",
+  InvalidType: (name: string, expected: string, an = false) =>
+    `Supplied ${name} is not a${an ? "n" : ""} ${expected}.`,
+  InvalidElement: (type: string, name: string, element: unknown) =>
+    `Supplied ${type} ${name} includes an invalid element: ${String(element)}`,
 
   ChannelGuildUnknown: (channelId: string) => `Channel ${channelId} has no known guild`,
   ChannelTypeChanged: (channelId: string, from: number, to: number) =>
@@ -62,6 +66,7 @@ export const GatewayErrorMessages = {
   PresenceNotFetchable: (guildId: string, userId: string) =>
     `Presences cannot be fetched from the API, they are only received from the gateway (user ${userId} of guild ${guildId} is not cached); enable the presences cache to read them later`,
   InviteGuildUnknown: (code: string) => `Invite ${code} has no known guild`,
+  UserNoDMChannel: "No DM Channel exists!",
 
   EmojiEmpty: "Cannot resolve an empty string to an emoji",
   EmojiType: "Cannot resolve an emoji without an ID nor a name",

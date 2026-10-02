@@ -660,12 +660,26 @@ await member.timeout(10 * 60_000, "spam");
 const permissions = await member.fetchPermissions(); // discord.js: member.permissions
 if (await member.fetchKickable()) await member.kick(); // discord.js: member.kickable
 
-const highest = await member.roles.fetchHighest(); // discord.js: member.roles.highest
-await highest?.setColors({ primaryColor: 0xff0000 });
+const cached = await member.roles.cache; // a Collection of the cached roles, @everyone included
+const highest = await member.roles.highest; // read from the cache, like discord.js
+const fetched = await member.roles.fetchHighest(); // falls back to the API for uncached roles
+await fetched?.setColors({ primaryColor: 0xff0000 });
 
 await client.user?.setActivity("with wolves", { type: ActivityType.Competing });
-await (await client.users.fetch(userId)).send("Welcome!");
+await client.users.send(member, "Welcome!"); // a user, a member, a message (its author), or an ID
 ```
+
+`member.roles` and `emoji.roles` are discord.js's `GuildMemberRoleManager` and
+`GuildEmojiRoleManager`: `add`, `remove` and `set` take a `Role`, an ID, an array or a `Collection`,
+and resolve to the updated member or emoji. Their `cache` and getters (`highest`, `hoist`, `color`,
+`icon`, ...) are the one difference: they are `Awaitable`, synchronous with the default cache and a
+promise with an asynchronous store, so `await` them. `highest` is `null` when no role is cached.
+
+`client.users.createDM(user)` returns the cached direct message channel, unless `force` is set;
+`client.users.dmChannel(user)` (or `user.dmChannel`) reads it, and `deleteDM` throws
+`UserNoDMChannel` without one. The cached channel is found by scanning the channel cache, which is
+only done on a synchronous cache that can enumerate its entries: with `cache: null` or a Redis store,
+`dmChannel` is `null` and `createDM` always asks Discord, which answers with the existing channel.
 
 `client.user` is a `ClientUser`, which edits the bot's profile and sets its presence on every shard.
 `client.members` also lists, searches, adds (OAuth2), edits, kicks, bans and prunes members;

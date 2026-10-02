@@ -1,6 +1,7 @@
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { container } from "@wolfstar/http-framework";
-import { createInMemoryCache } from "@wolfstar/plugin-cache";
+import { Collection } from "@discordjs/collection";
+import { createInMemoryCache, MemoryEntityCache, type EntityCache } from "@wolfstar/plugin-cache";
 import {
   ActivityType,
   ChannelType,
@@ -20,11 +21,14 @@ import {
   ClientUser,
   DMChannel,
   GatewayClient,
+  GatewayErrorCodes,
   GuildMember,
   Message,
   PermissionsBitField,
   Role,
+  ThreadMember,
   User,
+  type GatewayClientOptions,
 } from "../src/index.js";
 
 const botId = "266624760782258186";
@@ -82,7 +86,7 @@ function member(u: APIUser, roles: string[], extra: Partial<APIGuildMember> = {}
   };
 }
 
-function createClient() {
+function createClient(options: Partial<GatewayClientOptions> = {}) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
@@ -90,7 +94,45 @@ function createClient() {
     intents: 0,
     shardCount: 1,
     cache: createInMemoryCache(),
+    ...options,
   });
+}
+
+// The default cache of structure instances, `CollectionCache`.
+function createCollectionClient() {
+  return createClient({ cache: undefined });
+}
+
+// A store answering with promises, like Redis.
+function asynchronousStore(): EntityCache<any> {
+  const inner = new MemoryEntityCache<any>();
+  return {
+    get: async (key) => inner.get(key),
+    set: async (key, value, options) => inner.set(key, value, options),
+    upsert: async (key, data, options) => inner.upsert(key, data, options),
+    has: async (key) => inner.has(key),
+    delete: async (key) => inner.delete(key),
+    clear: async () => inner.clear(),
+    getSize: async () => inner.getSize(),
+  };
+}
+
+function createAsynchronousClient() {
+  return createClient({ cache: undefined, makeCache: () => asynchronousStore() });
+}
+
+const dm = { id: "90", type: ChannelType.DM, recipients: [user], last_message_id: null };
+
+async function cachedMember(client: GatewayClient, id = userId) {
+  return (await client.members.cache.get(client.members.resolveKey(guildId, id)))!;
+}
+
+async function cachedRole(client: GatewayClient, id: string) {
+  return (await client.roles.cache.get(client.roles.resolveKey(guildId, id)))!;
+}
+
+async function seedRole(client: GatewayClient, data: APIRole) {
+  await client.cache!.roles!.set(`${guildId}:${data.id}`, { ...data, guild_id: guildId });
 }
 
 /**
@@ -548,5 +590,340 @@ describe("GuildMemberManager", () => {
     expect(
       await client.members.cache.get(client.members.resolveKey(guildId, userId)),
     ).toBeUndefined();
+  });
+});
+
+describe("GuildMemberRoleManager", () => {
+  test("GIVEN the default cache THEN cache is a synchronous Collection with @everyone, skipping uncached roles", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    await client.cache!.members.set(`${guildId}:${userId}`, {
+      ...member(user, ["21", "99"]),
+      guild_id: guildId,
+    });
+    const target = await cachedMember(client);
+
+    const { roles } = target;
+    const cache = roles.cache as Collection<string, Role>;
+
+    expect(cache).toBeInstanceOf(Collection);
+    expect([...cache.keys()]).toEqual(["21", guildId]);
+    expect(cache.first()).toBeInstanceOf(Role);
+    expect(roles.member).toBe(target);
+    expect(roles.guild?.id).toBe(guildId);
+    expect(roles.ids).toEqual(["21", "99"]);
+    expect(roles.clone().member).toBe(target);
+  });
+
+  test("GIVEN cached roles THEN the getters pick among them, highest first", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    await seedRole(client, role("30", 3, 0n, { hoist: true, icon: "icon" }));
+    await seedRole(
+      client,
+      role("31", 4, 0n, {
+        colors: { primary_color: 0xff_00_00, secondary_color: null, tertiary_color: null },
+        tags: { premium_subscriber: null },
+      }),
+    );
+    await seedRole(client, role("20", 2, 0n, { tags: { bot_id: botId } }));
+    await client.cache!.members.set(`${guildId}:${userId}`, {
+      ...member(user, ["21", "30", "31"]),
+      guild_id: guildId,
+    });
+    const { roles } = await cachedMember(client);
+
+    expect((roles.highest as Role).id).toBe("31");
+    expect((roles.hoist as Role).id).toBe("30");
+    expect((roles.color as Role).id).toBe("31");
+    expect((roles.icon as Role).id).toBe("30");
+    expect((roles.premiumSubscriberRole as Role).id).toBe("31");
+    expect(roles.botRole).toBeNull();
+    expect(((await cachedMember(client, botId)).roles.botRole as Role).id).toBe("20");
+    expect((await roles.fetchColor())?.id).toBe("31");
+  });
+
+  test("GIVEN no colored, hoisted, or boosting role THEN the getters are null", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const { roles } = await cachedMember(client);
+
+    expect((roles.highest as Role).id).toBe("21");
+    expect(roles.hoist).toBeNull();
+    expect(roles.color).toBeNull();
+    expect(roles.icon).toBeNull();
+    expect(roles.premiumSubscriberRole).toBeNull();
+  });
+
+  test("GIVEN an asynchronous store THEN cache and the getters are promises", async () => {
+    const client = createAsynchronousClient();
+    await seedGuild(client);
+    const { roles } = await cachedMember(client);
+
+    const cache = roles.cache;
+    const highest = roles.highest;
+
+    expect(cache).toBeInstanceOf(Promise);
+    expect([...(await cache).keys()]).toEqual(["21", guildId]);
+    expect(highest).toBeInstanceOf(Promise);
+    expect((await highest)?.id).toBe("21");
+  });
+
+  test("GIVEN no cache THEN cache is empty and highest is null", async () => {
+    const client = createClient({ cache: null });
+    const target = client.members.cache.construct({ ...member(user, ["21"]), guild_id: guildId });
+
+    expect((await target.roles.cache).size).toBe(0);
+    expect(await target.roles.highest).toBeNull();
+  });
+
+  test("GIVEN add with a Role THEN it resolves to a copy of the member with the role", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const target = await cachedMember(client);
+
+    const updated = await target.roles.add(await cachedRole(client, "20"), "promoted");
+
+    expect(put).toHaveBeenCalledWith(Routes.guildMemberRole(guildId, userId, "20"), {
+      reason: "promoted",
+    });
+    expect(updated).toBeInstanceOf(GuildMember);
+    expect(updated).not.toBe(target);
+    expect(updated.roleIds).toEqual(["21", "20"]);
+  });
+
+  test("GIVEN add and remove without a cache THEN they still resolve to the updated member", async () => {
+    const client = createClient({ cache: null });
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const remove = vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
+    const target = client.members.cache.construct({ ...member(user, ["21"]), guild_id: guildId });
+
+    const added = await target.roles.add("20");
+    const removed = await target.roles.remove("21");
+
+    expect(added.roleIds).toEqual(["21", "20"]);
+    expect(removed.roleIds).toEqual([]);
+    expect(target.roleIds).toEqual(["21"]);
+    expect(remove).toHaveBeenCalledWith(Routes.guildMemberRole(guildId, userId, "21"), {
+      reason: undefined,
+    });
+  });
+
+  test("GIVEN add with a Collection THEN the member is edited with the union of its roles", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(member(user, ["21", "20"]));
+    const target = await cachedMember(client);
+    const moderator = await cachedRole(client, "20");
+
+    const updated = await target.roles.add(new Collection([["20", moderator]]), "promoted");
+
+    expect(patch).toHaveBeenCalledWith(Routes.guildMember(guildId, userId), {
+      body: expect.objectContaining({ roles: ["21", "20"] }),
+      reason: "promoted",
+    });
+    expect(updated).toBeInstanceOf(GuildMember);
+    expect(updated.roleIds).toEqual(["21", "20"]);
+  });
+
+  test("GIVEN set and edit with Roles THEN their IDs are sent", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(member(user, ["20"]));
+    const target = await cachedMember(client);
+    const moderator = await cachedRole(client, "20");
+
+    await target.roles.set([moderator]);
+    await target.edit({ roles: new Collection([["20", moderator]]) });
+
+    expect(patch).toHaveBeenCalledTimes(2);
+    for (const call of patch.mock.calls) {
+      expect((call[1] as { body: { roles: string[] } }).body.roles).toEqual(["20"]);
+    }
+  });
+
+  test("GIVEN an invalid resolvable THEN InvalidType or InvalidElement is thrown", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const { roles } = await cachedMember(client);
+
+    await expect(roles.add(42 as never)).rejects.toMatchObject({
+      code: GatewayErrorCodes.InvalidType,
+      message:
+        "Supplied roles is not a Role, Snowflake or Array or Collection of Roles or Snowflakes.",
+    });
+    await expect(roles.remove(null as never)).rejects.toMatchObject({
+      code: GatewayErrorCodes.InvalidType,
+    });
+    await expect(roles.add(["20", 42 as never])).rejects.toMatchObject({
+      code: GatewayErrorCodes.InvalidElement,
+      message: "Supplied Array or Collection roles includes an invalid element: 42",
+    });
+    await expect(roles.set([{} as never])).rejects.toBeInstanceOf(TypeError);
+  });
+});
+
+describe("GuildEmojiRoleManager", () => {
+  const emoji = { id: "42", name: "howl", roles: ["21", "99"], guild_id: guildId };
+
+  test("GIVEN the default cache THEN cache is a Collection of the cached allowed roles", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const structure = await client.guilds.emojis(guildId)._add(emoji);
+
+    const { roles } = structure;
+    const cache = roles.cache as Collection<string, Role>;
+
+    expect(cache).toBeInstanceOf(Collection);
+    expect([...cache.keys()]).toEqual(["21"]);
+    expect(roles.emoji).toBe(structure);
+    expect(roles.guild?.id).toBe(guildId);
+    expect(roles.clone().emoji).toBe(structure);
+  });
+
+  test("GIVEN add, remove, and set with Roles and Collections THEN the emoji is edited with their IDs", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const patch = vi.spyOn(container.rest, "patch").mockImplementation(async (_route, options) => ({
+      ...emoji,
+      roles: (options!.body as { roles: string[] }).roles,
+    }));
+    const moderator = await cachedRole(client, "20");
+    const structure = await client.guilds.emojis(guildId)._add(emoji);
+
+    expect((await structure.roles.add(moderator)).roleIds).toEqual(["21", "99", "20"]);
+    expect((await structure.roles.remove(new Collection([["20", moderator]]))).roleIds).toEqual([
+      "21",
+      "99",
+    ]);
+    expect((await structure.roles.set([moderator, "21"])).roleIds).toEqual(["20", "21"]);
+    expect(patch).toHaveBeenCalledTimes(3);
+    await expect(structure.roles.add(42 as never)).rejects.toMatchObject({
+      code: GatewayErrorCodes.InvalidElement,
+    });
+  });
+});
+
+describe("UserManager direct messages", () => {
+  test("GIVEN a cached DM THEN createDM reuses it unless forced", async () => {
+    const client = createCollectionClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+
+    const first = await client.users.createDM(userId);
+    const second = await client.users.createDM(new User(user));
+    await new User(user).createDM(true);
+
+    expect(second).toBe(first);
+    expect(post).toHaveBeenCalledTimes(2);
+  });
+
+  test("GIVEN cache: false THEN the DM is not stored", async () => {
+    const client = createCollectionClient();
+    vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+
+    const channel = await client.users.createDM(userId, { cache: false });
+
+    expect(channel).toBeInstanceOf(DMChannel);
+    expect(client.users.dmChannel(userId)).toBeNull();
+  });
+
+  test("GIVEN dmChannel THEN it is the cached DM with the user, null without one", async () => {
+    const client = createCollectionClient();
+    vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+
+    expect(client.users.dmChannel(userId)).toBeNull();
+    const channel = await client.users.createDM(userId);
+
+    expect(client.users.dmChannel(userId)).toBe(channel);
+    expect(new User(user).dmChannel).toBe(channel);
+    expect(client.users.dmChannel(botId)).toBeNull();
+  });
+
+  test("GIVEN a raw in-memory store THEN the cached DM is found too", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+
+    await client.users.createDM(userId);
+    const channel = await client.users.createDM(userId);
+
+    expect(channel.id).toBe("90");
+    expect(post).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN deleteDM THEN the cached DM is closed, and it throws without one", async () => {
+    const client = createCollectionClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+    const remove = vi.spyOn(container.rest, "delete").mockResolvedValue(dm);
+
+    await expect(client.users.deleteDM(userId)).rejects.toMatchObject({
+      code: GatewayErrorCodes.UserNoDMChannel,
+    });
+    expect(post).not.toHaveBeenCalled();
+
+    await client.users.createDM(userId);
+    const closed = await new User(user).deleteDM();
+
+    expect(closed.id).toBe("90");
+    expect(post).toHaveBeenCalledOnce();
+    expect(remove).toHaveBeenCalledWith(Routes.channel("90"), expect.anything());
+    expect(client.users.dmChannel(userId)).toBeNull();
+  });
+
+  test.each([
+    ["no cache", () => createClient({ cache: null })],
+    ["an asynchronous store", createAsynchronousClient],
+  ])(
+    "GIVEN %s THEN createDM and deleteDM ask the API, as the DM cannot be searched",
+    async (_, create) => {
+      const client = create();
+      const post = vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+      const remove = vi.spyOn(container.rest, "delete").mockResolvedValue(dm);
+
+      await client.users.createDM(userId);
+      await client.users.createDM(userId);
+
+      expect(await client.users.dmChannel(userId)).toBeNull();
+      expect(post).toHaveBeenCalledTimes(2);
+      expect((await client.users.deleteDM(userId)).id).toBe("90");
+      expect(post).toHaveBeenCalledTimes(3);
+      expect(remove).toHaveBeenCalledOnce();
+    },
+  );
+
+  test("GIVEN a member, a thread member, or a message THEN they resolve to their user", async () => {
+    const client = createCollectionClient();
+    const get = vi.spyOn(container.rest, "get").mockResolvedValue(user);
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(dm);
+    const guildMember = new GuildMember({ ...member(user, []), guild_id: guildId });
+    const threadMember = new ThreadMember({
+      id: "70",
+      user_id: userId,
+      join_timestamp: "2024-01-01T00:00:00.000Z",
+      flags: 0,
+    });
+    const message = new Message({
+      id: "91",
+      channel_id: "90",
+      content: "hi",
+      author: user,
+      mentions: [],
+      mention_roles: [],
+    } as never);
+
+    for (const resolvable of [guildMember, threadMember, message, new User(user), userId]) {
+      expect(client.users.resolveId(resolvable)).toBe(userId);
+    }
+
+    expect((client.users.resolve(guildMember) as User).id).toBe(userId);
+    expect((client.users.resolve(message) as User).id).toBe(userId);
+    expect(client.users.resolve(userId)).toBeNull();
+    expect((await client.users.fetch(guildMember)).id).toBe(userId);
+    expect(get).toHaveBeenCalledWith(Routes.user(userId), expect.anything());
+    expect((await client.users.createDM(threadMember)).id).toBe("90");
+    expect(post).toHaveBeenCalledWith(Routes.userChannels(), { body: { recipient_id: userId } });
+    expect(() => client.users.dmChannel(new GuildMember({ roles: [] } as never))).toThrow(
+      TypeError,
+    );
   });
 });
