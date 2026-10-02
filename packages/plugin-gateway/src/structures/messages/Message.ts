@@ -485,12 +485,13 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * Whether the message is partial: built from its IDs alone for an event about an uncached message, see
-   * `Partials.Message`. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch} completes
-   * it.
+   * Whether the message is partial, like discord.js's `Message#partial`: it lacks its content or its author. That is
+   * a message built from its IDs alone for an event about an uncached message (see `Partials.Message`), or from an
+   * update that carried neither. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch}
+   * completes it.
    */
   public get partial(): boolean {
-    return this[kData].author === undefined;
+    return typeof this[kData].content !== "string" || this[kData].author === undefined;
   }
 
   /**
