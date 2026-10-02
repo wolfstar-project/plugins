@@ -866,7 +866,7 @@ export class GatewayClient extends Client {
       state = undefined;
     }
 
-    this.emit("dispatch", payload, shardId);
+    this.emit("dispatch", payload, shardId, state);
     await action?.handle(payload.d, state, shardId);
 
     if (this.clientReadyTimestamp === null) {

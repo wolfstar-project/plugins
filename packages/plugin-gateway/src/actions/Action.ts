@@ -102,4 +102,9 @@ export class ActionsManager {
   public get(event: GatewayDispatchPayload["t"]): Action | undefined {
     return this.#actions.get(event);
   }
+
+  /** The dispatch types that have an action. */
+  public types(): GatewayDispatchPayload["t"][] {
+    return [...this.#actions.keys()];
+  }
 }
