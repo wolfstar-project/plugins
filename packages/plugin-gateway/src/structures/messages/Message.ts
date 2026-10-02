@@ -516,22 +516,20 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * Whether the bot can edit the message: it is the author.
-   */
-  public async fetchEditable(): Promise<boolean> {
-    const client = this.client;
-    return this.author.id === (client.user?.id ?? client.id);
-  }
-
-  /**
    * Whether the bot can delete the message: it is the author, or it has `ManageMessages` in the guild.
+   *
+   * @deprecated Use {@link Message.deletable}. When the guild, the channel or the bot's member may be missing from the
+   * cache (a filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`), then read
+   * the getter.
    */
   public async fetchDeletable(): Promise<boolean> {
-    return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
+    return this.editable || this.hasPermission("ManageMessages");
   }
 
   /**
    * Whether the bot can bulk delete the message: it can delete it, and it is newer than 14 days.
+   *
+   * @deprecated Use {@link Message.bulkDeletable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchBulkDeletable(): Promise<boolean> {
     return (
@@ -542,6 +540,8 @@ export class Message extends BaseMessage<""> {
 
   /**
    * Whether the bot can pin the message: it is not a system message, and the bot has `PinMessages`.
+   *
+   * @deprecated Use {@link Message.pinnable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchPinnable(): Promise<boolean> {
     if (this.system) return false;
@@ -551,12 +551,14 @@ export class Message extends BaseMessage<""> {
   /**
    * Whether the bot can publish the message: it is in an announcement channel, not crossposted yet, and the bot
    * authored it or has `ManageMessages`.
+   *
+   * @deprecated Use {@link Message.crosspostable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchCrosspostable(): Promise<boolean> {
     if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) return false;
     const channel = await this.fetchChannel();
     if (channel.type !== ChannelType.GuildAnnouncement) return false;
-    return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
+    return this.editable || this.hasPermission("ManageMessages");
   }
 
   /**

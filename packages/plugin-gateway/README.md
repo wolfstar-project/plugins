@@ -696,14 +696,11 @@ await member.timeout(10 * 60_000, "spam");
 
 if (member.permissions.has("BanMembers")) await member.ban(); // read from the cache, like discord.js
 if (member.kickable) await member.kick();
-const permissions = await member.fetchPermissions(); // falls back to the API for what is not cached
-if (await member.fetchKickable()) await member.kick();
 
 const me = await client.members.me(guildId); // discord.js: guild.members.me, null when not cached
 const cached = await member.roles.cache; // a Collection of the cached roles, @everyone included
 const highest = await member.roles.highest; // read from the cache, like discord.js
-const fetched = await member.roles.fetchHighest(); // falls back to the API for uncached roles
-await fetched?.setColors({ primaryColor: 0xff0000 });
+await highest?.setColors({ primaryColor: 0xff0000 });
 
 await client.user?.setActivity("with wolves", { type: ActivityType.Competing });
 await client.users.send(member, "Welcome!"); // a user, a member, a message (its author), or an ID
@@ -719,9 +716,26 @@ discord.js's derived getters are there too: `member.permissions`, `permissionsIn
 `manageable`, `kickable`, `bannable`, `moderatable`, `displayColor`, `role.editable`,
 `message.deletable`, `channel.permissionsFor(member)`, ... They read the cache alone, never the API.
 With an entity they need missing from the cache they throw `GuildUncached`, `GuildUncachedMe`,
-`ChannelUncached`, or `GuildMemberUncached`, as discord.js throws `GuildUncachedMe`. Every one of
-them has a `fetch*` twin (`fetchPermissions()`, `fetchKickable()`, `fetchDeletable()`, ...) that
-asks the API for what is not cached.
+`ChannelUncached`, or `GuildMemberUncached`, as discord.js throws `GuildUncachedMe`.
+
+Each of them also has a `fetch*` twin (`fetchPermissions()`, `fetchKickable()`, `fetchDeletable()`,
+...) that asks the API for what is not cached. The twins are deprecated: the getter is the API, as
+in discord.js. They will be removed in a later release.
+
+When the cache may lack an entity (a size-limited or filtered cache, or a `plugin-broker` worker
+that only receives some dispatches), fetch what is missing yourself, then read the getter:
+
+```ts
+await client.guilds.fetch(guildId); // the guild
+const me = await client.members.fetchMe(guildId); // the bot's member
+await me.roles.fetch(); // and the roles it needs
+
+if (await member.kickable) await member.kick();
+```
+
+The entity fetches (`fetchGuild`, `fetchChannel`, `fetchMember`, `fetchMe`, `roles.fetch()`, ...)
+stay. So does `member.fetchPresence()`, which is not a twin of `member.presence`: the getter is
+`null` with an asynchronous cache.
 
 With an asynchronous store (Redis) the same getters answer a promise, still read from the cache
 alone, so `await` them. Declare the cache asynchronous once, and they are typed as promises:
@@ -751,7 +765,7 @@ only done on a synchronous cache that can enumerate its entries: with `cache: nu
 `client.roles` creates, edits, moves and deletes roles, and fetches all of a guild's roles or their
 member counts. Permissions are `PermissionsBitField`s, computed like Discord does: owner and
 administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
-apply through `member.permissionsIn(channel)` or `member.fetchPermissionsIn(channel)`, see below.
+apply through `member.permissionsIn(channel)`, see below.
 
 `client.members.request(guildId, options)` (or `guild.requestMembers(options)`, discord.js:
 `guild.members.fetch()`) asks the guild's shard for its members over the gateway instead of REST:
@@ -784,8 +798,6 @@ await channel.permissionOverwrites.edit(roleId, { SendMessages: true });
 
 channel.permissionsFor(member).has("SendMessages"); // read from the cache, like discord.js
 member.permissionsIn(channel).has("SendMessages");
-await channel.fetchPermissionsFor(member); // falls back to the API for what is not cached
-await member.fetchPermissionsIn(channel);
 ```
 
 Permissions are computed like Discord does: guild permissions, then the `@everyone` overwrite, the
@@ -907,8 +919,7 @@ const fetched = await client.fetchWebhook(webhookId, token); // no bot authoriza
 and `message.channel` read the cache, like every relation getter: `null` when the entity is not
 cached or the cache is asynchronous, in which case `fetchChannel`, `fetchGuild`, and
 `fetchReference` get it. `editable`, `deletable`, `bulkDeletable`, `pinnable`, and `crosspostable`
-are discord.js's getters (promises with an asynchronous cache, see above), with `fetchDeletable` &
-co. as the twins that fall back to the API. Text channels
+are discord.js's getters (promises with an asynchronous cache, see above). Text channels
 get `messages`, `send`, `sendTyping`, and `bulkDelete`.
 
 As in discord.js, `attachments`, `stickers`, `messageSnapshots`, and `reactions.cache` are

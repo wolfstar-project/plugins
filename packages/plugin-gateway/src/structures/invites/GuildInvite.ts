@@ -46,6 +46,10 @@ export class GuildInvite extends BaseInvite {
 
   /**
    * Whether the bot can delete the invite: it created it, or it has `ManageGuild` (or `ManageChannels`).
+   *
+   * @deprecated Use {@link GuildInvite.deletable}. When the guild or the bot's member may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`), then read the
+   * getter.
    */
   public async fetchDeletable(): Promise<boolean> {
     const client = this.client;
