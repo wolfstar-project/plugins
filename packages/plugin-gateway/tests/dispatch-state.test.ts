@@ -371,3 +371,77 @@ describe("state round trip", () => {
     expect(await producer.reviveDispatchState("TYPING_START", { a: 1 }, {})).toBeUndefined();
   });
 });
+
+describe("replayDispatch", () => {
+  test("GIVEN a replay THEN raw is emitted, the cache is not written, and dispatch is not emitted", async () => {
+    const { producer, worker } = createPair();
+    const calls = recordAll(worker);
+
+    await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0);
+
+    expect(calls.map(([event]) => event)).toEqual(["raw", "messageCreate"]);
+    expect(await producer.messages.get(channelId, message().id)).toBeUndefined();
+  });
+
+  test("GIVEN INTERACTION_CREATE or READY THEN only raw is emitted", async () => {
+    const { worker } = createPair();
+    const calls = recordAll(worker);
+
+    await worker.replayDispatch({ t: GatewayDispatchEvents.InteractionCreate, d: {} }, 0);
+    await worker.replayDispatch({ t: GatewayDispatchEvents.Ready, d: {} }, 0);
+
+    expect(calls.map(([event]) => event)).toEqual(["raw", "raw"]);
+  });
+
+  test("GIVEN a dispatch type with no action THEN it resolves", async () => {
+    const { worker } = createPair();
+    await expect(worker.replayDispatch({ t: "SOMETHING_NEW", d: {} }, 0)).resolves.toBeUndefined();
+  });
+
+  test("GIVEN a throwing listener THEN the replay rejects with its error", async () => {
+    const { worker } = createPair();
+    worker.on("messageCreate", () => {
+      throw new Error("boom");
+    });
+
+    await expect(
+      worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0),
+    ).rejects.toThrow("boom");
+
+    // The queue still runs the next replay of the guild.
+    const other = vi.fn();
+    worker.removeAllListeners("messageCreate");
+    worker.on("messageCreate", other);
+    await worker.replayDispatch(
+      { t: GatewayDispatchEvents.MessageCreate, d: message({ id: "2" }) },
+      0,
+    );
+    expect(other).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN replays of one guild THEN they run in the order they were called", async () => {
+    const { worker } = createPair();
+    const order: string[] = [];
+    // Listeners are not awaited, so the slow step has to be part of handling the dispatch itself.
+    const hydrate = worker.messages.hydrate.bind(worker.messages);
+    vi.spyOn(worker.messages, "hydrate").mockImplementation(async (data) => {
+      if (data.id === "1") await new Promise((resolve) => setTimeout(resolve, 20));
+      return hydrate(data);
+    });
+    worker.on("messageCreate", (created) => void order.push(created.id));
+
+    await Promise.all([
+      worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message({ id: "1" }) }, 0),
+      worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message({ id: "2" }) }, 0),
+    ]);
+
+    expect(order).toEqual(["1", "2"]);
+  });
+
+  test("GIVEN a worker THEN its replayable types are the handled ones, without READY", () => {
+    const { worker } = createPair();
+    expect(worker.replayDispatchTypes).toContain(GatewayDispatchEvents.MessageUpdate);
+    expect(worker.replayDispatchTypes).not.toContain(GatewayDispatchEvents.Ready);
+    expect(worker.replayDispatchTypes).not.toContain(GatewayDispatchEvents.InteractionCreate);
+  });
+});

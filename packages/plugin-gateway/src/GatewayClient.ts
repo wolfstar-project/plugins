@@ -858,6 +858,57 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * The dispatch types {@link GatewayClient.replayDispatch} turns into events.
+   */
+  public get replayDispatchTypes(): readonly string[] {
+    return this.actions.types().filter((type) => type !== GatewayDispatchEvents.Ready);
+  }
+
+  /**
+   * Handles a dispatch another process received and wrote to the shared cache: emits `raw`, then the matching
+   * {@link GatewayEventMap} event, exactly as {@link GatewayClient.handleDispatch} would for a dispatch of this
+   * client, but without reading or writing the cache and without emitting `dispatch`, so a worker that never
+   * connects to Discord sees the events of the gateway process's client.
+   *
+   * @remarks
+   * Dispatches of a guild are handled in the order they were replayed, like the ones of a connected client.
+   * `READY` and `INTERACTION_CREATE` are ignored.
+   *
+   * @param payload The dispatch type and data.
+   * @param shardId The ID of the shard that received it, on the process that did.
+   * @param state The previous state, revived with {@link GatewayClient.reviveDispatchState}.
+   * @returns A promise rejecting when a listener or the handler throws, so the caller can retry the dispatch.
+   */
+  public async replayDispatch(
+    payload: { t: string; d: unknown },
+    shardId: number,
+    state?: unknown,
+  ): Promise<void> {
+    const dispatch = payload as GatewayDispatchPayload;
+    const outcome: { failed: boolean; error?: unknown } = { failed: false };
+
+    // The queue never sees a rejection (its chain would break): the failure is carried out and rethrown below.
+    await this.#queue.enqueue(shardId, dispatchPartition(dispatch), async () => {
+      try {
+        this.emit("raw", dispatch, shardId);
+        if (
+          dispatch.t === GatewayDispatchEvents.InteractionCreate ||
+          dispatch.t === GatewayDispatchEvents.Ready
+        ) {
+          return;
+        }
+
+        await this.actions.get(dispatch.t)?.handle(dispatch.d, state, shardId);
+      } catch (error) {
+        outcome.failed = true;
+        outcome.error = error;
+      }
+    });
+
+    if (outcome.failed) throw outcome.error;
+  }
+
+  /**
    * Processes a gateway dispatch: emits it as `raw`, writes it into the cache, emits it as `dispatch`, and emits the
    * matching {@link GatewayEventMap} event, if any.
    *
