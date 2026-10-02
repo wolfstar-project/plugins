@@ -155,6 +155,10 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the member's highest role, `@everyone` when they have no other.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.highest}. When some of the member's roles may be missing from the
+   * cache (a filtered cache, a `plugin-broker` worker), call {@link GuildMemberRoleManager.fetch} first, then read the
+   * getter.
    */
   public async fetchHighest(): Promise<Role | null> {
     return pick.highest(await this.fetch());
@@ -162,6 +166,9 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the role the member is displayed under in the member list, if any.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.hoist}. See {@link GuildMemberRoleManager.fetchHighest} for the
+   * cache-miss fallback.
    */
   public async fetchHoist(): Promise<Role | null> {
     return pick.hoist(await this.fetch());
@@ -169,6 +176,9 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the highest role giving the member a color, if any.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.color}. See {@link GuildMemberRoleManager.fetchHighest} for the
+   * cache-miss fallback.
    */
   public async fetchColor(): Promise<Role | null> {
     return pick.color(await this.fetch());
@@ -176,6 +186,9 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the highest role giving the member an icon, if any.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.icon}. See {@link GuildMemberRoleManager.fetchHighest} for the
+   * cache-miss fallback.
    */
   public async fetchIcon(): Promise<Role | null> {
     return pick.icon(await this.fetch());
@@ -183,6 +196,9 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the server booster role, if the member has it.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.premiumSubscriberRole}. See
+   * {@link GuildMemberRoleManager.fetchHighest} for the cache-miss fallback.
    */
   public async fetchPremiumSubscriberRole(): Promise<Role | null> {
     return pick.premiumSubscriberRole(await this.fetch());
@@ -190,6 +206,9 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * Fetches the role Discord manages for the member, when the member is a bot.
+   *
+   * @deprecated Use {@link GuildMemberRoleManager.botRole}. See {@link GuildMemberRoleManager.fetchHighest} for the
+   * cache-miss fallback.
    */
   public async fetchBotRole(): Promise<Role | null> {
     return pick.botRole(await this.fetch(), this.member.id);

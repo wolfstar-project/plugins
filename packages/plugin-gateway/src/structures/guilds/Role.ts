@@ -123,6 +123,9 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * role overwrites applied. discord.js: `role.permissionsIn(channel)`.
    *
    * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   *
+   * @deprecated Use {@link Role.permissionsIn}. When the guild or the channel may be missing from the cache, fetch
+   * them first (`client.guilds.fetch(guildId)`, `client.channels.fetch(channelId)`), then call the method.
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this as unknown as Role);
@@ -224,6 +227,10 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
 
   /**
    * Whether the client's member can edit this role, i.e. it has `ManageRoles` and a higher role.
+   *
+   * @deprecated Use {@link Role.editable}. When the bot's member or its roles may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`, then
+   * `me.roles.fetch()`), then read the getter.
    */
   public async fetchEditable(): Promise<boolean> {
     if (this.managed) return false;

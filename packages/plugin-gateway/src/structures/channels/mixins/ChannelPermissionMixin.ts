@@ -132,6 +132,9 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Fetches whether the channel's overwrites are the same as its category's. `null` without a category.
+   *
+   * @deprecated Use {@link ChannelPermissionMixin.permissionsLocked}. When the category may be missing from the cache,
+   * fetch it first (`client.channels.fetch(channel.parentId)`), then read the getter.
    */
   public async fetchPermissionsLocked(): Promise<boolean | null> {
     const { parent_id: parentId } = this[kData] as Data;
@@ -161,6 +164,10 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
    * applied. discord.js: `channel.permissionsFor(memberOrRole)`.
    *
    * @param target A member, a role, or the ID of a member.
+   *
+   * @deprecated Use {@link ChannelPermissionMixin.permissionsFor}. When the guild or the member may be missing from the
+   * cache, fetch them first (`client.guilds.fetch(guildId)`, `client.members.fetch(guildId, userId)`), then call the
+   * method.
    */
   public async fetchPermissionsFor(
     target: GuildMember | Role | string,

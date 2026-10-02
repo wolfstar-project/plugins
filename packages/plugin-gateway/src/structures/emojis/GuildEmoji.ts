@@ -113,6 +113,10 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
 
   /**
    * Whether the bot can delete the emoji: it is not managed, and the bot has `ManageGuildExpressions`.
+   *
+   * @deprecated Use {@link GuildEmoji.deletable}. When the guild or the bot's member may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`), then read the
+   * getter.
    */
   public async fetchDeletable(): Promise<boolean> {
     if (this.managed) return false;

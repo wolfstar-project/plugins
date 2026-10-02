@@ -313,6 +313,10 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * Fetches the member's guild-wide permissions, before channel overwrites: {@link GuildMember.permissions} with the
    * guild and the roles fetched from the API when they are not cached, whatever the cache.
+   *
+   * @deprecated Use {@link GuildMember.permissions}. When the guild or some roles may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.guilds.fetch(guildId)`,
+   * `member.roles.fetch()`), then read the getter.
    */
   public async fetchPermissions(): Promise<Readonly<PermissionsBitField>> {
     const client = this.client;
@@ -332,6 +336,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * discord.js: `member.permissionsIn(channel)`.
    *
    * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   *
+   * @deprecated Use {@link GuildMember.permissionsIn}. See {@link GuildMember.fetchPermissions} for the cache-miss
+   * fallback; fetch the channel too (`client.channels.fetch(channelId)`).
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this);
@@ -383,6 +390,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * Gets the member's presence from the cache. discord.js: `member.presence`.
    *
+   * Not deprecated, unlike the other `fetch*` twins of getters: it is not a duplicate of {@link GuildMember.presence},
+   * which is `null` with an asynchronous cache, so this is how to read the presence there.
+   *
    * @returns The presence, or `null` when it is not cached (the bot needs the `GuildPresences` intent).
    */
   public async fetchPresence(): Promise<Presence | null> {
@@ -416,6 +426,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Fetches the color the member's name is displayed in, `0` when none of their roles has one.
+   *
+   * @deprecated Use {@link GuildMember.displayColor}. When some roles may be missing from the cache, fetch them first
+   * (`member.roles.fetch()`), then read the getter.
    */
   public async fetchDisplayColor(): Promise<number> {
     return (await this.roles.fetchColor())?.colors.primaryColor ?? 0;
@@ -423,6 +436,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Fetches the color the member's name is displayed in, as a `#rrggbb` string.
+   *
+   * @deprecated Use {@link GuildMember.displayHexColor}. See {@link GuildMember.fetchDisplayColor} for the cache-miss
+   * fallback.
    */
   public async fetchDisplayHexColor(): Promise<`#${string}`> {
     return `#${(await this.fetchDisplayColor()).toString(16).padStart(6, "0")}`;
@@ -454,6 +470,10 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * Fetches whether the bot ranks above the member: {@link GuildMember.manageable} with the guild, the bot's member,
    * and the roles fetched from the API when they are not cached, whatever the cache.
+   *
+   * @deprecated Use {@link GuildMember.manageable}. When the guild, the bot's member or some roles may be missing from
+   * the cache (a filtered cache, a `plugin-broker` worker), fetch them first (`client.guilds.fetch(guildId)`,
+   * `client.members.fetchMe(guildId)`, `member.roles.fetch()`), then read the getter.
    */
   public async fetchManageable(): Promise<boolean> {
     const client = this.client;
@@ -498,6 +518,8 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can kick the member: it outranks them and has `KickMembers`.
+   *
+   * @deprecated Use {@link GuildMember.kickable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchKickable(): Promise<boolean> {
     return this.managedWith("KickMembers");
@@ -505,6 +527,8 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can ban the member: it outranks them and has `BanMembers`.
+   *
+   * @deprecated Use {@link GuildMember.bannable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchBannable(): Promise<boolean> {
     return this.managedWith("BanMembers");
@@ -512,6 +536,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can time the member out: it outranks them, has `ModerateMembers`, and they are no administrator.
+   *
+   * @deprecated Use {@link GuildMember.moderatable}. See {@link GuildMember.fetchManageable} for the cache-miss
+   * fallback.
    */
   public async fetchModeratable(): Promise<boolean> {
     if (!(await this.managedWith("ModerateMembers"))) return false;

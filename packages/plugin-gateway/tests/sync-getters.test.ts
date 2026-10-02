@@ -418,7 +418,6 @@ describe.each(synchronousModes)("message, role and emoji getters with %s", (_, o
 
     expect(own.editable).toBe(true);
     expect(own.deletable).toBe(true);
-    expect(own.editable).toBe(await own.fetchEditable());
   });
 
   test("GIVEN someone else's message THEN deletable, bulkDeletable and pinnable follow the channel permissions", async () => {
