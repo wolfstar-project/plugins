@@ -102,7 +102,7 @@ describe("Partials", () => {
     expect(message!.guildId).toBe(guildId);
     expect(message!.client).toBe(client);
     expect(message!.embeds).toEqual([]);
-    expect(message!.attachments).toEqual([]);
+    expect(message!.attachments.size).toBe(0);
   });
 
   test("GIVEN Partials.Message THEN bulk deletes list cached and partial messages in order", async () => {

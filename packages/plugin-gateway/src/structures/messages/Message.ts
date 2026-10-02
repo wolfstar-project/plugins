@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
@@ -40,6 +41,7 @@ import { GuildMember } from "../guilds/GuildMember.js";
 import { MessageMentions, type MessageMentionsRelations } from "./MessageMentions.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import { Poll } from "../polls/Poll.js";
+import { Sticker } from "../stickers/Sticker.js";
 import type { EmojiIdentifierResolvable } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import {
@@ -186,8 +188,16 @@ export class Message extends BaseMessage<""> {
     return new MessageFlagsBitField(this[kData].flags ?? 0).freeze();
   }
 
-  public get attachments(): Attachment[] {
-    return (this[kData].attachments ?? []).map((attachment) => new Attachment(attachment));
+  /**
+   * The attachments of the message, by ID, like discord.js's `Message#attachments`.
+   */
+  public get attachments(): Collection<string, Attachment> {
+    return new Collection(
+      (this[kData].attachments ?? []).map((attachment) => [
+        attachment.id,
+        new Attachment(attachment),
+      ]),
+    );
   }
 
   public get embeds(): Embed[] {
@@ -203,10 +213,17 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The raw sticker items of the message; fetch a full sticker with `client.fetchSticker(id)`.
+   * The stickers of the message, by ID, like discord.js's `Message#stickers`: partial stickers carrying the ID, name,
+   * and format of the payload's sticker items. Fetch a full one with `client.fetchSticker(id)`.
    */
-  public get stickers() {
-    return this[kData].sticker_items ?? [];
+  public get stickers(): Collection<string, Sticker> {
+    const client = this[kClient];
+    return new Collection(
+      (this[kData].sticker_items ?? []).map((item) => {
+        const sticker = new Sticker(item as never);
+        return [item.id, client ? bindClient(sticker, client) : sticker];
+      }),
+    );
   }
 
   /**
@@ -259,23 +276,26 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The snapshots of the messages this one forwards, as messages carrying the IDs of the forwarded message, like
-   * discord.js's `Message#messageSnapshots`.
+   * The snapshots of the messages this one forwards, as a collection of messages carrying the IDs of the forwarded
+   * message, by that ID, like discord.js's `Message#messageSnapshots`.
    */
-  public get messageSnapshots(): Message[] {
+  public get messageSnapshots(): Collection<string, Message> {
+    const collection = new Collection<string, Message>();
     const snapshots = this[kData].message_snapshots;
-    if (!snapshots?.length) return [];
+    if (!snapshots?.length) return collection;
     const reference = this[kData].message_reference;
     const client = this[kClient];
-    return snapshots.map((snapshot) => {
+    for (const snapshot of snapshots) {
       const message = new Message({
         ...snapshot.message,
         id: reference?.message_id ?? this.id,
         channel_id: reference?.channel_id ?? this.channelId,
         guild_id: reference?.guild_id,
       } as CacheEntityTypes["messages"]);
-      return client ? bindClient(message, client) : message;
-    });
+      collection.set(message.id, client ? bindClient(message, client) : message);
+    }
+
+    return collection;
   }
 
   /**

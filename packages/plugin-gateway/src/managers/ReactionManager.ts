@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import type { APIReaction } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
@@ -48,20 +49,24 @@ export class ReactionManager extends BaseManager {
   }
 
   /**
-   * The reactions of the message.
+   * The reactions of the message, by emoji like discord.js's `ReactionManager#cache`: the ID of a custom emoji, the
+   * name of a Unicode one.
    */
-  public get cache(): MessageReaction[] {
-    return this.#reactions.map((reaction) =>
-      bindClient(
-        new MessageReaction(
-          { ...reaction, channel_id: this.channelId, message_id: this.messageId },
-          {
-            message: this.#message,
-            emoji: (reaction.emoji.id && this.#emojis?.get(reaction.emoji.id)) || null,
-          },
-        ),
-        this.client,
-      ),
+  public get cache(): Collection<string, MessageReaction> {
+    return new Collection(
+      this.#reactions.map((reaction) => {
+        const structure = bindClient(
+          new MessageReaction(
+            { ...reaction, channel_id: this.channelId, message_id: this.messageId },
+            {
+              message: this.#message,
+              emoji: (reaction.emoji.id && this.#emojis?.get(reaction.emoji.id)) || null,
+            },
+          ),
+          this.client,
+        );
+        return [structure.valueOf(), structure];
+      }),
     );
   }
 

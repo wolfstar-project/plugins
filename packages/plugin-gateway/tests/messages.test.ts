@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { container } from "@wolfstar/http-framework";
 import { createInMemoryCache, messageKey } from "@wolfstar/plugin-cache";
 import {
@@ -18,6 +19,7 @@ import {
   Message,
   MessageMentions,
   ReactionEmoji,
+  Sticker,
   type GatewayClientOptions,
   type TextChannel,
 } from "../src/index.js";
@@ -113,14 +115,77 @@ describe("Message", () => {
     } as never);
 
     expect(msg.flags.has(MessageFlags.SuppressEmbeds)).toBe(true);
-    expect(msg.attachments[0]).toBeInstanceOf(Attachment);
+    expect(msg.attachments.first()).toBeInstanceOf(Attachment);
     expect(msg.embeds[0]).toBeInstanceOf(Embed);
     expect(msg.embeds[0]!.hexColor).toBe("#ff0000");
-    expect(msg.reactions.cache).toHaveLength(1);
+    expect(msg.reactions.cache.size).toBe(1);
     expect(msg.reactions.resolve("🐺")?.count).toBe(2);
     expect(msg.poll?.answers[0]?.voteCount).toBe(3);
     expect(msg.system).toBe(false);
     expect(msg.url).toBe(`https://discord.com/channels/${guildId}/${channelId}/${msg.id}`);
+  });
+
+  test("GIVEN attachments, stickers and snapshots THEN they are Collections keyed by ID", () => {
+    createClient();
+    const msg = new Message(
+      message({
+        attachments: [
+          {
+            id: "1",
+            filename: "wolf.png",
+            size: 10,
+            url: "https://cdn.discordapp.com/wolf.png",
+            proxy_url: "https://media.discordapp.net/wolf.png",
+          },
+        ],
+        sticker_items: [{ id: "5", name: "howl", format_type: 1 }],
+        message_reference: {
+          type: MessageReferenceType.Forward,
+          channel_id: "200000000000000201",
+          message_id: "700000000000000702",
+        },
+        message_snapshots: [{ message: { content: "awoo" } as never }],
+      }) as never,
+    );
+
+    expect(msg.attachments).toBeInstanceOf(Collection);
+    expect(msg.attachments.get("1")).toBeInstanceOf(Attachment);
+    expect(msg.stickers).toBeInstanceOf(Collection);
+    expect(msg.stickers.get("5")).toBeInstanceOf(Sticker);
+    expect(msg.stickers.get("5")?.name).toBe("howl");
+    expect(msg.stickers.get("5")?.format).toBe(1);
+    expect(() => JSON.stringify(msg.stickers.get("5"))).not.toThrow();
+    expect(msg.messageSnapshots).toBeInstanceOf(Collection);
+    expect(msg.messageSnapshots.get("700000000000000702")?.content).toBe("awoo");
+  });
+
+  test("GIVEN no attachments or stickers THEN the Collections are empty", () => {
+    const msg = new Message({ id: "3", channel_id: channelId } as never);
+
+    expect(msg.attachments.size).toBe(0);
+    expect(msg.stickers.size).toBe(0);
+    expect(msg.messageSnapshots.size).toBe(0);
+  });
+
+  test("GIVEN a unicode and a custom reaction with the same name THEN reactions.cache keys them apart", () => {
+    const counts = {
+      count: 1,
+      count_details: { normal: 1, burst: 0 },
+      me: false,
+      me_burst: false,
+      burst_colors: [],
+    };
+    const msg = new Message(
+      message({
+        reactions: [
+          { ...counts, emoji: { id: null, name: "wolf" } },
+          { ...counts, emoji: { id: "123456789012345678", name: "wolf" } },
+        ],
+      }),
+    );
+
+    expect(msg.reactions.cache).toBeInstanceOf(Collection);
+    expect([...msg.reactions.cache.keys()]).toEqual(["wolf", "123456789012345678"]);
   });
 
   test("GIVEN mentions THEN MessageMentions resolves users, members, and channels", () => {

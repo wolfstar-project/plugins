@@ -244,7 +244,7 @@ describe("message thread, reactions, and poll", () => {
       }),
     );
 
-    const [custom, unicode] = resolved.reactions.cache;
+    const [custom, unicode] = resolved.reactions.cache.values();
 
     expect(custom!.message).toBe(resolved);
     expect(custom!.emoji).toBeInstanceOf(GuildEmoji);

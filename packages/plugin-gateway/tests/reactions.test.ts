@@ -157,7 +157,7 @@ describe("reaction events", () => {
     expect(emoji[0]![0].count).toBe(1);
     const [[message, removed]] = all;
     expect(removed.map((r) => r.emoji.name)).toEqual(["🐺"]);
-    expect(message?.reactions.cache).toEqual([]);
+    expect(message?.reactions.cache.size).toBe(0);
   });
 });
 
