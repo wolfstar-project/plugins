@@ -15,7 +15,7 @@ import {
   transformResolved,
 } from "../src/util/Util.js";
 import { withOwnReaction } from "../src/util/reactions.js";
-import { expectSync, readCached, requireCached, syncOnly } from "../src/util/cache.js";
+import { readCached, syncOnly } from "../src/util/cache.js";
 import { createAsyncCache } from "./fixtures/asyncCache.js";
 
 describe("resolveColor", () => {
@@ -326,32 +326,23 @@ describe("synchronous cache reads", () => {
     });
   }
 
-  test("GIVEN a synchronous cache THEN readCached and requireCached return the entry, undefined on a miss", async () => {
+  test("GIVEN a synchronous cache THEN readCached returns the entry, undefined on a miss", async () => {
     const client = createClient();
     await client.users._add(user as never);
 
     expect(readCached(client.users.cache, user.id)?.username).toBe("wolf");
     expect(readCached(client.users.cache, "1")).toBeUndefined();
-    expect(requireCached(client.users.cache, user.id, "users")?.username).toBe("wolf");
-    expect(requireCached(client.users.cache, "1", "users")).toBeUndefined();
   });
 
-  test("GIVEN an asynchronous cache THEN readCached misses and requireCached throws CacheAsynchronous", async () => {
+  test("GIVEN an asynchronous cache THEN readCached misses", async () => {
     const client = createClient(createAsyncCache());
     await client.users._add(user as never);
 
     expect(client.users.cache.synchronous).toBe(false);
     expect(readCached(client.users.cache, user.id)).toBeUndefined();
-    expect(() => requireCached(client.users.cache, user.id, "users")).toThrow(
-      expect.objectContaining({ code: "CacheAsynchronous" }),
-    );
   });
 
-  test("GIVEN a promise THEN expectSync throws CacheAsynchronous and swallows its rejection", async () => {
-    expect(expectSync(1, "users")).toBe(1);
-    expect(() => expectSync(Promise.reject(new Error("offline")), "users")).toThrow(
-      expect.objectContaining({ code: "CacheAsynchronous" }),
-    );
+  test("GIVEN a promise THEN syncOnly is undefined and swallows its rejection", async () => {
     expect(syncOnly(Promise.reject(new Error("offline")))).toBeUndefined();
     expect(syncOnly(2)).toBe(2);
     // An unhandled rejection would fail the run.

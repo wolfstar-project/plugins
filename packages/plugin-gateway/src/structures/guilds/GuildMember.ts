@@ -1,4 +1,12 @@
-import { cachedGuild, cachedPresence, cachedVoiceState, expectSync } from "../../util/cache.js";
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import {
+  cachedGuild,
+  cachedPresence,
+  cachedVoiceState,
+  cacheRead,
+  whenAll,
+  type CacheRead,
+} from "../../util/cache.js";
 import { DiscordAPIError, type ImageURLOptions } from "@discordjs/rest";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APICollectibles } from "discord-api-types/v10";
@@ -20,7 +28,7 @@ import {
 import {
   computeGuildPermissions,
   computePermissionsIn,
-  computePermissionsInSync,
+  computeCachedPermissionsIn,
   requireGuild,
   requireMe,
 } from "../../util/permissions.js";
@@ -53,8 +61,9 @@ export interface GuildMemberRelations {
  * A member of a Discord guild.
  *
  * @remarks
- * discord.js's `permissions`, `manageable`, `kickable`, ... are read from the cache like there, which needs a
- * synchronous one: with an asynchronous cache they throw, and their `fetch*` twins are the ones to use.
+ * discord.js's `permissions`, `manageable`, `kickable`, ... are read from the cache like there: the plain value
+ * with a synchronous cache, a promise of it with an asynchronous one, typed as a promise once `GatewayCacheConfig`
+ * declares the cache asynchronous. They never call the API; their `fetch*` twins do, for what is not cached.
  * `member.roles` reads roles through the (possibly asynchronous) cache, so its getters are `Awaitable`.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
@@ -285,19 +294,20 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * The member's guild-wide permissions, before channel overwrites, like discord.js's `GuildMember#permissions`:
    * computed from the cached guild and roles, skipping the roles that are not cached.
    *
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link GuildMember.fetchPermissions}), `GuildUncached` when the guild is not cached.
+   * @throws A `GatewayError`: `GuildUncached` when the guild is not cached.
    */
-  public get permissions(): Readonly<PermissionsBitField> {
-    const guild = requireGuild(this.client, this.guildId);
-    const roles = expectSync(this.roles.cache, "roles");
-    return computeGuildPermissions({
-      guildId: this.guildId,
-      ownerId: guild.ownerId,
-      userId: this.requireId(),
-      memberRoleIds: this.roleIds,
-      roles: roles.map((role) => role.toJSON()),
-    });
+  public get permissions(): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(
+      whenAll([requireGuild(this.client, this.guildId), this.roles.cache], ([guild, roles]) =>
+        computeGuildPermissions({
+          guildId: this.guildId,
+          ownerId: guild.ownerId,
+          userId: this.requireId(),
+          memberRoleIds: this.roleIds,
+          roles: roles.map((role) => role.toJSON()),
+        }),
+      ),
+    );
   }
 
   /**
@@ -332,11 +342,10 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * with the channel's overwrites applied, read from the cache.
    *
    * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link GuildMember.fetchPermissionsIn}), `ChannelUncached` or `GuildUncached` when they are not cached.
+   * @throws A `GatewayError`: `ChannelUncached` or `GuildUncached` when they are not cached.
    */
-  public permissionsIn(channel: AnyChannel | string): Readonly<PermissionsBitField> {
-    return computePermissionsInSync(channel, this);
+  public permissionsIn(channel: AnyChannel | string): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(computeCachedPermissionsIn(channel, this));
   }
 
   /**
@@ -387,20 +396,22 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * The color the member's name is displayed in, like discord.js's `GuildMember#displayColor`: the one of their
    * highest cached role that has a color, `0` when none has.
-   *
-   * @throws A `GatewayError` (`CacheAsynchronous`) with an asynchronous cache: use
-   * {@link GuildMember.fetchDisplayColor}.
    */
-  public get displayColor(): number {
-    return expectSync(this.roles.color, "roles")?.colors.primaryColor ?? 0;
+  public get displayColor(): CacheRead<number> {
+    return cacheRead(whenAll([this.roles.color], ([role]) => role?.colors.primaryColor ?? 0));
   }
 
   /**
    * The color the member's name is displayed in, as a `#rrggbb` string, like discord.js's
    * `GuildMember#displayHexColor`. It throws like {@link GuildMember.displayColor}.
    */
-  public get displayHexColor(): `#${string}` {
-    return `#${this.displayColor.toString(16).padStart(6, "0")}`;
+  public get displayHexColor(): CacheRead<`#${string}`> {
+    return cacheRead(
+      whenAll(
+        [this.displayColor],
+        ([color]) => `#${color.toString(16).padStart(6, "0")}` as `#${string}`,
+      ),
+    );
   }
 
   /**
@@ -421,18 +432,23 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Whether the bot ranks above the member, like discord.js's `GuildMember#manageable`: it is not the guild owner, not
    * the bot itself, and the bot's highest role is higher than theirs (or the bot owns the guild).
    *
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link GuildMember.fetchManageable}), `GuildUncached` or `GuildUncachedMe` when the guild or the bot's member is
+   * @throws A `GatewayError`: `GuildUncached` or `GuildUncachedMe` when the guild or the bot's member is
    * not cached.
    */
-  public get manageable(): boolean {
+  public get manageable(): CacheRead<boolean> {
     const client = this.client;
-    const guild = requireGuild(client, this.guildId);
-    const settled = this.settledByOwnership(guild.ownerId);
-    if (settled !== null) return settled;
+    return cacheRead(
+      whenAll([requireGuild(client, this.guildId)], ([guild]) => {
+        const settled = this.settledByOwnership(guild.ownerId);
+        if (settled !== null) return settled;
 
-    const me = requireMe(client, this.guildId);
-    return outranks(expectSync(me.roles.highest, "roles"), expectSync(this.roles.highest, "roles"));
+        return whenAll([requireMe(client, this.guildId)], ([me]) =>
+          whenAll([me.roles.highest, this.roles.highest], ([mine, theirs]) =>
+            outranks(mine, theirs),
+          ),
+        );
+      }),
+    );
   }
 
   /**
@@ -454,24 +470,30 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Whether the bot can kick the member, like discord.js's `GuildMember#kickable`: it outranks them and has
    * `KickMembers`. It throws like {@link GuildMember.manageable}.
    */
-  public get kickable(): boolean {
-    return this.managedWithSync("KickMembers");
+  public get kickable(): CacheRead<boolean> {
+    return cacheRead(this.managedWithCached("KickMembers"));
   }
 
   /**
    * Whether the bot can ban the member, like discord.js's `GuildMember#bannable`: it outranks them and has
    * `BanMembers`. It throws like {@link GuildMember.manageable}.
    */
-  public get bannable(): boolean {
-    return this.managedWithSync("BanMembers");
+  public get bannable(): CacheRead<boolean> {
+    return cacheRead(this.managedWithCached("BanMembers"));
   }
 
   /**
    * Whether the bot can time the member out, like discord.js's `GuildMember#moderatable`: it outranks them, has
    * `ModerateMembers`, and they are no administrator. It throws like {@link GuildMember.manageable}.
    */
-  public get moderatable(): boolean {
-    return this.managedWithSync("ModerateMembers") && !this.permissions.has("Administrator");
+  public get moderatable(): CacheRead<boolean> {
+    return cacheRead(
+      whenAll([this.managedWithCached("ModerateMembers")], ([managed]) =>
+        managed
+          ? whenAll([this.permissions], ([permissions]) => !permissions.has("Administrator"))
+          : false,
+      ),
+    );
   }
 
   /**
@@ -617,9 +639,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
     return meId === ownerId ? true : null;
   }
 
-  private managedWithSync(permission: "KickMembers" | "BanMembers" | "ModerateMembers") {
-    if (!this.manageable) return false;
-    return requireMe(this.client, this.guildId).permissions.has(permission);
+  // `managedWith` from the cache alone.
+  private managedWithCached(
+    permission: "KickMembers" | "BanMembers" | "ModerateMembers",
+  ): Awaitable<boolean> {
+    return whenAll([this.manageable], ([manageable]) =>
+      manageable
+        ? whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+            whenAll([me.permissions], ([permissions]) => permissions.has(permission)),
+          )
+        : false,
+    );
   }
 
   private async managedWith(permission: "KickMembers" | "BanMembers" | "ModerateMembers") {

@@ -1,3 +1,4 @@
+import { cacheRead, whenAll, type CacheRead } from "../../util/cache.js";
 import { requireMe } from "../../util/permissions.js";
 import { BaseInvite } from "./BaseInvite.js";
 import { InviteGuild } from "../guilds/InviteGuild.js";
@@ -26,16 +27,21 @@ export class GuildInvite extends BaseInvite {
    * Whether the bot can delete the invite, like discord.js's `GuildInvite#deletable`: it created it, or it has
    * `ManageGuild` (or `ManageChannels`).
    *
-   * @throws A `GatewayError` when the permissions are needed: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link GuildInvite.fetchDeletable}), `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   * @throws A `GatewayError` when the permissions are needed: `GuildUncachedMe` or `GuildUncached` on a cache miss.
    */
-  public get deletable(): boolean {
+  public get deletable(): CacheRead<boolean> {
     const client = this.client;
     const { guildId } = this;
-    if (!guildId) return false;
-    if (this.inviterId === (client.user?.id ?? client.id)) return true;
+    if (!guildId) return cacheRead(false);
+    if (this.inviterId === (client.user?.id ?? client.id)) return cacheRead(true);
 
-    return requireMe(client, guildId).permissions.any(["ManageGuild", "ManageChannels"]);
+    return cacheRead(
+      whenAll([requireMe(client, guildId)], ([me]) =>
+        whenAll([me.permissions], ([permissions]) =>
+          permissions.any(["ManageGuild", "ManageChannels"]),
+        ),
+      ),
+    );
   }
 
   /**

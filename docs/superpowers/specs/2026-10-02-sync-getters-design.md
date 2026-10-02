@@ -15,13 +15,18 @@ existing signature changes, and every `fetch*` method stays.
 
 ## Rule for an asynchronous cache
 
-Decided with the user:
+Decided with the user, in two rounds:
 
 - **Relation getters** (`T | null`) never throw: they return `null` when the cache is asynchronous.
-- **Derived getters** (`permissions`, `manageable`, `deletable`, …) return the plain value like discord.js, and
-  **throw** `GatewayError` `CacheAsynchronous` when a cache they need is asynchronous (Redis): the `fetch*` variant is
-  the one to use there. `Awaitable<T>` was rejected because discord.js code would not compile unchanged, `T | null`
-  because `if (member.kickable)` would silently read `null` as `false`.
+- **Derived getters** (`permissions`, `manageable`, `deletable`, …) return the plain value with a synchronous cache,
+  like discord.js, and a **promise** of it with an asynchronous one (Redis), read from the cache alone: no API call,
+  so `await member.permissions` works everywhere. The first round had them throw `CacheAsynchronous` there; that was
+  revised on review of the PR, to make them usable on Redis without the `fetch*` twins.
+- **Types** follow a declaration of the application, `GatewayCacheConfig`: empty by default, which types the getters
+  as `T` (`CacheRead<T>`); augmented with `asynchronous: true`, which types them as `Promise<T>`. A plain
+  `Awaitable<T>` was rejected because discord.js code would not compile unchanged with the default cache.
+  Known hazard, documented in the README and on the interface: an application with an asynchronous cache that does
+  not declare it reads `if (member.kickable)` as always true.
 
 ## Lazy relations
 
@@ -81,8 +86,7 @@ One synchronous twin, with discord.js's name, for every existing `fetch*` check:
 Behaviour:
 
 - They only read caches, never the API.
-- An asynchronous cache throws `CacheAsynchronous(entity)`. Its message becomes "The {entity} cache is asynchronous:
-  use the asynchronous variant (`fetch*` methods, or await `cache.get`)".
+- With an asynchronous cache they answer a promise; a missing entity rejects it with the codes below.
 - A needed entity missing from a synchronous cache throws, as discord.js does with `GuildUncachedMe`:
   - `GuildUncached(guildId)` — the guild (its owner ID is needed);
   - `GuildUncachedMe(guildId)` — the bot's own member;
@@ -99,15 +103,16 @@ The decision rules stay in one place. `util/permissions.ts` already has the pure
 `computeChannelPermissions`, `compareRolePositions`. The rest of each check is small: it is written once as a
 function taking a _reader_ and used by both variants where the rule is more than a line:
 
-- `expectSync(value, entity)` in `util/cache.ts`: returns an `Awaitable`'s value, or throws `CacheAsynchronous` when
-  it is a promise (after attaching a no-op `catch`, so nothing is left unhandled).
-- `requireCached(cache, key, entity)`: `expectSync` over `peekCache`, for the synchronous variants.
-- `computeTargetPermissionsSync` / `computePermissionsInSync` next to their asynchronous counterparts, sharing
+- Every getter is written once over `Awaitable`s with `whenAll`, which stays synchronous when no input is a promise:
+  the same code answers a value or a promise. `cacheRead(value)` types the result as `CacheRead<T>`.
+- `requireGuild` / `requireMe` (`util/permissions.ts`) read the guild and the bot's member, throwing `GuildUncached` /
+  `GuildUncachedMe`.
+- `computeCachedTargetPermissions` / `computeCachedPermissionsIn` next to their API-backed counterparts, sharing
   `computeChannelPermissions`.
-- `GuildMember`: private `outranks(guild, me, mine, theirs)` holding the manageable rule, called by `manageable` and
+- `GuildMember`: `settledByOwnership` and `outranks` hold the manageable rule, shared by `manageable` and
   `fetchManageable`.
 
-The synchronous variants read the bot's member with `client.members.me(guildId)` (already `Awaitable`), the member's
+The getters read the bot's member with `client.members.me(guildId)` (already `Awaitable`), the member's
 roles with `member.roles.cache` / `member.roles.highest` (already `Awaitable`), and guilds with `_getShallow`.
 
 ## Compatibility
@@ -118,11 +123,11 @@ getter that answered `null` for a hand-built structure may now answer the cached
 
 ## Testing
 
-- `util`: `readCached`, `expectSync`, `requireCached` on a synchronous cache, an asynchronous one, and a miss.
+- `util`: `readCached`, `syncOnly` on a synchronous cache, an asynchronous one, and a miss.
 - Relations: for each read of the table, a hand-built structure bound to a client finds the cached entity; with an
   asynchronous store it answers `null`; with no client constructed it answers `null` without throwing.
 - Derived getters, each in three conditions: default cache (the value, equal to its `fetch*`), asynchronous store
-  (`CacheAsynchronous`), missing entity (the dedicated code). Hierarchy cases for `manageable`: owner, self, bot is
+  (a promise resolving to the same value, without an API call), missing entity (the dedicated code). Hierarchy cases for `manageable`: owner, self, bot is
   owner, higher, lower, equal position.
 - Type-level consumption test: `member.permissions.has("BanMembers")`, `member.kickable`, `message.deletable`,
   `channel.permissionsFor(member).has(...)` compile without `await`.

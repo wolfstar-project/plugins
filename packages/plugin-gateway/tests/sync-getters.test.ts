@@ -7,7 +7,8 @@ import {
   type APIMessage,
   type APIUser,
 } from "discord-api-types/v10";
-import { describe, expect, test } from "vitest";
+import { container } from "@wolfstar/http-framework";
+import { describe, expect, test, vi } from "vitest";
 import {
   GatewayClient,
   PermissionsBitField,
@@ -76,6 +77,8 @@ function createClient(options: Pick<GatewayClientOptions, "cache"> = {}) {
     ...options,
   });
 }
+
+const bits = (permissions: { bitField: bigint }) => permissions.bitField;
 
 interface SeedOptions {
   guildOwner?: string;
@@ -198,8 +201,6 @@ function message(authorId: string, channel: string, extra: Partial<APIMessage> =
     ...extra,
   } as never;
 }
-
-const asynchronous = expect.objectContaining({ code: "CacheAsynchronous" });
 
 const synchronousModes = [
   ["the default cache of instances", () => ({})],
@@ -363,20 +364,49 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
 });
 
 describe("member getters with an asynchronous cache", () => {
-  test("GIVEN an asynchronous cache THEN the getters throw CacheAsynchronous and the fetch methods answer", async () => {
+  test("GIVEN an asynchronous cache THEN the getters are promises answering from the cache", async () => {
     const client = createClient({ cache: createAsyncCache() });
     await seed(client);
     const target = await memberOf(client, targetId);
+    const peer = await memberOf(client, peerId);
 
-    expect(() => target.permissions).toThrow(asynchronous);
-    expect(() => target.manageable).toThrow(asynchronous);
-    expect(() => target.kickable).toThrow(asynchronous);
-    expect(() => target.permissionsIn(channelId)).toThrow(asynchronous);
-    expect(() => target.displayColor).toThrow(asynchronous);
-    expect((await target.fetchPermissions()).has("ViewChannel")).toBe(true);
-    expect(await target.fetchManageable()).toBe(true);
-    // An unhandled rejection of an abandoned read would fail the run.
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(target.permissions).toBeInstanceOf(Promise);
+    expect(target.manageable).toBeInstanceOf(Promise);
+    expect((await target.permissions).has("ViewChannel")).toBe(true);
+    expect((await target.permissions).has("KickMembers")).toBe(false);
+    expect(await target.manageable).toBe(true);
+    expect(await peer.manageable).toBe(false);
+    expect(await target.kickable).toBe(true);
+    expect((await target.permissionsIn(channelId)).has("SendMessages")).toBe(false);
+    expect((await target.permissionsIn(threadId)).has("ViewChannel")).toBe(true);
+    expect(await peer.displayColor).toBe(0xff_00_00);
+    expect(await peer.displayHexColor).toBe("#ff0000");
+    expect((await target.permissions).bitField).toBe((await target.fetchPermissions()).bitField);
+  });
+
+  test("GIVEN an asynchronous cache THEN the getters never call the API", async () => {
+    const client = createClient({ cache: createAsyncCache() });
+    await seed(client);
+    const target = await memberOf(client, targetId);
+    const get = vi.spyOn(container.rest, "get").mockRejectedValue(new Error("no API"));
+
+    await target.permissions;
+    await target.kickable;
+    await target.permissionsIn(channelId);
+
+    expect(get).not.toHaveBeenCalled();
+    get.mockRestore();
+  });
+
+  test("GIVEN an asynchronous cache missing an entity THEN the getters reject with the dedicated code", async () => {
+    const client = createClient({ cache: createAsyncCache() });
+    await seed(client, { withBot: false });
+    const target = await memberOf(client, targetId);
+
+    await expect(target.manageable).rejects.toMatchObject({ code: "GuildUncachedMe" });
+    await expect(target.permissionsIn("200000000000000099")).rejects.toMatchObject({
+      code: "ChannelUncached",
+    });
   });
 });
 
@@ -495,24 +525,26 @@ describe.each(synchronousModes)("message, role and emoji getters with %s", (_, o
 });
 
 describe("message getters with an asynchronous cache", () => {
-  test("GIVEN an asynchronous cache THEN deletable throws CacheAsynchronous for someone else's guild message", async () => {
+  test("GIVEN an asynchronous cache THEN the message checks answer from the cache once awaited", async () => {
     const client = createClient({ cache: createAsyncCache() });
     await seed(client);
     const theirs = await client.messages._build(message(targetId, moderatedChannelId));
+    const plain = await client.messages._build(message(targetId, channelId));
     const own = await client.messages._build(message(botId, moderatedChannelId));
 
-    expect(() => theirs.deletable).toThrow(asynchronous);
-    expect(() => theirs.pinnable).toThrow(asynchronous);
+    expect(theirs.deletable).toBeInstanceOf(Promise);
+    expect(await theirs.deletable).toBe(true);
+    expect(await theirs.pinnable).toBe(true);
+    expect(await theirs.bulkDeletable).toBe(true);
+    expect(await plain.deletable).toBe(false);
     // The author check needs no cache.
     expect(own.editable).toBe(true);
-    expect(own.deletable).toBe(true);
-    expect(await theirs.fetchDeletable()).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(await own.deletable).toBe(true);
   });
 });
 
 describe("every derived getter with an asynchronous cache", () => {
-  test("GIVEN an asynchronous cache THEN each getter needing the cache throws CacheAsynchronous", async () => {
+  test("GIVEN an asynchronous cache THEN each getter resolves to what its fetch twin answers", async () => {
     const client = createClient({ cache: createAsyncCache() });
     await seed(client);
     const target = await memberOf(client, targetId);
@@ -526,24 +558,40 @@ describe("every derived getter with an asynchronous cache", () => {
       .invites(guildId)
       ._build({ code: "abc", guild_id: guildId, inviter: user(targetId) } as never);
 
-    const getters: [string, () => unknown][] = [
-      ["member.bannable", () => target.bannable],
-      ["member.moderatable", () => target.moderatable],
-      ["member.displayHexColor", () => target.displayHexColor],
-      ["channel.permissionsFor(member)", () => channel.permissionsFor(target)],
-      ["channel.permissionsFor(id)", () => channel.permissionsFor(targetId)],
-      ["channel.permissionsFor(role)", () => channel.permissionsFor(low)],
-      ["role.editable", () => low.editable],
-      ["role.permissionsIn", () => low.permissionsIn(channelId)],
-      ["message.bulkDeletable", () => theirs.bulkDeletable],
-      ["message.crosspostable", () => theirs.crosspostable],
-      ["emoji.deletable", () => emoji.deletable],
-      ["invite.deletable", () => invite.deletable],
+    const getters: [string, () => unknown, () => Promise<unknown>][] = [
+      ["member.bannable", () => target.bannable, () => target.fetchBannable()],
+      ["member.moderatable", () => target.moderatable, () => target.fetchModeratable()],
+      ["member.displayHexColor", () => target.displayHexColor, () => target.fetchDisplayHexColor()],
+      [
+        "channel.permissionsFor(member)",
+        async () => bits(await channel.permissionsFor(target)),
+        async () => bits(await channel.fetchPermissionsFor(target)),
+      ],
+      [
+        "channel.permissionsFor(id)",
+        async () => bits(await channel.permissionsFor(targetId)),
+        async () => bits(await channel.fetchPermissionsFor(targetId)),
+      ],
+      [
+        "channel.permissionsFor(role)",
+        async () => bits(await channel.permissionsFor(low)),
+        async () => bits(await channel.fetchPermissionsFor(low)),
+      ],
+      ["role.editable", () => low.editable, () => low.fetchEditable()],
+      [
+        "role.permissionsIn",
+        async () => bits(await low.permissionsIn(channelId)),
+        async () => bits(await low.fetchPermissionsIn(channelId)),
+      ],
+      ["message.bulkDeletable", () => theirs.bulkDeletable, () => theirs.fetchBulkDeletable()],
+      ["message.crosspostable", () => theirs.crosspostable, () => theirs.fetchCrosspostable()],
+      ["emoji.deletable", () => emoji.deletable, () => emoji.fetchDeletable()],
+      ["invite.deletable", () => invite.deletable, () => invite.fetchDeletable()],
     ];
-    for (const [name, read] of getters) {
-      expect(read, name).toThrow(asynchronous);
+    for (const [name, read, twin] of getters) {
+      const value = read();
+      expect(value, name).toBeInstanceOf(Promise);
+      expect(await value, name).toEqual(await twin());
     }
-
-    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

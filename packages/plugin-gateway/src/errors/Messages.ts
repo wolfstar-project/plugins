@@ -24,7 +24,7 @@ export const GatewayErrorMessages = {
   SessionStoreTimeout: (timeout: number) => `Timed out after ${timeout}ms`,
 
   CacheAsynchronous: (entity: string) =>
-    `The ${entity} cache is asynchronous: use the asynchronous variant (the fetch* methods, or await cache.get)`,
+    `The ${entity} cache is asynchronous, await cache.get instead`,
   CacheConstructorAsynchronous: (entity: string) =>
     `The ${entity} structures resolve relations from an asynchronous cache, which a cache of instances cannot await`,
   CacheNotIterable: (entity: string) =>

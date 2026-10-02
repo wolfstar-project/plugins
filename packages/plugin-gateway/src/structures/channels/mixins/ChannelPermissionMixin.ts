@@ -1,14 +1,14 @@
 import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import { kData, kPatch, lazyRelation } from "../../Structure.js";
-import { cachedChannel } from "../../../util/cache.js";
+import { cachedChannel, cacheRead, type CacheRead } from "../../../util/cache.js";
 import type { APIOverwrite } from "discord-api-types/v10";
 import type { SetPositionOptions } from "../../../managers/GuildChannelManager.js";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
 import {
   computeTargetPermissions,
-  computeTargetPermissionsSync,
+  computeCachedTargetPermissions,
 } from "../../../util/permissions.js";
 import type { PermissionsBitField } from "../../../util/PermissionsBitField.js";
 import type { GuildMember } from "../../guilds/GuildMember.js";
@@ -146,13 +146,14 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
    * permissions with the channel's overwrites applied, read from the cache.
    *
    * @param target A member, a role, or the ID of a cached member.
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link ChannelPermissionMixin.fetchPermissionsFor}), `GuildMemberUncached` or `GuildUncached` on a miss.
+   * @throws A `GatewayError`: `GuildMemberUncached` or `GuildUncached` on a miss.
    */
-  public permissionsFor(target: GuildMember | Role | string): Readonly<PermissionsBitField> {
+  public permissionsFor(
+    target: GuildMember | Role | string,
+  ): CacheRead<Readonly<PermissionsBitField>> {
     const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
     if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
-    return computeTargetPermissionsSync(guildId, overwrites, target, this.client);
+    return cacheRead(computeCachedTargetPermissions(guildId, overwrites, target, this.client));
   }
 
   /**

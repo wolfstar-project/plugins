@@ -1,4 +1,4 @@
-import { cachedGuild, expectSync } from "../../util/cache.js";
+import { cachedGuild, cacheRead, whenAll, type CacheRead } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -12,7 +12,7 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import {
   compareRolePositions,
   computePermissionsIn,
-  computePermissionsInSync,
+  computeCachedPermissionsIn,
   requireMe,
 } from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
@@ -133,11 +133,10 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * with the channel's `@everyone` and role overwrites applied, read from the cache.
    *
    * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use {@link Role.fetchPermissionsIn}),
-   * `ChannelUncached` when the channel is not cached.
+   * @throws A `GatewayError`: `ChannelUncached` when the channel is not cached.
    */
-  public permissionsIn(channel: AnyChannel | string): Readonly<PermissionsBitField> {
-    return computePermissionsInSync(channel, this as unknown as Role);
+  public permissionsIn(channel: AnyChannel | string): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(computeCachedPermissionsIn(channel, this as unknown as Role));
   }
 
   public get hoist() {
@@ -204,17 +203,23 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * Whether the bot can edit this role, like discord.js's `Role#editable`: the role is not managed, and the bot has
    * `ManageRoles` and a higher role.
    *
-   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use {@link Role.fetchEditable}),
-   * `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   * @throws A `GatewayError`: `GuildUncachedMe` or `GuildUncached` on a cache miss.
    */
-  public get editable(): boolean {
-    if (this.managed) return false;
+  public get editable(): CacheRead<boolean> {
+    if (this.managed) return cacheRead(false);
 
-    const me = requireMe(this.client, this.guildId);
-    if (!me.permissions.has("ManageRoles")) return false;
-
-    const highest = expectSync(me.roles.highest, "roles");
-    return highest !== null && highest.comparePositionTo(this) > 0;
+    return cacheRead(
+      whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+        whenAll([me.permissions], ([permissions]) =>
+          permissions.has("ManageRoles")
+            ? whenAll(
+                [me.roles.highest],
+                ([highest]) => highest !== null && highest.comparePositionTo(this) > 0,
+              )
+            : false,
+        ),
+      ),
+    );
   }
 
   /**

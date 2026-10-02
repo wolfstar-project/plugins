@@ -1,6 +1,14 @@
 // Type-level test, checked by the root `typecheck` script through `tsconfig.consumption.json`: the derived getters of
 // discord.js are synchronous here too.
-import type { GuildEmoji, GuildMember, Message, Role, TextChannel } from "../../src/index.js";
+import type {
+  CacheRead,
+  CacheReadOf,
+  GuildEmoji,
+  GuildMember,
+  Message,
+  Role,
+  TextChannel,
+} from "../../src/index.js";
 
 declare const member: GuildMember;
 declare const message: Message;
@@ -30,3 +38,10 @@ export const roleInChannel: boolean = role.permissionsIn(channel).has("ViewChann
 export const forMember: boolean = channel.permissionsFor(member).has("ViewChannel");
 export const emojiDeletable: boolean = emoji.deletable;
 export const guildName: string | undefined = message.guild?.name;
+
+// Without a `GatewayCacheConfig` augmentation the getters are plain values; with `asynchronous: true` they are
+// promises, which is what they answer at runtime with an asynchronous cache.
+export const plain: CacheRead<boolean> = true;
+export const declared: CacheReadOf<{ asynchronous: true }, boolean> = Promise.resolve(true);
+// @ts-expect-error A cache declared asynchronous does not hand out plain values.
+export const notPlain: CacheReadOf<{ asynchronous: true }, boolean> = true;

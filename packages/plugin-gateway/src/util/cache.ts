@@ -1,7 +1,6 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
-import { GatewayError } from "../errors/GatewayError.js";
 import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
 /**
@@ -274,20 +273,6 @@ export function syncOnly<T>(value: Awaitable<T>): T | undefined {
 }
 
 /**
- * Gets the value of an {@link Awaitable} a synchronous getter depends on.
- *
- * @param value The value, or a promise of it.
- * @param entity The name of the entity it was read from, for the error.
- * @throws A `GatewayError` (`CacheAsynchronous`) when the value is a promise.
- * @internal
- */
-export function expectSync<T>(value: Awaitable<T>, entity: string): T {
-  if (!isPromiseLike(value)) return value;
-  value.then(undefined, () => {});
-  throw new GatewayError("CacheAsynchronous", entity);
-}
-
-/**
  * Reads an entry of a {@link Cache} for a relation getter: as the cache holds it, see {@link peekCache}.
  *
  * @param cache The cache.
@@ -306,25 +291,6 @@ export function readCached<Value extends StructureMixin<object>>(
     // A failing store is a miss for a getter; the store reported the failure through `cacheError` already.
     return undefined;
   }
-}
-
-/**
- * Reads an entry of a {@link Cache} for a synchronous getter that cannot answer without it.
- *
- * @param cache The cache.
- * @param key The key of the entry.
- * @param entity The name of the entity, for the error.
- * @returns The entry, or `undefined` when it is not cached.
- * @throws A `GatewayError` (`CacheAsynchronous`) when the cache is asynchronous.
- * @internal
- */
-export function requireCached<Value extends StructureMixin<object>>(
-  cache: Cache<Value>,
-  key: string,
-  entity: string,
-): Value | undefined {
-  if (!cache.synchronous) throw new GatewayError("CacheAsynchronous", entity);
-  return expectSync(peekCache(cache, key), entity);
 }
 
 type MaybeId = string | null | undefined;
@@ -392,4 +358,49 @@ export function cachedPresence(client: GatewayClient, guildId: MaybeId, userId: 
   return guildId && userId
     ? readCached(presences.cache, presences.resolveKey(guildId, userId))
     : undefined;
+}
+
+/**
+ * How the cache of the application answers, for the types of the getters reading it. Empty by default: the cache is
+ * synchronous (the default `CollectionCache`, or synchronous `@wolfstar/plugin-cache` stores), and the getters are
+ * typed as their plain value, like discord.js's.
+ *
+ * @remarks
+ * An application whose cache is asynchronous (a Redis store) declares it once, which types every such getter as a
+ * promise, the way it answers at runtime with that cache:
+ *
+ * ```typescript
+ * declare module "@wolfstar/plugin-gateway" {
+ *   interface GatewayCacheConfig {
+ *     asynchronous: true;
+ *   }
+ * }
+ *
+ * if (await member.kickable) await member.kick();
+ * ```
+ *
+ * Without the declaration the types still say `boolean` while the getter answers a promise, which is always truthy:
+ * declare it whenever a store is asynchronous.
+ */
+// eslint-disable-next-line typescript/no-empty-object-type, typescript/no-empty-interface -- augmented by applications
+export interface GatewayCacheConfig {}
+
+/**
+ * {@link CacheRead} for a given configuration.
+ */
+export type CacheReadOf<Config, T> = Config extends { asynchronous: true } ? Promise<T> : T;
+
+/**
+ * What a getter computed from the cache answers: the value itself with a synchronous cache, a promise of it with an
+ * asynchronous one. Its type follows {@link GatewayCacheConfig}; `await` works with both.
+ */
+export type CacheRead<T> = CacheReadOf<GatewayCacheConfig, T>;
+
+/**
+ * Types what a getter computed from the cache as a {@link CacheRead}.
+ *
+ * @internal
+ */
+export function cacheRead<T>(value: Awaitable<T>): CacheRead<T> {
+  return value as CacheRead<T>;
 }

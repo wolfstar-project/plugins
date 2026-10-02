@@ -1,4 +1,12 @@
-import { cachedChannel, cachedGuild, requireCached } from "../../util/cache.js";
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import {
+  cachedChannel,
+  cachedGuild,
+  cacheRead,
+  peekCache,
+  whenAll,
+  type CacheRead,
+} from "../../util/cache.js";
 import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -105,8 +113,9 @@ export interface Message extends StructureMixin<CacheEntityTypes["messages"], Me
  * @remarks
  * What discord.js reads synchronously from its cache is read the same way here with a synchronous cache: `guild`,
  * `channel`, and the `editable`, `deletable`, ... permission checks, which apply the channel's overwrites. With an
- * asynchronous cache the relation getters are `null` and the checks throw: `fetchChannel()`, `fetchGuild()`,
- * `fetchReference()`, and the `fetch*able()` twins work with any cache.
+ * asynchronous cache the relation getters are `null` (use `fetchChannel()`, `fetchGuild()`, `fetchReference()`), and
+ * the checks answer a promise read from the cache, typed as one once `GatewayCacheConfig` declares the cache
+ * asynchronous. The `fetch*able()` twins also ask the API for what is not cached.
  */
 export class Message extends BaseMessage<""> {
   /**
@@ -458,21 +467,20 @@ export class Message extends BaseMessage<""> {
    * Whether the bot can delete the message, like discord.js's `Message#deletable`: it is the author, or it has
    * `ManageMessages` in the channel.
    *
-   * @throws A `GatewayError` when the permissions are needed: `CacheAsynchronous` with an asynchronous cache (use
-   * {@link Message.fetchDeletable}), `GuildUncachedMe`, `GuildUncached` or `ChannelUncached` on a cache miss.
+   * @throws A `GatewayError` when the permissions are needed: `GuildUncachedMe`, `GuildUncached` or `ChannelUncached` on a cache miss.
    */
-  public get deletable(): boolean {
-    return this.editable || this.hasPermissionSync("ManageMessages");
+  public get deletable(): CacheRead<boolean> {
+    return cacheRead(this.editable || this.hasCachedPermission("ManageMessages"));
   }
 
   /**
    * Whether the bot can bulk delete the message, like discord.js's `Message#bulkDeletable`: it is newer than 14 days,
    * and the bot has `ManageMessages`. It throws like {@link Message.deletable}.
    */
-  public get bulkDeletable(): boolean {
-    return (
+  public get bulkDeletable(): CacheRead<boolean> {
+    return cacheRead(
       Date.now() - this.createdTimestamp < 14 * 24 * 60 * 60 * 1000 &&
-      this.hasPermissionSync("ManageMessages")
+        this.hasCachedPermission("ManageMessages"),
     );
   }
 
@@ -480,9 +488,9 @@ export class Message extends BaseMessage<""> {
    * Whether the bot can pin the message, like discord.js's `Message#pinnable`: it is not a system message, and the
    * bot has `PinMessages`. It throws like {@link Message.deletable}.
    */
-  public get pinnable(): boolean {
-    if (this.system) return false;
-    return !this.inGuild() || this.hasPermissionSync("PinMessages");
+  public get pinnable(): CacheRead<boolean> {
+    if (this.system) return cacheRead(false);
+    return cacheRead(!this.inGuild() || this.hasCachedPermission("PinMessages"));
   }
 
   /**
@@ -490,15 +498,21 @@ export class Message extends BaseMessage<""> {
    * channel, not crossposted yet, and the bot authored it or has `ManageMessages`. It throws like
    * {@link Message.deletable}.
    */
-  public get crosspostable(): boolean {
-    if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) return false;
-    // Not the `channel` getter: an asynchronous cache has to throw here, not look like a miss.
-    const channel =
-      this[kRelations].channel ??
-      requireCached(this.client.channels.cache, this.channelId, "channels");
-    if (!channel) throw new GatewayError("ChannelUncached", this.channelId);
-    if (channel.type !== ChannelType.GuildAnnouncement) return false;
-    return this.editable || this.hasPermissionSync("ManageMessages");
+  public get crosspostable(): CacheRead<boolean> {
+    if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) {
+      return cacheRead(false);
+    }
+
+    // Not the `channel` getter, which is `null` with an asynchronous cache.
+    const cached =
+      this[kRelations].channel ?? peekCache(this.client.channels.cache, this.channelId);
+    return cacheRead(
+      whenAll([cached], ([channel]) => {
+        if (!channel) throw new GatewayError("ChannelUncached", this.channelId);
+        if (channel.type !== ChannelType.GuildAnnouncement) return false;
+        return this.editable || this.hasCachedPermission("ManageMessages");
+      }),
+    );
   }
 
   /**
@@ -701,10 +715,12 @@ export class Message extends BaseMessage<""> {
   }
 
   // `hasPermission` from the cache alone.
-  private hasPermissionSync(permission: PermissionsString): boolean {
+  private hasCachedPermission(permission: PermissionsString): Awaitable<boolean> {
     const { guildId } = this;
     if (!guildId) return false;
-    return requireMe(this.client, guildId).permissionsIn(this.channelId).has(permission);
+    return whenAll([requireMe(this.client, guildId)], ([me]) =>
+      whenAll([me.permissionsIn(this.channelId)], ([permissions]) => permissions.has(permission)),
+    );
   }
 
   // The bot's permissions in the message's channel, overwrites included.
