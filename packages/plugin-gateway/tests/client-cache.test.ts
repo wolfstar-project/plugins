@@ -585,8 +585,10 @@ describe("relations read from other stores", () => {
     const cached = await client.members.cache.get(key);
 
     expect(cached?.user?.id).toBe(user.id);
-    expect(cached?.voice).toBeNull();
     expect(cacheErrors).toEqual([[error, { entity: "voiceStates", key, operation: "get" }]]);
+    // The getter reads the failing store again: a miss, reported like the first one, never a throw.
+    expect(cached?.voice).toBeNull();
+    expect(cacheErrors).toHaveLength(2);
   });
 
   test("GIVEN a failing relation store and cacheErrors throw THEN the read throws", async () => {

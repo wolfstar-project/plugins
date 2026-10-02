@@ -1,4 +1,5 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
+import type { GatewayClient } from "../GatewayClient.js";
 import { GatewayError } from "../errors/GatewayError.js";
 import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
@@ -297,7 +298,13 @@ export function readCached<Value extends StructureMixin<object>>(
   cache: Cache<Value>,
   key: string,
 ): Value | undefined {
-  return cache.synchronous ? syncOnly(peekCache(cache, key)) : undefined;
+  if (!cache.synchronous) return undefined;
+  try {
+    return syncOnly(peekCache(cache, key));
+  } catch {
+    // A failing store is a miss for a getter; the store reported the failure through `cacheError` already.
+    return undefined;
+  }
 }
 
 /**
@@ -317,4 +324,68 @@ export function requireCached<Value extends StructureMixin<object>>(
 ): Value | undefined {
   if (!cache.synchronous) throw new GatewayError("CacheAsynchronous", entity);
   return expectSync(peekCache(cache, key), entity);
+}
+
+type MaybeId = string | null | undefined;
+
+// The readers of the relation getters, see `StructureMixin#lazyRelation`: each answers `undefined` when the ID is
+// missing, the entity is not cached, or its cache is asynchronous.
+
+/** @internal */
+export function cachedGuild(client: GatewayClient, guildId: MaybeId) {
+  // Shallow: a structure resolving its guild should not make the guild resolve its channels.
+  if (!guildId) return undefined;
+  try {
+    return syncOnly(client.guilds._getShallow(guildId));
+  } catch {
+    return undefined;
+  }
+}
+
+/** @internal */
+export function cachedChannel(client: GatewayClient, channelId: MaybeId) {
+  return channelId ? readCached(client.channels.cache, channelId) : undefined;
+}
+
+/** @internal */
+export function cachedUser(client: GatewayClient, userId: MaybeId) {
+  return userId ? readCached(client.users.cache, userId) : undefined;
+}
+
+/** @internal */
+export function cachedMember(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { members } = client;
+  return guildId && userId
+    ? readCached(members.cache, members.resolveKey(guildId, userId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedRole(client: GatewayClient, guildId: MaybeId, roleId: MaybeId) {
+  const { roles } = client;
+  return guildId && roleId ? readCached(roles.cache, roles.resolveKey(guildId, roleId)) : undefined;
+}
+
+/** @internal */
+export function cachedMessage(client: GatewayClient, channelId: MaybeId, messageId: MaybeId) {
+  const { messages } = client;
+  return channelId && messageId
+    ? readCached(messages.cache, messages.resolveKey(channelId, messageId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedVoiceState(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { voiceStates } = client;
+  return guildId && userId
+    ? readCached(voiceStates.cache, voiceStates.resolveKey(guildId, userId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedPresence(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { presences } = client;
+  return guildId && userId
+    ? readCached(presences.cache, presences.resolveKey(guildId, userId))
+    : undefined;
 }

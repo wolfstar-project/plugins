@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -11,7 +12,7 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
-import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
+import { kData, kPatch, type kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 
 /**
  * The colors of a role: `primaryColor` alone for a solid color, with `secondaryColor` for a gradient, and with
@@ -63,11 +64,11 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the role was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

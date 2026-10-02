@@ -1,3 +1,4 @@
+import { cachedChannel, cachedMessage } from "../../util/cache.js";
 import { Poll as BasePoll, Structure as BaseStructure } from "@discordjs/structures";
 import type { APIPoll } from "discord-api-types/v10";
 import type { Message } from "../messages/Message.js";
@@ -67,14 +68,16 @@ export class Poll extends BasePoll<""> {
    * message.
    */
   public get message(): Message | null {
-    return this[kRelations].message ?? null;
+    return this.lazyRelation("message", (client) =>
+      cachedMessage(client, this[kData].channel_id, this[kData].message_id),
+    );
   }
 
   /**
    * The channel of the poll's message, from the cache, like discord.js's `Poll#channel`.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

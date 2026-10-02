@@ -1,3 +1,5 @@
+import { cachedGuild } from "../../../util/cache.js";
+import { lazyRelation } from "../../Structure.js";
 import type {
   APIGuildForumDefaultReactionEmoji,
   APIGuildForumTag,
@@ -10,7 +12,7 @@ import type {
 } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import type { Guild } from "../../guilds/Guild.js";
-import { kData, kRelations } from "../../Structure.js";
+import { kData } from "../../Structure.js";
 import type { GuildChannelCreateOptions, GuildChannelEditOptions } from "../../../util/channels.js";
 import type { AnyChannel } from "../../../managers/ChannelManager.js";
 import { editChannel } from "./edit.js";
@@ -52,11 +54,13 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the channel was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return lazyRelation(this, "guild", (client) =>
+      cachedGuild(client, (this[kData] as Data).guild_id),
+    );
   }
 
   /**

@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GuildEmojiEditOptions } from "../../managers/GuildEmojiManager.js";
 import { GuildEmojiRoleManager } from "../../managers/GuildEmojiRoleManager.js";
@@ -40,11 +41,11 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the emoji was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

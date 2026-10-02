@@ -293,9 +293,10 @@ describe("guild structure relations", () => {
       .cache.get(client.guilds.integrations(guildId).resolveKey(integration.id)))!;
     expect(resolved.role).toBeInstanceOf(Role);
     expect(resolved.role?.name).toBe("Alpha");
+    // Built without relations, the role is read from the cache by the getter.
     expect(
-      client.guilds.integrations(guildId).cache.construct(integration as never).role,
-    ).toBeNull();
+      client.guilds.integrations(guildId).cache.construct(integration as never).role?.name,
+    ).toBe("Alpha");
   });
 
   test("GIVEN invites THEN channel is the cached channel, else the partial one", async () => {

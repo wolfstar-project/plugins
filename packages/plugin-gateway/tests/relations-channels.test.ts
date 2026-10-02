@@ -280,7 +280,8 @@ describe("voice state and thread member relations", () => {
       join_timestamp: "2026-01-01T00:00:00.000Z",
       flags: 0,
     });
-    expect(bare.thread).toBeNull();
+    // Built without relations, the thread is read from the cache by the getter.
+    expect(bare.thread?.id).toBe(threadId);
     expect(bare.user).toBeNull();
   });
 });

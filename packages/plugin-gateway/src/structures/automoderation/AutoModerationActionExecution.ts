@@ -1,3 +1,4 @@
+import { cachedChannel, cachedGuild, cachedMember, cachedUser } from "../../util/cache.js";
 import type { GatewayAutoModerationActionExecutionDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { AutoModerationRule } from "./AutoModerationRule.js";
@@ -96,25 +97,27 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public get user(): User | null {
-    return this[kRelations].user ?? null;
+    return this.lazyRelation("user", (client) => cachedUser(client, this[kData].user_id));
   }
 
   /**
    * The member who triggered the rule, from the cache, like discord.js's `AutoModerationActionExecution#member`.
    */
   public get member(): GuildMember | null {
-    return this[kRelations].member ?? null;
+    return this.lazyRelation("member", (client) =>
+      cachedMember(client, this[kData].guild_id, this[kData].user_id),
+    );
   }
 
   /**
    * The channel the rule was triggered in, from the cache: `null` when there is none or it is not cached.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

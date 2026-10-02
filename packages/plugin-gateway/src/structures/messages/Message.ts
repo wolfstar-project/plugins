@@ -1,3 +1,4 @@
+import { cachedChannel, cachedGuild } from "../../util/cache.js";
 import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -172,18 +173,18 @@ export class Message extends BaseMessage<""> {
 
   /**
    * The guild the message was sent in, from the cache. `null` outside of guilds, when the guild is not cached, or when
-   * the message was not built by a manager: use {@link Message.fetchGuild} to always get it.
+   * the cache is asynchronous: use {@link Message.fetchGuild} to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
-   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the message
-   * was not built by a manager: use {@link Message.fetchChannel} to always get it.
+   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the cache is
+   * asynchronous: use {@link Message.fetchChannel} to always get it.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   public override get flags(): Readonly<MessageFlagsBitField> {

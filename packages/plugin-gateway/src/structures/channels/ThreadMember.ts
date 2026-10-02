@@ -1,3 +1,4 @@
+import { cachedChannel } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
@@ -97,10 +98,13 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
 
   /**
    * The thread, from the cache, like discord.js's `ThreadMember#thread`. `null` when it is not cached, or when the
-   * thread member was not built by a manager.
+   * cache is asynchronous.
    */
   public get thread(): AnyThreadChannel | null {
-    return this[kRelations].thread ?? null;
+    return this.lazyRelation(
+      "thread",
+      (client) => cachedChannel(client, this.threadId) as AnyThreadChannel | undefined,
+    );
   }
 
   /**

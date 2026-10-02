@@ -1,7 +1,9 @@
+import { cachedChannel } from "../../../util/cache.js";
+import { lazyRelation } from "../../Structure.js";
 import type { ChannelType } from "discord-api-types/v10";
 import type { AnyChannel } from "../../../managers/ChannelManager.js";
 import type { Channel } from "../Channel.js";
-import { kData, kRelations } from "../../Structure.js";
+import { kData } from "../../Structure.js";
 
 type Data = { parent_id?: string | null; nsfw?: boolean };
 
@@ -21,7 +23,9 @@ export class ChannelParentMixin<Type extends ChannelType = ChannelType> {
    * a manager.
    */
   public get parent(): AnyChannel | null {
-    return this[kRelations].parent ?? null;
+    return lazyRelation(this, "parent", (client) =>
+      cachedChannel(client, (this[kData] as Data).parent_id),
+    );
   }
 
   public get nsfw(): boolean {

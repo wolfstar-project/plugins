@@ -1,6 +1,7 @@
 import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
-import { kData, kPatch, kRelations } from "../../Structure.js";
+import { kData, kPatch, lazyRelation } from "../../Structure.js";
+import { cachedChannel } from "../../../util/cache.js";
 import type { APIOverwrite } from "discord-api-types/v10";
 import type { SetPositionOptions } from "../../../managers/GuildChannelManager.js";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
@@ -65,11 +66,13 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Whether the channel's overwrites are the same as its category's, like discord.js's
-   * `GuildChannel#permissionsLocked`: `null` when it has no category, or when the category is not cached (see
+   * `GuildChannel#permissionsLocked`: `null` when it has no category, or when the category is not in a synchronous cache (see
    * {@link ChannelPermissionMixin.fetchPermissionsLocked}).
    */
   public get permissionsLocked(): boolean | null {
-    const { parent } = this[kRelations];
+    const parent = lazyRelation<{ toJSON(): unknown }>(this, "parent", (client) =>
+      cachedChannel(client, (this[kData] as Data).parent_id),
+    );
     if (!parent) return null;
     return sameOverwrites(this[kData] as Data, parent.toJSON() as Data);
   }

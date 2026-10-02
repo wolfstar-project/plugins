@@ -1,3 +1,4 @@
+import { cachedChannel, cachedGuild } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import { Webhook as BaseWebhook } from "@discordjs/structures";
 import { WebhookType, type APIWebhook } from "discord-api-types/v10";
@@ -58,14 +59,14 @@ export class Webhook extends BaseWebhook {
    * The guild of the webhook, from the cache, like discord.js's `Webhook#guild`: `null` when it is not cached.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
    * The channel the webhook posts to, from the cache: `null` when it is not cached.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

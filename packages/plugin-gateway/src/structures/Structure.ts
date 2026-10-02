@@ -129,14 +129,7 @@ export class StructureMixin<Data extends object, Relations extends object = obje
     name: string,
     read: (client: GatewayClient) => Result | null | undefined,
   ): Result | null {
-    const resolved = (this[kRelations] as Record<string, unknown>)[name] as
-      | Result
-      | null
-      | undefined;
-    if (resolved !== null && resolved !== undefined) return resolved;
-
-    const client = this[kClient] ?? existingGatewayClient();
-    return client ? (read(client) ?? null) : null;
+    return lazyRelation(this, name, read);
   }
 
   /**
@@ -210,6 +203,30 @@ export class StructureMixin<Data extends object, Relations extends object = obje
       .map(([name]) => name);
     if (names.length > 0) this.dropRelations(...(names as never[]));
   }
+}
+
+/**
+ * {@link StructureMixin.lazyRelation} for the channel mixins, which are not structures themselves.
+ *
+ * @param structure The structure.
+ * @param name The name of the relation.
+ * @param read Reads the related structure from the cache of the client, synchronously.
+ * @internal
+ */
+export function lazyRelation<Result>(
+  structure: object,
+  name: string,
+  read: (client: GatewayClient) => Result | null | undefined,
+): Result | null {
+  const { [kRelations]: relations, [kClient]: bound } = structure as StructureMixin<object>;
+  const resolved = (relations as Record<string, unknown> | undefined)?.[name] as
+    | Result
+    | null
+    | undefined;
+  if (resolved !== null && resolved !== undefined) return resolved;
+
+  const client = bound ?? existingGatewayClient();
+  return client ? (read(client) ?? null) : null;
 }
 
 /**

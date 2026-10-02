@@ -1,3 +1,4 @@
+import { cachedGuild, cachedPresence, cachedVoiceState } from "../../util/cache.js";
 import { DiscordAPIError, type ImageURLOptions } from "@discordjs/rest";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { APICollectibles } from "discord-api-types/v10";
@@ -77,11 +78,11 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the member was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -304,15 +305,15 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * built by a manager. Use {@link GuildMember.fetchVoiceState} to ask the API.
    */
   public get voice(): VoiceState | null {
-    return this[kRelations].voice ?? null;
+    return this.lazyRelation("voice", (client) => cachedVoiceState(client, this.guildId, this.id));
   }
 
   /**
    * The member's presence, from the cache, like discord.js's `GuildMember#presence`: `null` when it is not cached
-   * (it needs the `GuildPresences` intent), or when the member was not built by a manager.
+   * (it needs the `GuildPresences` intent), or when the cache is asynchronous.
    */
   public get presence(): Presence | null {
-    return this[kRelations].presence ?? null;
+    return this.lazyRelation("presence", (client) => cachedPresence(client, this.guildId, this.id));
   }
 
   /**
