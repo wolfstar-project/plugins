@@ -5,10 +5,8 @@ import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { Message } from "../structures/messages/Message.js";
 import { bindClient } from "../structures/Structure.js";
 import { MessageReaction } from "../structures/messages/MessageReaction.js";
-import {
-  ReactionEmoji,
-  type EmojiIdentifierResolvable,
-} from "../structures/emojis/ReactionEmoji.js";
+import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
+import { reactionEmojiMatcher } from "../util/reactions.js";
 import { BaseManager } from "./BaseManager.js";
 
 /**
@@ -76,12 +74,8 @@ export class ReactionManager extends BaseManager {
    * @param emoji The emoji.
    */
   public resolve(emoji: EmojiIdentifierResolvable): MessageReaction | null {
-    const identifier = ReactionEmoji.resolveIdentifier(emoji);
-    return (
-      this.cache.find(
-        (reaction) => ReactionEmoji.resolveIdentifier(reaction.toJSON().emoji) === identifier,
-      ) ?? null
-    );
+    const matches = reactionEmojiMatcher(emoji);
+    return this.cache.find((reaction) => matches(reaction.toJSON().emoji)) ?? null;
   }
 
   /**

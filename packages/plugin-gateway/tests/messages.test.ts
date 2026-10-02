@@ -292,6 +292,39 @@ describe("Message", () => {
     expect(msg.reactions.cache.size).toBe(1);
   });
 
+  test.each([
+    ["its bare ID", "123456789012345678"],
+    ["an object with its ID", { id: "123456789012345678" }],
+    ["a mention under its new name", "<:renamed:123456789012345678>"],
+    ["a non-animated identifier", "howl:123456789012345678"],
+  ])(
+    "GIVEN react with a custom emoji others used, given as %s THEN the counted reaction is returned",
+    async (_, emoji) => {
+      createClient();
+      vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+      const msg = new Message(
+        message({
+          reactions: [
+            {
+              count: 2,
+              count_details: { normal: 2, burst: 0 },
+              me: false,
+              me_burst: false,
+              burst_colors: [],
+              emoji: { id: "123456789012345678", name: "howl", animated: true },
+            },
+          ],
+        }),
+      );
+
+      const reaction = await msg.react(emoji);
+
+      expect(reaction).toBeInstanceOf(MessageReaction);
+      expect(reaction.count).toBe(3);
+      expect(msg.reactions.cache.size).toBe(1);
+    },
+  );
+
   test("GIVEN react on a cached message THEN the cached reactions follow", async () => {
     const client = createClient();
     vi.spyOn(container.rest, "put").mockResolvedValue(undefined);

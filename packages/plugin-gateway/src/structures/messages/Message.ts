@@ -567,11 +567,14 @@ export class Message extends BaseMessage<""> {
    * @returns The reaction, counting the bot, like discord.js's `Message#react`.
    */
   public async react(emoji: EmojiIdentifierResolvable): Promise<MessageReaction> {
+    // Counting the bot adds no custom emoji the cache was not asked for already: the resolved ones stay valid.
+    const { emojis } = this[kRelations];
     await this.client.messages.react(this.channelId, this.id, emoji);
     // With a cache of instances the manager already patched this very message: the bot is counted once.
     const current = this[kData].reactions;
     const reactions = withOwnReaction(current, emoji);
     if (reactions !== current) this[kPatch]({ reactions });
+    if (emojis && !this[kRelations].emojis) this[kRelations] = { ...this[kRelations], emojis };
     return this.reactions.resolve(emoji)!;
   }
 

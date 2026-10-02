@@ -164,10 +164,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
     const message = await this.client.messages.fetch(this.channelId, this.messageId, {
       force: true,
     });
-    const identifier = this.reactionEmoji.identifier;
-    const current = message.reactions.cache.find(
-      (reaction) => ReactionEmoji.resolveIdentifier(reaction.toJSON().emoji) === identifier,
-    );
+    const current = message.reactions.resolve(this[kData].emoji);
     return current
       ? this[kPatch](current.toJSON())
       : this[kPatch]({
