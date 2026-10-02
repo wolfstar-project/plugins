@@ -82,6 +82,11 @@ export function recordAll(client: GatewayClient): Emitted[] {
     calls.push([event, ...args]);
     return emit(event, ...args);
   }) as never);
+  const emitAndWait = client.emitAndWait.bind(client);
+  vi.spyOn(client, "emitAndWait").mockImplementation(((event: string, args: readonly unknown[]) => {
+    calls.push([event, ...args]);
+    return emitAndWait(event, args);
+  }) as never);
   return calls;
 }
 
@@ -417,6 +422,48 @@ describe("replayDispatch", () => {
       0,
     );
     expect(other).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN an async listener that rejects THEN the replay rejects with its error", async () => {
+    const { worker } = createPair();
+    worker.on("messageCreate", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      throw new Error("async boom");
+    });
+
+    await expect(
+      worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0),
+    ).rejects.toThrow("async boom");
+  });
+
+  test("GIVEN an async listener THEN the replay resolves only once it finished", async () => {
+    const { worker } = createPair();
+    let finished = false;
+    worker.on("raw", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5));
+    });
+    worker.on("messageCreate", async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      finished = true;
+    });
+
+    await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0);
+
+    expect(finished).toBe(true);
+  });
+
+  test("GIVEN a once listener THEN a replay runs it a single time", async () => {
+    const { worker } = createPair();
+    const listener = vi.fn();
+    worker.once("messageCreate", listener);
+
+    await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0);
+    await worker.replayDispatch(
+      { t: GatewayDispatchEvents.MessageCreate, d: message({ id: "2" }) },
+      0,
+    );
+
+    expect(listener).toHaveBeenCalledOnce();
   });
 
   test("GIVEN replays of one guild THEN they run in the order they were called", async () => {

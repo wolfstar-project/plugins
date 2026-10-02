@@ -1,3 +1,4 @@
+import type { Awaitable } from "@wolfstar/plugin-cache";
 import type { GatewayDispatchPayload } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import {
@@ -19,14 +20,21 @@ export abstract class Action {
     return undefined;
   }
 
-  /** Builds and emits events after the cache has been updated. */
+  /**
+   * Builds and emits events after the cache has been updated.
+   *
+   * @param awaitListeners Waits for the listeners of the events, rejecting when one fails, instead of leaving their
+   * promises to the client's `error` event. Replays use it, as their caller acknowledges the dispatch afterwards.
+   */
   public abstract handle(
     data: GatewayDispatchPayload["d"],
     state: unknown,
     shardId: number,
+    awaitListeners?: boolean,
   ): Promise<void>;
 
-  protected emit([event, ...args]: GatewayEventTuple): void {
+  protected emit([event, ...args]: GatewayEventTuple, awaitListeners = false): Awaitable<void> {
+    if (awaitListeners) return this.client.emitAndWait(event, args);
     this.client.emit(event, ...(args as never));
   }
 }
@@ -48,9 +56,10 @@ export class DispatchAction extends Action {
     data: GatewayDispatchPayload["d"],
     state: unknown,
     shardId: number,
+    awaitListeners = false,
   ): Promise<void> {
     const args = await this.handler.build(this.client, data, state, shardId);
-    this.emit([this.handler.event, ...args] as GatewayEventTuple);
+    await this.emit([this.handler.event, ...args] as GatewayEventTuple, awaitListeners);
   }
 }
 
@@ -67,8 +76,15 @@ export class MultiDispatchAction extends Action {
     return this.handler.before?.(this.client, data);
   }
 
-  public async handle(data: GatewayDispatchPayload["d"], state: unknown): Promise<void> {
-    for (const event of await this.handler.emit(this.client, data, state)) this.emit(event);
+  public async handle(
+    data: GatewayDispatchPayload["d"],
+    state: unknown,
+    _shardId: number,
+    awaitListeners = false,
+  ): Promise<void> {
+    for (const event of await this.handler.emit(this.client, data, state)) {
+      await this.emit(event, awaitListeners);
+    }
   }
 }
 

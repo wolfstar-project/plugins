@@ -59,6 +59,7 @@ import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { resolveInviteCode } from "./util/DataResolver.js";
 import { DispatchStateCodecs } from "./util/dispatchState.js";
+import { emitAndWait } from "./util/emitAndWait.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import type { Partials } from "./util/Partials.js";
@@ -858,6 +859,15 @@ export class GatewayClient extends Client {
   }
 
   /**
+   * Like `emit`, but resolves once the listeners' promises settled and rejects with the first failure.
+   *
+   * @internal
+   */
+  public emitAndWait(event: string, args: readonly unknown[]): Promise<void> {
+    return emitAndWait(this, event, args);
+  }
+
+  /**
    * The dispatch types {@link GatewayClient.replayDispatch} turns into events.
    */
   public get replayDispatchTypes(): readonly string[] {
@@ -890,7 +900,7 @@ export class GatewayClient extends Client {
     // The queue never sees a rejection (its chain would break): the failure is carried out and rethrown below.
     await this.#queue.enqueue(shardId, dispatchPartition(dispatch), async () => {
       try {
-        this.emit("raw", dispatch, shardId);
+        await this.emitAndWait("raw", [dispatch, shardId]);
         if (
           dispatch.t === GatewayDispatchEvents.InteractionCreate ||
           dispatch.t === GatewayDispatchEvents.Ready
@@ -898,7 +908,7 @@ export class GatewayClient extends Client {
           return;
         }
 
-        await this.actions.get(dispatch.t)?.handle(dispatch.d, state, shardId);
+        await this.actions.get(dispatch.t)?.handle(dispatch.d, state, shardId, true);
       } catch (error) {
         outcome.failed = true;
         outcome.error = error;

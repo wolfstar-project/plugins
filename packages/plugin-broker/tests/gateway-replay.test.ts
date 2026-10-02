@@ -195,6 +195,44 @@ describe("replayGatewayDispatches", () => {
     );
   });
 
+  test("GIVEN an async worker listener rejecting THEN the entry stays pending and its redelivery replays it", async () => {
+    const { redis, broker, consumer, producer, worker } = setup();
+    forwardGatewayDispatches(producer, broker);
+    replayGatewayDispatches(consumer, worker);
+
+    let attempts = 0;
+    worker.on("messageCreate", async () => {
+      await Promise.resolve();
+      if (++attempts === 1) throw new Error("boom");
+    });
+    worker.on("error", () => {});
+
+    await consumer.start();
+    await feed(producer, "MESSAGE_CREATE", message());
+
+    await vi.waitFor(() => expect(attempts).toBe(1));
+    await vi.waitFor(async () =>
+      expect(await redis.xpending("events", "workers", "-", "+", 10)).toHaveLength(1),
+    );
+
+    await consumer.stop();
+    const restarted = new BrokerConsumer({
+      redis,
+      stream: "events",
+      group: "workers",
+      consumer: "w1",
+      block: 20,
+    });
+    consumers.push(restarted);
+    replayGatewayDispatches(restarted, worker);
+    await restarted.start();
+
+    await vi.waitFor(() => expect(attempts).toBe(2));
+    await vi.waitFor(async () =>
+      expect(await redis.xpending("events", "workers", "-", "+", 10)).toEqual([]),
+    );
+  });
+
   test("GIVEN a dispatch type the worker has no action for THEN it is acknowledged", async () => {
     const { redis, broker, consumer, worker } = setup();
     replayGatewayDispatches(consumer, worker, { events: ["SOMETHING_NEW"] });
