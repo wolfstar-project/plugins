@@ -65,6 +65,7 @@ On top of the `Client` options:
 | `intents`             | —                 | The gateway intents.                                                                                                               |
 | `cacheConstructor`    | `CollectionCache` | Builds `manager.cache`, the cache of structure instances each manager reads through, see [Cache](#cache).                          |
 | `cacheOptions`        | `undefined`       | Per-entity options of those caches, e.g. `{ messages: { maxSize: 1_000 } }`, see [Bounding memory](#bounding-memory).              |
+| `sweepers`            | `undefined`       | Periodically evicts entries from those caches, e.g. `DefaultSweeperSettings`, see [Sweepers](#sweepers).                           |
 | `cache`               | `undefined`       | A `@wolfstar/plugin-cache` cache whose raw stores back the managers instead, see [Cache](#cache).                                  |
 | `shardCount`          | `null`            | Total shards across every process, `null` for Discord's recommendation.                                                            |
 | `shardIds`            | `null`            | The shards this client runs, as an array or a `{ start, end }` range. `null` for all.                                              |
@@ -381,7 +382,7 @@ Only `manager.cache.get` (and `fetch`, `resolve`, which read it) returns the cac
 
 ### Bounding memory
 
-With the default cache, nothing is evicted unless a dispatch removes it. There are three ways to bound it:
+With the default cache, nothing is evicted unless a dispatch removes it. There are four ways to bound it:
 
 - **`cacheOptions`** sets a `maxSize` per entity: once reached, the oldest entry is evicted for each new one, and
   `0` holds nothing. It is passed to the `cacheConstructor`, the default `CollectionCache` included.
@@ -419,8 +420,67 @@ With the default cache, nothing is evicted unless a dispatch removes it. There a
   new GatewayClient({ intents, cache: null });
   ```
 
+- **[`sweepers`](#sweepers)** evict entries on a timer, e.g. messages nobody touched for a while.
+
+`cacheOptions` also takes a `keepOverLimit(value, key, cache)`, like discord.js's `LimitedCollection`: once `maxSize`
+is reached, the oldest entry it answers `false` for is evicted, and the cache grows past `maxSize` if it keeps them
+all. `cacheWithLimits` builds `cacheOptions` from plain numbers:
+
+```ts
+import { cacheWithLimits } from "@wolfstar/plugin-gateway";
+
+new GatewayClient({
+  intents,
+  // 200 messages, no presences, and up to 1000 members plus the ones in a voice channel.
+  cacheOptions: cacheWithLimits({
+    messages: 200,
+    presences: 0,
+    members: { maxSize: 1_000, keepOverLimit: (member) => member.voice?.channelId != null },
+  }),
+});
+```
+
 `cacheOptions` only applies to caches built by a constructor: like `cacheConstructor`, combining it with `cache` or
 `makeCache` throws (those stores have their own bounds), and it is ignored with `cache: null`.
+
+### Sweepers
+
+Like discord.js's, `sweepers` evict the entries of a cache every `interval` seconds. Each entity takes either a
+`lifetime` (in seconds) or a `filter` factory that returns the predicate of that sweep, or `null` to skip it. Only
+`invites`, `messages` and `threads` take a `lifetime`: a message is swept when it was last edited or created longer
+ago than that, a thread when it has been archived for longer, an invite when it has expired for longer.
+
+```ts
+import { GatewayClient, Sweepers } from "@wolfstar/plugin-gateway";
+
+const client = new GatewayClient({
+  intents,
+  sweepers: {
+    messages: { interval: 3_600, lifetime: 1_800 },
+    users: { interval: 3_600, filter: () => (user) => user.bot },
+    // Evict what Sweepers.filterByLifetime selects, counted from a timestamp of your choosing.
+    members: {
+      interval: 3_600,
+      filter: Sweepers.filterByLifetime({
+        lifetime: 7_200,
+        getComparisonTimestamp: (member) => member.joinedTimestamp,
+        excludeFromSweep: (member) => member.voice?.channelId != null,
+      }),
+    },
+  },
+});
+
+// Or on demand, which returns how many entries were evicted.
+client.sweepers.sweepMessages(600);
+client.sweepers.sweepUsers(() => (user) => user.bot);
+```
+
+`DefaultSweeperSettings` sweeps messages untouched for 30 minutes and threads archived for four hours, every hour.
+Unlike discord.js's, it is not empty. Every sweep emits `cacheSweep(entity, swept)`, and a failing filter emits
+`cacheError` with `operation: "sweep"` instead of throwing out of the timer. `client.destroy()` stops the timers.
+
+Sweepers walk the caches of structure instances, so combining them with `cache` or `makeCache` throws: set the `ttl`
+of their `policies` instead.
 
 ### Custom caches
 

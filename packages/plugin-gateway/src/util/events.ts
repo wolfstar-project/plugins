@@ -48,6 +48,7 @@ import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { Typing } from "../structures/channels/Typing.js";
 import type { User } from "../structures/users/User.js";
 import type { VoiceState } from "../structures/voice/VoiceState.js";
+import type { SweepableEntityName } from "./Sweepers.js";
 
 /**
  * Where a cache failure reported by the `cacheError` event happened.
@@ -64,7 +65,17 @@ export interface CacheErrorContext {
   /**
    * The operation that failed.
    */
-  operation: "get" | "set" | "upsert" | "delete" | "has" | "clear" | "getSize" | "keys" | "entries";
+  operation:
+    | "get"
+    | "set"
+    | "upsert"
+    | "delete"
+    | "has"
+    | "clear"
+    | "getSize"
+    | "keys"
+    | "entries"
+    | "sweep";
 }
 
 /**
@@ -138,6 +149,10 @@ export interface GatewayEventMap {
    * `cacheErrors: "miss"`, the manager then carries on as if the entry was not cached.
    */
   cacheError: [error: unknown, context: CacheErrorContext];
+  /**
+   * Emitted when a sweep of an entity's cache ran, with the amount of entries it evicted, see `Sweepers`.
+   */
+  cacheSweep: [entity: SweepableEntityName, swept: number];
 
   guildCreate: [guild: Guild];
   guildUpdate: [oldGuild: Guild | null, newGuild: Guild];
@@ -380,6 +395,7 @@ export enum GatewayEvents {
   ShardClose = "shardClose",
   ShardError = "shardError",
   CacheError = "cacheError",
+  CacheSweep = "cacheSweep",
   GuildCreate = "guildCreate",
   GuildUpdate = "guildUpdate",
   GuildDelete = "guildDelete",

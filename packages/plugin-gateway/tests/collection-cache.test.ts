@@ -92,6 +92,26 @@ describe("CollectionCache", () => {
     expect([...cache.keys()]).toEqual(["2", "3"]);
   });
 
+  test("GIVEN keepOverLimit THEN the oldest entry it does not keep is evicted", () => {
+    const keepOverLimit = vi.fn((value: User) => value.id === "1");
+    const cache = createCache({ maxSize: 2, keepOverLimit });
+    cache.add({ ...user, id: "1" });
+    cache.add({ ...user, id: "2" });
+    cache.add({ ...user, id: "3" });
+
+    expect([...cache.keys()]).toEqual(["1", "3"]);
+    expect(keepOverLimit).toHaveBeenCalledTimes(2);
+    expect(keepOverLimit.mock.calls[0]![2]).toBe(cache);
+  });
+
+  test("GIVEN keepOverLimit keeping everything THEN the cache grows past maxSize", () => {
+    const cache = createCache({ maxSize: 1, keepOverLimit: () => true });
+    cache.add({ ...user, id: "1" });
+    cache.add({ ...user, id: "2" });
+
+    expect([...cache.keys()]).toEqual(["1", "2"]);
+  });
+
   test("GIVEN maxSize 0 THEN nothing is held, and add still builds the structure", () => {
     const cache = createCache({ maxSize: 0 });
 

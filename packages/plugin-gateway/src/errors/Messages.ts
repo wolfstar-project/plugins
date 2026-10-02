@@ -13,7 +13,12 @@ export const GatewayErrorMessages = {
     "sessionStore replaces gateway.retrieveSessionInfo and gateway.updateSessionInfo, pass one or the other",
   ClientCacheConflict:
     "cacheConstructor and cacheOptions cannot be combined with cache or makeCache, pass one or the other",
+  ClientSweepersConflict:
+    "sweepers cannot be combined with cache or makeCache, whose stores hold raw data a sweep cannot filter: use their policies' ttl instead",
   ClientNotConstructed: "No GatewayClient has been constructed yet",
+
+  SweeperIntervalTooLong: (entity: string, interval: number) =>
+    `The sweeper of ${entity} has an interval of ${interval}s, which a timer cannot wait for: the maximum is 2147483s`,
 
   DispatchHandlerConflict: (event: string) =>
     `Dispatch event "${event}" is registered in both DispatchHandlers and MultiDispatchHandlers`,

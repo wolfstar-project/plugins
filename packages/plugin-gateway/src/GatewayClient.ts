@@ -78,6 +78,7 @@ import { EntityStoreCache } from "./util/EntityStoreCache.js";
 import { ManagedEntityNames, managerOf, type ManagedEntityName } from "./util/entityManagers.js";
 import type { CacheErrorContext } from "./util/events.js";
 import { NullCache } from "./util/NullCache.js";
+import { Sweepers, type SweeperOptions } from "./util/Sweepers.js";
 import { createStructureStoreAdapter } from "./util/StructureStoreAdapter.js";
 
 export interface GatewayClientOptions extends ClientOptions, GatewayClientMessageDefaults {
@@ -145,6 +146,30 @@ export interface GatewayClientOptions extends ClientOptions, GatewayClientMessag
    * @default undefined
    */
   cacheOptions?: Partial<Record<CacheEntityName, CacheEntityOptions>>;
+  /**
+   * Evicts entries from the caches of instances on a schedule, like discord.js's `sweepers` option: each entity has
+   * its own sweeper, evicting what a `filter` selects or what outlived a `lifetime`, every `interval` seconds. See
+   * {@link Sweepers}, whose methods sweep on demand, and {@link DefaultSweeperSettings}.
+   *
+   * @remarks
+   * The timers do not keep the process alive, and stop on {@link GatewayClient.destroy}. A sweep that throws (e.g. a
+   * filter) is reported through `cacheError`, and the next one runs as scheduled.
+   *
+   * It only applies to caches built by a constructor, the default included: like `cacheConstructor`, combining it with
+   * {@link GatewayClientOptions.cache} or {@link GatewayClientOptions.makeCache} throws, their stores expire entries
+   * with the `ttl` of {@link GatewayClientOptions.policies}. With `cache: null` it is ignored.
+   *
+   * @example
+   * ```typescript
+   * sweepers: {
+   *   messages: { interval: 3_600, lifetime: 1_800 },
+   *   users: { interval: 3_600, filter: () => (user) => user.bot },
+   * }
+   * ```
+   *
+   * @default undefined
+   */
+  sweepers?: SweeperOptions;
   /**
    * A `@wolfstar/plugin-cache` cache (in memory or Redis) whose raw stores back the managers, instead of the
    * in-memory caches of instances built by {@link GatewayClientOptions.cacheConstructor}: structures are then built
@@ -374,6 +399,12 @@ export class GatewayClient extends Client {
   public readonly presences: PresenceManager;
 
   /**
+   * Evicts entries from the caches of instances, on the schedule of {@link GatewayClientOptions.sweepers} and on
+   * demand, like discord.js's `Client#sweepers`.
+   */
+  public readonly sweepers: Sweepers;
+
+  /**
    * What happens to a dispatch whose cache read or write fails, see {@link GatewayClientOptions.cacheFailure}.
    */
   public readonly cacheFailure: "skip" | "emitUncached";
@@ -463,6 +494,10 @@ export class GatewayClient extends Client {
       throw new GatewayTypeError("ClientCacheConflict");
     }
 
+    if (options.sweepers && storeBacked) {
+      throw new GatewayTypeError("ClientSweepersConflict");
+    }
+
     this.#cacheOptions = options.cacheOptions ?? {};
     const stores = resolveCache(options);
     this.#stores = stores;
@@ -494,6 +529,7 @@ export class GatewayClient extends Client {
     this.voiceStates = new VoiceStateManager(this);
     this.presences = new PresenceManager(this);
     this.cache = this.#cacheConstructor ? this.#createStructureStores(options.policies) : stores;
+    this.sweepers = new Sweepers(this, this.#cacheConstructor ? options.sweepers : undefined);
 
     this.gateway = new WebSocketManager({
       ...options.gateway,
@@ -553,6 +589,7 @@ export class GatewayClient extends Client {
    * @param options Whether to keep the sessions resumable.
    */
   public destroy(options: GatewayClientDestroyOptions = {}): Promise<void> {
+    this.sweepers.destroy();
     this.#destroying ??= this.disconnect(options.resumable ?? false).finally(() => {
       this.#destroying = null;
     });
@@ -614,6 +651,16 @@ export class GatewayClient extends Client {
     }
 
     return cache as Cache<Value>;
+  }
+
+  /**
+   * Gets the cache of an entity if it was built already, without building it.
+   *
+   * @param name The name of the entity.
+   * @internal
+   */
+  public cacheOf(name: CacheEntityName): Cache<any> | undefined {
+    return this.#caches.get(name);
   }
 
   /**

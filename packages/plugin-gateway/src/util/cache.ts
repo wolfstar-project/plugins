@@ -177,6 +177,14 @@ export interface CacheEntityOptions {
    * @default Infinity
    */
   maxSize?: number;
+  /**
+   * Decides which entries `maxSize` never evicts, like discord.js's `LimitedCollection#keepOverLimit`: called with
+   * the oldest entries in turn, the first one it answers `false` for is evicted. When it answers `true` for all of
+   * them, the cache grows past `maxSize`.
+   *
+   * @default undefined
+   */
+  keepOverLimit?: (value: any, key: string, cache: Map<string, any>) => boolean;
 }
 
 /**
