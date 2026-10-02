@@ -609,7 +609,9 @@ describe("replayDispatch", () => {
     await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d: message() }, 0);
 
     expect(calls.map(([event]) => event)).toEqual(["raw", "messageCreate"]);
-    expect(await producer.messages.get(channelId, message().id)).toBeUndefined();
+    expect(
+      await producer.messages.cache.get(producer.messages.resolveKey(channelId, message().id)),
+    ).toBeUndefined();
   });
 
   test("GIVEN a replay THEN raw gets a full gateway payload, with the sequence number when known", async () => {
@@ -709,10 +711,10 @@ describe("replayDispatch", () => {
     const { worker } = createPair();
     const order: string[] = [];
     // Listeners are not awaited, so the slow step has to be part of handling the dispatch itself.
-    const hydrate = worker.messages.hydrate.bind(worker.messages);
-    vi.spyOn(worker.messages, "hydrate").mockImplementation(async (data) => {
+    const build = worker.messages._build.bind(worker.messages);
+    vi.spyOn(worker.messages, "_build").mockImplementation(async (data, extras) => {
       if (data.id === "1") await new Promise((resolve) => setTimeout(resolve, 20));
-      return hydrate(data);
+      return build(data, extras);
     });
     worker.on("messageCreate", (created) => void order.push(created.id));
 

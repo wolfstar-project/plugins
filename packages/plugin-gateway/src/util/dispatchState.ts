@@ -19,16 +19,16 @@ export interface DispatchStateCodec {
   revive(client: GatewayClient, state: unknown, data: any): Awaitable<unknown>;
 }
 
-type Hydrator = { hydrate(data: any): Promise<unknown> };
+type Hydrator = { _build(data: any): Awaitable<unknown> };
 type ManagerOf = (client: GatewayClient, data: any) => Hydrator;
 type Serializable = { toJSON(): unknown };
 
-// `hydrate`, not `resolveData`: the latter returns the cached entity, which the dispatch has already updated.
+// `_build`, not `_resolveData`: the latter returns the cached entity, which the dispatch has already updated.
 function single(manager: ManagerOf): DispatchStateCodec {
   return {
     serialize: (state) => (state === undefined ? undefined : (state as Serializable).toJSON()),
     revive: (client, state, data) =>
-      state === undefined ? undefined : manager(client, data).hydrate(state),
+      state === undefined ? undefined : manager(client, data)._build(state),
   };
 }
 
@@ -39,23 +39,33 @@ function list(manager: ManagerOf, scope: (data: any) => object = () => ({})): Di
     revive: (client, state, data) =>
       Array.isArray(state)
         ? Promise.all(
-            state.map((item) => manager(client, data).hydrate({ ...item, ...scope(data) })),
+            state.map((item) => manager(client, data)._build({ ...item, ...scope(data) })),
           )
         : undefined,
   };
 }
 
+// A cache failure leaves the relation unresolved: the previous state is still worth emitting.
+async function cachedOrUndefined<T>(read: () => Awaitable<T | undefined>): Promise<T | undefined> {
+  try {
+    return await read();
+  } catch {
+    return undefined;
+  }
+}
+
 async function reviveReaction(client: GatewayClient, json: any, data: any) {
-  const message = await client.messages
-    .get(data.channel_id, data.message_id)
-    .catch(() => undefined);
+  const messages = client.messages;
+  const message = await cachedOrUndefined(() =>
+    messages.cache.get(messages.resolveKey(data.channel_id, data.message_id)),
+  );
   const emojiId = json?.emoji?.id as string | null | undefined;
   const cachedEmoji =
     data.guild_id && emojiId
-      ? await client.guilds
-          .emojis(data.guild_id)
-          .get(emojiId)
-          .catch(() => undefined)
+      ? await cachedOrUndefined(() => {
+          const emojis = client.guilds.emojis(data.guild_id);
+          return emojis.cache.get(emojis.resolveKey(emojiId));
+        })
       : undefined;
 
   return bindClient(
