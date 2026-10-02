@@ -1,6 +1,6 @@
 import { Structure as BaseStructure } from "@discordjs/structures";
 import type { GatewayClient } from "../GatewayClient.js";
-import { getGatewayClient } from "../util/container.js";
+import { existingGatewayClient, getGatewayClient } from "../util/container.js";
 import { Mixin } from "./Mixin.js";
 
 // `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
@@ -116,6 +116,27 @@ export class StructureMixin<Data extends object, Relations extends object = obje
   public valueOf(): string | this {
     const { id } = this as { id?: unknown };
     return typeof id === "string" ? id : this;
+  }
+
+  /**
+   * Resolves a relation like discord.js's getters do: what the manager resolved when it built this structure, else a
+   * synchronous read of the cache. `null` when neither has it, the cache is asynchronous, or no client exists.
+   *
+   * @param name The name of the relation.
+   * @param read Reads the related structure from the client's cache, synchronously.
+   */
+  protected lazyRelation<Result>(
+    name: string,
+    read: (client: GatewayClient) => Result | null | undefined,
+  ): Result | null {
+    const resolved = (this[kRelations] as Record<string, unknown>)[name] as
+      | Result
+      | null
+      | undefined;
+    if (resolved !== null && resolved !== undefined) return resolved;
+
+    const client = this[kClient] ?? existingGatewayClient();
+    return client ? (read(client) ?? null) : null;
   }
 
   /**

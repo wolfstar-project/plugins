@@ -18,6 +18,17 @@ export function getGatewayClient(): GatewayClient {
   return client as GatewayClient;
 }
 
+/**
+ * Gets the {@link GatewayClient} registered in the framework's container, if any: {@link getGatewayClient} for the
+ * code that can do without a client.
+ *
+ * @internal
+ */
+export function existingGatewayClient(): GatewayClient | undefined {
+  const { client } = container;
+  return client && "gateway" in client ? (client as GatewayClient) : undefined;
+}
+
 declare module "@sapphire/pieces" {
   interface Container {
     /**

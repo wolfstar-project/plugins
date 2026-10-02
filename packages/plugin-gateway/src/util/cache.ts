@@ -1,4 +1,5 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
+import { GatewayError } from "../errors/GatewayError.js";
 import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
 /**
@@ -254,4 +255,66 @@ export function peekCache<
   return cache instanceof Map
     ? (Map.prototype.get.call(cache, key) as Value | undefined)
     : cache.get(key);
+}
+
+/**
+ * Keeps the value of an {@link Awaitable} that is no promise: what a getter can use without awaiting.
+ *
+ * @param value The value, or a promise of it.
+ * @returns The value, or `undefined` for a promise.
+ * @internal
+ */
+export function syncOnly<T>(value: Awaitable<T>): T | undefined {
+  if (!isPromiseLike(value)) return value;
+  // The read is abandoned: its failure must not surface as an unhandled rejection.
+  value.then(undefined, () => {});
+  return undefined;
+}
+
+/**
+ * Gets the value of an {@link Awaitable} a synchronous getter depends on.
+ *
+ * @param value The value, or a promise of it.
+ * @param entity The name of the entity it was read from, for the error.
+ * @throws A `GatewayError` (`CacheAsynchronous`) when the value is a promise.
+ * @internal
+ */
+export function expectSync<T>(value: Awaitable<T>, entity: string): T {
+  if (!isPromiseLike(value)) return value;
+  value.then(undefined, () => {});
+  throw new GatewayError("CacheAsynchronous", entity);
+}
+
+/**
+ * Reads an entry of a {@link Cache} for a relation getter: as the cache holds it, see {@link peekCache}.
+ *
+ * @param cache The cache.
+ * @param key The key of the entry.
+ * @returns The entry, or `undefined` when it is not cached or the cache is asynchronous.
+ * @internal
+ */
+export function readCached<Value extends StructureMixin<object>>(
+  cache: Cache<Value>,
+  key: string,
+): Value | undefined {
+  return cache.synchronous ? syncOnly(peekCache(cache, key)) : undefined;
+}
+
+/**
+ * Reads an entry of a {@link Cache} for a synchronous getter that cannot answer without it.
+ *
+ * @param cache The cache.
+ * @param key The key of the entry.
+ * @param entity The name of the entity, for the error.
+ * @returns The entry, or `undefined` when it is not cached.
+ * @throws A `GatewayError` (`CacheAsynchronous`) when the cache is asynchronous.
+ * @internal
+ */
+export function requireCached<Value extends StructureMixin<object>>(
+  cache: Cache<Value>,
+  key: string,
+  entity: string,
+): Value | undefined {
+  if (!cache.synchronous) throw new GatewayError("CacheAsynchronous", entity);
+  return expectSync(peekCache(cache, key), entity);
 }

@@ -24,7 +24,7 @@ export const GatewayErrorMessages = {
   SessionStoreTimeout: (timeout: number) => `Timed out after ${timeout}ms`,
 
   CacheAsynchronous: (entity: string) =>
-    `The ${entity} cache is asynchronous, await cache.get instead`,
+    `The ${entity} cache is asynchronous: use the asynchronous variant (the fetch* methods, or await cache.get)`,
   CacheConstructorAsynchronous: (entity: string) =>
     `The ${entity} structures resolve relations from an asynchronous cache, which a cache of instances cannot await`,
   CacheNotIterable: (entity: string) =>
@@ -35,6 +35,12 @@ export const GatewayErrorMessages = {
     `Supplied ${name} is not a${an ? "n" : ""} ${expected}.`,
   InvalidElement: (type: string, name: string, element: unknown) =>
     `Supplied ${type} ${name} includes an invalid element: ${String(element)}`,
+
+  GuildUncached: (guildId: string) => `Guild ${guildId} is not cached`,
+  GuildUncachedMe: (guildId: string) => `The client's member in guild ${guildId} is not cached`,
+  GuildMemberUncached: (guildId: string, userId: string) =>
+    `Member ${userId} of guild ${guildId} is not cached`,
+  ChannelUncached: (channelId: string) => `Channel ${channelId} is not cached`,
 
   ChannelGuildUnknown: (channelId: string) => `Channel ${channelId} has no known guild`,
   ChannelTypeChanged: (channelId: string, from: number, to: number) =>
