@@ -1,4 +1,5 @@
 import { WebSocketShardEvents } from "@discordjs/ws";
+import { container } from "@wolfstar/http-framework";
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
@@ -7,7 +8,7 @@ import {
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   GatewayClient,
   MessageReaction,
@@ -109,6 +110,33 @@ describe("reaction events", () => {
     const cached = await client.messages.cache.get(client.messages.resolveKey("20", "30"));
     expect(cached?.reactions.resolve("🐺")?.count).toBe(2);
   });
+
+  test.each([
+    ["an in-memory store", createInMemoryCache],
+    ["the default cache of instances", () => undefined],
+  ])(
+    "GIVEN the bot's own reaction echoed after react() with %s THEN it is counted once",
+    async (_, cache) => {
+      const client = new GatewayClient({
+        discordPublicKey: "0".repeat(64),
+        discordToken: "test-token",
+        clientId: botId,
+        intents: 0,
+        cache: cache(),
+      });
+      await createMessage(client);
+      const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+      const message = await client.messages.fetch("20", "30");
+
+      await message.react("🐺");
+      await dispatch(client, GatewayDispatchEvents.MessageReactionAdd, reaction(botId));
+      put.mockRestore();
+
+      const cached = await client.messages.cache.get(client.messages.resolveKey("20", "30"));
+      expect(cached?.reactions.resolve("🐺")?.count).toBe(1);
+      expect(cached?.reactions.resolve("🐺")?.me).toBe(true);
+    },
+  );
 
   test("GIVEN a reaction on an uncached message THEN the reaction has no counts", async () => {
     const client = createClient();

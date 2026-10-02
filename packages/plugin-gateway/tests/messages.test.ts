@@ -18,6 +18,7 @@ import {
   GatewayClient,
   Message,
   MessageMentions,
+  MessageReaction,
   ReactionEmoji,
   Sticker,
   type GatewayClientOptions,
@@ -260,16 +261,74 @@ describe("Message", () => {
     expect((await client.cache!.messages.get(key))?.pinned).toBe(true);
   });
 
-  test("GIVEN react with a custom emoji THEN it targets the own reaction route", async () => {
+  test("GIVEN react with a custom emoji THEN it targets the own reaction route and returns the reaction", async () => {
     createClient();
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(message());
 
-    await new Message(message()).react("<:howl:123456789012345678>");
+    const reaction = await msg.react("<:howl:123456789012345678>");
 
     expect(put).toHaveBeenCalledWith(
       Routes.channelMessageOwnReaction(channelId, "1200000000000000000", "howl:123456789012345678"),
       { signal: undefined },
     );
+    expect(reaction).toBeInstanceOf(MessageReaction);
+    expect(reaction.count).toBe(1);
+    expect(reaction.me).toBe(true);
+    expect(reaction.emoji.id).toBe("123456789012345678");
+    expect(reaction.message).toBe(msg);
+    expect(msg.reactions.cache.size).toBe(1);
+  });
+
+  test("GIVEN react with an emoji the bot already used THEN the count is unchanged", async () => {
+    createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(message());
+
+    await msg.react("🐺");
+    const reaction = await msg.react("🐺");
+
+    expect(reaction.count).toBe(1);
+    expect(msg.reactions.cache.size).toBe(1);
+  });
+
+  test("GIVEN react on a cached message THEN the cached reactions follow", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const key = messageKey(channelId, "1200000000000000000");
+    await client.cache!.messages.set(key, message());
+    const msg = await client.messages.fetch(channelId, "1200000000000000000");
+
+    await msg.react("🐺");
+
+    expect((await client.cache!.messages.get(key))?.reactions).toMatchObject([
+      { count: 1, me: true, emoji: { name: "🐺" } },
+    ]);
+  });
+
+  test("GIVEN MessageReaction#react THEN it returns itself with the bot counted", async () => {
+    createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(
+      message({
+        reactions: [
+          {
+            count: 2,
+            count_details: { normal: 2, burst: 0 },
+            me: false,
+            me_burst: false,
+            burst_colors: [],
+            emoji: { id: null, name: "🐺" },
+          },
+        ],
+      }),
+    );
+    const reaction = msg.reactions.resolve("🐺")!;
+
+    expect(await reaction.react()).toBe(reaction);
+    expect(reaction.count).toBe(3);
+    expect(reaction.me).toBe(true);
+    expect(msg.reactions.resolve("🐺")?.count).toBe(3);
   });
 
   test("GIVEN suppressEmbeds THEN it edits the flags", async () => {

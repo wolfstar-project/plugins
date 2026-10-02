@@ -14,6 +14,7 @@ import {
   resolvePartialEmoji,
   transformResolved,
 } from "../src/util/Util.js";
+import { withOwnReaction } from "../src/util/reactions.js";
 
 describe("resolveColor", () => {
   test("GIVEN a number THEN it is returned as is", () => {
@@ -259,5 +260,53 @@ describe("transformResolved", () => {
     expect(resolved.users!.size).toBe(1);
     expect(resolved.members).toBeUndefined();
     expect(resolved.roles).toBeUndefined();
+  });
+});
+
+describe("withOwnReaction", () => {
+  const counts = { count_details: { normal: 2, burst: 0 }, me_burst: false, burst_colors: [] };
+
+  test("GIVEN a new unicode emoji THEN a reaction of the bot is appended", () => {
+    expect(withOwnReaction(undefined, "🐺")).toEqual([
+      {
+        emoji: { id: null, name: "🐺" },
+        count: 1,
+        count_details: { normal: 1, burst: 0 },
+        me: true,
+        me_burst: false,
+        burst_colors: [],
+      },
+    ]);
+  });
+
+  test("GIVEN a new custom emoji THEN its ID, name and animated flag are kept", () => {
+    const [reaction] = withOwnReaction([], "<a:howl:123456789012345678>");
+
+    expect(reaction!.emoji).toEqual({ id: "123456789012345678", name: "howl", animated: true });
+  });
+
+  test("GIVEN an emoji others reacted with THEN the counts go up and me is set", () => {
+    const existing = { ...counts, count: 2, me: false, emoji: { id: null, name: "🐺" } };
+
+    expect(withOwnReaction([existing], "🐺")).toEqual([
+      { ...existing, count: 3, count_details: { normal: 3, burst: 0 }, me: true },
+    ]);
+  });
+
+  test("GIVEN an emoji the bot already reacted with THEN the very same array is returned", () => {
+    const reactions = [{ ...counts, count: 2, me: true, emoji: { id: null, name: "🐺" } }];
+
+    expect(withOwnReaction(reactions, "🐺")).toBe(reactions);
+  });
+
+  test("GIVEN a custom emoji matched by ID under another name THEN it is the same reaction", () => {
+    const existing = {
+      ...counts,
+      count: 2,
+      me: false,
+      emoji: { id: "123456789012345678", name: "old" },
+    };
+
+    expect(withOwnReaction([existing], "howl:123456789012345678")).toHaveLength(1);
   });
 });

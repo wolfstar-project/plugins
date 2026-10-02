@@ -27,6 +27,7 @@ import {
   type RoleSubscriptionData,
 } from "../../util/Transformers.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
+import { withOwnReaction } from "../../util/reactions.js";
 import {
   MessagePayload,
   type MessageCreateOptions,
@@ -38,6 +39,7 @@ import { Attachment } from "./Attachment.js";
 import { Embed } from "./Embed.js";
 import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
+import type { MessageReaction } from "./MessageReaction.js";
 import { MessageMentions, type MessageMentionsRelations } from "./MessageMentions.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import { Poll } from "../polls/Poll.js";
@@ -562,10 +564,15 @@ export class Message extends BaseMessage<""> {
    * Reacts to the message as the bot.
    *
    * @param emoji The emoji.
+   * @returns The reaction, counting the bot, like discord.js's `Message#react`.
    */
-  public async react(emoji: EmojiIdentifierResolvable): Promise<this> {
+  public async react(emoji: EmojiIdentifierResolvable): Promise<MessageReaction> {
     await this.client.messages.react(this.channelId, this.id, emoji);
-    return this;
+    // With a cache of instances the manager already patched this very message: the bot is counted once.
+    const current = this[kData].reactions;
+    const reactions = withOwnReaction(current, emoji);
+    if (reactions !== current) this[kPatch]({ reactions });
+    return this.reactions.resolve(emoji)!;
   }
 
   /**

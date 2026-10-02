@@ -27,6 +27,7 @@ import {
   type MessageEditOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
+import { withOwnReaction } from "../util/reactions.js";
 import { transformResolved } from "../util/Util.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
@@ -356,7 +357,7 @@ export class MessageManager extends CachedManager<
   }
 
   /**
-   * Reacts to a message as the bot.
+   * Reacts to a message as the bot, and counts the reaction on the cached message.
    *
    * @param channelId The ID of the channel.
    * @param messageId The ID of the message.
@@ -372,6 +373,11 @@ export class MessageManager extends CachedManager<
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
     );
+    await this._patchCached(this.resolveKey(channelId, messageId), (cached) => {
+      const { reactions } = cached.toJSON();
+      const updated = withOwnReaction(reactions, emoji);
+      return updated === reactions ? undefined : { reactions: updated };
+    });
   }
 
   /**
