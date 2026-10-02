@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type { StickerExtension } from "@discordjs/rest";
 import { Sticker as BaseSticker } from "@discordjs/structures";
 import { StickerFormatType, type APISticker } from "discord-api-types/v10";
@@ -65,11 +66,11 @@ export class Sticker extends BaseSticker {
   }
 
   /**
-   * The guild, from the cache. `null` outside of guilds, when the guild is not cached, or when the sticker was not built by
-   * a manager: use `fetchGuild()` to always get it.
+   * The guild, from the cache. `null` outside of guilds, when the guild is not cached, or when the cache is
+   * asynchronous: use `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

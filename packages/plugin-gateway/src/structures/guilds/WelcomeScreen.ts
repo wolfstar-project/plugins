@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import { GuildFeature, type APIGuildWelcomeScreen } from "discord-api-types/v10";
 import type { GuildWelcomeScreenEditOptions } from "../../managers/GuildManager.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
@@ -81,7 +82,7 @@ export class WelcomeScreen extends Structure<WelcomeScreenData> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

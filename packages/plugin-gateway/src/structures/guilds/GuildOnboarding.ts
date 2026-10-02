@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type {
   APIGuildOnboarding,
   APIGuildOnboardingPrompt,
@@ -173,7 +174,7 @@ export class GuildOnboarding extends Structure<APIGuildOnboarding> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

@@ -1,3 +1,12 @@
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import {
+  cachedChannel,
+  cachedGuild,
+  cacheRead,
+  peekCache,
+  whenAll,
+  type CacheRead,
+} from "../../util/cache.js";
 import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -27,6 +36,7 @@ import {
   type RoleSubscriptionData,
 } from "../../util/Transformers.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
+import { requireMe } from "../../util/permissions.js";
 import { withOwnReaction } from "../../util/reactions.js";
 import {
   MessagePayload,
@@ -101,8 +111,11 @@ export interface Message extends StructureMixin<CacheEntityTypes["messages"], Me
  * client.
  *
  * @remarks
- * Relations discord.js reads synchronously from its cache are asynchronous here: `fetchChannel()`, `fetchGuild()`,
- * `fetchReference()`, and the `fetch*able()` permission checks, which apply the channel's overwrites.
+ * What discord.js reads synchronously from its cache is read the same way here with a synchronous cache: `guild`,
+ * `channel`, and the `editable`, `deletable`, ... permission checks, which apply the channel's overwrites. With an
+ * asynchronous cache the relation getters are `null` (use `fetchChannel()`, `fetchGuild()`, `fetchReference()`), and
+ * the checks answer a promise read from the cache, typed as one once `GatewayCacheConfig` declares the cache
+ * asynchronous. The `fetch*able()` twins also ask the API for what is not cached.
  */
 export class Message extends BaseMessage<""> {
   /**
@@ -172,18 +185,18 @@ export class Message extends BaseMessage<""> {
 
   /**
    * The guild the message was sent in, from the cache. `null` outside of guilds, when the guild is not cached, or when
-   * the message was not built by a manager: use {@link Message.fetchGuild} to always get it.
+   * the cache is asynchronous: use {@link Message.fetchGuild} to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
-   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the message
-   * was not built by a manager: use {@link Message.fetchChannel} to always get it.
+   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the cache is
+   * asynchronous: use {@link Message.fetchChannel} to always get it.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   public override get flags(): Readonly<MessageFlagsBitField> {
@@ -443,6 +456,66 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
+   * Whether the bot can edit the message, like discord.js's `Message#editable`: it is the author.
+   */
+  public get editable(): boolean {
+    const client = this.client;
+    return this.author.id === (client.user?.id ?? client.id);
+  }
+
+  /**
+   * Whether the bot can delete the message, like discord.js's `Message#deletable`: it is the author, or it has
+   * `ManageMessages` in the channel.
+   *
+   * @throws A `GatewayError` when the permissions are needed: `GuildUncachedMe`, `GuildUncached` or `ChannelUncached` on a cache miss.
+   */
+  public get deletable(): CacheRead<boolean> {
+    return cacheRead(this.editable || this.hasCachedPermission("ManageMessages"));
+  }
+
+  /**
+   * Whether the bot can bulk delete the message, like discord.js's `Message#bulkDeletable`: it is newer than 14 days,
+   * and the bot has `ManageMessages`. It throws like {@link Message.deletable}.
+   */
+  public get bulkDeletable(): CacheRead<boolean> {
+    return cacheRead(
+      Date.now() - this.createdTimestamp < 14 * 24 * 60 * 60 * 1000 &&
+        this.hasCachedPermission("ManageMessages"),
+    );
+  }
+
+  /**
+   * Whether the bot can pin the message, like discord.js's `Message#pinnable`: it is not a system message, and the
+   * bot has `PinMessages`. It throws like {@link Message.deletable}.
+   */
+  public get pinnable(): CacheRead<boolean> {
+    if (this.system) return cacheRead(false);
+    return cacheRead(!this.inGuild() || this.hasCachedPermission("PinMessages"));
+  }
+
+  /**
+   * Whether the bot can publish the message, like discord.js's `Message#crosspostable`: it is in an announcement
+   * channel, not crossposted yet, and the bot authored it or has `ManageMessages`. It throws like
+   * {@link Message.deletable}.
+   */
+  public get crosspostable(): CacheRead<boolean> {
+    if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) {
+      return cacheRead(false);
+    }
+
+    // Not the `channel` getter, which is `null` with an asynchronous cache.
+    const cached =
+      this[kRelations].channel ?? peekCache(this.client.channels.cache, this.channelId);
+    return cacheRead(
+      whenAll([cached], ([channel]) => {
+        if (!channel) throw new GatewayError("ChannelUncached", this.channelId);
+        if (channel.type !== ChannelType.GuildAnnouncement) return false;
+        return this.editable || this.hasCachedPermission("ManageMessages");
+      }),
+    );
+  }
+
+  /**
    * Whether the bot can edit the message: it is the author.
    */
   public async fetchEditable(): Promise<boolean> {
@@ -639,6 +712,15 @@ export class Message extends BaseMessage<""> {
 
   public toString(): string {
     return this.content;
+  }
+
+  // `hasPermission` from the cache alone.
+  private hasCachedPermission(permission: PermissionsString): Awaitable<boolean> {
+    const { guildId } = this;
+    if (!guildId) return false;
+    return whenAll([requireMe(this.client, guildId)], ([me]) =>
+      whenAll([me.permissionsIn(this.channelId)], ([permissions]) => permissions.has(permission)),
+    );
   }
 
   // The bot's permissions in the message's channel, overwrites included.

@@ -1,3 +1,4 @@
+import { cachedMessage } from "../../util/cache.js";
 import { Reaction as BaseReaction, Structure as BaseStructure } from "@discordjs/structures";
 import type { APIReaction } from "discord-api-types/v10";
 import { ReactionUserManager } from "../../managers/ReactionUserManager.js";
@@ -71,7 +72,9 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
    * the cached one. `null` when the message is not cached.
    */
   public get message(): Message | null {
-    return this[kRelations].message ?? null;
+    return this.lazyRelation("message", (client) =>
+      cachedMessage(client, this[kData].channel_id, this[kData].message_id),
+    );
   }
 
   /**

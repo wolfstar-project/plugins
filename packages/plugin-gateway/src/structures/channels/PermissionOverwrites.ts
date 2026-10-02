@@ -1,8 +1,9 @@
+import { cachedChannel } from "../../util/cache.js";
 import type { APIOverwrite } from "discord-api-types/v10";
 import type { PermissionOverwriteOptions } from "../../util/channels.js";
 import { PermissionsBitField } from "../../util/PermissionsBitField.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { kData, kPatch, kRelations, Structure } from "../Structure.js";
+import { kData, kPatch, type kRelations, Structure } from "../Structure.js";
 
 /**
  * The relations of a {@link PermissionOverwrites}: the channel it belongs to.
@@ -44,11 +45,11 @@ export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
   }
 
   /**
-   * The channel the overwrite belongs to, like discord.js's `PermissionOverwrites#channel`: `null` when the overwrite
-   * was not read from a channel.
+   * The channel the overwrite belongs to, like discord.js's `PermissionOverwrites#channel`: `null` when the channel is
+   * not cached, or when the cache is asynchronous.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

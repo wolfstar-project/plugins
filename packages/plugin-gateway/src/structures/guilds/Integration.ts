@@ -1,3 +1,4 @@
+import { cachedGuild, cachedRole } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { Guild } from "./Guild.js";
 import type { Role } from "./Role.js";
@@ -67,10 +68,12 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
 
   /**
    * The role given to the integration's subscribers, from the cache, like discord.js's `Integration#role`: `null`
-   * when it has none, when it is not cached, or when the integration was not built by a manager.
+   * when it has none, when it is not cached, or when the cache is asynchronous.
    */
   public get role(): Role | null {
-    return this[kRelations].role ?? null;
+    return this.lazyRelation("role", (client) =>
+      cachedRole(client, this[kData].guild_id, this.roleId),
+    );
   }
 
   public override [kPatch](data: Readonly<Partial<CacheEntityTypes["integrations"]>>): this {
@@ -141,7 +144,7 @@ export class Integration extends Structure<CacheEntityTypes["integrations"]> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

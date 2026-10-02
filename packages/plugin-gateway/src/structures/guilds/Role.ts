@@ -1,3 +1,4 @@
+import { cachedGuild, cacheRead, whenAll, type CacheRead } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -8,10 +9,15 @@ import type { ImageResolvable } from "../../util/DataResolver.js";
 import { transformAPIRoleTags, type RoleTagData } from "../../util/Transformers.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
+import {
+  compareRolePositions,
+  computePermissionsIn,
+  computeCachedPermissionsIn,
+  requireMe,
+} from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
-import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
+import { kData, kPatch, type kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 
 /**
  * The colors of a role: `primaryColor` alone for a solid color, with `secondaryColor` for a gradient, and with
@@ -63,11 +69,11 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the role was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -120,6 +126,17 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this as unknown as Role);
+  }
+
+  /**
+   * The role's permissions in a channel, like discord.js's `Role#permissionsIn`: its permissions and `@everyone`'s,
+   * with the channel's `@everyone` and role overwrites applied, read from the cache.
+   *
+   * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
+   * @throws A `GatewayError`: `ChannelUncached` when the channel is not cached.
+   */
+  public permissionsIn(channel: AnyChannel | string): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(computeCachedPermissionsIn(channel, this as unknown as Role));
   }
 
   public get hoist() {
@@ -180,6 +197,29 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    */
   public comparePositionTo(role: Pick<Role, "id" | "position">): number {
     return compareRolePositions(this, role);
+  }
+
+  /**
+   * Whether the bot can edit this role, like discord.js's `Role#editable`: the role is not managed, and the bot has
+   * `ManageRoles` and a higher role.
+   *
+   * @throws A `GatewayError`: `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get editable(): CacheRead<boolean> {
+    if (this.managed) return cacheRead(false);
+
+    return cacheRead(
+      whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+        whenAll([me.permissions], ([permissions]) =>
+          permissions.has("ManageRoles")
+            ? whenAll(
+                [me.roles.highest],
+                ([highest]) => highest !== null && highest.comparePositionTo(this) > 0,
+              )
+            : false,
+        ),
+      ),
+    );
   }
 
   /**

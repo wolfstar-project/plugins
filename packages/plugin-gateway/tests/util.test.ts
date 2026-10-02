@@ -15,6 +15,8 @@ import {
   transformResolved,
 } from "../src/util/Util.js";
 import { withOwnReaction } from "../src/util/reactions.js";
+import { readCached, syncOnly } from "../src/util/cache.js";
+import { createAsyncCache } from "./fixtures/asyncCache.js";
 
 describe("resolveColor", () => {
   test("GIVEN a number THEN it is returned as is", () => {
@@ -308,5 +310,42 @@ describe("withOwnReaction", () => {
     };
 
     expect(withOwnReaction([existing], "howl:123456789012345678")).toHaveLength(1);
+  });
+});
+
+describe("synchronous cache reads", () => {
+  const user = { id: "600000000000000600", username: "wolf", discriminator: "0", avatar: null };
+
+  function createClient(cache?: ReturnType<typeof createAsyncCache>) {
+    return new GatewayClient({
+      discordPublicKey: "0".repeat(64),
+      discordToken: "test-token",
+      clientId: "266624760782258186",
+      intents: 0,
+      ...(cache ? { cache } : {}),
+    });
+  }
+
+  test("GIVEN a synchronous cache THEN readCached returns the entry, undefined on a miss", async () => {
+    const client = createClient();
+    await client.users._add(user as never);
+
+    expect(readCached(client.users.cache, user.id)?.username).toBe("wolf");
+    expect(readCached(client.users.cache, "1")).toBeUndefined();
+  });
+
+  test("GIVEN an asynchronous cache THEN readCached misses", async () => {
+    const client = createClient(createAsyncCache());
+    await client.users._add(user as never);
+
+    expect(client.users.cache.synchronous).toBe(false);
+    expect(readCached(client.users.cache, user.id)).toBeUndefined();
+  });
+
+  test("GIVEN a promise THEN syncOnly is undefined and swallows its rejection", async () => {
+    expect(syncOnly(Promise.reject(new Error("offline")))).toBeUndefined();
+    expect(syncOnly(2)).toBe(2);
+    // An unhandled rejection would fail the run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

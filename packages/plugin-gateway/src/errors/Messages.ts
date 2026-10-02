@@ -36,6 +36,12 @@ export const GatewayErrorMessages = {
   InvalidElement: (type: string, name: string, element: unknown) =>
     `Supplied ${type} ${name} includes an invalid element: ${String(element)}`,
 
+  GuildUncached: (guildId: string) => `Guild ${guildId} is not cached`,
+  GuildUncachedMe: (guildId: string) => `The client's member in guild ${guildId} is not cached`,
+  GuildMemberUncached: (guildId: string, userId: string) =>
+    `Member ${userId} of guild ${guildId} is not cached`,
+  ChannelUncached: (channelId: string) => `Channel ${channelId} is not cached`,
+
   ChannelGuildUnknown: (channelId: string) => `Channel ${channelId} has no known guild`,
   ChannelTypeChanged: (channelId: string, from: number, to: number) =>
     `Channel ${channelId} changed type from ${from} to ${to}`,

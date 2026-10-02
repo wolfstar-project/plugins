@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { Guild } from "./Guild.js";
 import { kData, kRelations, Structure } from "../Structure.js";
@@ -46,7 +47,7 @@ export class GuildBan extends Structure<GuildBanData> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

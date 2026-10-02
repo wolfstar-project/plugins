@@ -1,4 +1,6 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
+import type { GatewayClient } from "../GatewayClient.js";
+import type { Guild } from "../structures/guilds/Guild.js";
 import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
 /**
@@ -254,4 +256,151 @@ export function peekCache<
   return cache instanceof Map
     ? (Map.prototype.get.call(cache, key) as Value | undefined)
     : cache.get(key);
+}
+
+/**
+ * Keeps the value of an {@link Awaitable} that is no promise: what a getter can use without awaiting.
+ *
+ * @param value The value, or a promise of it.
+ * @returns The value, or `undefined` for a promise.
+ * @internal
+ */
+export function syncOnly<T>(value: Awaitable<T>): T | undefined {
+  if (!isPromiseLike(value)) return value;
+  // The read is abandoned: its failure must not surface as an unhandled rejection.
+  value.then(undefined, () => {});
+  return undefined;
+}
+
+/**
+ * Reads an entry of a {@link Cache} for a relation getter: as the cache holds it, see {@link peekCache}.
+ *
+ * @param cache The cache.
+ * @param key The key of the entry.
+ * @returns The entry, or `undefined` when it is not cached or the cache is asynchronous.
+ * @internal
+ */
+export function readCached<Value extends StructureMixin<object>>(
+  cache: Cache<Value>,
+  key: string,
+): Value | undefined {
+  if (!cache.synchronous) return undefined;
+  try {
+    return syncOnly(peekCache(cache, key));
+  } catch {
+    // A failing store is a miss for a getter; the store reported the failure through `cacheError` already.
+    return undefined;
+  }
+}
+
+type MaybeId = string | null | undefined;
+
+// The readers of the relation getters, see `StructureMixin#lazyRelation`: each answers `undefined` when the ID is
+// missing, the entity is not cached, or its cache is asynchronous.
+
+/** @internal */
+export function cachedGuild(client: GatewayClient, guildId: MaybeId) {
+  if (!guildId) return undefined;
+  try {
+    // A cache of instances hands out the guild it holds, like discord.js: the same object on every access.
+    const { cache } = client.guilds;
+    if (cache instanceof Map) return Map.prototype.get.call(cache, guildId) as Guild | undefined;
+    // Shallow: a structure resolving its guild should not make the guild resolve its channels.
+    return syncOnly(client.guilds._getShallow(guildId));
+  } catch {
+    return undefined;
+  }
+}
+
+/** @internal */
+export function cachedChannel(client: GatewayClient, channelId: MaybeId) {
+  return channelId ? readCached(client.channels.cache, channelId) : undefined;
+}
+
+/** @internal */
+export function cachedUser(client: GatewayClient, userId: MaybeId) {
+  return userId ? readCached(client.users.cache, userId) : undefined;
+}
+
+/** @internal */
+export function cachedMember(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { members } = client;
+  return guildId && userId
+    ? readCached(members.cache, members.resolveKey(guildId, userId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedRole(client: GatewayClient, guildId: MaybeId, roleId: MaybeId) {
+  const { roles } = client;
+  return guildId && roleId ? readCached(roles.cache, roles.resolveKey(guildId, roleId)) : undefined;
+}
+
+/** @internal */
+export function cachedMessage(client: GatewayClient, channelId: MaybeId, messageId: MaybeId) {
+  const { messages } = client;
+  return channelId && messageId
+    ? readCached(messages.cache, messages.resolveKey(channelId, messageId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedVoiceState(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { voiceStates } = client;
+  return guildId && userId
+    ? readCached(voiceStates.cache, voiceStates.resolveKey(guildId, userId))
+    : undefined;
+}
+
+/** @internal */
+export function cachedPresence(client: GatewayClient, guildId: MaybeId, userId: MaybeId) {
+  const { presences } = client;
+  return guildId && userId
+    ? readCached(presences.cache, presences.resolveKey(guildId, userId))
+    : undefined;
+}
+
+/**
+ * How the cache of the application answers, for the types of the getters reading it. Empty by default: the cache is
+ * synchronous (the default `CollectionCache`, or synchronous `@wolfstar/plugin-cache` stores), and the getters are
+ * typed as their plain value, like discord.js's.
+ *
+ * @remarks
+ * An application whose cache is asynchronous (a Redis store) declares it once, which types every such getter as a
+ * promise, the way it answers at runtime with that cache:
+ *
+ * ```typescript
+ * declare module "@wolfstar/plugin-gateway" {
+ *   interface GatewayCacheConfig {
+ *     asynchronous: true;
+ *   }
+ * }
+ *
+ * if (await member.kickable) await member.kick();
+ * ```
+ *
+ * Without the declaration the types still say `boolean` while the getter answers a promise, which is always truthy:
+ * declare it whenever a store is asynchronous.
+ */
+// eslint-disable-next-line typescript/no-empty-object-type, typescript/no-empty-interface -- augmented by applications
+export interface GatewayCacheConfig {}
+
+/**
+ * {@link CacheRead} for a given configuration.
+ */
+export type CacheReadOf<Config, T> = Config extends { asynchronous: true } ? Promise<T> : T;
+
+/**
+ * What a getter computed from the cache answers: the value itself with a synchronous cache, a promise of it with an
+ * asynchronous one. Its type follows {@link GatewayCacheConfig}; `await` works with both.
+ */
+export type CacheRead<T> = CacheReadOf<GatewayCacheConfig, T>;
+
+/**
+ * Types what a getter computed from the cache as a {@link CacheRead}.
+ *
+ * @internal
+ */
+export function cacheRead<T>(value: Awaitable<T>): CacheRead<T> {
+  return value as CacheRead<T>;
 }

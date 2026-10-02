@@ -1,3 +1,4 @@
+import { cachedChannel, cachedGuild } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import { GuildScheduledEventStatus, type APIGuildScheduledEvent } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
@@ -170,11 +171,11 @@ export class GuildScheduledEvent extends Structure<APIGuildScheduledEvent> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

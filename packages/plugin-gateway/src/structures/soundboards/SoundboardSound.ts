@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import { SoundboardSound as BaseSoundboardSound } from "@discordjs/structures";
 import type { APISoundboardSound } from "discord-api-types/v10";
 import type { SoundboardSoundEditOptions } from "../../managers/GuildSoundboardSoundManager.js";
@@ -67,7 +68,7 @@ export class SoundboardSound extends BaseSoundboardSound {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

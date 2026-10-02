@@ -1,3 +1,4 @@
+import { cachedGuild, cachedUser } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { AuditLogEvent } from "discord-api-types/v10";
 import { transformAPIAuditLogChange, type AuditLogChange } from "../../util/Transformers.js";
@@ -158,11 +159,11 @@ export class GuildAuditLogsEntry extends Structure<CacheEntityTypes["auditLogEnt
   }
 
   public get executor(): User | null {
-    return this[kRelations].executor ?? null;
+    return this.lazyRelation("executor", (client) => cachedUser(client, this[kData].user_id));
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public get createdTimestamp() {

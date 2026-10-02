@@ -1,3 +1,4 @@
+import { cachedGuild, cachedMember, cachedUser } from "../../util/cache.js";
 import { Presence as BasePresence } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
@@ -9,7 +10,7 @@ import { Activity } from "./Activity.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kRelations, StructureMixin } from "../Structure.js";
+import { initStructure, kData, StructureMixin } from "../Structure.js";
 import type { User } from "../users/User.js";
 
 /**
@@ -75,15 +76,17 @@ export class Presence extends BasePresence {
    * The user, from the cache. Presence payloads only carry the user's changed fields.
    */
   public get user(): User | null {
-    return this[kRelations].user ?? null;
+    return this.lazyRelation("user", (client) => cachedUser(client, this.userId));
   }
 
   public get member(): GuildMember | null {
-    return this[kRelations].member ?? null;
+    return this.lazyRelation("member", (client) =>
+      cachedMember(client, this[kData].guild_id, this.userId),
+    );
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public fetchMember(): Promise<GuildMember> {

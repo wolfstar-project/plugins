@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import { AutoModerationRule as BaseAutoModerationRule } from "@discordjs/structures";
 import type {
   APIAutoModerationAction,
@@ -18,7 +19,7 @@ import {
 } from "../../util/Transformers.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
+import { initStructure, kData, kPatch, StructureMixin } from "../Structure.js";
 
 /**
  * The relations of an {@link AutoModerationRule}, resolved from the cache by the guild's rule manager.
@@ -69,7 +70,7 @@ export class AutoModerationRule extends BaseAutoModerationRule {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**

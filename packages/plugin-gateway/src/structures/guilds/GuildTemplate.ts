@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import { RouteBases, type APITemplate } from "discord-api-types/v10";
 import type {
   GuildTemplateCreateGuildOptions,
@@ -113,7 +114,7 @@ export class GuildTemplate extends Structure<APITemplate> {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].source_guild_id));
   }
 
   /**

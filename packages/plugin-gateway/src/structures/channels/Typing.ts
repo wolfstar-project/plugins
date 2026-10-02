@@ -1,3 +1,4 @@
+import { cachedChannel, cachedGuild } from "../../util/cache.js";
 import type { GatewayTypingStartDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
@@ -55,7 +56,7 @@ export class Typing extends Structure<GatewayTypingStartDispatchData> {
    * The channel the user typed in, from the cache, like discord.js's `Typing#channel`: `null` when it is not cached.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**
@@ -73,7 +74,7 @@ export class Typing extends Structure<GatewayTypingStartDispatchData> {
    * The guild of the channel, from the cache: `null` outside of guilds or when it is not cached.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
