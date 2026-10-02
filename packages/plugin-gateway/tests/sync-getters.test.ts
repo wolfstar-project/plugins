@@ -30,6 +30,8 @@ const newsChannelId = "200000000000000023";
 const modRoleId = "700000000000000072";
 const lowRoleId = "700000000000000071";
 const adminRoleId = "700000000000000073";
+const topRoleId = "700000000000000074";
+const topId = "600000000000000005";
 
 const flags = PermissionFlagsBits;
 
@@ -117,6 +119,7 @@ async function seed(
     roleKey(guildId, adminRoleId),
     role(adminRoleId, 1, flags.Administrator) as never,
   );
+  await cache.roles.set(roleKey(guildId, topRoleId), role(topRoleId, 3, 0n) as never);
   await cache.channels.set(channelId, {
     id: channelId,
     type: ChannelType.GuildText,
@@ -161,6 +164,7 @@ async function seed(
     [targetId, [lowRoleId]],
     [peerId, [modRoleId]],
     [adminId, [adminRoleId]],
+    [topId, [topRoleId]],
   ];
   if (withBot) members.push([botId, botRoles]);
   for (const [id, roles] of members) {
@@ -256,6 +260,7 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
     expect(owner.manageable).toBe(false);
     expect(bot.manageable).toBe(false);
     expect(peer.manageable).toBe(false);
+    expect((await memberOf(client, topId)).manageable).toBe(false);
     for (const each of [target, owner, bot, peer]) {
       expect(each.manageable).toBe(await each.fetchManageable());
     }
@@ -324,6 +329,36 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
     expect(() => channel.permissionsFor("600000000000000099")).toThrow(
       expect.objectContaining({ code: "GuildMemberUncached" }),
     );
+  });
+
+  test("GIVEN a thread whose parent is not cached THEN permissionsIn throws ChannelUncached", async () => {
+    const client = createClient(options());
+    await seed(client);
+    await client.cache!.threads.set("200000000000000041", {
+      id: "200000000000000041",
+      type: ChannelType.PublicThread,
+      name: "orphan",
+      guild_id: guildId,
+      parent_id: "200000000000000040",
+    } as never);
+    const target = await memberOf(client, targetId);
+
+    expect(() => target.permissionsIn("200000000000000041")).toThrow(
+      expect.objectContaining({ code: "ChannelUncached" }),
+    );
+  });
+
+  test("GIVEN another client constructed later THEN a member ID is resolved by the channel's own client", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const target = await memberOf(client, targetId);
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
+    createClient(options());
+
+    expect(channel.permissionsFor(targetId).bitField).toBe(
+      target.permissionsIn(channelId).bitField,
+    );
+    expect(target.permissionsIn(channelId).has("ViewChannel")).toBe(true);
   });
 });
 
@@ -472,6 +507,43 @@ describe("message getters with an asynchronous cache", () => {
     expect(own.editable).toBe(true);
     expect(own.deletable).toBe(true);
     expect(await theirs.fetchDeletable()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+});
+
+describe("every derived getter with an asynchronous cache", () => {
+  test("GIVEN an asynchronous cache THEN each getter needing the cache throws CacheAsynchronous", async () => {
+    const client = createClient({ cache: createAsyncCache() });
+    await seed(client);
+    const target = await memberOf(client, targetId);
+    const channel = (await client.channels.cache.get(channelId)) as TextChannel;
+    const low = (await client.roles.cache.get(client.roles.resolveKey(guildId, lowRoleId)))!;
+    const theirs = await client.messages._build(message(targetId, newsChannelId));
+    const emoji = await client.guilds
+      .emojis(guildId)
+      ._build({ id: "900000000000000090", name: "howl", guild_id: guildId } as never);
+    const invite = await client.guilds
+      .invites(guildId)
+      ._build({ code: "abc", guild_id: guildId, inviter: user(targetId) } as never);
+
+    const getters: [string, () => unknown][] = [
+      ["member.bannable", () => target.bannable],
+      ["member.moderatable", () => target.moderatable],
+      ["member.displayHexColor", () => target.displayHexColor],
+      ["channel.permissionsFor(member)", () => channel.permissionsFor(target)],
+      ["channel.permissionsFor(id)", () => channel.permissionsFor(targetId)],
+      ["channel.permissionsFor(role)", () => channel.permissionsFor(low)],
+      ["role.editable", () => low.editable],
+      ["role.permissionsIn", () => low.permissionsIn(channelId)],
+      ["message.bulkDeletable", () => theirs.bulkDeletable],
+      ["message.crosspostable", () => theirs.crosspostable],
+      ["emoji.deletable", () => emoji.deletable],
+      ["invite.deletable", () => invite.deletable],
+    ];
+    for (const [name, read] of getters) {
+      expect(read, name).toThrow(asynchronous);
+    }
+
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

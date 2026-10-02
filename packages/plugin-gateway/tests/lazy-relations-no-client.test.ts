@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { GuildMember, Message } from "../src/index.js";
+import { ChannelType } from "discord-api-types/v10";
+import { createChannel, GuildMember, Message, type TextChannel } from "../src/index.js";
 
 // No client is constructed in this file: the getters have no cache to read.
 describe("lazy relations without a client", () => {
@@ -11,5 +12,15 @@ describe("lazy relations without a client", () => {
     expect(message.channel).toBeNull();
     expect(member.guild).toBeNull();
     expect(member.voice).toBeNull();
+
+    const channel = createChannel({
+      id: "20",
+      type: ChannelType.GuildText,
+      guild_id: "10",
+      parent_id: "19",
+    } as never) as TextChannel;
+    expect(channel.guild).toBeNull();
+    expect(channel.parent).toBeNull();
+    expect(channel.permissionsLocked).toBeNull();
   });
 });

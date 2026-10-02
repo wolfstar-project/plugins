@@ -341,8 +341,8 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * The member's voice state, from the cache, like discord.js's `GuildMember#voice`: `null` when they are not
-   * connected, when the voice state is not cached (it needs the `GuildVoiceStates` intent), or when the member was not
-   * built by a manager. Use {@link GuildMember.fetchVoiceState} to ask the API.
+   * connected, when the voice state is not cached (it needs the `GuildVoiceStates` intent), or when the cache is
+   * asynchronous. Use {@link GuildMember.fetchVoiceState} to ask the API.
    */
   public get voice(): VoiceState | null {
     return this.lazyRelation("voice", (client) => cachedVoiceState(client, this.guildId, this.id));

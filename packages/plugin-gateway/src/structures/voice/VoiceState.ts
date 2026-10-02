@@ -109,8 +109,7 @@ export class VoiceState extends BaseVoiceState {
   }
 
   /**
-   * The member, from the payload or the cache. `null` when neither has it, or when the voice state was not built by a
-   * manager.
+   * The member, from the payload or the cache. `null` when neither has it, or when the cache is asynchronous.
    */
   public get member(): GuildMember | null {
     return this.lazyRelation("member", (client) =>

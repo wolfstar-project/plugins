@@ -222,13 +222,15 @@ export function requireMe(client: GatewayClient, guildId: Snowflake): GuildMembe
  * @param guildId The ID of the channel's guild.
  * @param overwrites The channel's permission overwrites.
  * @param target A member, a role, or the ID of a cached member.
+ * @param client The client whose cache is read: the target's own by default, or the most recently constructed one
+ * for an ID.
  */
 export function computeTargetPermissionsSync(
   guildId: Snowflake,
   overwrites: readonly APIOverwrite[],
   target: GuildMember | Role | Snowflake,
+  client: GatewayClient = typeof target === "string" ? getGatewayClient() : target.client,
 ): PermissionsBitField {
-  const client = typeof target === "string" ? getGatewayClient() : target.client;
   if (typeof target !== "string" && "hoist" in target) {
     // Like every role that is not cached, a missing `@everyone` grants nothing.
     const everyone = requireCached(
@@ -278,7 +280,13 @@ export function computePermissionsInSync(
   channel: AnyChannel | Snowflake,
   target: GuildMember | Role | Snowflake,
 ): PermissionsBitField {
-  const client = typeof target === "string" ? getGatewayClient() : target.client;
+  // The cache of the client either structure belongs to: an ID alone does not tell which client it is about.
+  const client =
+    typeof target !== "string"
+      ? target.client
+      : typeof channel !== "string"
+        ? channel.client
+        : getGatewayClient();
   const cachedChannel = (id: Snowflake): AnyChannel => {
     const cached = requireCached(client.channels.cache, id, "channels");
     if (!cached) throw new GatewayError("ChannelUncached", id);
@@ -293,7 +301,12 @@ export function computePermissionsInSync(
   }
 
   if (!data.guild_id) throw new GatewayError("ChannelGuildUnknown", resolved.id);
-  return computeTargetPermissionsSync(data.guild_id, data.permission_overwrites ?? [], target);
+  return computeTargetPermissionsSync(
+    data.guild_id,
+    data.permission_overwrites ?? [],
+    target,
+    client,
+  );
 }
 
 type OverwriteHolder = {

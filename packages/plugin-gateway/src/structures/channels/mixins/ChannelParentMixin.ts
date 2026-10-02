@@ -19,8 +19,8 @@ export class ChannelParentMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * The parent of the channel, from the cache, like discord.js's `parent`: the category of a guild channel, or the
-   * channel a thread belongs to. `null` when it has none, when it is not cached, or when the channel was not built by
-   * a manager.
+   * channel a thread belongs to. `null` when it has none, when it is not cached, or when the cache is
+   * asynchronous.
    */
   public get parent(): AnyChannel | null {
     return lazyRelation(this, "parent", (client) =>

@@ -2,12 +2,14 @@ import { createInMemoryCache, memberKey, messageKey, roleKey } from "@wolfstar/p
 import { ChannelType, MessageType, type APIMessage, type APIUser } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import {
+  AutoModerationActionExecution,
   bindClient,
   createChannel,
   GatewayClient,
   GuildMember,
   Message,
   MessageReaction,
+  Presence,
   Role,
   VoiceState,
   type GatewayClientOptions,
@@ -179,6 +181,37 @@ describe.each(synchronousModes)("lazy relations with %s", (_, options) => {
     expect(voice.member?.id).toBe(user.id);
   });
 
+  test("GIVEN a presence and an auto moderation execution built by hand THEN their user and member come from the cache", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const raw = { user: { id: user.id }, guild_id: guildId, status: "online", activities: [] };
+    await client.cache!.presences.set(client.presences.resolveKey(guildId, user.id), raw as never);
+    const presence = bindClient(new Presence(raw as never), client);
+    const execution = bindClient(
+      new AutoModerationActionExecution({
+        guild_id: guildId,
+        user_id: user.id,
+        channel_id: channelId,
+        rule_id: "1",
+        rule_trigger_type: 1,
+        action: { type: 1 },
+        content: "",
+        matched_keyword: null,
+        matched_content: null,
+      } as never),
+      client,
+    );
+
+    expect(presence.user?.username).toBe("wolf");
+    expect(presence.member?.id).toBe(user.id);
+    expect(presence.guild?.id).toBe(guildId);
+    expect(bindClient(new GuildMember(member as never), client).presence?.status).toBe("online");
+    expect(execution.user?.username).toBe("wolf");
+    expect(execution.member?.id).toBe(user.id);
+    expect(execution.channel?.id).toBe(channelId);
+    expect(execution.guild?.id).toBe(guildId);
+  });
+
   test("GIVEN a relation that was not cached when the structure was built THEN it is found once cached", async () => {
     const client = createClient(options());
     await seed(client, false);
@@ -200,5 +233,16 @@ describe("lazy relations with an asynchronous cache", () => {
     expect(built.guild).toBeNull();
     expect(built.channel).toBeNull();
     expect(bindClient(new GuildMember(member as never), client).voice).toBeNull();
+  });
+});
+
+describe("lazy relations with the default cache of instances", () => {
+  test("GIVEN a guild read by a relation getter THEN it is the instance the cache holds", async () => {
+    const client = createClient();
+    await seed(client);
+    const built = bindClient(new Message(message() as never), client);
+
+    expect(built.guild).toBe(built.guild);
+    expect(built.guild).toBe(await client.guilds.cache.get(guildId));
   });
 });

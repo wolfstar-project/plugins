@@ -1,5 +1,6 @@
 import type { Awaitable, CacheEntityName } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import type { Guild } from "../structures/guilds/Guild.js";
 import { GatewayError } from "../errors/GatewayError.js";
 import { kRelations, type StructureMixin } from "../structures/Structure.js";
 
@@ -333,9 +334,12 @@ type MaybeId = string | null | undefined;
 
 /** @internal */
 export function cachedGuild(client: GatewayClient, guildId: MaybeId) {
-  // Shallow: a structure resolving its guild should not make the guild resolve its channels.
   if (!guildId) return undefined;
   try {
+    // A cache of instances hands out the guild it holds, like discord.js: the same object on every access.
+    const { cache } = client.guilds;
+    if (cache instanceof Map) return Map.prototype.get.call(cache, guildId) as Guild | undefined;
+    // Shallow: a structure resolving its guild should not make the guild resolve its channels.
     return syncOnly(client.guilds._getShallow(guildId));
   } catch {
     return undefined;

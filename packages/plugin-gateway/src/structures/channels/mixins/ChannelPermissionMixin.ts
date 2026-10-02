@@ -152,7 +152,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
   public permissionsFor(target: GuildMember | Role | string): Readonly<PermissionsBitField> {
     const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
     if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
-    return computeTargetPermissionsSync(guildId, overwrites, target);
+    return computeTargetPermissionsSync(guildId, overwrites, target, this.client);
   }
 
   /**

@@ -45,8 +45,8 @@ export class PermissionOverwrites extends Structure<PermissionOverwritesData> {
   }
 
   /**
-   * The channel the overwrite belongs to, like discord.js's `PermissionOverwrites#channel`: `null` when the overwrite
-   * was not read from a channel.
+   * The channel the overwrite belongs to, like discord.js's `PermissionOverwrites#channel`: `null` when the channel is
+   * not cached, or when the cache is asynchronous.
    */
   public get channel(): AnyChannel | null {
     return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));

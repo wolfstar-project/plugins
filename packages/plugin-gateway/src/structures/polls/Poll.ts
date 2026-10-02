@@ -64,8 +64,8 @@ export class Poll extends BasePoll<""> {
   }
 
   /**
-   * The message the poll belongs to, like discord.js's `Poll#message`: `null` when the poll was not read from a
-   * message.
+   * The message the poll belongs to, like discord.js's `Poll#message`: `null` when the message is not cached,
+   * or when the cache is asynchronous.
    */
   public get message(): Message | null {
     return this.lazyRelation("message", (client) =>
