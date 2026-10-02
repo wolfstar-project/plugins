@@ -1,6 +1,6 @@
 import { jsonCodec } from "@wolfstar/plugin-cache";
 import { describe, expect, test } from "vitest";
-import { createBroker } from "../src/index.js";
+import { createBroker, fieldsToRecord } from "../src/index.js";
 import { FakeStreamRedis } from "./fixtures/FakeStreamRedis.js";
 
 describe("createBroker", () => {
@@ -52,6 +52,29 @@ describe("createBroker", () => {
     const decoded = codec.decode(Buffer.from(fields[payloadIndex]!, "base64"));
 
     expect(decoded).toEqual({ id: "42", content: "hi" });
+  });
+
+  test("GIVEN publish options THEN the entry carries an encoded state and the shard", async () => {
+    const redis = new FakeStreamRedis();
+    const codec = jsonCodec();
+    const broker = createBroker({ redis, stream: "events", codec });
+
+    await broker.publish("messageUpdate", { id: "1" }, { state: { content: "old" }, shard: 2 });
+
+    const [{ fields }] = redis.entriesOf("events");
+    const record = fieldsToRecord(fields);
+    expect(codec.decode(Buffer.from(record.state!, "base64"))).toEqual({ content: "old" });
+    expect(record.shard).toBe("2");
+  });
+
+  test("GIVEN no publish options THEN the entry holds only the event and payload", async () => {
+    const redis = new FakeStreamRedis();
+    const broker = createBroker({ redis, stream: "events" });
+
+    await broker.publish("messageCreate", { id: "1" });
+
+    const [{ fields }] = redis.entriesOf("events");
+    expect(Object.keys(fieldsToRecord(fields))).toEqual(["event", "payload"]);
   });
 
   test("GIVEN maxLength THEN old entries are trimmed", async () => {

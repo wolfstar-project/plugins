@@ -70,6 +70,62 @@ describe("BrokerConsumer", () => {
     await vi.waitFor(async () => expect(await pending(redis)).toHaveLength(1));
   });
 
+  test("GIVEN an entry published with a state and shard THEN the message carries both", async () => {
+    const redis = new FakeStreamRedis();
+    const broker = createBroker({ redis, stream: "events" });
+    const consumer = start(options(redis));
+    const messages: unknown[] = [];
+    consumer.on("messageCreate", (_payload: unknown, message: unknown) => messages.push(message));
+
+    await consumer.start();
+    await broker.publish("messageCreate", { id: "1" }, { state: { content: "old" }, shard: 3 });
+
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect(messages[0]).toMatchObject({
+      event: "messageCreate",
+      state: { content: "old" },
+      shard: 3,
+    });
+  });
+
+  test("GIVEN an entry published without options THEN the message has no state or shard", async () => {
+    const redis = new FakeStreamRedis();
+    const broker = createBroker({ redis, stream: "events" });
+    const consumer = start(options(redis));
+    const messages: object[] = [];
+    consumer.on("messageCreate", (_payload: unknown, message: object) => messages.push(message));
+
+    await consumer.start();
+    await broker.publish("messageCreate", { id: "1" });
+
+    await vi.waitFor(() => expect(messages).toHaveLength(1));
+    expect("state" in messages[0]!).toBe(false);
+    expect("shard" in messages[0]!).toBe(false);
+  });
+
+  test("GIVEN an entry whose state cannot be decoded THEN it is left pending and no listener runs", async () => {
+    const redis = new FakeStreamRedis();
+    const consumer = start(options(redis));
+    const listener = vi.fn();
+    consumer.on("messageCreate", listener);
+
+    await consumer.start();
+    const payload = Buffer.from(JSON.stringify({ id: "1" })).toString("base64");
+    await redis.xadd(
+      "events",
+      "*",
+      "event",
+      "messageCreate",
+      "payload",
+      payload,
+      "state",
+      "bm90LWpzb24=",
+    );
+
+    await vi.waitFor(async () => expect(await pending(redis)).toHaveLength(1));
+    expect(listener).not.toHaveBeenCalled();
+  });
+
   test("GIVEN a restarted consumer with the same name THEN its own pending entries are redelivered", async () => {
     const redis = new FakeStreamRedis();
     const broker = createBroker({ redis, stream: "events" });
