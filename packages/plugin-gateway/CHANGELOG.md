@@ -1,5 +1,99 @@
 # @wolfstar/plugin-gateway
 
+## 0.9.0
+
+### Minor Changes
+
+- [#163](https://github.com/wolfstar-project/plugins/pull/163) [`31568d2`](https://github.com/wolfstar-project/plugins/commit/31568d2b4d4c3c26f2311432ae30b01a5561ef80) - **Breaking:** managers now expose the discord.js RFC `Cache` as `manager.cache`, built by a client-level `cacheConstructor`.
+
+  - **New default.** Without a cache option, every entity is cached in memory by `CollectionCache`, a `Collection` of structure instances that updates patch in place. Pass `cache: null` to cache nothing (the previous default).
+  - **Memory.** The default keeps every received entity in memory until a dispatch removes it: nothing expires. Bound it with the new `cacheOptions` (`cacheOptions: { messages: { maxSize: 1_000 } }`, the oldest entry of the whole entity is evicted first, not per channel as discord.js does for messages; `0` holds nothing), with `policies.filter` (`policies: { users: { filter: (user) => !user.bot } }`), or cache nothing with `cache: null`.
+  - **Instances.** Only `manager.cache.get` (and `fetch` / `resolve`, which read it) returns the cached instance. The structures delivered by events (the message of `messageCreate`, the `new` of update events) and by `listCached` are freshly built, and a structure's `guild` relation is a copy of the cached guild. The previous state of update and delete events is a copy of the cached instance, carrying the relations of its last read.
+  - `cacheConstructor` receives `(creator, name, options)`, `options` being the exported `CacheConstructorOptions`: `keyOf`, `refresh`, and the entity's `cacheOptions`. Extending `CollectionCache` is the recommended way; a cache that is not a `Map` gets no dispatch cascades, `READY` reconciliation, emoji / sticker diff events, or `listCached`.
+  - `manager.cache` is always defined: `get`, `set`, `has`, `delete`, `add`, `clear`, `getSize`, `construct`, and `synchronous`. `CollectionCache`, `EntityStoreCache`, `NullCache`, and the `Cache` / `CacheConstructor` types are exported.
+  - `cache` / `makeCache` (`@wolfstar/plugin-cache`) keep working: managers view the raw stores through `EntityStoreCache`. `cacheConstructor` and `cacheOptions` cannot be combined with them (it throws), and `cache: null` wins over both.
+  - Managers follow `BaseManager → DataManager → CachedManager`. `BaseManager` is now the root class, no longer an alias of `CachedManager`. `DataManager` adds `resolveId`.
+  - Removed `manager.get()`, `manager.cached()`, `manager.construct()`, `manager.hydrate()`, `manager.resolveData()`, and `manager.entity`. `createStructure` is the protected structure creator; `_add`'s options are `{ id, extras }`.
+  - `_add` returns the cached instance, patched, or a clone with `cache: false`.
+
+  | Before                                      | After                                                                  |
+  | ------------------------------------------- | ---------------------------------------------------------------------- |
+  | `client.users.get(id)`                      | `client.users.cache.get(id)`                                           |
+  | `client.members.get(guildId, userId)`       | `client.members.cache.get(client.members.resolveKey(guildId, userId))` |
+  | `client.users.cached(id)`                   | `client.users.cache.get(id)`                                           |
+  | `client.users.cache?.get(id)` (raw)         | `client.cache?.users?.get(id)`                                         |
+  | `client.users.construct(raw)`               | `client.users.cache.construct(raw)`                                    |
+  | `new GatewayClient({ intents })` (no cache) | `new GatewayClient({ intents, cache: null })`                          |
+
+- [#175](https://github.com/wolfstar-project/plugins/pull/175) [`3e8edb7`](https://github.com/wolfstar-project/plugins/commit/3e8edb73155407a663bafc20bbc7e1cb7f666a8a) - Add discord.js-style sweepers and cache limits. The `sweepers` client option and `client.sweepers` (`Sweepers`, with `sweepMessages`, `sweepUsers`, `sweepThreads`, ..., `filterByLifetime` and `outdatedThreadSweepFilter`) evict entries of the instance caches on a timer or on demand, emitting `cacheSweep`. `cacheOptions.<entity>.keepOverLimit` mirrors `LimitedCollection#keepOverLimit`, and `cacheWithLimits` and `DefaultSweeperSettings` are ready-made presets. Sweepers cannot be combined with `cache` or `makeCache`.
+
+- [#174](https://github.com/wolfstar-project/plugins/pull/174) [`32dadb5`](https://github.com/wolfstar-project/plugins/commit/32dadb5c844c719a7a096a5e4e7c2d7ce7db36a4) - Deprecate the derived `fetch*` twins of discord.js's getters, and remove `Message#fetchEditable`.
+
+  - **Removed**: `Message#fetchEditable()`. It compared two IDs and never awaited, so use the `Message#editable` getter.
+  - **Deprecated**, to be removed in a later release: `GuildMember#fetchPermissions`, `fetchPermissionsIn`, `fetchManageable`, `fetchKickable`, `fetchBannable`, `fetchModeratable`, `fetchDisplayColor`, `fetchDisplayHexColor`; `Message#fetchDeletable`, `fetchBulkDeletable`, `fetchPinnable`, `fetchCrosspostable`; `Role#fetchEditable`, `fetchPermissionsIn`; `fetchPermissionsFor` and `fetchPermissionsLocked` on guild channels; `GuildEmoji#fetchDeletable`, `GuildInvite#fetchDeletable`; `GuildMemberRoleManager#fetchHighest`, `fetchHoist`, `fetchColor`, `fetchIcon`, `fetchPremiumSubscriberRole`, `fetchBotRole`. Each points at its getter in its `@deprecated` notice.
+  - **Kept**: every entity fetch (`fetchGuild`, `fetchChannel`, `fetchMember`, `client.members.fetchMe`, `roles.fetch()`, ...) and `GuildMember#fetchPresence`, which is the only way to read a presence with an asynchronous cache.
+  - **Migrating** when the cache may lack an entity (a size-limited or filtered cache, a `plugin-broker` worker): fetch it (`client.guilds.fetch(guildId)`, `client.members.fetchMe(guildId)`, `member.roles.fetch()`), then read the getter.
+
+- [#168](https://github.com/wolfstar-project/plugins/pull/168) [`8780f43`](https://github.com/wolfstar-project/plugins/commit/8780f43239145b7ad21d1f3dcd03f934264eab9b) - Let a `GatewayClient` that never connects to Discord receive the events of another process's client. The `dispatch` event gains a trailing `state` argument (what the dispatch's handler read before the cache write, e.g. the cached message a `MESSAGE_UPDATE` replaces), `serializeDispatchState`/`reviveDispatchState` carry that state across processes as raw API data (`DispatchStateCodecs`), and `replayDispatch`/`replayDispatchTypes` handle a dispatch another process wrote to the shared cache, emitting `raw` (as a full gateway payload, with `op` and the optional sequence number `s`) and the matching event without reading or writing the cache and without emitting `dispatch`. `replayDispatch` awaits asynchronous listeners and rejects when one fails, and a `USER_UPDATE` for the bot's own user now builds `client.user` when it is still `null` instead of emitting a plain `User`.
+
+- [#166](https://github.com/wolfstar-project/plugins/pull/166) [`dbc7962`](https://github.com/wolfstar-project/plugins/commit/dbc7962e5637a68bef23e3026178688cd760c04f) - **Breaking:** discord.js parity for a member's roles, an emoji's roles, and `UserManager`.
+
+  `GuildMemberRoleManager` (`member.roles`):
+
+  - **Breaking:** built from the member, `new GuildMemberRoleManager(member)`, instead of `(client, guildId, userId, roleIds)`. It exposes `member` and `guild`; `guildId`, `userId` and `ids` are kept.
+  - **Breaking:** `add` / `remove` always resolve to the updated `GuildMember`: a copy of the member for a single role (it resolved to `void`), the patched member for several. `set` resolves to the member it patched.
+  - `add` / `remove` / `set` accept a `Role`, an ID, an array of either, or a `Collection` of roles. So do `member.edit({ roles })` and `client.members.add(…, { roles })`.
+  - New `cache`: a `Collection<Snowflake, Role>` of the member's cached roles, `@everyone` included, uncached roles skipped.
+  - New `highest`, `hoist`, `color`, `icon`, `premiumSubscriberRole` and `botRole` getters, read from `cache`. The `fetch*` methods stay, as the variants that fall back to the API.
+  - New `clone()`.
+  - `color` / `fetchColor()` pick the highest role with a `colors.primaryColor`, as discord.js does.
+
+  `GuildEmojiRoleManager` (`emoji.roles`):
+
+  - **Breaking:** built from the emoji, `new GuildEmojiRoleManager(emoji)`, exposing `emoji` and `guild`.
+  - `add` / `remove` / `set` accept `Role`s, IDs, arrays and a `Collection`, and resolve to the emoji they patched. So do the `roles` of `GuildEmojiCreateOptions` / `GuildEmojiEditOptions`.
+  - New `cache` and `clone()`.
+
+  `cache` and the getters are `Awaitable`, the one difference from discord.js: synchronous with the default `CollectionCache`, a promise with an asynchronous store. `highest` is `Role | null`, as `@everyone` may not be cached.
+
+  `UserManager`:
+
+  - **Breaking:** `createDM(user, { cache, force })` returns the cached direct message channel instead of always calling the API; pass `force: true` for the previous behaviour.
+  - **Breaking:** `deleteDM(user)` closes the cached channel, and throws `UserNoDMChannel` when there is none, instead of opening one first.
+  - New `dmChannel(user)` and `User#dmChannel`: the cached direct message channel with a user, `null` when there is none.
+  - `User#createDM(force?)` and `GuildMember#createDM(force?)`.
+  - `resolve` / `resolveId` / `fetch` / `send` / `createDM` / `deleteDM` accept a `UserResolvable`: a `User`, a `GuildMember`, a `ThreadMember`, a `Message` (its author), or an ID.
+
+  The cached channel is looked up by scanning the channel cache, which is only done on a synchronous cache that can enumerate its entries (`CollectionCache`, the in-memory stores). With `cache: null` or an asynchronous store such as Redis, `dmChannel` is `null`, `createDM` always calls the API, and `deleteDM` asks Discord for the channel first without throwing.
+
+  New error codes: `InvalidType`, `InvalidElement` (an invalid role resolvable) and `UserNoDMChannel`. The `RoleResolvables` and `CreateDMOptions` types are exported.
+
+- [#167](https://github.com/wolfstar-project/plugins/pull/167) [`a08f774`](https://github.com/wolfstar-project/plugins/commit/a08f77471aaf7e5070fd44aed788ec51ffbdf9b0) - `client.members.me(guildId)`: the bot's own member in a guild, read from the cache alone, like discord.js's `guild.members.me`. It is `null` when the member is not cached, and `Awaitable`: synchronous with the default `CollectionCache`, a promise with an asynchronous store. `fetchMe(guildId)` stays as the variant that falls back to the API.
+
+- [#169](https://github.com/wolfstar-project/plugins/pull/169) [`6468763`](https://github.com/wolfstar-project/plugins/commit/646876363da7dc2b730a8fb7ed3011cd11a38859) - discord.js parity for the structure members that had its names but not its contracts.
+
+  **Breaking (`@wolfstar/plugin-gateway`):**
+
+  - `Message#react()` resolves to the `MessageReaction` instead of the message, and counts the bot on the message and on its cached entry. `MessageReaction#react()` bumps its counts too.
+  - `Message#attachments`, `Message#stickers`, `Message#messageSnapshots` and `ReactionManager#cache` are `Collection`s instead of arrays: use `.first()`, `.size`, `.get(id)`. Reactions are keyed by emoji ID, or name for Unicode emojis. The `messageReactionRemoveAll` event carries a `Collection` as well.
+  - `Message#stickers` holds partial `Sticker` structures instead of raw sticker items (`format_type` → `format`).
+  - `Message#partial` is `true` when the message lacks its content, not only its author.
+  - `valueOf()` of a structure is its ID when it has one, so structures compare and sort by ID.
+
+  `@wolfstar/plugin-cache`: a `MESSAGE_REACTION_ADD` for the bot's own reaction is no longer counted when the cached reaction already has `me` set.
+
+- [#170](https://github.com/wolfstar-project/plugins/pull/170) [`5a50497`](https://github.com/wolfstar-project/plugins/commit/5a50497887c4cc18178d753ae140ab1702254673) - discord.js's synchronous getters, read from the cache.
+
+  - **Derived getters**, next to their `fetch*` twins: `GuildMember#permissions`, `permissionsIn(channel)`, `manageable`, `kickable`, `bannable`, `moderatable`, `displayColor`, `displayHexColor`; `Message#editable`, `deletable`, `bulkDeletable`, `pinnable`, `crosspostable`; `Role#editable`, `Role#permissionsIn(channel)`; `permissionsFor(target)` on guild channels; `GuildEmoji#deletable`, `GuildInvite#deletable`. They read the cache alone and never call the API. An entity they need that is not cached throws `GuildUncached`, `GuildUncachedMe`, `ChannelUncached`, or `GuildMemberUncached`; roles that are not cached are skipped, as in discord.js.
+  - **Asynchronous caches** (e.g. a Redis store): the same getters answer a promise, read from the cache alone, so `await member.permissions` works there too. Declare `interface GatewayCacheConfig { asynchronous: true }` in a `declare module "@wolfstar/plugin-gateway"` block to have them typed as promises (`CacheRead<T>`). Without the declaration they are typed as plain values, like discord.js's.
+  - **Relation getters** (`message.guild`, `message.channel`, `member.guild`, `member.voice`, `channel.parent`, `reaction.message`, ...) fall back to a synchronous read of the cache when the manager did not resolve the relation, so structures built by hand, and structures built before their relation was cached, find it. They stay `null` with an asynchronous cache and never throw. `permissionsLocked` benefits from it.
+  - New error codes: `GuildUncached`, `GuildUncachedMe`, `GuildMemberUncached`, `ChannelUncached`.
+
+### Patch Changes
+
+- Updated dependencies [[`6468763`](https://github.com/wolfstar-project/plugins/commit/646876363da7dc2b730a8fb7ed3011cd11a38859)]:
+  - @wolfstar/plugin-cache@0.5.1
+
 ## 0.8.0
 
 ### Minor Changes

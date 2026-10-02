@@ -1,5 +1,16 @@
 # @wolfstar/plugin-broker
 
+## 0.4.0
+
+### Minor Changes
+
+- [#168](https://github.com/wolfstar-project/plugins/pull/168) [`8780f43`](https://github.com/wolfstar-project/plugins/commit/8780f43239145b7ad21d1f3dcd03f934264eab9b) - Add `replayGatewayDispatches`, replaying the dispatches `forwardGatewayDispatches` publishes on a `GatewayClient` that never connects to Discord, so workers run `EventGatewayListener` pieces with the same Structures and previous state (`old` arguments) as the gateway process. Stream entries gain an optional `state` (the previous state of the dispatch's entity, encoded like the payload), `shard` and `sequence` (the gateway sequence number) field, `publish` takes them as `options`, and `BrokerMessage` exposes them; entries without them, and consumers unaware of them, work as before.
+
+### Patch Changes
+
+- Updated dependencies [[`6468763`](https://github.com/wolfstar-project/plugins/commit/646876363da7dc2b730a8fb7ed3011cd11a38859)]:
+  - @wolfstar/plugin-cache@0.5.1
+
 ## 0.3.1
 
 ### Patch Changes
