@@ -1,3 +1,4 @@
+import type { Collection } from "@discordjs/collection";
 import type {
   GatewayChannelPinsUpdateDispatchData,
   GatewayDispatchPayload,
@@ -207,11 +208,11 @@ export interface GatewayEventMap {
     details: MessageReactionEventDetails,
   ];
   /**
-   * Emitted when every reaction is removed from a message, with the reactions the cache held.
+   * Emitted when every reaction is removed from a message, with the reactions the cache held, by emoji.
    */
   messageReactionRemoveAll: [
     message: Message | null,
-    reactions: MessageReaction[],
+    reactions: Collection<string, MessageReaction>,
     data: GatewayMessageReactionRemoveAllDispatchData,
   ];
   /**

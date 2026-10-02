@@ -110,6 +110,15 @@ export class StructureMixin<Data extends object, Relations extends object = obje
   }
 
   /**
+   * The ID of this structure, like discord.js's `Base#valueOf`, so that structures compare and sort by ID. Structures
+   * without an ID (a member whose user is unknown, a voice state, ...) are their own value.
+   */
+  public valueOf(): string | this {
+    const { id } = this as { id?: unknown };
+    return typeof id === "string" ? id : this;
+  }
+
+  /**
    * Patches the raw data of this structure in place, with a shallow merge.
    *
    * @param data The updated data.

@@ -1,6 +1,7 @@
 import { Reaction as BaseReaction, Structure as BaseStructure } from "@discordjs/structures";
 import type { APIReaction } from "discord-api-types/v10";
 import { ReactionUserManager } from "../../managers/ReactionUserManager.js";
+import { withOwnReaction } from "../../util/reactions.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
@@ -131,11 +132,17 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
   }
 
   /**
-   * Reacts with this emoji as the bot.
+   * Reacts with this emoji as the bot, and counts the bot in this reaction.
    */
   public async react(): Promise<this> {
+    const { message } = this;
+    if (message) return this[kPatch]((await message.react(this[kData].emoji)).toJSON());
+
     await this.client.messages.react(this.channelId, this.messageId, this.reactionEmoji.identifier);
-    return this[kPatch]({ me: true });
+    // A partial reaction has no counts to bump: only `me` is known.
+    if (this.partial) return this[kPatch]({ me: true });
+    const [updated] = withOwnReaction([this.toJSON() as APIReaction], this[kData].emoji);
+    return this[kPatch](updated!);
   }
 
   /**
@@ -157,10 +164,7 @@ export class MessageReaction extends BaseReaction<"count" | "count_details"> {
     const message = await this.client.messages.fetch(this.channelId, this.messageId, {
       force: true,
     });
-    const identifier = this.reactionEmoji.identifier;
-    const current = message.reactions.cache.find(
-      (reaction) => ReactionEmoji.resolveIdentifier(reaction.toJSON().emoji) === identifier,
-    );
+    const current = message.reactions.resolve(this[kData].emoji);
     return current
       ? this[kPatch](current.toJSON())
       : this[kPatch]({

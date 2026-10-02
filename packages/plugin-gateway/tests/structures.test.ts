@@ -11,6 +11,7 @@ import {
   kClone,
   kPatch,
   Message,
+  MessageReaction,
   Mixin,
   PermissionOverwrites,
   PublicThreadChannel,
@@ -60,6 +61,32 @@ describe("Structure", () => {
     raw.username = "mutated";
 
     expect(user.username).toBe("wolf");
+  });
+  test("GIVEN a structure with an ID THEN valueOf is the ID", () => {
+    const user = new User(data);
+    const role = new Role({ id: "2", guild_id: "10", name: "pack" } as never);
+    const message = new Message({ id: "3", channel_id: "20" } as never);
+
+    expect(user.valueOf()).toBe(data.id);
+    expect(role.valueOf()).toBe("2");
+    expect(message.valueOf()).toBe("3");
+  });
+
+  test("GIVEN a structure without an ID THEN valueOf is the structure", () => {
+    const member = new GuildMember({ guild_id: "10", roles: [] } as never);
+
+    expect(member.id).toBeNull();
+    expect(member.valueOf()).toBe(member);
+  });
+
+  test("GIVEN a structure defining its own valueOf THEN it is kept", () => {
+    const reaction = new MessageReaction({
+      channel_id: "20",
+      message_id: "30",
+      emoji: { id: null, name: "🐺" },
+    } as never);
+
+    expect(reaction.valueOf()).toBe("🐺");
   });
 });
 

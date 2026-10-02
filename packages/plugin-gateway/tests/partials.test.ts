@@ -59,6 +59,22 @@ afterEach(() => {
 });
 
 describe("Partials", () => {
+  test("GIVEN a message without content or without author THEN it is partial", () => {
+    const author = {
+      id: "1",
+      username: "wolf",
+      discriminator: "0",
+      global_name: null,
+      avatar: null,
+    };
+
+    expect(new Message({ id: "3", channel_id: "20", author } as never).partial).toBe(true);
+    expect(new Message({ id: "3", channel_id: "20", content: "hi" } as never).partial).toBe(true);
+    expect(new Message({ id: "3", channel_id: "20", author, content: "" } as never).partial).toBe(
+      false,
+    );
+  });
+
   test("GIVEN the options THEN the client exposes a frozen copy", () => {
     const partials = [Partials.Message];
     const client = createClient(partials);
@@ -102,7 +118,7 @@ describe("Partials", () => {
     expect(message!.guildId).toBe(guildId);
     expect(message!.client).toBe(client);
     expect(message!.embeds).toEqual([]);
-    expect(message!.attachments).toEqual([]);
+    expect(message!.attachments.size).toBe(0);
   });
 
   test("GIVEN Partials.Message THEN bulk deletes list cached and partial messages in order", async () => {

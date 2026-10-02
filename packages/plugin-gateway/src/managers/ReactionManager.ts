@@ -1,13 +1,12 @@
+import { Collection } from "@discordjs/collection";
 import type { APIReaction } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { Message } from "../structures/messages/Message.js";
 import { bindClient } from "../structures/Structure.js";
 import { MessageReaction } from "../structures/messages/MessageReaction.js";
-import {
-  ReactionEmoji,
-  type EmojiIdentifierResolvable,
-} from "../structures/emojis/ReactionEmoji.js";
+import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
+import { reactionEmojiMatcher } from "../util/reactions.js";
 import { BaseManager } from "./BaseManager.js";
 
 /**
@@ -48,20 +47,24 @@ export class ReactionManager extends BaseManager {
   }
 
   /**
-   * The reactions of the message.
+   * The reactions of the message, by emoji like discord.js's `ReactionManager#cache`: the ID of a custom emoji, the
+   * name of a Unicode one.
    */
-  public get cache(): MessageReaction[] {
-    return this.#reactions.map((reaction) =>
-      bindClient(
-        new MessageReaction(
-          { ...reaction, channel_id: this.channelId, message_id: this.messageId },
-          {
-            message: this.#message,
-            emoji: (reaction.emoji.id && this.#emojis?.get(reaction.emoji.id)) || null,
-          },
-        ),
-        this.client,
-      ),
+  public get cache(): Collection<string, MessageReaction> {
+    return new Collection(
+      this.#reactions.map((reaction) => {
+        const structure = bindClient(
+          new MessageReaction(
+            { ...reaction, channel_id: this.channelId, message_id: this.messageId },
+            {
+              message: this.#message,
+              emoji: (reaction.emoji.id && this.#emojis?.get(reaction.emoji.id)) || null,
+            },
+          ),
+          this.client,
+        );
+        return [structure.valueOf(), structure];
+      }),
     );
   }
 
@@ -71,12 +74,8 @@ export class ReactionManager extends BaseManager {
    * @param emoji The emoji.
    */
   public resolve(emoji: EmojiIdentifierResolvable): MessageReaction | null {
-    const identifier = ReactionEmoji.resolveIdentifier(emoji);
-    return (
-      this.cache.find(
-        (reaction) => ReactionEmoji.resolveIdentifier(reaction.toJSON().emoji) === identifier,
-      ) ?? null
-    );
+    const matches = reactionEmojiMatcher(emoji);
+    return this.cache.find((reaction) => matches(reaction.toJSON().emoji)) ?? null;
   }
 
   /**

@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import type { Awaitable } from "@wolfstar/plugin-cache";
 import { GatewayDispatchEvents } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
@@ -83,13 +84,15 @@ const reaction: DispatchStateCodec = {
     state === undefined ? undefined : reviveReaction(client, state, data),
 };
 
+// A collection of reactions by emoji, see `ReactionManager#cache`: it travels as the list of its values.
 const reactions: DispatchStateCodec = {
   serialize: (state) =>
-    Array.isArray(state) ? state.map((item) => (item as Serializable).toJSON()) : undefined,
-  revive: (client, state, data) =>
-    Array.isArray(state)
-      ? Promise.all(state.map((item) => reviveReaction(client, item, data)))
-      : undefined,
+    state instanceof Collection ? state.map((item) => (item as Serializable).toJSON()) : undefined,
+  revive: async (client, state, data) => {
+    if (!Array.isArray(state)) return undefined;
+    const revived = await Promise.all(state.map((item) => reviveReaction(client, item, data)));
+    return new Collection(revived.map((item) => [item.valueOf(), item]));
+  },
 };
 
 /**

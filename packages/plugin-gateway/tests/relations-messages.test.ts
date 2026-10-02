@@ -1,3 +1,4 @@
+import { container } from "@wolfstar/http-framework";
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { createInMemoryCache, emojiKey, memberKey, roleKey } from "@wolfstar/plugin-cache";
 import {
@@ -10,7 +11,7 @@ import {
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   GatewayClient,
   GuildEmoji,
@@ -244,13 +245,39 @@ describe("message thread, reactions, and poll", () => {
       }),
     );
 
-    const [custom, unicode] = resolved.reactions.cache;
+    const [custom, unicode] = resolved.reactions.cache.values();
 
     expect(custom!.message).toBe(resolved);
     expect(custom!.emoji).toBeInstanceOf(GuildEmoji);
     expect(custom!.emoji.name).toBe("howl");
     expect(resolved.reactions.resolve(`old_name:${emojiId}`)).not.toBeNull();
     expect(unicode!.emoji).toBeInstanceOf(ReactionEmoji);
+  });
+
+  test("GIVEN react on a message with a cached custom emoji THEN the reaction keeps the cached emoji", async () => {
+    const client = createClient();
+    await seed(client);
+    const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const resolved = await client.messages._build(
+      message({
+        reactions: [
+          {
+            count: 2,
+            count_details: { normal: 2, burst: 0 },
+            me: false,
+            me_burst: false,
+            burst_colors: [],
+            emoji: { id: emojiId, name: "old_name" },
+          },
+        ],
+      }),
+    );
+
+    const reaction = await resolved.react(emojiId);
+    put.mockRestore();
+
+    expect(reaction.count).toBe(3);
+    expect(reaction.emoji).toBeInstanceOf(GuildEmoji);
   });
 
   test("GIVEN a reaction on an uncached message THEN the cached emoji resolves, the message is null", async () => {

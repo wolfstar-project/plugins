@@ -479,7 +479,7 @@ describe("message transformers", () => {
         message_snapshots: [{ message: { content: "awoo" } as never }],
       }) as never,
     );
-    const [snapshot] = msg.messageSnapshots;
+    const snapshot = msg.messageSnapshots.first();
     expect(snapshot).toBeInstanceOf(Message);
     expect(snapshot!.id).toBe("700000000000000702");
     expect(snapshot!.channelId).toBe("200000000000000201");

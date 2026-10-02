@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import {
   ChannelType,
   GatewayDispatchEvents,
@@ -320,12 +321,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.MessageReactionRemoveAll]: {
     event: GatewayEvents.MessageReactionRemoveAll,
     before: async (client, data) =>
-      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.cache ?? [],
-    build: async (client, data, previous: MessageReaction[] | undefined) => [
+      (await previousOf(client.messages, data.channel_id, data.message_id))?.reactions.cache ??
+      new Collection<string, MessageReaction>(),
+    build: async (client, data, previous: Collection<string, MessageReaction> | undefined) => [
       (await cachedOrUndefined(() =>
         cachedOf(client.messages, data.channel_id, data.message_id),
       )) ?? partialMessage(client, data.channel_id, data.message_id, data.guild_id),
-      previous ?? [],
+      previous ?? new Collection<string, MessageReaction>(),
       data,
     ],
   },

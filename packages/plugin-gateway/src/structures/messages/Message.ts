@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
@@ -26,6 +27,7 @@ import {
   type RoleSubscriptionData,
 } from "../../util/Transformers.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
+import { withOwnReaction } from "../../util/reactions.js";
 import {
   MessagePayload,
   type MessageCreateOptions,
@@ -37,9 +39,11 @@ import { Attachment } from "./Attachment.js";
 import { Embed } from "./Embed.js";
 import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
+import type { MessageReaction } from "./MessageReaction.js";
 import { MessageMentions, type MessageMentionsRelations } from "./MessageMentions.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import { Poll } from "../polls/Poll.js";
+import { Sticker } from "../stickers/Sticker.js";
 import type { EmojiIdentifierResolvable } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import {
@@ -186,8 +190,16 @@ export class Message extends BaseMessage<""> {
     return new MessageFlagsBitField(this[kData].flags ?? 0).freeze();
   }
 
-  public get attachments(): Attachment[] {
-    return (this[kData].attachments ?? []).map((attachment) => new Attachment(attachment));
+  /**
+   * The attachments of the message, by ID, like discord.js's `Message#attachments`.
+   */
+  public get attachments(): Collection<string, Attachment> {
+    return new Collection(
+      (this[kData].attachments ?? []).map((attachment) => [
+        attachment.id,
+        new Attachment(attachment),
+      ]),
+    );
   }
 
   public get embeds(): Embed[] {
@@ -203,10 +215,17 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The raw sticker items of the message; fetch a full sticker with `client.fetchSticker(id)`.
+   * The stickers of the message, by ID, like discord.js's `Message#stickers`: partial stickers carrying the ID, name,
+   * and format of the payload's sticker items. Fetch a full one with `client.fetchSticker(id)`.
    */
-  public get stickers() {
-    return this[kData].sticker_items ?? [];
+  public get stickers(): Collection<string, Sticker> {
+    const client = this[kClient];
+    return new Collection(
+      (this[kData].sticker_items ?? []).map((item) => {
+        const sticker = new Sticker(item as never);
+        return [item.id, client ? bindClient(sticker, client) : sticker];
+      }),
+    );
   }
 
   /**
@@ -259,23 +278,26 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The snapshots of the messages this one forwards, as messages carrying the IDs of the forwarded message, like
-   * discord.js's `Message#messageSnapshots`.
+   * The snapshots of the messages this one forwards, as a collection of messages carrying the IDs of the forwarded
+   * message, by that ID, like discord.js's `Message#messageSnapshots`.
    */
-  public get messageSnapshots(): Message[] {
+  public get messageSnapshots(): Collection<string, Message> {
+    const collection = new Collection<string, Message>();
     const snapshots = this[kData].message_snapshots;
-    if (!snapshots?.length) return [];
+    if (!snapshots?.length) return collection;
     const reference = this[kData].message_reference;
     const client = this[kClient];
-    return snapshots.map((snapshot) => {
+    for (const snapshot of snapshots) {
       const message = new Message({
         ...snapshot.message,
         id: reference?.message_id ?? this.id,
         channel_id: reference?.channel_id ?? this.channelId,
         guild_id: reference?.guild_id,
       } as CacheEntityTypes["messages"]);
-      return client ? bindClient(message, client) : message;
-    });
+      collection.set(message.id, client ? bindClient(message, client) : message);
+    }
+
+    return collection;
   }
 
   /**
@@ -465,12 +487,13 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * Whether the message is partial: built from its IDs alone for an event about an uncached message, see
-   * `Partials.Message`. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch} completes
-   * it.
+   * Whether the message is partial, like discord.js's `Message#partial`: it lacks its content or its author. That is
+   * a message built from its IDs alone for an event about an uncached message (see `Partials.Message`), or from an
+   * update that carried neither. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch}
+   * completes it.
    */
   public get partial(): boolean {
-    return this[kData].author === undefined;
+    return typeof this[kData].content !== "string" || this[kData].author === undefined;
   }
 
   /**
@@ -541,10 +564,18 @@ export class Message extends BaseMessage<""> {
    * Reacts to the message as the bot.
    *
    * @param emoji The emoji.
+   * @returns The reaction, counting the bot, like discord.js's `Message#react`.
    */
-  public async react(emoji: EmojiIdentifierResolvable): Promise<this> {
+  public async react(emoji: EmojiIdentifierResolvable): Promise<MessageReaction> {
+    // Counting the bot adds no custom emoji the cache was not asked for already: the resolved ones stay valid.
+    const { emojis } = this[kRelations];
     await this.client.messages.react(this.channelId, this.id, emoji);
-    return this;
+    // With a cache of instances the manager already patched this very message: the bot is counted once.
+    const current = this[kData].reactions;
+    const reactions = withOwnReaction(current, emoji);
+    if (reactions !== current) this[kPatch]({ reactions });
+    if (emojis && !this[kRelations].emojis) this[kRelations] = { ...this[kRelations], emojis };
+    return this.reactions.resolve(emoji)!;
   }
 
   /**

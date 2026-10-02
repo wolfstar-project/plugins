@@ -2,6 +2,7 @@ import {
   ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
+  type APIMessage,
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
@@ -19,6 +20,7 @@ import {
   roleKey,
   threadMemberKey,
 } from "../src/index.js";
+import { addReaction } from "../src/lib/reactions.js";
 
 const user: APIUser = {
   id: "1",
@@ -522,5 +524,48 @@ describe("applyCacheOperations results", () => {
       { entity: "users", key: "2", type: "delete", existing: { ...user, id: "2" } },
       { entity: "users", key: "1", type: "delete", existing: { ...user, username: "u" } },
     ]);
+  });
+});
+
+describe("addReaction", () => {
+  const bot = "266624760782258186";
+  const emoji = { id: null, name: "🐺" };
+  const base = { id: "30", channel_id: "20" } as APIMessage;
+  const event = (userId: string, burst = false) =>
+    ({ user_id: userId, channel_id: "20", message_id: "30", emoji, burst, type: 0 }) as never;
+
+  test("GIVEN the bot's own reaction already counted THEN the message is returned unchanged", () => {
+    const cached = {
+      ...base,
+      reactions: [
+        {
+          emoji,
+          count: 1,
+          count_details: { normal: 1, burst: 0 },
+          me: true,
+          me_burst: false,
+          burst_colors: [],
+        },
+      ],
+    } as APIMessage;
+
+    expect(addReaction(cached, event(bot), bot)).toBe(cached);
+  });
+
+  test("GIVEN someone else's reaction on an emoji the bot reacted with THEN it is counted", () => {
+    const counted = addReaction(addReaction(base, event(bot), bot), event("1"), bot);
+
+    expect(counted.reactions?.[0]).toMatchObject({ count: 2, me: true });
+  });
+
+  test("GIVEN the bot's burst reaction on an emoji it reacted normally with THEN it is counted", () => {
+    const counted = addReaction(addReaction(base, event(bot), bot), event(bot, true), bot);
+
+    expect(counted.reactions?.[0]).toMatchObject({
+      count: 2,
+      count_details: { normal: 1, burst: 1 },
+      me: true,
+      me_burst: true,
+    });
   });
 });

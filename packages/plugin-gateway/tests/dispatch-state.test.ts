@@ -99,6 +99,8 @@ export function visible(calls: readonly Emitted[]): Emitted[] {
 /** Structures compare by class and raw data, everything else as is. */
 export function plain(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(plain);
+  // A collection of structures, e.g. the reactions of `messageReactionRemoveAll`.
+  if (value instanceof Map) return [...value].map(plain);
   if (value && typeof value === "object" && typeof (value as any).toJSON === "function") {
     return [value.constructor.name, (value as any).toJSON()];
   }
