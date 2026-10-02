@@ -214,7 +214,12 @@ export class Sweepers {
   public constructor(client: GatewayClient, options: SweeperOptions = {}) {
     this.#client = client;
     this.options = options;
-    for (const entity of SweepableEntityNames) this.#schedule(entity);
+    try {
+      for (const entity of SweepableEntityNames) this.#schedule(entity);
+    } catch (error) {
+      this.destroy();
+      throw error;
+    }
   }
 
   /**

@@ -259,6 +259,21 @@ describe("Sweepers scheduled", () => {
     );
   });
 
+  test("GIVEN a later entity with invalid options THEN no timer of an earlier one is left running", () => {
+    expect(
+      sweeperTimers(() => {
+        expect(() =>
+          createClient({
+            sweepers: {
+              messages: { interval: 60, lifetime: 600 },
+              users: { interval: "60" as never, filter: () => () => true },
+            },
+          }),
+        ).toThrow(TypeError);
+      }),
+    ).toBe(0);
+  });
+
   test("GIVEN DefaultSweeperSettings THEN it schedules the messages and threads sweepers", () => {
     expect(sweeperTimers(() => createClient({ sweepers: DefaultSweeperSettings }))).toBe(2);
   });
