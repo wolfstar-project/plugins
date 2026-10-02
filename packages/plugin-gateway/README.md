@@ -694,8 +694,10 @@ const member = await client.members.fetch(guildId, userId);
 await member.roles.add(roleId, "verified");
 await member.timeout(10 * 60_000, "spam");
 
-const permissions = await member.fetchPermissions(); // discord.js: member.permissions
-if (await member.fetchKickable()) await member.kick(); // discord.js: member.kickable
+if (member.permissions.has("BanMembers")) await member.ban(); // read from the cache, like discord.js
+if (member.kickable) await member.kick();
+const permissions = await member.fetchPermissions(); // any cache, falls back to the API
+if (await member.fetchKickable()) await member.kick();
 
 const me = await client.members.me(guildId); // discord.js: guild.members.me, null when not cached
 const cached = await member.roles.cache; // a Collection of the cached roles, @everyone included
@@ -713,6 +715,15 @@ and resolve to the updated member or emoji. Their `cache` and getters (`highest`
 `icon`, ...) are the one difference: they are `Awaitable`, synchronous with the default cache and a
 promise with an asynchronous store, so `await` them. `highest` is `null` when no role is cached.
 
+discord.js's derived getters are there too: `member.permissions`, `permissionsIn(channel)`,
+`manageable`, `kickable`, `bannable`, `moderatable`, `displayColor`, `role.editable`,
+`message.deletable`, `channel.permissionsFor(member)`, ... They read the cache alone, so they need a
+synchronous one: with an asynchronous store (Redis) they throw a `GatewayError` with the code
+`CacheAsynchronous`, and with an entity they need missing from the cache `GuildUncached`,
+`GuildUncachedMe`, `ChannelUncached`, or `GuildMemberUncached`, as discord.js throws
+`GuildUncachedMe`. Every one of them has a `fetch*` twin (`fetchPermissions()`, `fetchKickable()`,
+`fetchDeletable()`, ...) that works with any cache and asks the API for what is not cached.
+
 `client.users.createDM(user)` returns the cached direct message channel, unless `force` is set;
 `client.users.dmChannel(user)` (or `user.dmChannel`) reads it, and `deleteDM` throws
 `UserNoDMChannel` without one. The cached channel is found by scanning the channel cache, which is
@@ -724,7 +735,7 @@ only done on a synchronous cache that can enumerate its entries: with `cache: nu
 `client.roles` creates, edits, moves and deletes roles, and fetches all of a guild's roles or their
 member counts. Permissions are `PermissionsBitField`s, computed like Discord does: owner and
 administrators get everything, everyone else `@everyone` plus their roles. Channel overwrites
-apply through `member.fetchPermissionsIn(channel)`, see below.
+apply through `member.permissionsIn(channel)` or `member.fetchPermissionsIn(channel)`, see below.
 
 `client.members.request(guildId, options)` (or `guild.requestMembers(options)`, discord.js:
 `guild.members.fetch()`) asks the guild's shard for its members over the gateway instead of REST:
@@ -755,8 +766,10 @@ const channel = await guild.channels.create({ name: "den", type: ChannelType.Gui
 await channel.permissionOverwrites.edit(guild.id, { SendMessages: false });
 await channel.permissionOverwrites.edit(roleId, { SendMessages: true });
 
-const permissions = await channel.fetchPermissionsFor(member); // discord.js: channel.permissionsFor(member)
-await member.fetchPermissionsIn(channel); // discord.js: member.permissionsIn(channel)
+channel.permissionsFor(member).has("SendMessages"); // read from the cache, like discord.js
+member.permissionsIn(channel).has("SendMessages");
+await channel.fetchPermissionsFor(member); // any cache, falls back to the API
+await member.fetchPermissionsIn(channel);
 ```
 
 Permissions are computed like Discord does: guild permissions, then the `@everyone` overwrite, the
@@ -874,9 +887,12 @@ const fetched = await client.fetchWebhook(webhookId, token); // no bot authoriza
 
 `Message` follows discord.js: `attachments`, `embeds`, `mentions` (`MessageMentions`), `reactions`
 (`ReactionManager`), `poll` (`Poll`), `flags`, `cleanContent`, and the actions `reply`, `edit`,
-`delete`, `forward`, `pin`, `react`, `crosspost`, `startThread`, `suppressEmbeds`. Relations are
-fetched: `fetchChannel`, `fetchGuild`, `fetchReference`, and `fetchDeletable` & co. instead of
-discord.js's `deletable`. Text channels get `messages`, `send`, `sendTyping`, and `bulkDelete`.
+`delete`, `forward`, `pin`, `react`, `crosspost`, `startThread`, `suppressEmbeds`. `message.guild`
+and `message.channel` read the cache, like every relation getter: `null` when the entity is not
+cached or the cache is asynchronous, in which case `fetchChannel`, `fetchGuild`, and
+`fetchReference` get it. `editable`, `deletable`, `bulkDeletable`, `pinnable`, and `crosspostable`
+are discord.js's getters, with `fetchDeletable` & co. as their twins for any cache. Text channels
+get `messages`, `send`, `sendTyping`, and `bulkDelete`.
 
 As in discord.js, `attachments`, `stickers`, `messageSnapshots`, and `reactions.cache` are
 `Collection`s keyed by ID (reactions by the ID of a custom emoji, the name of a Unicode one), while

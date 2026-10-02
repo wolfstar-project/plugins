@@ -53,8 +53,9 @@ export interface GuildMemberRelations {
  * A member of a Discord guild.
  *
  * @remarks
- * Relations are asynchronous, unlike discord.js: `member.roles` reads roles through the (possibly asynchronous)
- * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
+ * discord.js's `permissions`, `manageable`, `kickable`, ... are read from the cache like there, which needs a
+ * synchronous one: with an asynchronous cache they throw, and their `fetch*` twins are the ones to use.
+ * `member.roles` reads roles through the (possibly asynchronous) cache, so its getters are `Awaitable`.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   declare public [kRelations]: GuildMemberRelations;

@@ -2,7 +2,7 @@
 
 Date: 2026-10-02
 Package: `@wolfstar/plugin-gateway`
-Status: **approved in conversation**, implementation in progress.
+Status: **implemented**.
 
 Second part of the parity work drawn from the comparative report "strutture di discord.js e Wolfstar" (§3, §4); see
 `2026-10-02-structure-contract-parity-design.md` for the split in P1–P3. It covers the "lazy relations in structure

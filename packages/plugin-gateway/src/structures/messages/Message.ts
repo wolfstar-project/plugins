@@ -103,8 +103,10 @@ export interface Message extends StructureMixin<CacheEntityTypes["messages"], Me
  * client.
  *
  * @remarks
- * Relations discord.js reads synchronously from its cache are asynchronous here: `fetchChannel()`, `fetchGuild()`,
- * `fetchReference()`, and the `fetch*able()` permission checks, which apply the channel's overwrites.
+ * What discord.js reads synchronously from its cache is read the same way here with a synchronous cache: `guild`,
+ * `channel`, and the `editable`, `deletable`, ... permission checks, which apply the channel's overwrites. With an
+ * asynchronous cache the relation getters are `null` and the checks throw: `fetchChannel()`, `fetchGuild()`,
+ * `fetchReference()`, and the `fetch*able()` twins work with any cache.
  */
 export class Message extends BaseMessage<""> {
   /**
