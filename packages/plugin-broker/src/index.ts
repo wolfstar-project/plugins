@@ -9,9 +9,12 @@ export {
 export type { BrokerEventName, BrokerEvents } from "./lib/events.js";
 export {
   forwardGatewayDispatches,
+  replayGatewayDispatches,
+  type ReplayGatewayDispatchesOptions,
   type ForwardGatewayDispatchesOptions,
   type GatewayDispatchEmitterLike,
   type GatewayDispatchListener,
+  type GatewayReplayTargetLike,
   type GatewayDispatchLike,
 } from "./lib/gateway.js";
 export {

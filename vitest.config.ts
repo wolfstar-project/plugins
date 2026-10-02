@@ -10,6 +10,12 @@ export default defineConfig({
         find: /^@wolfstar\/plugin-cache$/,
         replacement: fileURLToPath(new URL("packages/plugin-cache/src/index.ts", import.meta.url)),
       },
+      {
+        find: /^@wolfstar\/plugin-gateway$/,
+        replacement: fileURLToPath(
+          new URL("packages/plugin-gateway/src/index.ts", import.meta.url),
+        ),
+      },
     ],
   },
   // plugin-subcommands-advanced's tests use legacy decorators transformed here.
