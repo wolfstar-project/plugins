@@ -29,7 +29,7 @@ Workers run `EventGatewayListener` pieces unchanged. Gateway process(es) may kee
 `GatewayClient#handleDispatch` splits into two halves sharing one code path:
 
 - Producer half (unchanged behavior): emit `raw`, `before`, cache write, emit `dispatch`, `action.handle`.
-- Consumer half, `replayDispatch(payload, shardId, state?)`: emit `raw`, then `action.handle(payload.d, state, shardId)` only. No `before`, no cache write, no `dispatch` event (workers must not re-forward), no `READY`/`clientReady` bookkeeping, `INTERACTION_CREATE` ignored as today. The dispatch partition queue is used so a guild's dispatches stay ordered within a worker.
+- Consumer half, `replayDispatch(payload, shardId, state?)`: emit `raw`, then `action.handle(payload.d, state, shardId)` only. No `before`, no cache write, no `dispatch` event (workers must not re-forward), no `READY`/`clientReady` bookkeeping: `READY` is ignored like `INTERACTION_CREATE`. The dispatch partition queue is used so a guild's dispatches stay ordered within a worker. `replayDispatch` rejects when a listener throws (the queue itself keeps going), so the caller can leave the entry unacknowledged.
 
 `DispatchHandlers`/`MultiDispatchHandlers` are untouched: workers cannot drift from the gateway process.
 
@@ -41,14 +41,16 @@ A worker `GatewayClient` is constructed with the same cache and token but `conne
 
 ### State serialization
 
-Each `before`-bearing handler declares how its state travels. `DispatchHandler`/`MultiDispatchHandler` gain an optional `state` codec:
+Each `before`-bearing handler has a codec for how its state travels. The codecs live in `plugin-gateway`'s `util/dispatchState.ts` (`DispatchStateCodecs`, keyed by dispatch type), leaving `DispatchHandlers` untouched; a coverage-guard test fails when a handler with a `before` has no codec:
 
 ```ts
-state?: {
-  serialize(state: unknown): unknown;                       // plain data, codec-safe
-  revive(client: GatewayClient, data: unknown): Awaitable<unknown>;
-};
+interface DispatchStateCodec {
+  serialize(state: unknown): unknown; // plain data, codec-safe
+  revive(client: GatewayClient, state: unknown, data: any): Awaitable<unknown>;
+}
 ```
+
+`data` is the dispatch data, needed by guild-scoped managers such as `client.guilds.invites(data.guild_id)`.
 
 Shared helpers cover the shapes that occur:
 
@@ -68,19 +70,20 @@ The stream entry gains an optional field: `event`, `payload`, and `state` (base6
 
 ### Producer: `forwardGatewayDispatches`
 
-Unchanged for emitters that only emit `(payload, shardId)`. For a `GatewayClient` (its `dispatch` event now passing `state`), it asks the dispatch type's codec to serialize the state and publishes it with the entry. The codec table lives in `plugin-gateway` and reaches `plugin-broker` structurally, through a new optional member on `GatewayDispatchEmitterLike` (`serializeDispatchState(type, state)`), so `plugin-broker` still has no runtime dependency on `plugin-gateway`. An emitter without it publishes no state.
+Unchanged for emitters that only emit `(payload, shardId)`. For a `GatewayClient` (its `dispatch` event now passing `state`), it asks the dispatch type's codec to serialize the state and publishes it with the entry. The codec table lives in `plugin-gateway` and reaches `plugin-broker` structurally, through a new optional member on `GatewayDispatchEmitterLike` (`serializeDispatchState(type, state)`), so `plugin-broker` still has no runtime dependency on `plugin-gateway`. An emitter without it publishes no state. A throwing `serializeDispatchState` is reported through `onError` and the dispatch is still published, without state. `shard` is published only when non-zero.
 
 ### Consumer: `replayGatewayDispatches(consumer, client, options?)`
 
 ```ts
 interface GatewayReplayTargetLike {
+  readonly replayDispatchTypes: readonly string[];
   replayDispatch(payload: { t: string; d: unknown }, shardId: number, state?: unknown): Promise<void>;
-  reviveDispatchState(type: string, data: unknown): Promise<unknown>;
+  reviveDispatchState(type: string, state: unknown, data: unknown): Promise<unknown>;
 }
 replayGatewayDispatches(consumer: BrokerConsumer, client: GatewayReplayTargetLike, options?: { events?: readonly string[] }): () => void;
 ```
 
-It registers a listener per forwarded dispatch type (`options.events`, else every dispatch type `DispatchHandlers`/`MultiDispatchHandlers` know), which revives `state` and awaits `client.replayDispatch`. The returned promise is what `BrokerConsumer` already awaits before `XACK`: a worker whose listener throws leaves the entry pending, so at-least-once delivery is preserved end to end. Returns a function removing the listeners.
+It registers a listener per forwarded dispatch type (`options.events`, else `client.replayDispatchTypes`: every type with an action, minus `READY`), which revives `state` and awaits `client.replayDispatch`. The returned promise is what `BrokerConsumer` already awaits before `XACK`: a worker whose listener throws leaves the entry pending, so at-least-once delivery is preserved end to end. Returns a function removing the listeners.
 
 `shardId` is not on the stream today; it is added as an optional `shard` field and defaults to `0` when absent.
 

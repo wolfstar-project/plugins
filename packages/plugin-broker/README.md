@@ -136,6 +136,38 @@ With [`@wolfstar/plugin-sharder`](https://www.npmjs.com/package/@wolfstar/plugin
 every shard process: they all publish onto the same stream, and the workers share the load through
 their consumer group.
 
+### Gateway process and workers
+
+Run one `GatewayClient` that connects to Discord and forwards its dispatches, and any number of
+workers that never connect but replay them on their own `GatewayClient`, so `EventGatewayListener`
+pieces behave as if the dispatch happened in-process, `old` arguments included. Both clients must
+use the same Redis cache.
+
+```ts
+// Gateway process
+const gatewayClient = new GatewayClient({ ...options, cache: redisCache });
+forwardGatewayDispatches(gatewayClient, broker);
+await gatewayClient.start();
+
+// Worker: same cache, never connected
+const worker = new GatewayClient({ ...options, cache: redisCache });
+const consumer = new BrokerConsumer({
+  redis,
+  stream: "wolfstar:events",
+  group: "workers",
+  consumer: "worker-1",
+});
+replayGatewayDispatches(consumer, worker);
+await consumer.start();
+```
+
+A worker's `messageUpdate` listener receives the message as it was before the edit: the gateway
+process ships that previous state with the dispatch (serialized as raw API data), and the worker
+rebuilds it. Relations of that previous state (author, guild, …) resolve from the cache when the
+worker handles the entry, so they can be newer than the dispatch. `READY`, `INTERACTION_CREATE` and
+shard lifecycle events (`shardReady`, `shardClose`, …) are not replayed. An entry is acknowledged
+once its listeners resolved, so a worker listener that throws leaves it pending for redelivery.
+
 ### `BrokerListener` piece
 
 Like `EventGatewayListener` in `@wolfstar/plugin-gateway`, a `BrokerListener` piece typed by event
