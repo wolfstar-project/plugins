@@ -42,7 +42,7 @@ reading another cache. The goal is that code written against discord.js keeps wo
 
 1. calls `client.messages.react(channelId, id, emoji)` (unchanged, `Promise<void>`);
 2. computes the message's `reactions` with the bot's reaction added — a pure helper `withOwnReaction(reactions, emoji)`
-   in `util/messages.ts`: when the emoji is already there with `me: true`, nothing changes (the route is idempotent);
+   in `util/reactions.ts`: when the emoji is already there with `me: true`, nothing changes (the route is idempotent);
    when it is there with `me: false`, `count` and `count_details.normal` go up by one and `me` becomes `true`;
    otherwise a new entry `{ count: 1, count_details: { normal: 1, burst: 0 }, me: true, me_burst: false,
 burst_colors: [], emoji }` is appended;
