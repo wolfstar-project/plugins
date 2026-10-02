@@ -11,6 +11,7 @@ export {
   forwardGatewayDispatches,
   type ForwardGatewayDispatchesOptions,
   type GatewayDispatchEmitterLike,
+  type GatewayDispatchListener,
   type GatewayDispatchLike,
 } from "./lib/gateway.js";
 export {

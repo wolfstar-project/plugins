@@ -85,4 +85,58 @@ describe("forwardGatewayDispatches", () => {
     expect(publish).not.toHaveBeenCalled();
     expect(client.listenerCount("dispatch")).toBe(0);
   });
+
+  test("GIVEN an emitter that serializes state THEN the serialized state is published with the dispatch", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const serializeDispatchState = vi.fn((_type: string, state: unknown) => ({ raw: state }));
+    const client = Object.assign(gateway(), { serializeDispatchState });
+
+    forwardGatewayDispatches(client, { publish });
+    client.emit("dispatch", { t: "MESSAGE_UPDATE", d: { id: "1" } }, 0, { cached: true });
+
+    expect(serializeDispatchState).toHaveBeenCalledWith("MESSAGE_UPDATE", { cached: true });
+    expect(publish).toHaveBeenCalledExactlyOnceWith(
+      "MESSAGE_UPDATE",
+      { id: "1" },
+      { state: { raw: { cached: true } } },
+    );
+  });
+
+  test("GIVEN a dispatch from a shard other than 0 THEN the shard is published", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const client = gateway();
+
+    forwardGatewayDispatches(client, { publish });
+    client.emit("dispatch", { t: "MESSAGE_CREATE", d: { id: "1" } }, 2);
+
+    expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_CREATE", { id: "1" }, { shard: 2 });
+  });
+
+  test("GIVEN a state and an emitter that cannot serialize it THEN no state is published", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const client = gateway();
+
+    forwardGatewayDispatches(client, { publish });
+    client.emit("dispatch", { t: "MESSAGE_UPDATE", d: { id: "1" } }, 0, { cached: true });
+
+    expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_UPDATE", { id: "1" });
+  });
+
+  test("GIVEN a serializer that throws THEN the dispatch is still published, without state, and onError is told", () => {
+    const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
+    const error = new Error("cannot serialize");
+    const client = Object.assign(gateway(), {
+      serializeDispatchState: () => {
+        throw error;
+      },
+    });
+    const onError = vi.fn();
+    const payload = { t: "MESSAGE_UPDATE", d: { id: "1" } };
+
+    forwardGatewayDispatches(client, { publish }, { onError });
+    client.emit("dispatch", payload, 0, { cached: true });
+
+    expect(publish).toHaveBeenCalledExactlyOnceWith("MESSAGE_UPDATE", { id: "1" });
+    expect(onError).toHaveBeenCalledExactlyOnceWith(error, payload);
+  });
 });
