@@ -280,7 +280,19 @@ export class GuildMemberManager extends CachedManager<
   }
 
   /**
-   * Fetches the bot's own member in a guild.
+   * Gets the bot's own member in a guild from the cache, like discord.js's `guild.members.me`. Synchronous when the
+   * member cache is. Use {@link GuildMemberManager.fetchMe} to fall back to the API.
+   *
+   * @param guildId The ID of the guild.
+   * @returns The member, or `null` when it is not cached.
+   */
+  public me(guildId: string): Awaitable<GuildMember | null> {
+    const key = this.resolveKey(guildId, this.client.user?.id ?? this.client.id);
+    return whenAll([this.cache.get(key)], ([member]) => member ?? null);
+  }
+
+  /**
+   * Fetches the bot's own member in a guild, cache first.
    *
    * @param guildId The ID of the guild.
    */

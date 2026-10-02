@@ -660,6 +660,7 @@ await member.timeout(10 * 60_000, "spam");
 const permissions = await member.fetchPermissions(); // discord.js: member.permissions
 if (await member.fetchKickable()) await member.kick(); // discord.js: member.kickable
 
+const me = await client.members.me(guildId); // discord.js: guild.members.me, null when not cached
 const cached = await member.roles.cache; // a Collection of the cached roles, @everyone included
 const highest = await member.roles.highest; // read from the cache, like discord.js
 const fetched = await member.roles.fetchHighest(); // falls back to the API for uncached roles

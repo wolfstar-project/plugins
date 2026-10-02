@@ -554,6 +554,29 @@ describe("GuildMember", () => {
 });
 
 describe("GuildMemberManager", () => {
+  test("GIVEN me THEN it is the bot's cached member, read synchronously, null when it is not cached", async () => {
+    const client = createCollectionClient();
+    const get = vi.spyOn(container.rest, "get");
+
+    expect(client.members.me(guildId)).toBeNull();
+    await seedGuild(client);
+
+    expect((client.members.me(guildId) as GuildMember).id).toBe(botId);
+    expect(client.members.me(guildId)).toBe(await cachedMember(client, botId));
+    expect(get).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN an asynchronous store THEN me is a promise", async () => {
+    const client = createAsynchronousClient();
+    await seedGuild(client);
+
+    const me = client.members.me(guildId);
+
+    expect(me).toBeInstanceOf(Promise);
+    expect((await me)?.id).toBe(botId);
+    expect(await client.members.me("11")).toBeNull();
+  });
+
   test("GIVEN list and search THEN the query is built and results cached", async () => {
     const client = createClient();
     const get = vi.spyOn(container.rest, "get").mockResolvedValue([member(user, [])]);
