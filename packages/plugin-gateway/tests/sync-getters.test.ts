@@ -1,8 +1,10 @@
 import { createInMemoryCache, memberKey, roleKey } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
+  MessageType,
   OverwriteType,
   PermissionFlagsBits,
+  type APIMessage,
   type APIUser,
 } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
@@ -23,6 +25,8 @@ const peerId = "600000000000000003";
 const adminId = "600000000000000004";
 const channelId = "200000000000000020";
 const threadId = "200000000000000021";
+const moderatedChannelId = "200000000000000022";
+const newsChannelId = "200000000000000023";
 const modRoleId = "700000000000000072";
 const lowRoleId = "700000000000000071";
 const adminRoleId = "700000000000000073";
@@ -75,11 +79,17 @@ interface SeedOptions {
   guildOwner?: string;
   withGuild?: boolean;
   withBot?: boolean;
+  botRoles?: string[];
 }
 
 async function seed(
   client: GatewayClient,
-  { guildOwner = ownerId, withGuild = true, withBot = true }: SeedOptions = {},
+  {
+    guildOwner = ownerId,
+    withGuild = true,
+    withBot = true,
+    botRoles = [modRoleId],
+  }: SeedOptions = {},
 ) {
   const cache = client.cache!;
   if (withGuild) {
@@ -116,6 +126,28 @@ async function seed(
       { id: guildId, type: OverwriteType.Role, allow: "0", deny: String(flags.SendMessages) },
     ],
   } as never);
+  const moderated = [
+    {
+      id: modRoleId,
+      type: OverwriteType.Role,
+      allow: String(flags.ManageMessages | flags.PinMessages),
+      deny: "0",
+    },
+  ];
+  await cache.channels.set(moderatedChannelId, {
+    id: moderatedChannelId,
+    type: ChannelType.GuildText,
+    name: "moderated",
+    guild_id: guildId,
+    permission_overwrites: moderated,
+  } as never);
+  await cache.channels.set(newsChannelId, {
+    id: newsChannelId,
+    type: ChannelType.GuildAnnouncement,
+    name: "news",
+    guild_id: guildId,
+    permission_overwrites: moderated,
+  } as never);
   await cache.threads.set(threadId, {
     id: threadId,
     type: ChannelType.PublicThread,
@@ -130,7 +162,7 @@ async function seed(
     [peerId, [modRoleId]],
     [adminId, [adminRoleId]],
   ];
-  if (withBot) members.push([botId, [modRoleId]]);
+  if (withBot) members.push([botId, botRoles]);
   for (const [id, roles] of members) {
     await cache.users.set(id, user(id) as never);
     await cache.members.set(memberKey(guildId, id), member(id, roles) as never);
@@ -139,6 +171,28 @@ async function seed(
 
 async function memberOf(client: GatewayClient, id: string): Promise<GuildMember> {
   return (await client.members.cache.get(client.members.resolveKey(guildId, id)))!;
+}
+
+function message(authorId: string, channel: string, extra: Partial<APIMessage> = {}) {
+  return {
+    // A recent snowflake: bulk deletion only reaches messages newer than 14 days.
+    id: String((BigInt(Date.now()) - 1_420_070_400_000n) * 4_194_304n),
+    channel_id: channel,
+    guild_id: guildId,
+    author: user(authorId),
+    content: "hello",
+    timestamp: new Date().toISOString(),
+    edited_timestamp: null,
+    tts: false,
+    mention_everyone: false,
+    mentions: [],
+    mention_roles: [],
+    attachments: [],
+    embeds: [],
+    pinned: false,
+    type: MessageType.Default,
+    ...extra,
+  } as never;
 }
 
 const asynchronous = expect.objectContaining({ code: "CacheAsynchronous" });
@@ -287,6 +341,137 @@ describe("member getters with an asynchronous cache", () => {
     expect((await target.fetchPermissions()).has("ViewChannel")).toBe(true);
     expect(await target.fetchManageable()).toBe(true);
     // An unhandled rejection of an abandoned read would fail the run.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+});
+
+describe.each(synchronousModes)("message, role and emoji getters with %s", (_, options) => {
+  test("GIVEN the bot's own message THEN it is editable and deletable", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const own = await client.messages._build(message(botId, channelId));
+
+    expect(own.editable).toBe(true);
+    expect(own.deletable).toBe(true);
+    expect(own.editable).toBe(await own.fetchEditable());
+  });
+
+  test("GIVEN someone else's message THEN deletable, bulkDeletable and pinnable follow the channel permissions", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const plain = await client.messages._build(message(targetId, channelId));
+    const moderated = await client.messages._build(message(targetId, moderatedChannelId));
+    const old = await client.messages._build(
+      message(targetId, moderatedChannelId, { id: "1200000000000000000" }),
+    );
+    const system = await client.messages._build(
+      message(targetId, moderatedChannelId, { type: MessageType.UserJoin }),
+    );
+
+    expect(plain.editable).toBe(false);
+    expect([plain.deletable, plain.bulkDeletable, plain.pinnable]).toEqual([false, false, false]);
+    expect([moderated.deletable, moderated.bulkDeletable, moderated.pinnable]).toEqual([
+      true,
+      true,
+      true,
+    ]);
+    expect(old.bulkDeletable).toBe(false);
+    expect(system.pinnable).toBe(false);
+    expect(moderated.deletable).toBe(await moderated.fetchDeletable());
+    expect(moderated.bulkDeletable).toBe(await moderated.fetchBulkDeletable());
+    expect(moderated.pinnable).toBe(await moderated.fetchPinnable());
+    expect(plain.deletable).toBe(await plain.fetchDeletable());
+  });
+
+  test("GIVEN a message outside of a guild THEN only the author can delete it, and anyone can pin it", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const dm = await client.messages._build(
+      message(targetId, "200000000000000030", { guild_id: undefined } as never),
+    );
+
+    expect(dm.deletable).toBe(false);
+    expect(dm.pinnable).toBe(true);
+    expect(dm.crosspostable).toBe(false);
+  });
+
+  test("GIVEN an announcement channel THEN crosspostable follows the channel type and permissions", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const news = await client.messages._build(message(targetId, newsChannelId));
+    const text = await client.messages._build(message(targetId, moderatedChannelId));
+    const uncached = await client.messages._build(message(targetId, "200000000000000099"));
+
+    expect(news.crosspostable).toBe(true);
+    expect(text.crosspostable).toBe(false);
+    expect(news.crosspostable).toBe(await news.fetchCrosspostable());
+    expect(() => uncached.crosspostable).toThrow(
+      expect.objectContaining({ code: "ChannelUncached" }),
+    );
+  });
+
+  test("GIVEN the bot's roles THEN role.editable follows ManageRoles and the hierarchy", async () => {
+    const client = createClient(options());
+    await seed(client, { botRoles: [adminRoleId, modRoleId] });
+    const roleOf = async (id: string) =>
+      (await client.roles.cache.get(client.roles.resolveKey(guildId, id)))!;
+    const [low, mod] = await Promise.all([roleOf(lowRoleId), roleOf(modRoleId)]);
+
+    expect(low.editable).toBe(true);
+    expect(mod.editable).toBe(false);
+    expect(low.editable).toBe(await low.fetchEditable());
+    expect(mod.editable).toBe(await mod.fetchEditable());
+  });
+
+  test("GIVEN a bot without ManageRoles THEN no role is editable", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const low = (await client.roles.cache.get(client.roles.resolveKey(guildId, lowRoleId)))!;
+
+    expect(low.editable).toBe(false);
+  });
+
+  test("GIVEN an emoji THEN deletable follows ManageGuildExpressions", async () => {
+    const data = { id: "900000000000000090", name: "howl", guild_id: guildId, managed: false };
+    const admin = createClient(options());
+    await seed(admin, { botRoles: [adminRoleId] });
+    const deletable = await admin.guilds.emojis(guildId)._build(data as never);
+    expect(deletable.deletable).toBe(true);
+    expect(deletable.deletable).toBe(await deletable.fetchDeletable());
+
+    const plain = createClient(options());
+    await seed(plain);
+    const kept = await plain.guilds.emojis(guildId)._build(data as never);
+    expect(kept.deletable).toBe(false);
+  });
+
+  test("GIVEN an invite THEN deletable follows its inviter and ManageGuild", async () => {
+    const admin = createClient(options());
+    await seed(admin, { botRoles: [adminRoleId] });
+    const foreign = await admin.guilds.invites(guildId)._build({
+      code: "abc",
+      guild_id: guildId,
+      inviter: user(targetId),
+    } as never);
+
+    expect(foreign.deletable).toBe(true);
+    expect(foreign.deletable).toBe(await foreign.fetchDeletable());
+  });
+});
+
+describe("message getters with an asynchronous cache", () => {
+  test("GIVEN an asynchronous cache THEN deletable throws CacheAsynchronous for someone else's guild message", async () => {
+    const client = createClient({ cache: createAsyncCache() });
+    await seed(client);
+    const theirs = await client.messages._build(message(targetId, moderatedChannelId));
+    const own = await client.messages._build(message(botId, moderatedChannelId));
+
+    expect(() => theirs.deletable).toThrow(asynchronous);
+    expect(() => theirs.pinnable).toThrow(asynchronous);
+    // The author check needs no cache.
+    expect(own.editable).toBe(true);
+    expect(own.deletable).toBe(true);
+    expect(await theirs.fetchDeletable()).toBe(true);
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 });

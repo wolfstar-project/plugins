@@ -1,4 +1,5 @@
 import { cachedGuild } from "../../util/cache.js";
+import { requireMe } from "../../util/permissions.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GuildEmojiEditOptions } from "../../managers/GuildEmojiManager.js";
 import { GuildEmojiRoleManager } from "../../managers/GuildEmojiRoleManager.js";
@@ -93,6 +94,18 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   public get author(): User | null {
     const { user } = this[kData];
     return this[kRelations].author ?? (user ? new User(user) : null);
+  }
+
+  /**
+   * Whether the bot can delete the emoji, like discord.js's `GuildEmoji#deletable`: it is not managed, and the bot
+   * has `ManageGuildExpressions`.
+   *
+   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use {@link GuildEmoji.fetchDeletable}),
+   * `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get deletable(): boolean {
+    if (this.managed) return false;
+    return requireMe(this.client, this.guildId).permissions.has("ManageGuildExpressions");
   }
 
   /**

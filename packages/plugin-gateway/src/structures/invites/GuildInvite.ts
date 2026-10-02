@@ -1,3 +1,4 @@
+import { requireMe } from "../../util/permissions.js";
 import { BaseInvite } from "./BaseInvite.js";
 import { InviteGuild } from "../guilds/InviteGuild.js";
 import type { Guild } from "../guilds/Guild.js";
@@ -19,6 +20,22 @@ export class GuildInvite extends BaseInvite {
   public get guild(): Guild | InviteGuild | null {
     const { guild } = this[kData];
     return this[kRelations].guild ?? (guild ? new InviteGuild(guild) : null);
+  }
+
+  /**
+   * Whether the bot can delete the invite, like discord.js's `GuildInvite#deletable`: it created it, or it has
+   * `ManageGuild` (or `ManageChannels`).
+   *
+   * @throws A `GatewayError` when the permissions are needed: `CacheAsynchronous` with an asynchronous cache (use
+   * {@link GuildInvite.fetchDeletable}), `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get deletable(): boolean {
+    const client = this.client;
+    const { guildId } = this;
+    if (!guildId) return false;
+    if (this.inviterId === (client.user?.id ?? client.id)) return true;
+
+    return requireMe(client, guildId).permissions.any(["ManageGuild", "ManageChannels"]);
   }
 
   /**

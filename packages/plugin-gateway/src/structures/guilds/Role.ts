@@ -1,4 +1,4 @@
-import { cachedGuild } from "../../util/cache.js";
+import { cachedGuild, expectSync } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
@@ -13,6 +13,7 @@ import {
   compareRolePositions,
   computePermissionsIn,
   computePermissionsInSync,
+  requireMe,
 } from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
@@ -197,6 +198,23 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    */
   public comparePositionTo(role: Pick<Role, "id" | "position">): number {
     return compareRolePositions(this, role);
+  }
+
+  /**
+   * Whether the bot can edit this role, like discord.js's `Role#editable`: the role is not managed, and the bot has
+   * `ManageRoles` and a higher role.
+   *
+   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use {@link Role.fetchEditable}),
+   * `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get editable(): boolean {
+    if (this.managed) return false;
+
+    const me = requireMe(this.client, this.guildId);
+    if (!me.permissions.has("ManageRoles")) return false;
+
+    const highest = expectSync(me.roles.highest, "roles");
+    return highest !== null && highest.comparePositionTo(this) > 0;
   }
 
   /**
