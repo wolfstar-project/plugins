@@ -28,6 +28,7 @@ import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../ut
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { GatewayError, GatewayTypeError, GatewayRangeError } from "../errors/GatewayError.js";
 import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
+import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
 
 /**
  * The options to edit a member with.
@@ -38,9 +39,9 @@ export interface GuildMemberEditOptions {
    */
   nick?: string | null;
   /**
-   * The IDs of the roles the member ends up with.
+   * The roles the member ends up with: an array of roles or IDs, or a `Collection` of roles.
    */
-  roles?: readonly string[];
+  roles?: RoleResolvables;
   mute?: boolean;
   deaf?: boolean;
   /**
@@ -76,7 +77,10 @@ export interface GuildMemberEditMeOptions {
 export interface GuildMemberAddOptions {
   accessToken: string;
   nick?: string;
-  roles?: readonly string[];
+  /**
+   * The roles the member starts with: an array of roles or IDs, or a `Collection` of roles.
+   */
+  roles?: RoleResolvables;
   mute?: boolean;
   deaf?: boolean;
 }
@@ -434,7 +438,7 @@ export class GuildMemberManager extends CachedManager<
     const body: RESTPutAPIGuildMemberJSONBody = {
       access_token: options.accessToken,
       nick: options.nick,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
       mute: options.mute,
       deaf: options.deaf,
     };
@@ -458,7 +462,7 @@ export class GuildMemberManager extends CachedManager<
     const until = options.communicationDisabledUntil;
     const body: RESTPatchAPIGuildMemberJSONBody = {
       nick: options.nick,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
       mute: options.mute,
       deaf: options.deaf,
       channel_id: options.channel,

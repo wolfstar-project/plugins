@@ -141,7 +141,7 @@ function changesReduce(
 
 // A cache read that never rejects, so a failing cache degrades to the fallback target.
 async function read<Value extends StructureMixin<object>, Args extends readonly string[]>(
-  manager: DataManager<Value, Args>,
+  manager: Pick<DataManager<Value, Args>, "cache" | "resolveKey">,
   ...args: Args
 ): Promise<Value | undefined> {
   try {

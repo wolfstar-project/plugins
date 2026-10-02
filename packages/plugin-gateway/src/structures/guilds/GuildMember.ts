@@ -125,10 +125,10 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * The member's roles. It needs the member's user ID, which every payload but some partial ones carries.
+   * The member's roles. Changing them needs the member's user ID, which every payload but some partial ones carries.
    */
   public get roles(): GuildMemberRoleManager {
-    return new GuildMemberRoleManager(this.client, this.guildId, this.requireId(), this.roleIds);
+    return new GuildMemberRoleManager(this);
   }
 
   public get joinedTimestamp(): number | null {
@@ -347,7 +347,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Fetches the color the member's name is displayed in, `0` when none of their roles has one.
    */
   public async fetchDisplayColor(): Promise<number> {
-    return (await this.roles.fetchColor())?.color ?? 0;
+    return (await this.roles.fetchColor())?.colors.primaryColor ?? 0;
   }
 
   /**
@@ -442,8 +442,13 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
     return this;
   }
 
-  public createDM(): Promise<DMChannel> {
-    return this.client.users.createDM(this.requireId());
+  /**
+   * Opens a direct message channel with the member, reusing the cached one.
+   *
+   * @param force Whether to skip the cache lookup and always call the API.
+   */
+  public createDM(force = false): Promise<DMChannel> {
+    return this.client.users.createDM(this.requireId(), { force });
   }
 
   public deleteDM(): Promise<DMChannel> {

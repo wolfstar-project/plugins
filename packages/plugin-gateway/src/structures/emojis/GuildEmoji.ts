@@ -83,7 +83,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    * The roles allowed to use the emoji.
    */
   public get roles(): GuildEmojiRoleManager {
-    return new GuildEmojiRoleManager(this.client, this.guildId, this.id, this.roleIds);
+    return new GuildEmojiRoleManager(this);
   }
 
   /**

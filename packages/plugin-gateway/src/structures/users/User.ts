@@ -1,6 +1,6 @@
 import type { BaseImageURLOptions, ImageURLOptions } from "@discordjs/rest";
 import { User as BaseUser } from "@discordjs/structures";
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { cdn } from "../../util/cdn.js";
 import {
   transformAPIAvatarDecorationData,
@@ -154,10 +154,20 @@ export class User extends BaseUser {
   }
 
   /**
-   * Opens a direct message channel with the user, or gets the existing one.
+   * The cached direct message channel with the user, see `UserManager#dmChannel`: `null` when there is none, or when
+   * the channel cache cannot be searched. Synchronous when the channel cache is.
    */
-  public createDM(): Promise<DMChannel> {
-    return this.client.users.createDM(this.id);
+  public get dmChannel(): Awaitable<DMChannel | null> {
+    return this.client.users.dmChannel(this.id);
+  }
+
+  /**
+   * Opens a direct message channel with the user, reusing the cached one.
+   *
+   * @param force Whether to skip the cache lookup and always call the API.
+   */
+  public createDM(force = false): Promise<DMChannel> {
+    return this.client.users.createDM(this.id, { force });
   }
 
   /**

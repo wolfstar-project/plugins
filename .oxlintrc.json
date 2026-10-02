@@ -28,6 +28,7 @@
               "_add",
               "_build",
               "_construct",
+              "_findDM",
               "_getInGuild",
               "_getShallow",
               "_hydrate",

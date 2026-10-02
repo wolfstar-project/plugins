@@ -10,6 +10,7 @@ import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { resolveImage, type ImageResolvable } from "../util/DataResolver.js";
+import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
 
 /**
  * The options to create an emoji with.
@@ -22,9 +23,9 @@ export interface GuildEmojiCreateOptions {
   attachment: ImageResolvable;
   name: string;
   /**
-   * The IDs of the roles allowed to use the emoji, everyone when omitted.
+   * The roles allowed to use the emoji, everyone when omitted: an array of roles or IDs, or a `Collection` of roles.
    */
-  roles?: readonly string[];
+  roles?: RoleResolvables;
   reason?: string;
 }
 
@@ -34,9 +35,10 @@ export interface GuildEmojiCreateOptions {
 export interface GuildEmojiEditOptions {
   name?: string;
   /**
-   * The IDs of the roles allowed to use the emoji, `null` or empty for everyone.
+   * The roles allowed to use the emoji, `null` or empty for everyone: an array of roles or IDs, or a `Collection`
+   * of roles.
    */
-  roles?: readonly string[] | null;
+  roles?: RoleResolvables | null;
   reason?: string;
 }
 
@@ -107,7 +109,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     const body: RESTPostAPIGuildEmojiJSONBody = {
       image: (await resolveImage(options.attachment))!,
       name: options.name,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
     };
     const emoji = await this.client.api.guilds.createEmoji(this.guildId, body, {
       reason: options.reason,
@@ -125,7 +127,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     const body: RESTPatchAPIGuildEmojiJSONBody = {
       name: options.name,
       roles:
-        options.roles === undefined || options.roles === null ? options.roles : [...options.roles],
+        options.roles === undefined || options.roles === null
+          ? options.roles
+          : resolveRoleIds(options.roles),
     };
     const emoji = await this.client.api.guilds.editEmoji(this.guildId, emojiId, body, {
       reason: options.reason,

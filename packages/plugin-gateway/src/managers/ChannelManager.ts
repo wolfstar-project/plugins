@@ -1,5 +1,10 @@
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { applyGatewayDispatch, stageInstanceKey, threadMemberKey } from "@wolfstar/plugin-cache";
+import {
+  applyGatewayDispatch,
+  isIterableCache,
+  stageInstanceKey,
+  threadMemberKey,
+} from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   GatewayDispatchEvents,
@@ -281,6 +286,35 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     return whenAll([this.readRaw(channelId)], ([data]) =>
       data ? this._hydrateInGuild(data, guild) : null,
     );
+  }
+
+  /**
+   * Finds the cached direct message channel with a user, for `client.users`.
+   *
+   * @remarks
+   * Only a synchronous channel cache that can enumerate its entries is searched: scanning every channel of a remote
+   * store costs more than asking Discord for the channel.
+   *
+   * @param userId The ID of the user.
+   * @returns The channel, `null` when the cache was searched and holds none, `undefined` when it cannot be searched.
+   * @internal
+   */
+  public _findDM(userId: string): Awaitable<DMChannel | null | undefined> {
+    const store = this.rawStore;
+    if (store === undefined || store.synchronous !== true || !isIterableCache(store)) {
+      return undefined;
+    }
+
+    return whenAll([this.guard("entries", null, () => store.entries(), [])], ([entries]) => {
+      const found = entries.find(
+        ([, data]) => data.type === ChannelType.DM && data.recipients?.[0]?.id === userId,
+      );
+      if (!found) return null;
+      return whenAll(
+        [this.cache.get(found[0])],
+        ([channel]) => (channel as DMChannel | undefined) ?? null,
+      );
+    });
   }
 
   // Reads a raw channel, without building its structure: a failing store is reported, and counts as a miss.

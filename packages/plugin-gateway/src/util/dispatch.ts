@@ -52,7 +52,7 @@ import { Partials } from "./Partials.js";
 // hot dispatches (presences, voice states, messages) expensive. The previous state therefore carries the relations of
 // the entity's last read. An instance that was never read has none yet, and is read in full.
 async function previousOf<Value extends StructureMixin<object>, Args extends readonly string[]>(
-  manager: DataManager<Value, Args>,
+  manager: Pick<DataManager<Value, Args>, "cache" | "resolveKey">,
   ...args: Args
 ): Promise<Value | undefined> {
   const key = manager.resolveKey(...args);
@@ -65,7 +65,7 @@ async function previousOf<Value extends StructureMixin<object>, Args extends rea
 
 // Reads an entity from the cache of its manager, by the arguments identifying it.
 function cachedOf<Value extends StructureMixin<object>, Args extends readonly string[]>(
-  manager: DataManager<Value, Args>,
+  manager: Pick<DataManager<Value, Args>, "cache" | "resolveKey">,
   ...args: Args
 ): Awaitable<Value | undefined> {
   return manager.cache.get(manager.resolveKey(...args));
