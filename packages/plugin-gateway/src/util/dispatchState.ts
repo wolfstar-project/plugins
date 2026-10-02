@@ -1,0 +1,149 @@
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import { GatewayDispatchEvents } from "discord-api-types/v10";
+import type { GatewayClient } from "../GatewayClient.js";
+import { MessageReaction } from "../structures/messages/MessageReaction.js";
+import { bindClient } from "../structures/Structure.js";
+
+/**
+ * Carries the previous state a dispatch handler reads before the cache write (`DispatchHandler#before`) across
+ * processes: {@link DispatchStateCodec.serialize} turns it into plain, codec-safe data on the gateway process, and
+ * {@link DispatchStateCodec.revive} builds the structures again on a worker.
+ */
+export interface DispatchStateCodec {
+  serialize(state: unknown): unknown;
+  /**
+   * @param client The client of the worker.
+   * @param state What `serialize` returned, after a trip through the wire.
+   * @param data The dispatch data.
+   */
+  revive(client: GatewayClient, state: unknown, data: any): Awaitable<unknown>;
+}
+
+type Hydrator = { hydrate(data: any): Promise<unknown> };
+type ManagerOf = (client: GatewayClient, data: any) => Hydrator;
+type Serializable = { toJSON(): unknown };
+
+// `hydrate`, not `resolveData`: the latter returns the cached entity, which the dispatch has already updated.
+function single(manager: ManagerOf): DispatchStateCodec {
+  return {
+    serialize: (state) => (state === undefined ? undefined : (state as Serializable).toJSON()),
+    revive: (client, state, data) =>
+      state === undefined ? undefined : manager(client, data).hydrate(state),
+  };
+}
+
+function list(manager: ManagerOf, scope: (data: any) => object = () => ({})): DispatchStateCodec {
+  return {
+    serialize: (state) =>
+      Array.isArray(state) ? state.map((item) => (item as Serializable).toJSON()) : undefined,
+    revive: (client, state, data) =>
+      Array.isArray(state)
+        ? Promise.all(
+            state.map((item) => manager(client, data).hydrate({ ...item, ...scope(data) })),
+          )
+        : undefined,
+  };
+}
+
+async function reviveReaction(client: GatewayClient, json: any, data: any) {
+  const message = await client.messages
+    .get(data.channel_id, data.message_id)
+    .catch(() => undefined);
+  const emojiId = json?.emoji?.id as string | null | undefined;
+  const cachedEmoji =
+    data.guild_id && emojiId
+      ? await client.guilds
+          .emojis(data.guild_id)
+          .get(emojiId)
+          .catch(() => undefined)
+      : undefined;
+
+  return bindClient(
+    new MessageReaction(
+      { channel_id: data.channel_id, message_id: data.message_id, ...json },
+      { message: message ?? null, emoji: cachedEmoji ?? null },
+    ),
+    client,
+  );
+}
+
+const reaction: DispatchStateCodec = {
+  serialize: (state) => (state === undefined ? undefined : (state as Serializable).toJSON()),
+  revive: (client, state, data) =>
+    state === undefined ? undefined : reviveReaction(client, state, data),
+};
+
+const reactions: DispatchStateCodec = {
+  serialize: (state) =>
+    Array.isArray(state) ? state.map((item) => (item as Serializable).toJSON()) : undefined,
+  revive: (client, state, data) =>
+    Array.isArray(state)
+      ? Promise.all(state.map((item) => reviveReaction(client, item, data)))
+      : undefined,
+};
+
+/**
+ * How the state of each dispatch type that has a `before` travels, see {@link DispatchStateCodec}.
+ *
+ * @remarks
+ * A handler that gains a `before` needs an entry here; `tests/dispatch-state.test.ts` fails otherwise.
+ */
+export const DispatchStateCodecs: { [Type in GatewayDispatchEvents]?: DispatchStateCodec } = {
+  [GatewayDispatchEvents.GuildUpdate]: single((client) => client.guilds),
+  [GatewayDispatchEvents.GuildDelete]: single((client) => client.guilds),
+  [GatewayDispatchEvents.ChannelUpdate]: single((client) => client.channels),
+  [GatewayDispatchEvents.ThreadUpdate]: single((client) => client.threads),
+  [GatewayDispatchEvents.ThreadDelete]: single((client) => client.threads),
+  [GatewayDispatchEvents.ThreadMemberUpdate]: single((client) => client.threadMembers),
+  [GatewayDispatchEvents.ThreadMembersUpdate]: list(
+    (client) => client.threadMembers,
+    (data) => ({ id: data.id, guild_id: data.guild_id }),
+  ),
+  [GatewayDispatchEvents.MessageUpdate]: single((client) => client.messages),
+  [GatewayDispatchEvents.MessageDelete]: single((client) => client.messages),
+  [GatewayDispatchEvents.MessageDeleteBulk]: list((client) => client.messages),
+  [GatewayDispatchEvents.MessageReactionRemoveAll]: reactions,
+  [GatewayDispatchEvents.MessageReactionRemoveEmoji]: reaction,
+  [GatewayDispatchEvents.GuildMemberUpdate]: single((client) => client.members),
+  [GatewayDispatchEvents.GuildMemberRemove]: single((client) => client.members),
+  [GatewayDispatchEvents.GuildRoleUpdate]: single((client) => client.roles),
+  [GatewayDispatchEvents.GuildRoleDelete]: single((client) => client.roles),
+  [GatewayDispatchEvents.InviteDelete]: single((client, data) =>
+    client.guilds.invites(data.guild_id),
+  ),
+  [GatewayDispatchEvents.VoiceStateUpdate]: single((client) => client.voiceStates),
+  [GatewayDispatchEvents.PresenceUpdate]: single((client) => client.presences),
+  [GatewayDispatchEvents.GuildScheduledEventUpdate]: single((client, data) =>
+    client.guilds.scheduledEvents(data.guild_id),
+  ),
+  [GatewayDispatchEvents.StageInstanceUpdate]: single((client, data) =>
+    client.guilds.stageInstances(data.guild_id),
+  ),
+  [GatewayDispatchEvents.GuildSoundboardSoundUpdate]: single((client, data) =>
+    client.guilds.soundboardSounds(data.guild_id),
+  ),
+  [GatewayDispatchEvents.GuildSoundboardSoundDelete]: single((client, data) =>
+    client.guilds.soundboardSounds(data.guild_id),
+  ),
+  [GatewayDispatchEvents.GuildBanRemove]: single((client, data) =>
+    client.guilds.bans(data.guild_id),
+  ),
+  [GatewayDispatchEvents.AutoModerationRuleUpdate]: single((client, data) =>
+    client.guilds.autoModerationRules(data.guild_id),
+  ),
+  [GatewayDispatchEvents.IntegrationUpdate]: single((client, data) =>
+    client.guilds.integrations(data.guild_id),
+  ),
+  [GatewayDispatchEvents.IntegrationDelete]: single((client, data) =>
+    client.guilds.integrations(data.guild_id),
+  ),
+  [GatewayDispatchEvents.UserUpdate]: single((client) => client.users),
+  [GatewayDispatchEvents.GuildEmojisUpdate]: list(
+    (client, data) => client.guilds.emojis(data.guild_id),
+    (data) => ({ guild_id: data.guild_id }),
+  ),
+  [GatewayDispatchEvents.GuildStickersUpdate]: list(
+    (client, data) => client.guilds.stickers(data.guild_id),
+    (data) => ({ guild_id: data.guild_id }),
+  ),
+};

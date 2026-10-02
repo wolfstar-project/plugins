@@ -58,6 +58,7 @@ import { StickerPack } from "./structures/stickers/StickerPack.js";
 import { ActionsManager } from "./actions/Action.js";
 import { dispatchPartition, DispatchQueue, type DispatchQueueStats } from "./util/DispatchQueue.js";
 import { resolveInviteCode } from "./util/DataResolver.js";
+import { DispatchStateCodecs } from "./util/dispatchState.js";
 import { DispatchTimeoutError } from "./util/errors.js";
 import type { GatewayClientMessageDefaults } from "./structures/messages/MessagePayload.js";
 import type { Partials } from "./util/Partials.js";
@@ -827,6 +828,33 @@ export class GatewayClient extends Client {
    */
   public isClientReady(): boolean {
     return this.clientReadyTimestamp !== null;
+  }
+
+  /**
+   * Serializes the previous state a dispatch's handler read (the `state` of the `dispatch` event) to plain data other
+   * processes can {@link GatewayClient.reviveDispatchState revive}.
+   *
+   * @param type The dispatch type, e.g. `MESSAGE_UPDATE`.
+   * @param state The state, as passed to the `dispatch` event.
+   * @returns The plain data, `undefined` when there is no state or the type keeps none.
+   */
+  public serializeDispatchState(type: string, state: unknown): unknown {
+    if (state === undefined) return undefined;
+    return DispatchStateCodecs[type as GatewayDispatchEvents]?.serialize(state);
+  }
+
+  /**
+   * Builds the structures of a state {@link GatewayClient.serializeDispatchState serialized} on another process, to
+   * hand to {@link GatewayClient.replayDispatch}. Relations resolve from this client's cache as it is now, so they can
+   * be newer than the dispatch.
+   *
+   * @param type The dispatch type.
+   * @param state The serialized state, `undefined` when there was none.
+   * @param data The dispatch data.
+   */
+  public async reviveDispatchState(type: string, state: unknown, data: unknown): Promise<unknown> {
+    if (state === undefined) return undefined;
+    return DispatchStateCodecs[type as GatewayDispatchEvents]?.revive(this, state, data);
   }
 
   /**

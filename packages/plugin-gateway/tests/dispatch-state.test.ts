@@ -1,6 +1,7 @@
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
 import {
+  ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
   MessageType,
@@ -9,7 +10,12 @@ import {
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
 import { describe, expect, test, vi } from "vitest";
-import { GatewayClient } from "../src/index.js";
+import {
+  DispatchHandlers,
+  DispatchStateCodecs,
+  GatewayClient,
+  MultiDispatchHandlers,
+} from "../src/index.js";
 
 export const guildId = "100000000000000010";
 export const channelId = "200000000000000020";
@@ -112,5 +118,256 @@ describe("the dispatch event", () => {
     const [create, update] = dispatched;
     expect(create![2]).toBeUndefined();
     expect((update![2] as { content: string }).content).toBe("hello");
+  });
+});
+
+describe("DispatchStateCodecs", () => {
+  test("GIVEN every handler with a before THEN it has a codec, and every codec a handler with a before", () => {
+    const withBefore = [
+      ...Object.entries(DispatchHandlers),
+      ...Object.entries(MultiDispatchHandlers),
+    ]
+      .filter(([, handler]) => handler && "before" in handler && handler.before)
+      .map(([type]) => type)
+      .toSorted();
+
+    expect(Object.keys(DispatchStateCodecs).toSorted()).toEqual(withBefore);
+  });
+});
+
+interface Case {
+  name: string;
+  seed: [GatewayDispatchEvents, unknown][];
+  update: [GatewayDispatchEvents, unknown];
+}
+
+const member = (extra: object = {}) => ({
+  guild_id: guildId,
+  user: author,
+  roles: [],
+  joined_at: "2026-01-01T00:00:00.000Z",
+  deaf: false,
+  mute: false,
+  flags: 0,
+  ...extra,
+});
+const reaction = {
+  count: 1,
+  count_details: { normal: 1, burst: 0 },
+  me: false,
+  me_burst: false,
+  emoji: { id: null, name: "👍" },
+  burst_colors: [],
+};
+const channel = (extra: object = {}) => ({
+  id: channelId,
+  type: ChannelType.GuildText,
+  guild_id: guildId,
+  name: "general",
+  position: 0,
+  permission_overwrites: [],
+  ...extra,
+});
+const role = (extra: object = {}) => ({
+  id: "300000000000000030",
+  name: "mods",
+  color: 0,
+  hoist: false,
+  position: 1,
+  permissions: "0",
+  managed: false,
+  mentionable: false,
+  flags: 0,
+  ...extra,
+});
+const emoji = (extra: object = {}) => ({
+  id: "400000000000000040",
+  name: "wolf",
+  roles: [],
+  animated: false,
+  available: true,
+  ...extra,
+});
+const stage = (extra: object = {}) => ({
+  id: "500000000000000050",
+  guild_id: guildId,
+  channel_id: "500000000000000051",
+  topic: "a",
+  privacy_level: 2,
+  discoverable_disabled: false,
+  guild_scheduled_event_id: null,
+  ...extra,
+});
+const sound = (extra: object = {}) => ({
+  sound_id: "700000000000000070",
+  name: "howl",
+  volume: 1,
+  emoji_id: null,
+  emoji_name: null,
+  guild_id: guildId,
+  available: true,
+  ...extra,
+});
+
+const threadId = "800000000000000080";
+const threadMember = {
+  id: threadId,
+  user_id: author.id,
+  join_timestamp: "2026-01-01T00:00:00.000Z",
+  flags: 0,
+};
+
+const cases: Case[] = [
+  {
+    name: "single, root manager (message)",
+    seed: [[GatewayDispatchEvents.MessageCreate, message()]],
+    update: [GatewayDispatchEvents.MessageUpdate, message({ content: "edited" })],
+  },
+  {
+    name: "single, root manager (channel)",
+    seed: [[GatewayDispatchEvents.ChannelCreate, channel()]],
+    update: [GatewayDispatchEvents.ChannelUpdate, channel({ name: "renamed" })],
+  },
+  {
+    name: "single, root manager (member)",
+    seed: [[GatewayDispatchEvents.GuildMemberAdd, member()]],
+    update: [GatewayDispatchEvents.GuildMemberUpdate, member({ nick: "alpha" })],
+  },
+  {
+    name: "single, root manager (role)",
+    seed: [[GatewayDispatchEvents.GuildRoleCreate, { guild_id: guildId, role: role() }]],
+    update: [
+      GatewayDispatchEvents.GuildRoleUpdate,
+      { guild_id: guildId, role: role({ name: "admins" }) },
+    ],
+  },
+  {
+    name: "single, guild-scoped manager (stage instance)",
+    seed: [[GatewayDispatchEvents.StageInstanceCreate, stage()]],
+    update: [GatewayDispatchEvents.StageInstanceUpdate, stage({ topic: "b" })],
+  },
+  {
+    name: "single, guild-scoped manager (soundboard sound)",
+    seed: [[GatewayDispatchEvents.GuildSoundboardSoundCreate, sound()]],
+    update: [GatewayDispatchEvents.GuildSoundboardSoundUpdate, sound({ name: "growl" })],
+  },
+  {
+    name: "list, root manager (bulk deleted messages)",
+    seed: [
+      [GatewayDispatchEvents.MessageCreate, message({ id: "1200000000000000001" })],
+      [GatewayDispatchEvents.MessageCreate, message({ id: "1200000000000000002" })],
+    ],
+    update: [
+      GatewayDispatchEvents.MessageDeleteBulk,
+      {
+        ids: ["1200000000000000001", "1200000000000000002"],
+        channel_id: channelId,
+        guild_id: guildId,
+      },
+    ],
+  },
+  {
+    name: "list, root manager with extra scope (removed thread members)",
+    seed: [
+      [
+        GatewayDispatchEvents.ThreadMembersUpdate,
+        { id: threadId, guild_id: guildId, member_count: 1, added_members: [threadMember] },
+      ],
+    ],
+    update: [
+      GatewayDispatchEvents.ThreadMembersUpdate,
+      { id: threadId, guild_id: guildId, member_count: 0, removed_member_ids: [author.id] },
+    ],
+  },
+  {
+    name: "list, guild-scoped manager (emojis)",
+    seed: [[GatewayDispatchEvents.GuildEmojisUpdate, { guild_id: guildId, emojis: [emoji()] }]],
+    update: [
+      GatewayDispatchEvents.GuildEmojisUpdate,
+      { guild_id: guildId, emojis: [emoji({ name: "alpha" })] },
+    ],
+  },
+  {
+    name: "reaction collection",
+    seed: [[GatewayDispatchEvents.MessageCreate, message({ reactions: [reaction] })]],
+    update: [
+      GatewayDispatchEvents.MessageReactionRemoveAll,
+      { channel_id: channelId, message_id: message().id, guild_id: guildId },
+    ],
+  },
+  {
+    name: "single reaction",
+    seed: [[GatewayDispatchEvents.MessageCreate, message({ reactions: [reaction] })]],
+    update: [
+      GatewayDispatchEvents.MessageReactionRemoveEmoji,
+      {
+        channel_id: channelId,
+        message_id: message().id,
+        guild_id: guildId,
+        emoji: { id: null, name: "👍" },
+      },
+    ],
+  },
+  {
+    name: "empty reaction collection (message without reactions)",
+    seed: [[GatewayDispatchEvents.MessageCreate, message()]],
+    update: [
+      GatewayDispatchEvents.MessageReactionRemoveAll,
+      { channel_id: channelId, message_id: message().id, guild_id: guildId },
+    ],
+  },
+];
+
+describe("state round trip", () => {
+  test.each(cases)(
+    "GIVEN $name THEN the worker emits what the producer did",
+    async ({ seed, update }) => {
+      const { producer, worker } = createPair();
+      const produced = recordAll(producer);
+      const replayed = recordAll(worker);
+      const dispatched = captureDispatches(producer);
+
+      for (const [type, data] of seed) await feed(producer, type, data);
+      const mark = produced.length;
+      await feed(producer, update[0], update[1]);
+
+      const [payload, shardId, state] = dispatched.at(-1)!;
+      const serialized = producer.serializeDispatchState(payload.t, state);
+      // The worker only ever sees what went through the wire.
+      const wire = serialized === undefined ? undefined : JSON.parse(JSON.stringify(serialized));
+      expect(wire).toBeDefined();
+
+      const revived = await worker.reviveDispatchState(payload.t, wire, payload.d);
+      await worker.replayDispatch(payload, shardId, revived);
+
+      const expected = visible(produced.slice(mark));
+      expect(expected.length).toBeGreaterThan(0);
+      expect(plain(visible(replayed))).toEqual(plain(expected));
+    },
+  );
+
+  test("GIVEN an update of an uncached message THEN no state is shipped and the worker matches the producer", async () => {
+    const { producer, worker } = createPair();
+    const produced = recordAll(producer);
+    const replayed = recordAll(worker);
+    const dispatched = captureDispatches(producer);
+
+    await feed(producer, GatewayDispatchEvents.MessageUpdate, message({ content: "edited" }));
+
+    const [payload, shardId, state] = dispatched.at(-1)!;
+    expect(state).toBeUndefined();
+    expect(producer.serializeDispatchState(payload.t, state)).toBeUndefined();
+
+    const revived = await worker.reviveDispatchState(payload.t, undefined, payload.d);
+    expect(revived).toBeUndefined();
+    await worker.replayDispatch(payload, shardId, revived);
+
+    expect(plain(visible(replayed))).toEqual(plain(visible(produced)));
+  });
+
+  test("GIVEN a type without a codec THEN serializing and reviving are no-ops", async () => {
+    const { producer } = createPair();
+    expect(producer.serializeDispatchState("TYPING_START", { a: 1 })).toBeUndefined();
+    expect(await producer.reviveDispatchState("TYPING_START", { a: 1 }, {})).toBeUndefined();
   });
 });
