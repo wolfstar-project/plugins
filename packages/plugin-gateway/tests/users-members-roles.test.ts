@@ -677,6 +677,16 @@ describe("GuildMemberRoleManager", () => {
     expect(await target.roles.highest).toBeNull();
   });
 
+  test("GIVEN a member without a user THEN botRole and fetchBotRole are both null", async () => {
+    const client = createCollectionClient();
+    await seedGuild(client);
+    const { user: _, ...userless } = member(user, ["21"]);
+    const target = client.members.cache.construct({ ...userless, guild_id: guildId });
+
+    expect(target.roles.botRole).toBeNull();
+    expect(await target.roles.fetchBotRole()).toBeNull();
+  });
+
   test("GIVEN add with a Role THEN it resolves to a copy of the member with the role", async () => {
     const client = createCollectionClient();
     await seedGuild(client);

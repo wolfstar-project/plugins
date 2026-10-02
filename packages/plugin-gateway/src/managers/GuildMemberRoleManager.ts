@@ -192,7 +192,7 @@ export class GuildMemberRoleManager extends BaseManager {
    * Fetches the role Discord manages for the member, when the member is a bot.
    */
   public async fetchBotRole(): Promise<Role | null> {
-    return pick.botRole(await this.fetch(), this.userId);
+    return pick.botRole(await this.fetch(), this.member.id);
   }
 
   /**
