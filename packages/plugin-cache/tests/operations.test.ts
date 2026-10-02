@@ -535,7 +535,7 @@ describe("addReaction", () => {
     ({ user_id: userId, channel_id: "20", message_id: "30", emoji, burst, type: 0 }) as never;
 
   test("GIVEN the bot's own reaction already counted THEN the message is returned unchanged", () => {
-    const message = {
+    const cached = {
       ...base,
       reactions: [
         {
@@ -549,19 +549,19 @@ describe("addReaction", () => {
       ],
     } as APIMessage;
 
-    expect(addReaction(message, event(bot), bot)).toBe(message);
+    expect(addReaction(cached, event(bot), bot)).toBe(cached);
   });
 
   test("GIVEN someone else's reaction on an emoji the bot reacted with THEN it is counted", () => {
-    const message = addReaction(addReaction(base, event(bot), bot), event("1"), bot);
+    const counted = addReaction(addReaction(base, event(bot), bot), event("1"), bot);
 
-    expect(message.reactions?.[0]).toMatchObject({ count: 2, me: true });
+    expect(counted.reactions?.[0]).toMatchObject({ count: 2, me: true });
   });
 
   test("GIVEN the bot's burst reaction on an emoji it reacted normally with THEN it is counted", () => {
-    const message = addReaction(addReaction(base, event(bot), bot), event(bot, true), bot);
+    const counted = addReaction(addReaction(base, event(bot), bot), event(bot, true), bot);
 
-    expect(message.reactions?.[0]).toMatchObject({
+    expect(counted.reactions?.[0]).toMatchObject({
       count: 2,
       count_details: { normal: 1, burst: 1 },
       me: true,

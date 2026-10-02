@@ -2,7 +2,7 @@
 
 Date: 2026-10-02
 Package: `@wolfstar/plugin-gateway`
-Status: **draft**, awaiting review.
+Status: **implemented**.
 
 Source: the comparative report "strutture di discord.js e Wolfstar" (discord.js `4dc1acc`, plugins `a08f774`), which
 lists where a structure of this package has the name of a discord.js member but not its contract. The parity work it

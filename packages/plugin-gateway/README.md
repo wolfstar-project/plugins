@@ -107,61 +107,61 @@ value is the plain event name, so it is interchangeable with the string literal.
 client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
 ```
 
-| Event                                                     | Arguments                                      |
-| --------------------------------------------------------- | ---------------------------------------------- |
-| `raw`                                                     | `payload`, `shardId` — every dispatch          |
-| `shardReady`                                              | `shardId`, `user`                              |
-| `clientReady`                                             | `client` — once, see below                     |
-| `shardResume` / `shardClose` / `shardError`               | `shardId` / `shardId, code` / `error, shardId` |
-| `guildCreate`                                             | `guild`                                        |
-| `guildUpdate`                                             | `oldGuild \| null`, `newGuild`                 |
-| `guildDelete`                                             | `guild \| null`, `data`                        |
-| `channelCreate` / `channelDelete`                         | `channel`                                      |
-| `channelUpdate`                                           | `oldChannel \| null`, `newChannel`             |
-| `threadCreate` / `threadUpdate` / `threadDelete`          | same shapes as channels                        |
-| `threadListSync`                                          | `threads`, `members`, `data`                   |
-| `threadMemberUpdate`                                      | `oldMember \| null`, `newMember`               |
-| `threadMembersUpdate`                                     | `added`, `removed`, `thread \| null`, `data`   |
-| `messageCreate`                                           | `message`                                      |
-| `messageUpdate`                                           | `oldMessage \| null`, `newMessage`             |
-| `messageDelete`                                           | `message \| null`, `data`                      |
-| `messageDeleteBulk`                                       | `messages`, `data`                             |
-| `messageReactionAdd` / `messageReactionRemove`            | `reaction`, `user \| null`, `details`          |
-| `messageReactionRemoveAll`                                | `message \| null`, `reactions`, `data`         |
-| `messageReactionRemoveEmoji`                              | `reaction`                                     |
-| `messagePollVoteAdd` / `messagePollVoteRemove`            | `answer`, `userId`                             |
-| `guildMemberAdd`                                          | `member`                                       |
-| `guildMemberUpdate`                                       | `oldMember \| null`, `newMember`               |
-| `guildMemberRemove`                                       | `member \| null`, `data`                       |
-| `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete` | same shapes as members                         |
-| `guildMembersChunk`                                       | `members`, `guild \| null`, `data`             |
-| `userUpdate`                                              | `oldUser \| null`, `newUser`                   |
-| `emojiCreate` / `emojiDelete`                             | `emoji`                                        |
-| `emojiUpdate`                                             | `oldEmoji`, `newEmoji`                         |
-| `stickerCreate` / `stickerDelete`                         | `sticker`                                      |
-| `stickerUpdate`                                           | `oldSticker`, `newSticker`                     |
-| `inviteCreate`                                            | `invite`                                       |
-| `inviteDelete`                                            | `invite \| null`, `data`                       |
-| `voiceStateUpdate`                                        | `oldState \| null`, `newState`                 |
-| `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`           |
-| `guildScheduledEventCreate` / `guildScheduledEventDelete` | `event`                                        |
-| `guildScheduledEventUpdate`                               | `oldEvent \| null`, `newEvent`                 |
-| `guildScheduledEventUserAdd` / `...UserRemove`            | `event \| null`, `user \| null`, `data`        |
-| `stageInstanceCreate` / `stageInstanceDelete`             | `stageInstance`                                |
-| `stageInstanceUpdate`                                     | `oldStageInstance \| null`, `newStageInstance` |
-| `guildSoundboardSoundCreate`                              | `sound`                                        |
-| `guildSoundboardSoundUpdate`                              | `oldSound \| null`, `newSound`                 |
-| `guildSoundboardSoundDelete`                              | `sound \| null`, `data`                        |
-| `guildSoundboardSoundsUpdate` / `soundboardSounds`        | `sounds`, `guildId`                            |
-| `guildBanAdd` / `guildBanRemove`                          | `ban`                                          |
-| `guildAuditLogEntryCreate`                                | `entry`                                        |
-| `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                         |
-| `autoModerationRuleUpdate`                                | `oldRule \| null`, `newRule`                   |
-| `autoModerationActionExecution`                           | `execution`                                    |
-| `guildIntegrationsUpdate`                                 | `guild \| null`, `data`                        |
-| `integrationCreate`                                       | `integration`                                  |
-| `integrationUpdate`                                       | `oldIntegration \| null`, `newIntegration`     |
-| `integrationDelete`                                       | `integration \| null`, `data`                  |
+| Event                                                     | Arguments                                               |
+| --------------------------------------------------------- | ------------------------------------------------------- |
+| `raw`                                                     | `payload`, `shardId` — every dispatch                   |
+| `shardReady`                                              | `shardId`, `user`                                       |
+| `clientReady`                                             | `client` — once, see below                              |
+| `shardResume` / `shardClose` / `shardError`               | `shardId` / `shardId, code` / `error, shardId`          |
+| `guildCreate`                                             | `guild`                                                 |
+| `guildUpdate`                                             | `oldGuild \| null`, `newGuild`                          |
+| `guildDelete`                                             | `guild \| null`, `data`                                 |
+| `channelCreate` / `channelDelete`                         | `channel`                                               |
+| `channelUpdate`                                           | `oldChannel \| null`, `newChannel`                      |
+| `threadCreate` / `threadUpdate` / `threadDelete`          | same shapes as channels                                 |
+| `threadListSync`                                          | `threads`, `members`, `data`                            |
+| `threadMemberUpdate`                                      | `oldMember \| null`, `newMember`                        |
+| `threadMembersUpdate`                                     | `added`, `removed`, `thread \| null`, `data`            |
+| `messageCreate`                                           | `message`                                               |
+| `messageUpdate`                                           | `oldMessage \| null`, `newMessage`                      |
+| `messageDelete`                                           | `message \| null`, `data`                               |
+| `messageDeleteBulk`                                       | `messages`, `data`                                      |
+| `messageReactionAdd` / `messageReactionRemove`            | `reaction`, `user \| null`, `details`                   |
+| `messageReactionRemoveAll`                                | `message \| null`, `reactions` (a `Collection`), `data` |
+| `messageReactionRemoveEmoji`                              | `reaction`                                              |
+| `messagePollVoteAdd` / `messagePollVoteRemove`            | `answer`, `userId`                                      |
+| `guildMemberAdd`                                          | `member`                                                |
+| `guildMemberUpdate`                                       | `oldMember \| null`, `newMember`                        |
+| `guildMemberRemove`                                       | `member \| null`, `data`                                |
+| `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete` | same shapes as members                                  |
+| `guildMembersChunk`                                       | `members`, `guild \| null`, `data`                      |
+| `userUpdate`                                              | `oldUser \| null`, `newUser`                            |
+| `emojiCreate` / `emojiDelete`                             | `emoji`                                                 |
+| `emojiUpdate`                                             | `oldEmoji`, `newEmoji`                                  |
+| `stickerCreate` / `stickerDelete`                         | `sticker`                                               |
+| `stickerUpdate`                                           | `oldSticker`, `newSticker`                              |
+| `inviteCreate`                                            | `invite`                                                |
+| `inviteDelete`                                            | `invite \| null`, `data`                                |
+| `voiceStateUpdate`                                        | `oldState \| null`, `newState`                          |
+| `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`                    |
+| `guildScheduledEventCreate` / `guildScheduledEventDelete` | `event`                                                 |
+| `guildScheduledEventUpdate`                               | `oldEvent \| null`, `newEvent`                          |
+| `guildScheduledEventUserAdd` / `...UserRemove`            | `event \| null`, `user \| null`, `data`                 |
+| `stageInstanceCreate` / `stageInstanceDelete`             | `stageInstance`                                         |
+| `stageInstanceUpdate`                                     | `oldStageInstance \| null`, `newStageInstance`          |
+| `guildSoundboardSoundCreate`                              | `sound`                                                 |
+| `guildSoundboardSoundUpdate`                              | `oldSound \| null`, `newSound`                          |
+| `guildSoundboardSoundDelete`                              | `sound \| null`, `data`                                 |
+| `guildSoundboardSoundsUpdate` / `soundboardSounds`        | `sounds`, `guildId`                                     |
+| `guildBanAdd` / `guildBanRemove`                          | `ban`                                                   |
+| `guildAuditLogEntryCreate`                                | `entry`                                                 |
+| `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                                  |
+| `autoModerationRuleUpdate`                                | `oldRule \| null`, `newRule`                            |
+| `autoModerationActionExecution`                           | `execution`                                             |
+| `guildIntegrationsUpdate`                                 | `guild \| null`, `data`                                 |
+| `integrationCreate`                                       | `integration`                                           |
+| `integrationUpdate`                                       | `oldIntegration \| null`, `newIntegration`              |
+| `integrationDelete`                                       | `integration \| null`, `data`                           |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -876,7 +876,13 @@ const fetched = await client.fetchWebhook(webhookId, token); // no bot authoriza
 (`ReactionManager`), `poll` (`Poll`), `flags`, `cleanContent`, and the actions `reply`, `edit`,
 `delete`, `forward`, `pin`, `react`, `crosspost`, `startThread`, `suppressEmbeds`. Relations are
 fetched: `fetchChannel`, `fetchGuild`, `fetchReference`, and `fetchDeletable` & co. instead of
-discord.js's `deletable`. Text channels get `messages`, `send`, `sendTyping`, and `bulkDelete`:
+discord.js's `deletable`. Text channels get `messages`, `send`, `sendTyping`, and `bulkDelete`.
+
+As in discord.js, `attachments`, `stickers`, `messageSnapshots`, and `reactions.cache` are
+`Collection`s keyed by ID (reactions by the ID of a custom emoji, the name of a Unicode one), while
+`embeds` and `components` are arrays. `react()` resolves to the `MessageReaction`, counting the bot.
+`partial` is `true` for a message lacking its content or its author. Every structure is valued by
+its ID (`valueOf()`), like discord.js's `Base`:
 
 ```ts
 const channel = await client.channels.fetch(channelId);
@@ -886,7 +892,8 @@ if (channel instanceof TextChannel) {
     content: "Awoo",
     poll: { question: { text: "Best pack?" }, answers },
   });
-  await message.react("🐺");
+  const reaction = await message.react("🐺");
+  console.log(reaction.count, message.attachments.first()?.url);
   const voters = await message.poll?.answers[0]?.fetchVoters();
   await channel.bulkDelete(10, true);
 }
