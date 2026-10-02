@@ -16,6 +16,7 @@ import {
   GatewayClient,
   MultiDispatchHandlers,
 } from "../src/index.js";
+import { ClientUser } from "../src/structures/users/ClientUser.js";
 
 export const guildId = "100000000000000010";
 export const channelId = "200000000000000020";
@@ -144,6 +145,8 @@ interface Case {
   name: string;
   seed: [GatewayDispatchEvents, unknown][];
   update: [GatewayDispatchEvents, unknown];
+  /** Prepares the producer before anything is fed to it. */
+  setup?: (producer: GatewayClient) => void;
 }
 
 const member = (extra: object = {}) => ({
@@ -221,6 +224,110 @@ const threadMember = {
   join_timestamp: "2026-01-01T00:00:00.000Z",
   flags: 0,
 };
+
+const guild = (extra: object = {}) => ({
+  id: guildId,
+  name: "Pack",
+  icon: null,
+  owner_id: author.id,
+  features: [],
+  ...extra,
+});
+const thread = (extra: object = {}) => ({
+  id: threadId,
+  type: ChannelType.PublicThread,
+  guild_id: guildId,
+  parent_id: channelId,
+  name: "thread",
+  ...extra,
+});
+const voiceState = (extra: object = {}) => ({
+  guild_id: guildId,
+  channel_id: channelId,
+  user_id: author.id,
+  session_id: "session",
+  deaf: false,
+  mute: false,
+  self_deaf: false,
+  self_mute: true,
+  self_video: false,
+  suppress: false,
+  request_to_speak_timestamp: null,
+  ...extra,
+});
+const presence = (extra: object = {}) => ({
+  guild_id: guildId,
+  user: { id: author.id },
+  status: "online",
+  activities: [],
+  client_status: { desktop: "online" },
+  ...extra,
+});
+const invite = (extra: object = {}) => ({
+  code: "wolves",
+  guild_id: guildId,
+  channel_id: channelId,
+  created_at: "2024-01-01T00:00:00.000Z",
+  max_age: 0,
+  max_uses: 0,
+  temporary: false,
+  uses: 0,
+  expires_at: null,
+  ...extra,
+});
+const scheduledEvent = (extra: object = {}) => ({
+  id: "300000000000000031",
+  guild_id: guildId,
+  channel_id: null,
+  creator_id: author.id,
+  creator: author,
+  name: "Full moon",
+  description: null,
+  scheduled_start_time: "2026-10-01T20:00:00.000Z",
+  scheduled_end_time: "2026-10-01T22:00:00.000Z",
+  privacy_level: 2,
+  status: 1,
+  entity_type: 3,
+  entity_id: null,
+  entity_metadata: { location: "The den" },
+  recurrence_rule: null,
+  ...extra,
+});
+const autoModerationRule = (extra: object = {}) => ({
+  id: "900000000000000090",
+  guild_id: guildId,
+  name: "No howling",
+  creator_id: author.id,
+  event_type: 1,
+  trigger_type: 1,
+  trigger_metadata: { keyword_filter: ["awoo"], allow_list: ["wolf"] },
+  actions: [{ type: 1 }],
+  enabled: true,
+  exempt_roles: [],
+  exempt_channels: [],
+  ...extra,
+});
+const integration = (extra: object = {}) => ({
+  id: "400000000000000041",
+  guild_id: guildId,
+  name: "Twitch",
+  type: "twitch",
+  enabled: true,
+  account: { id: "wolfstream", name: "wolfstream" },
+  user: author,
+  ...extra,
+});
+const sticker = (extra: object = {}) => ({
+  id: "450000000000000045",
+  name: "sticker",
+  description: null,
+  tags: "wolf",
+  type: 2,
+  format_type: 1,
+  ...extra,
+});
+
+const botUser: APIUser = { ...author, id: "266624760782258186", username: "bot" };
 
 const cases: Case[] = [
   {
@@ -314,6 +421,12 @@ const cases: Case[] = [
     ],
   },
   {
+    name: "the bot's own user",
+    setup: (producer) => void (producer.user = new ClientUser(botUser)),
+    seed: [[GatewayDispatchEvents.MessageCreate, message({ author: botUser })]],
+    update: [GatewayDispatchEvents.UserUpdate, { ...botUser, username: "renamed" }],
+  },
+  {
     name: "empty reaction collection (message without reactions)",
     seed: [[GatewayDispatchEvents.MessageCreate, message()]],
     update: [
@@ -321,13 +434,124 @@ const cases: Case[] = [
       { channel_id: channelId, message_id: message().id, guild_id: guildId },
     ],
   },
+  {
+    name: "single, root manager (guild update)",
+    seed: [[GatewayDispatchEvents.GuildCreate, guild()]],
+    update: [GatewayDispatchEvents.GuildUpdate, guild({ name: "Renamed" })],
+  },
+  {
+    name: "single, root manager (guild delete)",
+    seed: [[GatewayDispatchEvents.GuildCreate, guild()]],
+    update: [GatewayDispatchEvents.GuildDelete, { id: guildId }],
+  },
+  {
+    name: "single, root manager (thread update)",
+    seed: [[GatewayDispatchEvents.ThreadCreate, thread()]],
+    update: [GatewayDispatchEvents.ThreadUpdate, thread({ name: "renamed" })],
+  },
+  {
+    name: "single, root manager (thread delete)",
+    seed: [[GatewayDispatchEvents.ThreadCreate, thread()]],
+    update: [
+      GatewayDispatchEvents.ThreadDelete,
+      { id: threadId, guild_id: guildId, parent_id: channelId, type: ChannelType.PublicThread },
+    ],
+  },
+  {
+    name: "single, root manager (thread member update)",
+    seed: [[GatewayDispatchEvents.ThreadMemberUpdate, { ...threadMember, guild_id: guildId }]],
+    update: [
+      GatewayDispatchEvents.ThreadMemberUpdate,
+      { ...threadMember, flags: 2, guild_id: guildId },
+    ],
+  },
+  {
+    name: "single, root manager (message delete)",
+    seed: [[GatewayDispatchEvents.MessageCreate, message()]],
+    update: [
+      GatewayDispatchEvents.MessageDelete,
+      { id: message().id, channel_id: channelId, guild_id: guildId },
+    ],
+  },
+  {
+    name: "single, root manager (member remove)",
+    seed: [[GatewayDispatchEvents.GuildMemberAdd, member()]],
+    update: [GatewayDispatchEvents.GuildMemberRemove, { guild_id: guildId, user: author }],
+  },
+  {
+    name: "single, root manager (role delete)",
+    seed: [[GatewayDispatchEvents.GuildRoleCreate, { guild_id: guildId, role: role() }]],
+    update: [GatewayDispatchEvents.GuildRoleDelete, { guild_id: guildId, role_id: role().id }],
+  },
+  {
+    name: "single, root manager (voice state)",
+    seed: [[GatewayDispatchEvents.VoiceStateUpdate, voiceState()]],
+    update: [GatewayDispatchEvents.VoiceStateUpdate, voiceState({ self_mute: false })],
+  },
+  {
+    name: "single, root manager (presence)",
+    seed: [[GatewayDispatchEvents.PresenceUpdate, presence()]],
+    update: [GatewayDispatchEvents.PresenceUpdate, presence({ status: "idle" })],
+  },
+  {
+    name: "single, guild-scoped manager (invite delete)",
+    seed: [[GatewayDispatchEvents.InviteCreate, invite()]],
+    update: [
+      GatewayDispatchEvents.InviteDelete,
+      { code: invite().code, guild_id: guildId, channel_id: channelId },
+    ],
+  },
+  {
+    name: "single, guild-scoped manager (scheduled event update)",
+    seed: [[GatewayDispatchEvents.GuildScheduledEventCreate, scheduledEvent()]],
+    update: [GatewayDispatchEvents.GuildScheduledEventUpdate, scheduledEvent({ name: "New moon" })],
+  },
+  {
+    name: "single, guild-scoped manager (soundboard sound delete)",
+    seed: [[GatewayDispatchEvents.GuildSoundboardSoundCreate, sound()]],
+    update: [
+      GatewayDispatchEvents.GuildSoundboardSoundDelete,
+      { sound_id: sound().sound_id, guild_id: guildId },
+    ],
+  },
+  {
+    name: "single, guild-scoped manager (ban remove)",
+    seed: [[GatewayDispatchEvents.GuildBanAdd, { guild_id: guildId, user: author }]],
+    update: [GatewayDispatchEvents.GuildBanRemove, { guild_id: guildId, user: author }],
+  },
+  {
+    name: "single, guild-scoped manager (auto moderation rule update)",
+    seed: [[GatewayDispatchEvents.AutoModerationRuleCreate, autoModerationRule()]],
+    update: [
+      GatewayDispatchEvents.AutoModerationRuleUpdate,
+      autoModerationRule({ name: "No growling" }),
+    ],
+  },
+  {
+    name: "single, guild-scoped manager (integration update)",
+    seed: [[GatewayDispatchEvents.IntegrationCreate, integration()]],
+    update: [GatewayDispatchEvents.IntegrationUpdate, integration({ name: "YouTube" })],
+  },
+  {
+    name: "single, guild-scoped manager (integration delete)",
+    seed: [[GatewayDispatchEvents.IntegrationCreate, integration()]],
+    update: [GatewayDispatchEvents.IntegrationDelete, { id: integration().id, guild_id: guildId }],
+  },
+  {
+    name: "list, guild-scoped manager (stickers)",
+    seed: [
+      [GatewayDispatchEvents.GuildStickersUpdate, { guild_id: guildId, stickers: [sticker()] }],
+    ],
+    update: [GatewayDispatchEvents.GuildStickersUpdate, { guild_id: guildId, stickers: [] }],
+  },
 ];
 
 describe("state round trip", () => {
   test.each(cases)(
     "GIVEN $name THEN the worker emits what the producer did",
-    async ({ seed, update }) => {
+    async ({ seed, update, setup }) => {
       const { producer, worker } = createPair();
+      setup?.(producer);
       const produced = recordAll(producer);
       const replayed = recordAll(worker);
       const dispatched = captureDispatches(producer);
@@ -386,6 +610,21 @@ describe("replayDispatch", () => {
 
     expect(calls.map(([event]) => event)).toEqual(["raw", "messageCreate"]);
     expect(await producer.messages.get(channelId, message().id)).toBeUndefined();
+  });
+
+  test("GIVEN a replay THEN raw gets a full gateway payload, with the sequence number when known", async () => {
+    const { worker } = createPair();
+    const raws: unknown[] = [];
+    worker.on("raw", (payload) => raws.push(payload));
+    const d = message();
+
+    await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d, s: 5 }, 0);
+    await worker.replayDispatch({ t: GatewayDispatchEvents.MessageCreate, d }, 0);
+
+    expect(raws).toEqual([
+      { op: GatewayOpcodes.Dispatch, s: 5, t: GatewayDispatchEvents.MessageCreate, d },
+      { op: GatewayOpcodes.Dispatch, s: 0, t: GatewayDispatchEvents.MessageCreate, d },
+    ]);
   });
 
   test("GIVEN INTERACTION_CREATE or READY THEN only raw is emitted", async () => {

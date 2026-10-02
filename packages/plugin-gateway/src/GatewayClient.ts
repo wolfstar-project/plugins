@@ -884,17 +884,23 @@ export class GatewayClient extends Client {
    * Dispatches of a guild are handled in the order they were replayed, like the ones of a connected client.
    * `READY` and `INTERACTION_CREATE` are ignored.
    *
-   * @param payload The dispatch type and data.
+   * @param payload The dispatch type and data, and its sequence number on the shard that received it, `0` when
+   * unknown. `raw` listeners get it as a full gateway payload, with its `op`.
    * @param shardId The ID of the shard that received it, on the process that did.
    * @param state The previous state, revived with {@link GatewayClient.reviveDispatchState}.
    * @returns A promise rejecting when a listener or the handler throws, so the caller can retry the dispatch.
    */
   public async replayDispatch(
-    payload: { t: string; d: unknown },
+    payload: { t: string; d: unknown; s?: number },
     shardId: number,
     state?: unknown,
   ): Promise<void> {
-    const dispatch = payload as GatewayDispatchPayload;
+    const dispatch = {
+      op: GatewayOpcodes.Dispatch,
+      s: payload.s ?? 0,
+      t: payload.t,
+      d: payload.d,
+    } as GatewayDispatchPayload;
     const outcome: { failed: boolean; error?: unknown } = { failed: false };
 
     // The queue never sees a rejection (its chain would break): the failure is carried out and rethrown below.

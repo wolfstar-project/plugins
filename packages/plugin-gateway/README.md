@@ -204,6 +204,43 @@ On `READY`, the cached guilds of that shard which `READY` no longer lists are dr
 persistent cache, and Discord does not replay those removals. This is best effort: a failure (cache unreachable,
 unknown shard count) is reported through `error` and keeps the remaining guilds.
 
+### Replaying dispatches on another process
+
+A client that never connects to Discord can still emit the events of another process's client, as long as both
+share a cache: the connected client handles each dispatch and writes it to the cache, and the other one replays it
+without touching the cache again.
+
+- The connected client emits `dispatch` after the cache write, with `payload`, `shardId` and a trailing `state`: what
+  the dispatch's handler read before the write (the cached message a `MESSAGE_UPDATE` replaces, the member a
+  `GUILD_MEMBER_REMOVE` drops, …), `undefined` when the type keeps none or it was not cached.
+- `client.serializeDispatchState(type, state)` turns that `state` into plain, JSON-safe API data, and
+  `client.reviveDispatchState(type, serialized, data)` rebuilds its structures on the receiving client. Relations
+  (author, guild, …) resolve from the receiving client's cache as it is when the dispatch is replayed, so they can be
+  newer than the dispatch. `DispatchStateCodecs` is the table behind both, one codec per type that keeps a state.
+- `client.replayDispatch({ t, d, s? }, shardId, state?)` emits `raw` and the matching event, with the same Structures
+  and `old` arguments the connected client emitted. It never reads or writes the cache, and never emits `dispatch`.
+  Dispatches of a guild replay in order, like on a connected client. `client.replayDispatchTypes` lists the types it
+  handles: `READY` and `INTERACTION_CREATE` are not replayed, so `client.user` stays `null` until something sets it,
+  and shard lifecycle events never fire. The promise rejects when a listener or the handler throws, which lets the
+  caller retry the dispatch; async listeners are awaited.
+
+```ts
+// Connected client: ship each dispatch with its previous state.
+connected.on("dispatch", async (payload, shardId, state) => {
+  const serialized = connected.serializeDispatchState(payload.t, state);
+  await transport.send({ payload, shardId, state: serialized });
+});
+
+// Worker: same cache, never connected.
+transport.receive(async ({ payload, shardId, state }) => {
+  const revived = await worker.reviveDispatchState(payload.t, state, payload.d);
+  await worker.replayDispatch(payload, shardId, revived);
+});
+```
+
+[`@wolfstar/plugin-broker`](https://www.npmjs.com/package/@wolfstar/plugin-broker) wires this up over Redis Streams with
+`forwardGatewayDispatches` and `replayGatewayDispatches`.
+
 ## Listeners
 
 Since `GatewayClient` emits on the client itself, gateway events are handled by regular listener
