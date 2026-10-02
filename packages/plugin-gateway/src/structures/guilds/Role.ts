@@ -9,7 +9,11 @@ import type { ImageResolvable } from "../../util/DataResolver.js";
 import { transformAPIRoleTags, type RoleTagData } from "../../util/Transformers.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
+import {
+  compareRolePositions,
+  computePermissionsIn,
+  computePermissionsInSync,
+} from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
 import { kData, kPatch, type kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
@@ -121,6 +125,18 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this as unknown as Role);
+  }
+
+  /**
+   * The role's permissions in a channel, like discord.js's `Role#permissionsIn`: its permissions and `@everyone`'s,
+   * with the channel's `@everyone` and role overwrites applied, read from the cache.
+   *
+   * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
+   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use {@link Role.fetchPermissionsIn}),
+   * `ChannelUncached` when the channel is not cached.
+   */
+  public permissionsIn(channel: AnyChannel | string): Readonly<PermissionsBitField> {
+    return computePermissionsInSync(channel, this as unknown as Role);
   }
 
   public get hoist() {

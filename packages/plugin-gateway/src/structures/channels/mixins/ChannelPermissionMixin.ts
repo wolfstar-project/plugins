@@ -6,7 +6,10 @@ import type { APIOverwrite } from "discord-api-types/v10";
 import type { SetPositionOptions } from "../../../managers/GuildChannelManager.js";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
-import { computeTargetPermissions } from "../../../util/permissions.js";
+import {
+  computeTargetPermissions,
+  computeTargetPermissionsSync,
+} from "../../../util/permissions.js";
 import type { PermissionsBitField } from "../../../util/PermissionsBitField.js";
 import type { GuildMember } from "../../guilds/GuildMember.js";
 import type { Role } from "../../guilds/Role.js";
@@ -136,6 +139,20 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
 
     const parent = (await this.client.channels.fetch(parentId)).toJSON() as Data;
     return sameOverwrites(this[kData] as Data, parent);
+  }
+
+  /**
+   * The permissions of a member or role in the channel, like discord.js's `GuildChannel#permissionsFor`: their guild
+   * permissions with the channel's overwrites applied, read from the cache.
+   *
+   * @param target A member, a role, or the ID of a cached member.
+   * @throws A `GatewayError`: `CacheAsynchronous` with an asynchronous cache (use
+   * {@link ChannelPermissionMixin.fetchPermissionsFor}), `GuildMemberUncached` or `GuildUncached` on a miss.
+   */
+  public permissionsFor(target: GuildMember | Role | string): Readonly<PermissionsBitField> {
+    const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
+    return computeTargetPermissionsSync(guildId, overwrites, target);
   }
 
   /**

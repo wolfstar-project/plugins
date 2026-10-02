@@ -8,6 +8,9 @@ import {
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { Role } from "../structures/guilds/Role.js";
+import type { GatewayClient } from "../GatewayClient.js";
+import type { Guild } from "../structures/guilds/Guild.js";
+import { expectSync, requireCached } from "./cache.js";
 import { getGatewayClient } from "./container.js";
 import { PermissionsBitField } from "./PermissionsBitField.js";
 import { GatewayError } from "../errors/GatewayError.js";
@@ -182,6 +185,115 @@ export async function computePermissionsIn(
 
   if (!data.guild_id) throw new GatewayError("ChannelGuildUnknown", resolved.id);
   return computeTargetPermissions(data.guild_id, data.permission_overwrites ?? [], target);
+}
+
+/**
+ * Gets a guild from a synchronous cache, for the getters that cannot answer without it.
+ *
+ * @param client The client.
+ * @param guildId The ID of the guild.
+ * @throws A `GatewayError`: `CacheAsynchronous` when the guild cache is asynchronous, `GuildUncached` on a miss.
+ * @internal
+ */
+export function requireGuild(client: GatewayClient, guildId: Snowflake): Guild {
+  const guild = expectSync(client.guilds._getShallow(guildId), "guilds");
+  if (!guild) throw new GatewayError("GuildUncached", guildId);
+  return guild;
+}
+
+/**
+ * Gets the bot's own member of a guild from a synchronous cache, for the getters checking what the bot can do.
+ *
+ * @param client The client.
+ * @param guildId The ID of the guild.
+ * @throws A `GatewayError`: `CacheAsynchronous` when the member cache is asynchronous, `GuildUncachedMe` on a miss.
+ * @internal
+ */
+export function requireMe(client: GatewayClient, guildId: Snowflake): GuildMember {
+  const me = expectSync(client.members.me(guildId), "members");
+  if (!me) throw new GatewayError("GuildUncachedMe", guildId);
+  return me;
+}
+
+/**
+ * The synchronous {@link computeTargetPermissions}: it reads the caches alone, and throws a `GatewayError`
+ * (`CacheAsynchronous`) when one of them is asynchronous.
+ *
+ * @param guildId The ID of the channel's guild.
+ * @param overwrites The channel's permission overwrites.
+ * @param target A member, a role, or the ID of a cached member.
+ */
+export function computeTargetPermissionsSync(
+  guildId: Snowflake,
+  overwrites: readonly APIOverwrite[],
+  target: GuildMember | Role | Snowflake,
+): PermissionsBitField {
+  const client = typeof target === "string" ? getGatewayClient() : target.client;
+  if (typeof target !== "string" && "hoist" in target) {
+    // Like every role that is not cached, a missing `@everyone` grants nothing.
+    const everyone = requireCached(
+      client.roles.cache,
+      client.roles.resolveKey(guildId, guildId),
+      "roles",
+    );
+    const base = new PermissionsBitField(
+      target.permissions.bitField | (everyone?.permissions.bitField ?? 0n),
+    );
+    if (base.has(PermissionFlagsBits.Administrator)) {
+      return new PermissionsBitField(PermissionsBitField.All).freeze();
+    }
+
+    return computeChannelPermissions(base, { guildId, roleIds: [target.id], overwrites });
+  }
+
+  let member: GuildMember;
+  if (typeof target === "string") {
+    const cached = requireCached(
+      client.members.cache,
+      client.members.resolveKey(guildId, target),
+      "members",
+    );
+    if (!cached) throw new GatewayError("GuildMemberUncached", guildId, target);
+    member = cached;
+  } else {
+    member = target;
+  }
+
+  return computeChannelPermissions(member.permissions, {
+    guildId,
+    userId: member.id ?? undefined,
+    roleIds: member.roleIds,
+    overwrites,
+  });
+}
+
+/**
+ * The synchronous {@link computePermissionsIn}: the channel, and the parent of a thread, are read from the cache.
+ *
+ * @param channel The channel, or the ID of a cached one.
+ * @param target A member, a role, or the ID of a cached member.
+ * @throws A `GatewayError`: `CacheAsynchronous` when a cache is asynchronous, `ChannelUncached` on a miss.
+ */
+export function computePermissionsInSync(
+  channel: AnyChannel | Snowflake,
+  target: GuildMember | Role | Snowflake,
+): PermissionsBitField {
+  const client = typeof target === "string" ? getGatewayClient() : target.client;
+  const cachedChannel = (id: Snowflake): AnyChannel => {
+    const cached = requireCached(client.channels.cache, id, "channels");
+    if (!cached) throw new GatewayError("ChannelUncached", id);
+    return cached;
+  };
+
+  let resolved = typeof channel === "string" ? cachedChannel(channel) : channel;
+  let data = resolved.toJSON() as OverwriteHolder;
+  if (resolved.isThread() && data.parent_id) {
+    resolved = cachedChannel(data.parent_id);
+    data = resolved.toJSON() as OverwriteHolder;
+  }
+
+  if (!data.guild_id) throw new GatewayError("ChannelGuildUnknown", resolved.id);
+  return computeTargetPermissionsSync(data.guild_id, data.permission_overwrites ?? [], target);
 }
 
 type OverwriteHolder = {
