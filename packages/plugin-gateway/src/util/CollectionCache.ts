@@ -25,6 +25,11 @@ export interface CollectionCacheOptions<Value, Raw> {
    * @default Infinity
    */
   maxSize?: number;
+  /**
+   * Decides which entries `maxSize` never evicts: the oldest one it answers `false` for is evicted instead. When it
+   * answers `true` for every entry, the cache grows past `maxSize`.
+   */
+  keepOverLimit?: (value: Value, key: string, cache: Map<string, Value>) => boolean;
 }
 
 /**
@@ -62,6 +67,8 @@ export class CollectionCache<
 
   readonly #maxSize: number;
 
+  readonly #keepOverLimit: CollectionCacheOptions<Value, Raw>["keepOverLimit"];
+
   public constructor(
     creator: StructureCreator<Value, Raw>,
     name: CacheEntityName,
@@ -73,6 +80,7 @@ export class CollectionCache<
     this.#keyOf = options.keyOf ?? ((data) => (data as unknown as { id: string }).id);
     this.#refresh = options.refresh;
     this.#maxSize = options.maxSize ?? Infinity;
+    this.#keepOverLimit = options.keepOverLimit;
   }
 
   public add(data: Partial<Raw>, overwrite = false): Value {
@@ -97,8 +105,11 @@ export class CollectionCache<
     // Nothing fits: evicting the oldest entry would still leave this one in.
     if (this.#maxSize <= 0) return this;
     if (this.size >= this.#maxSize && !super.has(key)) {
-      const oldest = this.keys().next();
-      if (!oldest.done) super.delete(oldest.value);
+      for (const [oldKey, oldValue] of this) {
+        if (this.#keepOverLimit?.(oldValue, oldKey, this)) continue;
+        super.delete(oldKey);
+        break;
+      }
     }
 
     return super.set(key, value);
