@@ -11,7 +11,7 @@ export interface ScheduledTaskHandlerOptions {
    */
   queue?: string;
   /**
-   * The BullMQ queue options. `connection` is also the worker's connection.
+   * The BullMQ queue options. The worker shares its `connection`, `prefix`, and the other options common to both.
    */
   bull: QueueOptions;
 }

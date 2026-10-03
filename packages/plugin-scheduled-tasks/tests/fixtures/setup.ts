@@ -1,4 +1,5 @@
 import { container } from "@wolfstar/http-framework";
+import type { QueueOptions } from "bullmq";
 import { EventEmitter } from "node:events";
 import { ScheduledTask, ScheduledTaskHandler, ScheduledTaskStore } from "../../src/index.js";
 import { Queue, Worker } from "./bullmq.js";
@@ -13,7 +14,7 @@ export interface Emitted {
 /**
  * Installs a stand-in client that records what is emitted on it, a fresh `scheduled-tasks` store, and a handler.
  */
-export function createHandler(queue?: string) {
+export function createHandler(queue?: string, bull: Partial<QueueOptions> = {}) {
   const emitted: Emitted[] = [];
   const client = new EventEmitter();
   const emit = client.emit.bind(client);
@@ -28,7 +29,7 @@ export function createHandler(queue?: string) {
   const store = new ScheduledTaskStore();
   container.stores.register(store);
 
-  const handler = new ScheduledTaskHandler({ queue, bull: { connection } });
+  const handler = new ScheduledTaskHandler({ queue, bull: { ...bull, connection } });
   container.tasks = handler;
 
   return {

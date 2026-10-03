@@ -9,6 +9,7 @@ import {
   type JobsOptions,
   type QueueOptions,
   type RepeatOptions,
+  type WorkerOptions,
 } from "bullmq";
 import type { ScheduledTaskCustomJobOptions } from "./structures/ScheduledTask.js";
 import type { ScheduledTaskStore } from "./structures/ScheduledTaskStore.js";
@@ -54,7 +55,7 @@ export class ScheduledTaskHandler {
     this.#worker = new Worker(
       this.queue,
       async (job) => this.run({ name: job.name as ScheduledTasksKeys, payload: job.data }),
-      { connection: this.options.connection, autorun: false },
+      { ...toWorkerOptions(this.options), autorun: false },
     );
 
     this.#client.on("error", (error) => {
@@ -285,6 +286,31 @@ export class ScheduledTaskHandler {
     }
   }
 }
+
+/**
+ * The queue options a worker has to share with its queue to consume from it: the connection, and above all the key
+ * `prefix`, without which the worker would wait on `bull:<queue>` for jobs the queue adds under `<prefix>:<queue>`.
+ * The rest of {@link QueueOptions} only concerns the queue.
+ */
+function toWorkerOptions(options: QueueOptions): WorkerOptions {
+  const workerOptions: WorkerOptions = { connection: options.connection };
+
+  // Only the keys that are set: BullMQ spreads the options over its defaults, so an explicit `prefix: undefined`
+  // would replace the default `bull` prefix instead of leaving it alone.
+  for (const key of SharedQueueOptions) {
+    if (options[key] !== undefined) Object.assign(workerOptions, { [key]: options[key] });
+  }
+
+  return workerOptions;
+}
+
+const SharedQueueOptions = [
+  "prefix",
+  "blockingConnection",
+  "skipVersionCheck",
+  "skipWaitingForReady",
+  "telemetry",
+] as const satisfies readonly (keyof QueueOptions & keyof WorkerOptions)[];
 
 /**
  * A job scheduler's template does not take the options that only make sense for a single job: BullMQ derives the

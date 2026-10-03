@@ -107,7 +107,7 @@ export class Worker extends EventEmitter {
   public constructor(
     public readonly name: string,
     public readonly processor: (job: { name: string; data: unknown }) => Promise<unknown>,
-    public readonly opts: { connection: unknown; autorun?: boolean },
+    public readonly opts: Record<string, unknown>,
   ) {
     super();
     Worker.instances.push(this);

@@ -80,6 +80,9 @@ describe("scheduledTasks", () => {
 
     expect(container.tasks.queue).toBe("client");
     expect(container.tasks.options).toEqual({ connection: override, prefix: "p" });
+    // The worker has to listen under the same key prefix the queue writes to.
+    expect(Queue.instances.at(-1)!.opts).toMatchObject({ prefix: "p" });
+    expect(Worker.instances.at(-1)!.opts).toMatchObject({ connection: override, prefix: "p" });
   });
 
   test("GIVEN no connection THEN the client fails with the plugin's name", () => {
@@ -100,6 +103,22 @@ describe("scheduledTasks", () => {
     const names = await loadedListeners(() => createClient(plugin, client));
 
     expect(names).toEqual([]);
+  });
+
+  test("GIVEN listeners that fail to load THEN the error goes to the logger", async () => {
+    const error = new Error("boom");
+    const loadPiece = vi.spyOn(container.stores, "loadPiece").mockRejectedValue(error);
+
+    createClient({ bull: { connection } });
+    const logged = vi.spyOn(container.logger, "error").mockImplementation(() => {});
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(logged).toHaveBeenCalledWith(
+      "[plugin-scheduled-tasks] Failed to load listeners:",
+      error,
+    );
+    loadPiece.mockRestore();
+    logged.mockRestore();
   });
 
   test("GIVEN postListen THEN the worker starts and the repeated tasks are created", async () => {

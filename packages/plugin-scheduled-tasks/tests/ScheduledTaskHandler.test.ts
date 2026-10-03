@@ -35,6 +35,26 @@ describe("ScheduledTaskHandler", () => {
       expect(worker.opts).toEqual({ connection, autorun: false });
       expect(worker.runs).toBe(0);
     });
+
+    test("GIVEN queue options shared with workers THEN the worker gets them too", () => {
+      const telemetry = {} as never;
+      const { queue, worker } = createHandler(undefined, {
+        prefix: "p",
+        skipVersionCheck: true,
+        telemetry,
+        defaultJobOptions: { attempts: 3 },
+      });
+
+      expect(queue.opts).toMatchObject({ prefix: "p", defaultJobOptions: { attempts: 3 } });
+      expect(worker.opts).toMatchObject({
+        connection,
+        prefix: "p",
+        skipVersionCheck: true,
+        telemetry,
+      });
+      // Queue-only options stay out of the worker's.
+      expect(worker.opts).not.toHaveProperty("defaultJobOptions");
+    });
   });
 
   describe("start", () => {

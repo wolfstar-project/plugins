@@ -50,7 +50,7 @@ export default definePlugin((pluginOptions: ScheduledTasksPluginOptions = {}) =>
       options.loadScheduledTaskErrorListeners ?? pluginOptions.loadErrorListeners ?? true;
     if (loadErrorListeners) {
       loadListeners().catch((error: unknown) =>
-        console.error("[plugin-scheduled-tasks] Failed to load listeners:", error),
+        container.logger.error("[plugin-scheduled-tasks] Failed to load listeners:", error),
       );
     }
   },
