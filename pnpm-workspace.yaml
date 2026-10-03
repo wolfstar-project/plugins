@@ -5,4 +5,7 @@ allowBuilds:
   esbuild: true
   msgpackr-extract: false
 minimumReleaseAgeExclude:
-  - "@wolfstar/http-framework@3.4.0"
+  - "@wolfstar/http-framework@3.4.0 || 6.1.0"
+  - "@wolfstar/cli@2.2.0"
+  - "@wolfstar/kit@0.1.0"
+  - "@wolfstar/nitro-server@0.2.5"

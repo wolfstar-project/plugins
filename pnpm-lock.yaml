@@ -276,8 +276,8 @@ importers:
         specifier: ^0.0.2
         version: 0.0.2(@nuxt/kit@3.21.11(magicast@0.5.4))(@nuxt/schema@3.21.11)(esbuild@0.25.12)(rolldown@1.2.7)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/plugin-broker:
     dependencies:
@@ -289,8 +289,8 @@ importers:
         specifier: ^4.4.1
         version: 4.4.1
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/plugin-gateway':
         specifier: workspace:^
         version: link:../plugin-gateway
@@ -339,8 +339,8 @@ importers:
         version: 0.38.54
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
 
   packages/plugin-i18next:
     dependencies:
@@ -370,8 +370,8 @@ importers:
         version: 26.4.2(typescript@7.0.2)
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/i18next-type-generator':
         specifier: 3.1.4
         version: 3.1.4
@@ -383,8 +383,8 @@ importers:
         version: 10.73.0(@opentelemetry/core@2.11.0(@opentelemetry/api@1.9.1))(supports-color@7.2.0)
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       consola:
         specifier: ^3.4.2
         version: 3.4.2
@@ -414,11 +414,11 @@ importers:
         version: 0.38.54
     devDependencies:
       '@wolfstar/http-framework':
-        specifier: ^5.1.0
-        version: 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+        specifier: ^6.1.0
+        version: 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       '@wolfstar/http-framework-test-utils':
-        specifier: ^3.0.9
-        version: 3.0.9(@wolfstar/http-framework@5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.1)
+        specifier: ^4.0.2
+        version: 4.0.2(@wolfstar/http-framework@6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.1)
 
 packages:
 
@@ -2433,8 +2433,8 @@ packages:
   '@vue/shared@3.5.43':
     resolution: {integrity: sha512-uksS7YGMR5NZyr4JNq0Rp+QyLns0ueaz20KwzIPW9R0LH1Vnt4E+XUM29PNseEbf1www2gOuhuDi5AKOIXag9Q==}
 
-  '@wolfstar/cli@2.0.1':
-    resolution: {integrity: sha512-DPf/WtxtPzJoqDaTA9jpYw4t0OafHOJP4lRtaQExjk4elptCBI1ehAfcuKnIs7k21Qh0KJINNgFbAf/+WNWkgg==}
+  '@wolfstar/cli@2.2.0':
+    resolution: {integrity: sha512-BzsLOPQQkpMwWzyRkZ3/W/+CW5rWTXhZ5Ej6cQV7WittGDk8yslimczJAV7cuuxhMgHlqL4AJwE5yK94YiJe6Q==}
     engines: {node: '>=22'}
     hasBin: true
     peerDependencies:
@@ -2452,18 +2452,18 @@ packages:
       vite:
         optional: true
 
-  '@wolfstar/http-framework-test-utils@3.0.9':
-    resolution: {integrity: sha512-fLwu8Iy70WC9TE1WTjeoemkINf+aXHEGGrjIJPHvfOHzQP2BgO1t9SMLxU60Bscq+ArCg4gP9tiLZlHpuc9CXA==}
+  '@wolfstar/http-framework-test-utils@4.0.2':
+    resolution: {integrity: sha512-FAEoogghBHFj0OSkY7ppPmjcSCovcLKjCRbFaIJ3c9sbmv7lnWbbYInVBdrmJMLepJRLdpxOzabHHveCQ5pCKw==}
     engines: {node: '>=20'}
     peerDependencies:
-      '@wolfstar/http-framework': ^5.0.0
-      vitest: '>=4.1.10'
+      '@wolfstar/http-framework': ^6.0.0
+      vitest: '>=5.0.0'
     peerDependenciesMeta:
       vitest:
         optional: true
 
-  '@wolfstar/http-framework@5.1.0':
-    resolution: {integrity: sha512-+T9ByI0JxRU54S+U/wXDpdRfSGFRLk7MLkEEUNSId9veYLF2ypsqJTglNIbJYxEGOjLiWw3auDDGFEh0pKO3IQ==}
+  '@wolfstar/http-framework@6.1.0':
+    resolution: {integrity: sha512-JDLPk/u1w/VSplB3Btb+SuIusNsn2CD0d0IQglICoXDv+i+4o7Llles754Q+tQ5m0ysSwc/59+OsRfMzKCskPw==}
     engines: {node: '>=20'}
     hasBin: true
 
@@ -2476,8 +2476,12 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  '@wolfstar/nitro-server@0.2.1':
-    resolution: {integrity: sha512-OtwNtvTVlJKHqg2bzoCVB9YqBdxlhbyBMRQLzM9bNPb+Sm1e4D5Y2DQpWKXq7e/0tHtBM2LZqGcR6FFBhW/Yew==}
+  '@wolfstar/kit@0.1.0':
+    resolution: {integrity: sha512-KGZOzqkDU2XkgOH+e2oF2s93fydC506eJ07uUapVMtJ1BpCPPJFtI/Ag3N+QA+iAX188uhRIDJKOQhgH+9Cqyg==}
+    engines: {node: '>=20'}
+
+  '@wolfstar/nitro-server@0.2.5':
+    resolution: {integrity: sha512-9WJO+newSCg+Ph15kOSWbSmVFTvGPseq6VrcZkroZhvBxlWmerUX03kF/2usAbLiOXL8KTkyqbqeDBRQqoFj8A==}
     engines: {node: '>=22'}
     peerDependencies:
       nitro: '>=3.0.0-0'
@@ -2488,12 +2492,12 @@ packages:
       vite:
         optional: true
 
-  '@wolfstar/schema@0.2.0':
-    resolution: {integrity: sha512-6+XRso/mHOoVjbFIOSIIoqUSc1g4mLmuNlvzbZh9qOgriUlJoIdTMaSuQN8eAoe4h1hUDZ86UJ8PQYrKLHZQDw==}
+  '@wolfstar/schema@0.5.0':
+    resolution: {integrity: sha512-xyGyNdtkF3JhMyQq7h4D+POXDP76EM0u3nI8loRBM4YPolgeV0ULnMdnmVjcDc82AfajPz48wQKc8Cl0Xur93A==}
     engines: {node: '>=20'}
 
-  '@wolfstar/vite-server@0.2.1':
-    resolution: {integrity: sha512-6EopcoU9rpkHqLQnWAB8ZLr4d23weEYHW9jGfb1Lzt4y7fmLLQOiuwZ7xKQnNLZIXFwtsFiMxZ9uSIPZXYX5/A==}
+  '@wolfstar/vite-server@0.4.0':
+    resolution: {integrity: sha512-X4h/BVJoXE7Umlm9BUY30XW3ZS3jum1Ux4amgj5mBi52yDEevpxlSnvFVIyubF+YsKJCFNkf+LeWOM6HZBXwFQ==}
     engines: {node: '>=22'}
     peerDependencies:
       vite: '>=6.0.0'
@@ -3282,6 +3286,9 @@ packages:
 
   hookable@6.1.1:
     resolution: {integrity: sha512-U9LYDy1CwhMCnprUfeAZWZGByVbhd54hwepegYTK7Pi5NvqEj63ifz5z+xukznehT7i6NIZRu89Ay1AZmRsLEQ==}
+
+  hookable@6.1.2:
+    resolution: {integrity: sha512-+abwxtiEA52GCVIsQqut3S/uKTbUwYIp4Pe/vv+6py5XiXBCqMZHg6pA6Y5qhgLSEys0/cYuPbO0z1QFj5ZCmg==}
 
   hosted-git-info@8.1.0:
     resolution: {integrity: sha512-Rw/B2DNQaPBICNXEm8balFz9a6WpZrkCGpcWFpy7nCj+NyhSdqXipmfvtmWt9xGfp0wZnBxB+iVpLmQMYt47Tw==}
@@ -5992,16 +5999,18 @@ snapshots:
 
   '@vue/shared@3.5.43': {}
 
-  '@wolfstar/cli@2.0.1(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/cli@2.2.0(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@clack/prompts': 1.8.1
       '@sapphire/ts-config': 5.0.3
-      '@wolfstar/nitro-server': 0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
-      '@wolfstar/vite-server': 0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/kit': 0.1.0(magicast@0.5.4)
+      '@wolfstar/nitro-server': 0.2.5(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/schema': 0.5.0(magicast@0.5.4)
+      '@wolfstar/vite-server': 0.4.0(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       chokidar: 5.0.0
       citty: 0.2.2
       colorette: 2.0.20
+      hookable: 6.1.2
       ink: 7.1.1(react@19.3.0)
       mlly: 1.8.2
       my-bad: 0.2.7(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
@@ -6019,13 +6028,13 @@ snapshots:
       - react-devtools-core
       - utf-8-validate
 
-  '@wolfstar/http-framework-test-utils@3.0.9(@wolfstar/http-framework@5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.1)':
+  '@wolfstar/http-framework-test-utils@4.0.2(@wolfstar/http-framework@6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)))(vitest@5.0.1)':
     dependencies:
-      '@wolfstar/http-framework': 5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/http-framework': 6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
     optionalDependencies:
       vitest: 5.0.1(@opentelemetry/api@1.9.1)(@types/node@22.15.21)(@vitest/coverage-v8@5.0.1)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
 
-  '@wolfstar/http-framework@5.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/http-framework@6.1.0(acorn@8.18.0)(esbuild@0.25.12)(magicast@0.5.4)(oxc-parser@0.147.0)(rolldown@1.2.7)(rollup@4.63.1)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
       '@discordjs/builders': 1.14.1
       '@discordjs/collection': 2.1.1
@@ -6035,8 +6044,8 @@ snapshots:
       '@sapphire/result': 2.8.0
       '@sapphire/utilities': 3.18.2
       '@vladfrangu/async_event_emitter': 2.4.7
-      '@wolfstar/cli': 2.0.1(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
+      '@wolfstar/cli': 2.2.0(magicast@0.5.4)(tsdown@0.23.0(@arethetypeswrong/core@0.18.5)(oxc-resolver@11.24.2)(publint@0.3.24)(typescript@7.0.2)(unrun@0.3.1))(typescript@7.0.2)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/schema': 0.5.0(magicast@0.5.4)
       chokidar: 5.0.0
       discord-api-types: 0.38.54
       mlly: 1.8.2
@@ -6078,10 +6087,17 @@ snapshots:
       - svelte
       - vite-plus
 
-  '@wolfstar/nitro-server@0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/kit@0.1.0(magicast@0.5.4)':
     dependencies:
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
-      '@wolfstar/vite-server': 0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
+      '@wolfstar/schema': 0.5.0(magicast@0.5.4)
+      semver: 7.8.5
+    transitivePeerDependencies:
+      - magicast
+
+  '@wolfstar/nitro-server@0.2.5(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+    dependencies:
+      '@wolfstar/schema': 0.5.0(magicast@0.5.4)
+      '@wolfstar/vite-server': 0.4.0(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))
       chokidar: 5.0.0
       picomatch: 4.0.7
     optionalDependencies:
@@ -6089,16 +6105,16 @@ snapshots:
     transitivePeerDependencies:
       - magicast
 
-  '@wolfstar/schema@0.2.0(magicast@0.5.4)':
+  '@wolfstar/schema@0.5.0(magicast@0.5.4)':
     dependencies:
       c12: 3.3.4(magicast@0.5.4)
       nostics: 1.3.0
     transitivePeerDependencies:
       - magicast
 
-  '@wolfstar/vite-server@0.2.1(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
+  '@wolfstar/vite-server@0.4.0(magicast@0.5.4)(vite@6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:
-      '@wolfstar/schema': 0.2.0(magicast@0.5.4)
+      '@wolfstar/schema': 0.5.0(magicast@0.5.4)
       srvx: 1.0.5
     optionalDependencies:
       vite: 6.4.3(@types/node@22.15.21)(jiti@2.7.0)(yaml@2.9.0)
@@ -6758,6 +6774,8 @@ snapshots:
       parse-passwd: 1.0.0
 
   hookable@6.1.1: {}
+
+  hookable@6.1.2: {}
 
   hosted-git-info@8.1.0:
     dependencies:
