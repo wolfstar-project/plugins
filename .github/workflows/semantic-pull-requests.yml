@@ -46,6 +46,7 @@ jobs:
             plugin-logger
             plugin-gateway
             plugin-cache
+            plugin-scheduled-tasks
             plugin-sharder
             plugin-subcommands-advanced
             gateway
