@@ -27,6 +27,9 @@
 - name: packages:plugin-gateway
   color: "1d76db"
   description: Changes in plugin-gateway
+- name: packages:plugin-scheduled-tasks
+  color: "1d76db"
+  description: Changes in plugin-scheduled-tasks
 - name: packages:plugin-sharder
   color: "1d76db"
   description: Changes in plugin-sharder

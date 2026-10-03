@@ -109,7 +109,12 @@ describe(`${FRAMEWORK} peer ranges`, () => {
 
     test("accepts the same majors as every other plugin", () => {
       const upTo = semver.major(latest!);
-      const expected = acceptedMajors(plugins[0]!.peerRange, upTo);
+      // A plugin built on a framework feature that only exists from some version on (`definePlugin`, 6.1.0) cannot
+      // accept the majors before it: only the majors from its own minimum up have to match.
+      const minimum = semver.minVersion(plugin.peerRange)!.major;
+      const expected = acceptedMajors(plugins[0]!.peerRange, upTo).filter(
+        (major) => major >= minimum,
+      );
       expect(
         acceptedMajors(plugin.peerRange, upTo),
         `${plugin.name}'s peer range "${plugin.peerRange}" supports different ${FRAMEWORK} majors than ` +

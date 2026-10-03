@@ -61,10 +61,10 @@ packages/plugin-scheduled-tasks/
 
 ### Entry points
 
-| Subpath      | Content                                                                                                                                                                          |
-| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`          | default export: the module. Named: `scheduledTasks`, `ScheduledTaskHandler`, `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskEvents`, `loadListeners`, and the types.         |
-| `./plugin`   | default export: the plugin factory (the same function as `scheduledTasks`). This is the `from` the module passes to `ctx.addPlugin`.                                              |
+| Subpath      | Content                                                                                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`          | default export: the module. Named: `scheduledTasks`, `ScheduledTaskHandler`, `ScheduledTask`, `ScheduledTaskStore`, `ScheduledTaskEvents`, `loadListeners`, and the types.      |
+| `./plugin`   | default export: the plugin factory (the same function as `scheduledTasks`). This is the `from` the module passes to `ctx.addPlugin`.                                            |
 | `./register` | no-op. The `stars` CLI still imports `<pkg>/register` for every `@wolfstar/plugin-*` dependency; registering there as well would run the hooks twice when the module is listed. |
 
 All three are built by tsdown (`entry`) and validated by attw (`attwEntrypoints`). `sideEffects` is `false`.
@@ -75,7 +75,10 @@ All three are built by tsdown (`entry`) and validated by attw (`attwEntrypoints`
 // stars.config.ts
 export default defineConfig({
   modules: [
-    ["@wolfstar/plugin-scheduled-tasks", { queue: "tasks", bull: { connection: { host: "localhost", port: 6379 } } }],
+    [
+      "@wolfstar/plugin-scheduled-tasks",
+      { queue: "tasks", bull: { connection: { host: "localhost", port: 6379 } } },
+    ],
   ],
 });
 ```
@@ -107,11 +110,11 @@ options are written into the built entry, so they must be JSON-serialisable: `bu
 
 Name: `@wolfstar/plugin-scheduled-tasks`. No `enforce`, no `apply`.
 
-| Hook                        | Behaviour                                                                                                                                                                                                                         |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Hook                        | Behaviour                                                                                                                                                                                                                           |
+| --------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `preGenericsInitialization` | Resolves options: factory options as the base, `ClientOptions.tasks` shallow-merged over them (`bull` merged one level deep). Throws a `TypeError` naming the missing key when `bull.connection` is absent. Sets `container.tasks`. |
-| `postInitialization`        | `container.stores.register(new ScheduledTaskStore())`. Loads the listeners unless `loadErrorListeners` (factory) or `ClientOptions.loadScheduledTaskErrorListeners` is `false`.                                                    |
-| `postListen`                | `await container.tasks.createRepeated()`, then `container.tasks.start()`.                                                                                                                                                         |
+| `postInitialization`        | `container.stores.register(new ScheduledTaskStore())`. Loads the listeners unless `loadErrorListeners` (factory) or `ClientOptions.loadScheduledTaskErrorListeners` is `false`.                                                     |
+| `postListen`                | `container.tasks.start()`, then `createRepeated()` without awaiting it: BullMQ holds commands until Redis is reachable, which would hold `listen()`. A rejection is emitted as `scheduledTaskStrategyClientError`.                  |
 
 Sapphire's `postLogin` maps to `postListen`: there is no login here, and `postListen` runs once every piece is loaded.
 
@@ -123,20 +126,20 @@ events exactly like upstream: `isNotConnectionError(error)` routes to `Scheduled
 `ScheduledTaskStrategyWorkerError`, anything else to `ScheduledTaskStrategyConnectError`. Events are emitted on
 `container.client`.
 
-| Member                    | Behaviour                                                                                                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `options`, `queue`        | As upstream.                                                                                                                                                                                                                                           |
-| `client`                  | The BullMQ `Queue`.                                                                                                                                                                                                                                    |
-| `start()`                 | Calls `worker.run()` once (idempotent); its promise only settles when the worker closes, so it is not awaited and a rejection is emitted as a worker error.                                                                                            |
-| `close()`                 | Closes queue and worker.                                                                                                                                                                                                                               |
-| `create(task, options?)`  | No options: `queue.add(name, payload)`. Number or `repeated: false`: `queue.add` with `delay` and `customJobOptions`. `repeated: true`: `queue.upsertJobScheduler(name, { every } \| { pattern, tz }, { name, data: payload, opts: customJobOptions })`. |
-| `createRepeated(tasks?)`  | Without arguments, one `create` per piece of `store.repeatedTasks`; otherwise the given tasks. Sequential, as upstream.                                                                                                                                |
-| `delete(id)`              | Removes the job with that id, if any.                                                                                                                                                                                                                  |
-| `deleteRepeated(name)`    | `queue.removeJobScheduler(name)`. Not in upstream: a scheduler is not a job, so `delete` cannot remove it.                                                                                                                                             |
-| `list(options)`           | `queue.getJobs(types, start, end, asc)`.                                                                                                                                                                                                               |
-| `listRepeated(options)`   | `queue.getJobSchedulers(start, end, asc)`; returns `JobSchedulerJson[]`.                                                                                                                                                                               |
-| `get(id)`                 | `queue.getJob(id)`, `undefined` when absent.                                                                                                                                                                                                           |
-| `run(task)`               | As upstream: `NotFound` and `undefined` when the piece is missing; otherwise `Run`, then `Success` with the duration, or `Error` and rethrow; then `Finished`. Duration measured with `performance.now()` rather than `@sapphire/stopwatch`.           |
+| Member                   | Behaviour                                                                                                                                                                                                                                                |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `options`, `queue`       | As upstream.                                                                                                                                                                                                                                             |
+| `client`                 | The BullMQ `Queue`.                                                                                                                                                                                                                                      |
+| `start()`                | Calls `worker.run()` once (idempotent); its promise only settles when the worker closes, so it is not awaited and a rejection is emitted as a worker error.                                                                                              |
+| `close()`                | Closes queue and worker.                                                                                                                                                                                                                                 |
+| `create(task, options?)` | No options: `queue.add(name, payload)`. Number or `repeated: false`: `queue.add` with `delay` and `customJobOptions`. `repeated: true`: `queue.upsertJobScheduler(name, { every } \| { pattern, tz }, { name, data: payload, opts: customJobOptions })`. |
+| `createRepeated(tasks?)` | Without arguments, one `create` per piece of `store.repeatedTasks`; otherwise the given tasks. Sequential, as upstream.                                                                                                                                  |
+| `delete(id)`             | Removes the job with that id, if any.                                                                                                                                                                                                                    |
+| `deleteRepeated(name)`   | `queue.removeJobScheduler(name)`. Not in upstream: a scheduler is not a job, so `delete` cannot remove it.                                                                                                                                               |
+| `list(options)`          | `queue.getJobs(types, start, end, asc)`.                                                                                                                                                                                                                 |
+| `listRepeated(options)`  | `queue.getJobSchedulers(start, end, asc)`; returns `JobSchedulerJson[]`.                                                                                                                                                                                 |
+| `get(id)`                | `queue.getJob(id)`, `undefined` when absent.                                                                                                                                                                                                             |
+| `run(task)`              | As upstream: `NotFound` and `undefined` when the piece is missing; otherwise `Run`, then `Success` with the duration, or `Error` and rethrow; then `Finished`. Duration measured with `@sapphire/stopwatch`, as upstream.                                |
 
 ### Deliberate differences from upstream
 
@@ -148,7 +151,7 @@ events exactly like upstream: `isNotConnectionError(error)` routes to `Scheduled
 - **`deleteRepeated`** is added and **`listRepeated`** returns `JobSchedulerJson[]`.
 - Schedulers left in Redis by pieces removed from the code are **not pruned**: they cannot be told apart from the
   ones created by hand with `create(..., { repeated: true })`. They surface as `scheduledTaskNotFound`.
-- No `version` export (upstream injects it at build time; no package of this repo has one).
+- The `version` export is injected at build time by `@redstardev/unplugin-version-injector`, like `plugin-api`.
 
 ### Pieces, store, events, listeners, types
 
@@ -171,7 +174,7 @@ options may come from the factory.
 
 ### Dependencies
 
-- `dependencies`: `bullmq@^6`.
+- `dependencies`: `bullmq@^6`, `@sapphire/stopwatch`.
 - `peerDependencies`: `@wolfstar/http-framework@^6.1.0`, `@wolfstar/kit@^0.1.0` (kit's README prescribes a peer for
   modules).
 - `devDependencies`: both peers and `@sapphire/pieces`.
@@ -195,7 +198,7 @@ record their calls.
 - `ScheduledTaskStore.test.ts`: `repeatedTasks` across `set`, `delete`, `clear`.
 - `plugin.test.ts`: a real `Client` with `plugins: [scheduledTasks(...)]`: `container.tasks` set, store registered,
   listeners loaded or skipped, `ClientOptions.tasks` overriding factory options, the missing-connection error, and
-  `postListen` calling `createRepeated` before `start`.
+  `postListen` starting the worker and creating the repeated tasks.
 - `module.test.ts`: `setup` calls `addPlugin` with `from` and the options, and `addImports`.
 - `register.test.ts`: importing `./register` adds nothing to `Client.plugins.registry`.
 - `tests/types/`: consumption test for the `ScheduledTasks` augmentation (payload required, optional, absent),
