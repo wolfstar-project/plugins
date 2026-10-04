@@ -1,5 +1,13 @@
 # @wolfstar/plugin-api
 
+## 2.0.1
+
+### Patch Changes
+
+- [#180](https://github.com/wolfstar-project/plugins/pull/180) [`040a747`](https://github.com/wolfstar-project/plugins/commit/040a747998949fb863bf21a6b417a279f8d1e84e) - fix(deps): update dependency cookie-es to v3 Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#176](https://github.com/wolfstar-project/plugins/pull/176) [`c989f83`](https://github.com/wolfstar-project/plugins/commit/c989f8396af21be2038ffbb513e38eb1189ccbde) - Accept `@wolfstar/http-framework` v6 in the peer range (`|| ^6.0.0`).
+
 ## 2.0.0
 
 ### Major Changes

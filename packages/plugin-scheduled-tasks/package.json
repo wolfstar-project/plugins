@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-scheduled-tasks",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "Plugin for @wolfstar/http-framework to schedule one-off and repeated tasks, backed by BullMQ",
   "keywords": [
     "bullmq",
