@@ -5,7 +5,7 @@ import {
   type ClientOptions,
 } from "@wolfstar/http-framework";
 import "./index";
-import { Logger } from "./lib/Logger";
+import { installLogger } from "./hooks";
 
 /**
  * Replaces the framework's built-in console logger with a {@link Logger}, which fans entries
@@ -22,8 +22,7 @@ import { Logger } from "./lib/Logger";
  */
 export class LoggerPlugin extends Plugin {
   public static [preGenericsInitialization](this: Client, options: ClientOptions): void {
-    options.logger ??= {};
-    options.logger.instance ??= new Logger(options.logger);
+    installLogger(options);
   }
 }
 
