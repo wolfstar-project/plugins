@@ -1,5 +1,11 @@
 # @wolfstar/plugin-i18next
 
+## 2.1.2
+
+### Patch Changes
+
+- [#176](https://github.com/wolfstar-project/plugins/pull/176) [`c989f83`](https://github.com/wolfstar-project/plugins/commit/c989f8396af21be2038ffbb513e38eb1189ccbde) - Accept `@wolfstar/http-framework` v6 in the peer range (`|| ^6.0.0`).
+
 ## 2.1.1
 
 ### Patch Changes
