@@ -33,6 +33,41 @@ Requires Node.js `>=20.18.1`.
 
 ## Usage
 
+### Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer):
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: [["@wolfstar/plugin-api/module", { prefix: "v1", listenOptions: { port: 4000 } }]],
+});
+```
+
+The options are written into the built entry, so they must be JSON-serialisable. Anything that is
+not (for example `server` options holding functions or buffers) goes through `ClientOptions.api`,
+which is merged over the module options.
+
+Never combine the module (or the `@wolfstar/plugin-api/plugin` factory below) with
+`import "@wolfstar/plugin-api/register"`: both paths install the same hooks, so combining them
+installs them twice, which for the API would call `connect()` twice on one server.
+
+Without Stars, pass the `definePlugin` factory to `plugins` instead:
+
+```ts
+import apiPlugin from "@wolfstar/plugin-api/plugin";
+
+const client = new Client({
+  plugins: [apiPlugin({ prefix: "v1", listenOptions: { port: 4000 } })],
+});
+```
+
+The server starts listening once the client does, exactly as with `register`, unless
+`automaticallyConnect` is `false`.
+
+### `register` entrypoint (framework v3/v5/v6)
+
 Import the side-effecting `register` entrypoint **before** you create your `Client`:
 
 ```ts
