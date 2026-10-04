@@ -282,6 +282,21 @@ Entities are keyed by their ID, except the ones scoped to a guild or a channel, 
 `guildId:id` / `channelId:id` helpers exported by the package (`memberKey`, `messageKey`,
 `roleKey`, ...).
 
+## Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer) to add the package to the auto imports:
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: ["@wolfstar/plugin-cache/module"],
+});
+```
+
+The module registers no plugin and takes no options: the cache itself is still constructed by
+`@wolfstar/plugin-gateway`.
+
 ## Credits
 
 The dispatch-to-cache table is adapted from
