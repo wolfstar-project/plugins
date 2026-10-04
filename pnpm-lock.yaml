@@ -304,6 +304,9 @@ importers:
         specifier: ^0.38.33
         version: 0.38.54
     devDependencies:
+      '@wolfstar/kit':
+        specifier: ^0.1.0
+        version: 0.1.0(magicast@0.5.4)
       ioredis:
         specifier: ^6.0.0
         version: 6.0.0(supports-color@7.2.0)
