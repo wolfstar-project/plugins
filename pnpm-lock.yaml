@@ -431,6 +431,10 @@ importers:
       '@sapphire/result':
         specifier: ^2.8.0
         version: 2.8.0
+    devDependencies:
+      '@wolfstar/kit':
+        specifier: ^0.1.0
+        version: 0.1.0(magicast@0.5.4)
 
   packages/plugin-subcommands-advanced:
     dependencies:

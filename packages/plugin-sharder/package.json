@@ -43,6 +43,12 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
+    },
+    "./module": {
+      "import": {
+        "types": "./dist/esm/module.d.ts",
+        "default": "./dist/esm/module.js"
+      }
     }
   },
   "publishConfig": {
@@ -57,6 +63,17 @@
   },
   "dependencies": {
     "@sapphire/result": "^2.8.0"
+  },
+  "devDependencies": {
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependencies": {
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@wolfstar/kit": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"
