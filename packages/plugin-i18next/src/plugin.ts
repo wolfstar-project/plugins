@@ -1,4 +1,5 @@
 import { definePlugin, type ClientOptions } from "@wolfstar/http-framework";
+import type { FSWatcher } from "chokidar";
 import "./index";
 import { initI18n, installI18n, watchLanguages } from "./hooks";
 import type { InternationalizationOptions } from "./lib/types";
@@ -6,6 +7,9 @@ import type { InternationalizationOptions } from "./lib/types";
 /**
  * The i18next plugin: installs the `InternationalizationHandler` on `container.i18n`, loads the languages before the
  * stores, and watches the languages directory when HMR is enabled.
+ *
+ * The plugin exposes the chokidar watcher started by `postListen` as `watcher` (`null` until then, and when HMR is not
+ * enabled), so it can be closed on shutdown, like `I18nextPlugin.watcher` of `./register`.
  *
  * @param pluginOptions The handler options. `ClientOptions.i18n` is merged over them.
  *
@@ -30,15 +34,20 @@ export default definePlugin((pluginOptions?: InternationalizationOptions) => {
         : { ...pluginOptions, ...options.i18n },
   });
 
+  let watcher: FSWatcher | null = null;
+
   return {
     name: "@wolfstar/plugin-i18next",
+    get watcher() {
+      return watcher;
+    },
     preGenericsInitialization(_client, options) {
       options.i18n = merged(options).i18n;
       installI18n(options);
     },
     preLoad: () => initI18n(),
     postListen(_client, options) {
-      watchLanguages(merged(options));
+      watcher = watchLanguages(merged(options)) ?? watcher;
     },
   };
 });

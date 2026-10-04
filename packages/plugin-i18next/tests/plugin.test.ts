@@ -92,6 +92,25 @@ describe("i18nextPlugin", () => {
     expect(watch).toHaveBeenCalledWith(FIXTURES, expect.objectContaining({ ignoreInitial: true }));
   });
 
+  test("GIVEN HMR enabled THEN the watcher is exposed on the plugin so it can be closed", () => {
+    const plugin = i18nPlugin({ defaultLanguageDirectory: FIXTURES, hmr: { enabled: true } });
+    const client = new Client({ ...base, plugins: [plugin] });
+    expect(plugin.watcher).toBeNull();
+
+    plugin.postListen?.(client, {} as ClientOptions);
+
+    expect(plugin.watcher).toBe(vi.mocked(watch).mock.results[0]?.value);
+  });
+
+  test("GIVEN HMR not enabled THEN the plugin exposes no watcher", () => {
+    const plugin = i18nPlugin({ defaultLanguageDirectory: FIXTURES });
+    const client = new Client({ ...base, plugins: [plugin] });
+
+    plugin.postListen?.(client, {} as ClientOptions);
+
+    expect(plugin.watcher).toBeNull();
+  });
+
   test("GIVEN HMR not enabled THEN postListen watches nothing", () => {
     const plugin = i18nPlugin({ defaultLanguageDirectory: FIXTURES });
     const client = new Client({ ...base, plugins: [plugin] });

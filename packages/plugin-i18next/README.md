@@ -272,6 +272,21 @@ import { I18nextPlugin } from "@wolfstar/plugin-i18next/register";
 await I18nextPlugin.watcher?.close();
 ```
 
+The `./plugin` factory exposes the same watcher as `watcher` on the plugin it returns (`null` until
+`postListen` has run, and when HMR is not enabled):
+
+```typescript
+import i18nPlugin from "@wolfstar/plugin-i18next/plugin";
+
+const plugin = i18nPlugin({ hmr: { enabled: true } });
+const client = new Client({ plugins: [plugin] });
+
+await plugin.watcher?.close();
+```
+
+A module activated through `stars.config` is built by the CLI, so there is no plugin instance to read
+the watcher from.
+
 ## Options
 
 | Option                     | Type                                     | Description                                                                             |
