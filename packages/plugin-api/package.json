@@ -56,7 +56,7 @@
     "@vladfrangu/async_event_emitter": "^2.4.7",
     "cookie-es": "^1.2.3",
     "tldts": "^7.4.16",
-    "undici": "^7.30.0"
+    "undici": "^8.11.2"
   },
   "devDependencies": {
     "@redstardev/unplugin-version-injector": "^0.0.2",
