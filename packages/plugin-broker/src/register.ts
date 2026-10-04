@@ -1,17 +1,17 @@
 import {
   Client,
-  container,
   Plugin,
   postListen,
   preGenericsInitialization,
   type ClientOptions,
 } from "@wolfstar/http-framework";
 import type { Awaitable } from "@wolfstar/plugin-cache";
+import "./augmentations.js";
 import "./index.js";
-import { BrokerConsumer, type BrokerConsumerOptions } from "./BrokerConsumer.js";
+import { installBroker, startBroker } from "./hooks.js";
 
 /**
- * Installs the {@link BrokerConsumer} configured through `ClientOptions.broker`, if any.
+ * Installs the `BrokerConsumer` configured through `ClientOptions.broker`, if any.
  *
  * @remarks
  * Splits construction from starting it, matching where each is safe to run: `preGenericsInitialization` runs
@@ -29,11 +29,11 @@ import { BrokerConsumer, type BrokerConsumerOptions } from "./BrokerConsumer.js"
  */
 export class BrokerPlugin extends Plugin {
   public static [preGenericsInitialization](this: Client, options: ClientOptions): void {
-    if (options.broker) container.broker = new BrokerConsumer(options.broker);
+    installBroker(options);
   }
 
   public static [postListen](this: Client): Awaitable<void> {
-    return container.broker?.start();
+    return startBroker();
   }
 }
 
@@ -43,27 +43,3 @@ Client.plugins
     "WolfStar-Broker-PreGenericsInitialization",
   )
   .registerPostListenHook(BrokerPlugin[postListen], "WolfStar-Broker-PostListen");
-
-declare module "@sapphire/pieces" {
-  interface Container {
-    /**
-     * The {@link BrokerConsumer} installed from `ClientOptions.broker`, once constructed by
-     * `preGenericsInitialization`. `BrokerListener` pieces bind to it as their default `emitter`.
-     *
-     * @remarks
-     * Only actually set when `ClientOptions.broker` is configured, same as `container.gatewayClient` is only set
-     * once a `GatewayClient` is constructed; declared non-optional so `"broker"` is accepted by
-     * {@link Listener.Options.emitter}'s `Container`-key mapped type, which excludes optional properties.
-     */
-    broker: BrokerConsumer;
-  }
-}
-
-declare module "@wolfstar/http-framework" {
-  interface ClientOptions {
-    /**
-     * Configures a {@link BrokerConsumer}, started automatically once the client starts listening.
-     */
-    broker?: BrokerConsumerOptions;
-  }
-}

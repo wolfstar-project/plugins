@@ -51,6 +51,58 @@ await broker.publish("messageCreate", payload);
 
 ### Consumer
 
+#### Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer):
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: [["@wolfstar/plugin-broker/module", { stream: "wolfstar:events", group: "workers" }]],
+});
+```
+
+The options are written into the built entry, so they must be JSON-serialisable. `redis` is a client
+instance and `consumer` is per-process (for example `worker-${process.pid}`), so neither can live in
+`stars.config`: supply both through `ClientOptions.broker`, which is shallow-merged over the module
+options (the module `options` are the base values, `ClientOptions.broker` overrides them). TypeScript
+currently types `ClientOptions.broker` as the full `BrokerConsumerOptions`, so `redis`, `stream`, `group`
+and `consumer` must all be present there, even when `stream` and `group` are also set in `stars.config`:
+
+```ts
+import { Client } from "@wolfstar/http-framework";
+import { Redis } from "ioredis";
+
+const client = new Client({
+  broker: {
+    redis: new Redis(process.env.REDIS_URL!),
+    stream: "wolfstar:events",
+    group: "workers",
+    consumer: `worker-${process.pid}`,
+  },
+});
+```
+
+A missing `redis` or `consumer` is not reported when the client is constructed: it surfaces when the
+consumer starts, once the client starts listening (`postListen`). Never combine the module (or the
+`@wolfstar/plugin-broker/plugin` factory below) with `import "@wolfstar/plugin-broker/register"`: both
+paths install the same hooks, so combining them installs them twice.
+
+Without Stars, pass the `definePlugin` factory to `plugins` instead:
+
+```ts
+import brokerPlugin from "@wolfstar/plugin-broker/plugin";
+
+const client = new Client({
+  plugins: [brokerPlugin({ redis, stream: "wolfstar:events", group: "workers", consumer: "w1" })],
+});
+```
+
+The consumer is started once the client starts listening, exactly as with `register`.
+
+#### `register` entrypoint (framework v3/v5/v6)
+
 Import the side-effecting `register` entrypoint **before** you create your `Client`, then configure
 `broker` on it — it is started automatically once the client starts listening:
 
