@@ -1,5 +1,16 @@
 # @wolfstar/plugin-broker
 
+## 0.5.0
+
+### Minor Changes
+
+- [#192](https://github.com/wolfstar-project/plugins/pull/192) [`aa389c8`](https://github.com/wolfstar-project/plugins/commit/aa389c8925cfc26bb5ea6db65cda5f76855f6e33) - Add `@wolfstar/plugin-broker/module` and `@wolfstar/plugin-broker/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
+### Patch Changes
+
+- Updated dependencies [[`69129e9`](https://github.com/wolfstar-project/plugins/commit/69129e9910c83f973701d55611ddd123b88d39c4)]:
+  - @wolfstar/plugin-cache@0.6.0
+
 ## 0.4.1
 
 ### Patch Changes

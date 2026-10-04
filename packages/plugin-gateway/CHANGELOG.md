@@ -1,5 +1,16 @@
 # @wolfstar/plugin-gateway
 
+## 0.10.0
+
+### Minor Changes
+
+- [#191](https://github.com/wolfstar-project/plugins/pull/191) [`57913c1`](https://github.com/wolfstar-project/plugins/commit/57913c1e8eca39ab74d2641b0857d8922e8f9347) - Add `@wolfstar/plugin-gateway/module`: list it in `modules` in `stars.config` to add the package to the auto imports. It needs framework 6.1 and the optional `@wolfstar/kit` peer; the main entrypoint is unchanged.
+
+### Patch Changes
+
+- Updated dependencies [[`69129e9`](https://github.com/wolfstar-project/plugins/commit/69129e9910c83f973701d55611ddd123b88d39c4)]:
+  - @wolfstar/plugin-cache@0.6.0
+
 ## 0.9.1
 
 ### Patch Changes

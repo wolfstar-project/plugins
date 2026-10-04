@@ -1,5 +1,11 @@
 # @wolfstar/plugin-logger
 
+## 0.3.0
+
+### Minor Changes
+
+- [#187](https://github.com/wolfstar-project/plugins/pull/187) [`a548c51`](https://github.com/wolfstar-project/plugins/commit/a548c51642b1a119df6fe91e79fd5dd377bcca51) - Add `@wolfstar/plugin-logger/module` and `@wolfstar/plugin-logger/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
 ## 0.2.2
 
 ### Patch Changes

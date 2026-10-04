@@ -1,5 +1,11 @@
 # @wolfstar/plugin-cache
 
+## 0.6.0
+
+### Minor Changes
+
+- [#189](https://github.com/wolfstar-project/plugins/pull/189) [`69129e9`](https://github.com/wolfstar-project/plugins/commit/69129e9910c83f973701d55611ddd123b88d39c4) - Add `@wolfstar/plugin-cache/module`: list it in `modules` in `stars.config` to add the package to the auto imports. It needs framework 6.1 and the optional `@wolfstar/kit` peer; the main entrypoint is unchanged.
+
 ## 0.5.1
 
 ### Patch Changes

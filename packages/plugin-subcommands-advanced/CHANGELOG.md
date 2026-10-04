@@ -1,5 +1,11 @@
 # @wolfstar/plugin-subcommands-advanced
 
+## 2.1.0
+
+### Minor Changes
+
+- [#193](https://github.com/wolfstar-project/plugins/pull/193) [`1e5f320`](https://github.com/wolfstar-project/plugins/commit/1e5f320d8e2769d7e7868fac78b05f6519b960e2) - Add `@wolfstar/plugin-subcommands-advanced/module` and `@wolfstar/plugin-subcommands-advanced/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
 ## 2.0.6
 
 ### Patch Changes
