@@ -1035,6 +1035,20 @@ try {
   `shardClient.gatewayOptions` into the client's options.
 - Interaction payloads keep being handled as today, they do not read through `client.users` & co.
 
+## Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer) to add the package to the auto imports:
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: ["@wolfstar/plugin-gateway/module"],
+});
+```
+
+The module registers no plugin and takes no options: you still construct the `GatewayClient` yourself.
+
 ## Credits
 
 The error system (`src/errors/`) is adapted from discord.js's
