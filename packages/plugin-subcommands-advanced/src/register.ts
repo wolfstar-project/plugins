@@ -1,13 +1,6 @@
-import {
-  Client,
-  container,
-  Plugin,
-  postInitialization,
-  type ClientOptions,
-  type CommandStore,
-} from "@wolfstar/http-framework";
+import { Client, Plugin, postInitialization, type ClientOptions } from "@wolfstar/http-framework";
 import "./index.js";
-import { SubcommandsAdvancedLoaderStrategy } from "./lib/utils/strategy.js";
+import { installSubcommandsStrategy } from "./hooks.js";
 
 /**
  * Installs the advanced subcommands loader strategy so modular child command
@@ -21,13 +14,7 @@ import { SubcommandsAdvancedLoaderStrategy } from "./lib/utils/strategy.js";
  */
 export class SubcommandsAdvancedPlugin extends Plugin {
   public static [postInitialization](this: Client, _options: ClientOptions): void {
-    const store = container.stores.get("commands") as CommandStore;
-    Object.defineProperty(store, "strategy", {
-      value: new SubcommandsAdvancedLoaderStrategy(),
-      configurable: true,
-      enumerable: true,
-      writable: true,
-    });
+    installSubcommandsStrategy();
   }
 }
 
