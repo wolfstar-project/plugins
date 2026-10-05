@@ -167,6 +167,44 @@ describe("Partials", () => {
     expect(member!.user?.username).toBe("wolf");
   });
 
+  test("GIVEN a partial member THEN its role manager is partial, and a full member's is not", async () => {
+    const client = createClient([Partials.GuildMember]);
+    const calls = record(client, "guildMemberRemove");
+    await dispatch(client, GatewayDispatchEvents.GuildMemberRemove, { guild_id: guildId, user });
+    const [[partial]] = calls;
+
+    const full = await client.members._build({
+      guild_id: guildId,
+      user,
+      roles: [],
+      joined_at: "2024-01-01T00:00:00.000Z",
+      deaf: false,
+      mute: false,
+      flags: 0,
+    });
+
+    expect(partial!.roles.partial).toBe(true);
+    expect(full.partial).toBe(false);
+    expect(full.roles.partial).toBe(false);
+  });
+
+  test("GIVEN a presence of an uncached member THEN the member cache stays untouched", async () => {
+    const client = createClient([Partials.GuildMember]);
+
+    await dispatch(client, GatewayDispatchEvents.PresenceUpdate, {
+      user: { id: userId },
+      guild_id: guildId,
+      status: "online",
+      activities: [],
+      client_status: { desktop: "online" },
+    });
+
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, userId)),
+    ).toBeUndefined();
+    expect(await client.cache!.members!.has(`${guildId}:${userId}`)).toBe(false);
+  });
+
   test("GIVEN Partials.User and Partials.Message THEN reactions carry a partial user and message", async () => {
     const client = createClient([Partials.User, Partials.Message]);
     const calls = record(client, "messageReactionAdd");
