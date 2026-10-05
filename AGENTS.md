@@ -53,7 +53,15 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
   - Use `deps`, `release` or `ci` for dependency updates, release PRs and workflow changes respectively.
   - Omit the scope when the change is too broad for a single one.
   - The scope must be in the `scopes` list of the workflow; add new ones there (see the new-package gotcha above).
-- **Description:** always create PRs using [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) — fill in every section (linked issue, context, description, key changes, type of change, pre-flight checklist) instead of writing a free-form body.
+- **Description:** always create PRs using [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) — fill in every section (linked issue, context, description, key changes, type of change, pre-flight checklist) instead of writing a free-form body. Tick the checklist items that apply, never drop a section, and pass the filled template to `gh pr create --body-file`.
+- **Skills:** when you need to commit, use the `/git-commit` skill if it is available in your environment (otherwise commit by hand following the Conventional Commits rules); when you need to open a PR, use the `/create-pull-request` skill if available (otherwise `gh pr create`). Either way the PR must follow the template rule above.
+- **AI disclosure:** when an AI agent wrote or edited the code or the PR description, end the PR body with a disclosure line, outside the template sections, in this form:
+
+  ```md
+  > 🤖 AI disclosure: <agent or tool name> modified this description. Code written with <model id>; PR description written with <model id>. [My AI open-source policy](https://redstar071.dev/blog/ai-in-open-source).
+  ```
+
+  Use the exact model ids you ran on (for example `claude-opus-5-5`), never a guess; if the code and the description were produced by different models or tools, name each one. Leave the line out when no AI tool was involved. Add it whenever you edit an existing PR description too, and never remove a disclosure line another contributor left. Review and edit AI-written text so it reflects your own understanding, as the PR template asks.
 
 ## Exercising the core functionality (ApiServer)
 
