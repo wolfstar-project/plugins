@@ -37,7 +37,7 @@ import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.
 import type { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { GuildInvite } from "../structures/invites/GuildInvite.js";
-import type { GuildMember } from "../structures/guilds/GuildMember.js";
+import type { GuildMember, PartialGuildMember } from "../structures/guilds/GuildMember.js";
 import type { Message } from "../structures/messages/Message.js";
 import type { MessageReaction } from "../structures/messages/MessageReaction.js";
 import type { PollAnswer } from "../structures/polls/PollAnswer.js";
@@ -241,8 +241,17 @@ export interface GatewayEventMap {
   messagePollVoteRemove: [answer: PollAnswer, userId: string];
 
   guildMemberAdd: [member: GuildMember];
-  guildMemberUpdate: [oldMember: GuildMember | null, newMember: GuildMember];
-  guildMemberRemove: [member: GuildMember | null, data: GatewayGuildMemberRemoveDispatchData];
+  /**
+   * `oldMember` is partial with `Partials.GuildMember` when the member was not cached.
+   */
+  guildMemberUpdate: [oldMember: GuildMember | PartialGuildMember | null, newMember: GuildMember];
+  /**
+   * `member` is partial with `Partials.GuildMember` when the member was not cached.
+   */
+  guildMemberRemove: [
+    member: GuildMember | PartialGuildMember | null,
+    data: GatewayGuildMemberRemoveDispatchData,
+  ];
   /**
    * Emitted for each chunk of members Discord sends in answer to `client.members.request`, once it is cached.
    * `data` has the chunk's index and count, its nonce, and the requested IDs that are not members (`not_found`).

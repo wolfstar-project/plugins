@@ -58,6 +58,11 @@ export interface GuildMemberRelations {
 }
 
 /**
+ * A {@link GuildMember} known to be partial, see {@link GuildMember.isPartial}.
+ */
+export type PartialGuildMember = GuildMember & { readonly partial: true };
+
+/**
  * A member of a Discord guild.
  *
  * @remarks
@@ -615,6 +620,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    */
   public get partial(): boolean {
     return this[kData].joined_at === undefined;
+  }
+
+  /**
+   * Whether the member is partial, see {@link GuildMember.partial}, as a type guard: narrows to {@link PartialGuildMember}.
+   *
+   * @remarks
+   * `joinedAt` stays `Date | null` on a member that is not partial: Discord types `joined_at` as nullable on the
+   * gateway's member payloads, so `partial` alone can not tell that it is a date.
+   */
+  public isPartial(): this is PartialGuildMember {
+    return this.partial;
   }
 
   /**

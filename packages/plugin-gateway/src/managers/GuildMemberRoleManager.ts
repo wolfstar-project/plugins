@@ -69,6 +69,13 @@ export class GuildMemberRoleManager extends BaseManager {
   }
 
   /**
+   * Whether the member is partial, see {@link GuildMember.partial}. The roles of a partial member are not known.
+   */
+  public get partial(): boolean {
+    return this.member.partial;
+  }
+
+  /**
    * The ID of the member's user.
    *
    * @throws {GatewayError} `GuildMemberUserUnknown` when the member's payload did not include its user.
