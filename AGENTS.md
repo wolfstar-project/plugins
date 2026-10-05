@@ -45,6 +45,16 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 - Activation has two paths. `plugin-scheduled-tasks` is module-only (its `./register` is a no-op). The older plugins ship `./module` (default export: `defineModule` from `@wolfstar/kit`, optional peer) and, for those with runtime hooks, `./plugin` (default export: a `definePlugin` factory); `./register` stays the legacy class + `Client.plugins.register*Hook` path for framework v3/v5/v6. Both call the same functions in `src/hooks.ts`, so change behaviour there. The `stars` CLI never imports `<pkg>/register` itself; it only preloads the sources registered through `ctx.addPlugin`, so a user's own `import "<pkg>/register"` (or passing the `./plugin` factory to `plugins` while also importing `/register`) still double-installs the hooks. `tests/module-entries.test.ts` checks that every `src/module.ts` (except `plugin-scheduled-tasks`, excluded on purpose) is exported, built and has kit as an optional peer.
 - Every push to any branch (see `.github/workflows/pkg-pr-new.yml`) builds the packages and publishes preview tarballs to [pkg.pr.new](https://pkg.pr.new) via `pnpm exec pkg-pr-new publish`, so unreleased changes from any branch/PR can be installed directly without waiting for a real release.
 
+## Pull requests
+
+- **Title** follows Conventional Commits and is validated by `.github/workflows/semantic-pull-requests.yml` (types: `feat`, `fix`, `docs`, `style`, `refactor`, `perf`, `test`, `build`, `ci`, `chore`, `revert`; the subject must not start with an uppercase letter).
+- **Scope rules:**
+  - Use the package name as the scope (e.g. `feat(plugin-gateway): ...`, `fix(plugin-api): ...`). Documentation about a package uses that package's scope too (e.g. `docs(plugin-cache): ...`).
+  - Use `deps`, `release` or `ci` for dependency updates, release PRs and workflow changes respectively.
+  - Omit the scope when the change is too broad for a single one.
+  - The scope must be in the `scopes` list of the workflow; add new ones there (see the new-package gotcha above).
+- **Description:** always create PRs using [`.github/PULL_REQUEST_TEMPLATE.md`](.github/PULL_REQUEST_TEMPLATE.md) — fill in every section (linked issue, context, description, key changes, type of change, pre-flight checklist) instead of writing a free-form body.
+
 ## Exercising the core functionality (ApiServer)
 
 The library's core is `ApiServer`, a standalone REST server (default port `4000`). To run it end-to-end: `pnpm build`, then instantiate `ApiServer`, register the route/middleware stores on `container.stores`, `loadMiddlewares()`, `loadListeners()`, load a `Route`, `container.stores.load()`, then `server.connect()`. See `packages/plugin-api/tests/ApiServer.test.ts` for the exact pattern.
