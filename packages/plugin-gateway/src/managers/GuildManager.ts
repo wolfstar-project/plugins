@@ -1,8 +1,13 @@
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { setTimeout as sleep } from "node:timers/promises";
+import { Collection } from "@discordjs/collection";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
+  RESTJSONErrorCodes,
   type APIGuild,
+  type APIMessageSearchResult,
+  type RESTGetAPIGuildMessagesSearchResult,
   type APIVoiceRegion,
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
@@ -46,7 +51,14 @@ import { WelcomeScreen } from "../structures/guilds/WelcomeScreen.js";
 import type { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import type { User } from "../structures/users/User.js";
 import type { Webhook } from "../structures/webhooks/Webhook.js";
+import { GatewayError } from "../errors/GatewayError.js";
+import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
+import {
+  toSearchQuery,
+  type GuildSearchMessagesOptions,
+  type GuildSearchMessagesResult,
+} from "../util/messageSearch.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
@@ -489,6 +501,111 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       integrations: pageIntegrations,
       applicationCommands: log.application_commands,
       guildScheduledEvents: log.guild_scheduled_events,
+    };
+  }
+
+  /**
+   * Searches the messages of a guild.
+   *
+   * @remarks
+   * Needs the `ReadMessageHistory` permission, and the content of the messages is empty without the `MessageContent`
+   * intent. Discord may return fewer messages than `limit`, and `totalResults` is approximate while messages are
+   * created or deleted, so do not paginate on `messages.size`: advance `offset` by `limit` until it passes
+   * `totalResults`.
+   *
+   * While Discord indexes the guild, the search waits the `retry_after` it answers and retries until the index is
+   * ready, so pass a `signal` to bound it, or `retryOnMissingIndex: false` to throw `SearchIndexNotYetAvailable`
+   * instead. Threads of the results are cached before their messages.
+   *
+   * @param guildId The ID of the guild.
+   * @param options What to search for, and how.
+   * @throws {GatewayRangeError} When an option exceeds a limit Discord documents.
+   * @throws {GatewayError} `SearchIndexNotYetAvailable` when the index is not ready and `retryOnMissingIndex` is
+   * `false`, with the `retryAfter` (in seconds) and the `documentsIndexed` Discord answered.
+   */
+  public async searchMessages(
+    guildId: string,
+    options: GuildSearchMessagesOptions = {},
+  ): Promise<GuildSearchMessagesResult> {
+    const { cache = true, retryOnMissingIndex = true, signal } = options;
+    const query = toSearchQuery(this.client, options);
+    // `Routes.guildMessagesSearch` exists at runtime but is missing from the typings of discord-api-types@0.38.54.
+    const route = `/guilds/${guildId}/messages/search` as const;
+
+    for (;;) {
+      const body = (await this.client.api.rest.get(route, {
+        query,
+        signal,
+      })) as RESTGetAPIGuildMessagesSearchResult;
+      if (!("code" in body) || body.code !== RESTJSONErrorCodes.IndexNotYetAvailable) {
+        return this.searchResult(guildId, body as APIMessageSearchResult, cache);
+      }
+
+      // A `retry_after` of 0 means "after a short delay", not "now".
+      const retryAfter =
+        Number.isFinite(body.retry_after) && body.retry_after > 0 ? body.retry_after : 1;
+      if (!retryOnMissingIndex) {
+        const documentsIndexed = body.documents_indexed ?? 0;
+        throw Object.assign(
+          new GatewayError("SearchIndexNotYetAvailable", guildId, retryAfter, documentsIndexed),
+          { retryAfter, documentsIndexed },
+        );
+      }
+
+      // Clamped: a timer longer than 2^31 - 1 ms fires immediately.
+      await sleep(Math.min(retryAfter * 1000, 2_147_483_647), undefined, { signal });
+    }
+  }
+
+  private async searchResult(
+    guildId: string,
+    body: APIMessageSearchResult,
+    cache: boolean,
+  ): Promise<GuildSearchMessagesResult> {
+    const threads: GuildSearchMessagesResult["threads"] = new Collection();
+    // Before the messages, so that these resolve their thread from the cache.
+    for (const raw of body.threads ?? []) {
+      threads.set(
+        raw.id,
+        await this.client.threads._add({ ...raw, guild_id: raw.guild_id ?? guildId }, cache),
+      );
+    }
+
+    const messages: GuildSearchMessagesResult["messages"] = new Collection();
+    const added = await Promise.all(
+      body.messages
+        .flat()
+        // The search leaves `reactions` out, and a message of an uncached channel still needs its guild.
+        .map((message) =>
+          this.client.messages._add({ ...message, guild_id: guildId } as never, cache),
+        ),
+    );
+    for (const message of added) messages.set(message.id, message);
+
+    const threadMembers: GuildSearchMessagesResult["threadMembers"] = new Collection();
+    const members = await Promise.all(
+      (body.members ?? []).map(
+        async (raw) =>
+          [
+            raw,
+            await this.client.threadMembers._add({ ...raw, guild_id: guildId }, cache),
+          ] as const,
+      ),
+    );
+    for (const [raw, member] of members) {
+      if (!raw.id || !raw.user_id) continue;
+      let ofThread: Collection<string, ThreadMember> | undefined = threadMembers.get(raw.id);
+      if (!ofThread) threadMembers.set(raw.id, (ofThread = new Collection()));
+      ofThread.set(raw.user_id, member);
+    }
+
+    return {
+      messages,
+      threads,
+      threadMembers,
+      totalResults: body.total_results,
+      doingDeepHistoricalIndex: body.doing_deep_historical_index,
+      ...(body.documents_indexed === undefined ? {} : { documentsIndexed: body.documents_indexed }),
     };
   }
 

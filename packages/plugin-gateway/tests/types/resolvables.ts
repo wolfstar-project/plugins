@@ -11,6 +11,7 @@ import type {
   GuildChannelResolvable,
   GuildMember,
   GuildResolvable,
+  GuildSearchMessagesOptions,
   Presence,
   PresenceResolvable,
   ThreadMember,
@@ -79,3 +80,20 @@ export const badColor: ColorResolvable = "NotAColor";
 export const presenceFromRole: PresenceResolvable = role;
 // @ts-expect-error The guild ID is a string.
 export const presenceGuildNumber = client.presences.resolve("123456789012345678", 1);
+
+export const searchOptions: GuildSearchMessagesOptions = {
+  channelIds: [channel, thread, "123456789012345678"],
+  authorIds: [user, member, message, threadMember, "123456789012345678"],
+  mentions: [user],
+  mentionsRoleIds: [role, "123456789012345678"],
+  repliedToUserIds: [member],
+  repliedToMessageIds: [message, "123456789012345678"],
+  minId: message,
+  maxId: "123456789012345678",
+};
+// @ts-expect-error A role is not a channel.
+export const searchChannelFromRole: GuildSearchMessagesOptions = { channelIds: [role] };
+// @ts-expect-error A channel is not a user.
+export const searchAuthorFromChannel: GuildSearchMessagesOptions = { authorIds: [channel] };
+// @ts-expect-error Order is `asc` or `desc`.
+export const searchBadOrder: GuildSearchMessagesOptions = { sortOrder: "up" };

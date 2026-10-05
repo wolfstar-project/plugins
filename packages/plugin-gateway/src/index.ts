@@ -28,6 +28,10 @@ export * from "./util/flags.js";
 export * from "./util/limits.js";
 export * from "./util/Sweepers.js";
 export * from "./util/messages.js";
+export type {
+  GuildSearchMessagesOptions,
+  GuildSearchMessagesResult,
+} from "./util/messageSearch.js";
 export * from "./util/Partials.js";
 export * from "./util/permissions.js";
 export * from "./util/PermissionsBitField.js";
