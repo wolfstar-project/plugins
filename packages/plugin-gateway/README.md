@@ -980,7 +980,16 @@ and `message.channel` read the cache, like every relation getter: `null` when th
 cached or the cache is asynchronous, in which case `fetchChannel`, `fetchGuild`, and
 `fetchReference` get it. `editable`, `deletable`, `bulkDeletable`, `pinnable`, and `crosspostable`
 are discord.js's getters (promises with an asynchronous cache, see above). Text channels
-get `messages`, `send`, `sendTyping`, and `bulkDelete`.
+get `messages`, `send`, and `sendTyping`. Guild text-based channels (not direct messages, like in
+discord.js) also get `bulkDelete`, which takes messages, their IDs, a `Collection`, or a count, and
+resolves to a `Collection` of the deleted messages by ID: the cached `Message`, else a partial one
+with `Partials.Message`, else `undefined`. Narrow a `Message | PartialMessage` with `partial`.
+
+`Message` is generic like discord.js's: `Message<true>` has a `guildId` string and guild-text-based `channel`s, and
+`inGuild()` narrows to it. `reply`, `edit`, and the other actions resolve to messages whose `channel` is never a group
+DM (`OmitPartialGroupDMChannel`), `fetch(force)` answers from the cache when `force` is `false`, `forward` takes a
+channel or its ID, and `messageSnapshots` hold `MessageSnapshot`s. `sharedClientTheme`, `resolveComponent(customId)`,
+and `fetchWebhook()` are discord.js's.
 
 As in discord.js, `attachments`, `stickers`, `messageSnapshots`, and `reactions.cache` are
 `Collection`s keyed by ID (reactions by the ID of a custom emoji, the name of a Unicode one), while

@@ -14,6 +14,7 @@ import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
 import { TextChannelMixin } from "./mixins/TextChannelMixin.js";
+import { TextGuildChannelMixin } from "./mixins/TextGuildChannelMixin.js";
 import { VoiceChannelMixin } from "./mixins/VoiceChannelMixin.js";
 
 export interface VoiceChannel
@@ -24,6 +25,7 @@ export interface VoiceChannel
       [
         BaseChannelMixin<ChannelType.GuildVoice>,
         TextChannelMixin<ChannelType.GuildVoice>,
+        TextGuildChannelMixin<ChannelType.GuildVoice>,
         GuildChannelMixin<ChannelType.GuildVoice>,
         ChannelParentMixin<ChannelType.GuildVoice>,
         ChannelPermissionMixin<ChannelType.GuildVoice>,
@@ -69,6 +71,7 @@ Mixin(VoiceChannel, [
   StructureMixin,
   BaseChannelMixin,
   TextChannelMixin,
+  TextGuildChannelMixin,
   GuildChannelMixin,
   ChannelParentMixin,
   ChannelPermissionMixin,

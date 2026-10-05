@@ -13,6 +13,7 @@ import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelTopicMixin } from "./mixins/ChannelTopicMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
 import { TextChannelMixin } from "./mixins/TextChannelMixin.js";
+import { TextGuildChannelMixin } from "./mixins/TextGuildChannelMixin.js";
 
 export interface AnnouncementChannel
   extends
@@ -22,6 +23,7 @@ export interface AnnouncementChannel
       [
         BaseChannelMixin<ChannelType.GuildAnnouncement>,
         TextChannelMixin<ChannelType.GuildAnnouncement>,
+        TextGuildChannelMixin<ChannelType.GuildAnnouncement>,
         GuildChannelMixin<ChannelType.GuildAnnouncement>,
         ChannelParentMixin<ChannelType.GuildAnnouncement>,
         ChannelPermissionMixin<ChannelType.GuildAnnouncement>,
@@ -67,6 +69,7 @@ Mixin(AnnouncementChannel, [
   StructureMixin,
   BaseChannelMixin,
   TextChannelMixin,
+  TextGuildChannelMixin,
   GuildChannelMixin,
   ChannelParentMixin,
   ChannelPermissionMixin,

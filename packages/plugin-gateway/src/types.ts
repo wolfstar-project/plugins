@@ -92,6 +92,46 @@ export type TextBasedChannel =
   | VoiceChannel;
 
 /**
+ * Any channel of a guild messages can be sent in: {@link TextBasedChannel} without the direct message channels.
+ */
+export type GuildTextBasedChannel = Exclude<TextBasedChannel, DMChannel | GroupDMChannel>;
+
+/**
+ * `True` when `Value` is `true`, `False` when it is `false`, and both when it is `boolean`, like discord.js's `If`.
+ */
+export type If<Value extends boolean, TrueResult, FalseResult = null> = Value extends true
+  ? TrueResult
+  : Value extends false
+    ? FalseResult
+    : FalseResult | TrueResult;
+
+/**
+ * The structures that can be partial, see {@link Partialize}.
+ */
+export type AllowedPartial = Message;
+
+/**
+ * A structure known to be partial, like discord.js's `Partialize`: `partial` is `true`, the nulled keys are `null`, the
+ * nullable ones may be, and the overridable ones may be missing.
+ */
+export type Partialize<
+  Structure extends AllowedPartial,
+  NulledKeys extends keyof Structure | null = null,
+  NullableKeys extends keyof Structure | null = null,
+  OverridableKeys extends keyof Structure | "" = "",
+> = {
+  [K in keyof Omit<Structure, OverridableKeys>]: K extends "partial"
+    ? true
+    : K extends NulledKeys
+      ? null
+      : K extends NullableKeys
+        ? Structure[K] | null
+        : Structure[K];
+} & {
+  [K in OverridableKeys]: K extends keyof Structure ? Structure[K] : never;
+};
+
+/**
  * Any channel members can connect to.
  */
 export type VoiceBasedChannel = StageChannel | VoiceChannel;

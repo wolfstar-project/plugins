@@ -11,6 +11,7 @@ export * from "./DMChannelMixin.js";
 export * from "./GroupDMMixin.js";
 export * from "./GuildChannelMixin.js";
 export * from "./TextChannelMixin.js";
+export * from "./TextGuildChannelMixin.js";
 export * from "./ThreadChannelMixin.js";
 export * from "./ThreadOnlyChannelMixin.js";
 export * from "./VoiceChannelMixin.js";

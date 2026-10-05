@@ -30,6 +30,7 @@ import type {
   APIMessageInteractionMetadata,
   APIMessageReference,
   APIMessageRoleSubscriptionData,
+  APIMessageSharedClientTheme,
   APIRoleTags,
   APIUserPrimaryGuild,
   AutoModerationActionType,
@@ -759,6 +760,32 @@ export function transformAPIRoleSubscriptionData(
     tierName: data.tier_name,
     totalMonthsSubscribed: data.total_months_subscribed,
     isRenewal: data.is_renewal,
+  };
+}
+
+/**
+ * The custom client theme shared via a message, camel-cased like discord.js's `SharedClientTheme`.
+ */
+export interface SharedClientTheme {
+  colors: string[];
+  gradientAngle: number;
+  baseMix: number;
+  baseTheme?: APIMessageSharedClientTheme["base_theme"];
+}
+
+/**
+ * Transforms the shared client theme of a message.
+ *
+ * @param data The data to transform.
+ */
+export function transformAPIMessageSharedClientTheme(
+  data: APIMessageSharedClientTheme,
+): SharedClientTheme {
+  return {
+    colors: data.colors,
+    gradientAngle: data.gradient_angle,
+    baseMix: data.base_mix,
+    ...(data.base_theme === undefined ? {} : { baseTheme: data.base_theme }),
   };
 }
 

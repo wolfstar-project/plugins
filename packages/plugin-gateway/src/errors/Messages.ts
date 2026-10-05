@@ -36,6 +36,7 @@ export const GatewayErrorMessages = {
     `The ${entity} cache cannot enumerate its entries (it has no keys/values/entries)`,
   CacheKeyUnresolvable: (entity: string, reason: string) => `Cannot key a ${entity} ${reason}`,
   IdUnresolvable: "Cannot resolve an ID from a structure without one",
+  MessageBulkDeleteType: "The messages must be an Array, Collection, or number.",
   InvalidType: (name: string, expected: string, an = false) =>
     `Supplied ${name} is not a${an ? "n" : ""} ${expected}.`,
   InvalidElement: (type: string, name: string, element: unknown) =>
@@ -97,6 +98,8 @@ export const GatewayErrorMessages = {
     `The message search index of guild ${guildId} is not available yet (${documentsIndexed} documents indexed), retry after ${retryAfter}s`,
   MessageForwardChannelMissing: "Forwarding a message by ID needs its channel",
   MessageReferenceMissing: (messageId: string) => `Message ${messageId} references no message`,
+  WebhookMessage: "The message was not sent by a webhook.",
+  WebhookApplication: "This message webhook belongs to an application and cannot be fetched.",
   MessagePollMissing: (messageId: string) => `Message ${messageId} has no poll`,
   AttachmentDownloadFailed: (url: string, status: number) => `Could not download ${url}: ${status}`,
   FileNotFound: (file: string) => `File could not be found: ${file}`,
