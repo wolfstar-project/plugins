@@ -36,6 +36,24 @@ exhaustive list, but here are some things to consider before/while submitting yo
 - Everything should follow our Oxlint rules as closely as possible, and should pass lint tests even if you must disable
   a rule for a single line.
 
+### AI-assisted contributions
+
+AI tools are welcome, but you remain responsible for everything you submit. Review and understand every change, and make
+sure the pull request description reflects your own understanding rather than unedited generated text.
+
+If an AI agent or tool wrote or edited the code or the pull request description, end the pull request body with a
+disclosure line, outside the template sections:
+
+```md
+> 🤖 AI disclosure: <agent or tool name> was used on this PR. Code written with <model id>; PR description written with <model id>. [AI policy](https://github.com/wolfstar-project/plugins/blob/main/.github/CONTRIBUTING.md#ai-assisted-contributions).
+```
+
+- Use the exact model ids that were used, never a guess. If the code and the description came from different models or
+  tools, name each one.
+- Leave the line out when no AI tool was involved.
+- Add it whenever you edit an existing pull request description with AI, and never remove a disclosure line another
+  contributor left.
+
 <!-- Link Dump -->
 
 [discord server]: https://join.wolfstar.rocks
