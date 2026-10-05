@@ -172,7 +172,7 @@ export interface GuildSearchMessagesResult {
  *
  * @internal
  */
-export function validateSearchOptions(options: GuildSearchMessagesOptions): void {
+function validateSearchOptions(options: GuildSearchMessagesOptions): void {
   const { content, slop, channelIds, limit, offset } = options;
   if (content !== undefined && content.length > 1024) {
     throw new GatewayRangeError("MessageSearchContentLength");
