@@ -1,6 +1,10 @@
 import { presenceKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
+import { ThreadMember } from "../structures/channels/ThreadMember.js";
+import { GuildMember } from "../structures/guilds/GuildMember.js";
+import { Message } from "../structures/messages/Message.js";
 import { Presence } from "../structures/presences/Presence.js";
+import type { PresenceResolvable } from "../types.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager } from "./CachedManager.js";
 import { GatewayError } from "../errors/GatewayError.js";
@@ -43,6 +47,60 @@ export class PresenceManager extends CachedManager<
       ([user, member, guild]) =>
         new Presence(data, { user: user ?? null, member: member ?? null, guild }),
     );
+  }
+
+  /**
+   * Resolves a {@link PresenceResolvable} to the cached presence of its user in a guild.
+   *
+   * @remarks
+   * A string is a **user ID**, not a cache key: build the key with {@link PresenceManager.resolveKey} to read
+   * `cache.get` directly. It is a pure cache read, no request is made and a miss is `null`; presences only come from
+   * the gateway.
+   *
+   * The guild comes from a member or a message, else from a thread member's member or thread, and otherwise from
+   * `guildId`. A message sent in a direct message belongs to no guild, so it resolves to `null` unless `guildId` is
+   * given.
+   *
+   * @param presence The presence, something holding a user, or a user ID.
+   * @param guildId The guild to look the presence up in, when the value carries none.
+   * @returns The presence, or `null` if it is not cached or its guild is unknown.
+   */
+  public override resolve(
+    presence: PresenceResolvable,
+    guildId?: string,
+  ): Awaitable<Presence | null> {
+    if (presence instanceof Presence) return presence;
+
+    const userId = this.resolveId(presence);
+    const guild = this.guildOf(presence) ?? guildId ?? null;
+    if (userId === null || guild === null) return null;
+
+    return whenAll([this.cache.get(this.resolveKey(guild, userId))], ([cached]) => cached ?? null);
+  }
+
+  /**
+   * Resolves a {@link PresenceResolvable} to a user ID.
+   *
+   * @remarks
+   * This is the ID of the presence's user, like discord.js, and not the cache key {@link PresenceManager.resolveKey}
+   * builds from a guild and a user.
+   *
+   * @param presence The presence, something holding a user, or a user ID.
+   * @returns The user ID, or `null` if the value holds none.
+   */
+  public override resolveId(presence: PresenceResolvable): string | null {
+    if (typeof presence === "string") return presence;
+    if (presence instanceof Presence) return presence.userId;
+    if (presence instanceof Message) return presence.author.id || null;
+    return presence.id;
+  }
+
+  private guildOf(presence: PresenceResolvable): string | null {
+    if (presence instanceof GuildMember || presence instanceof Message) return presence.guildId;
+    if (presence instanceof ThreadMember) {
+      return presence.guildMember?.guildId ?? presence.thread?.guildId ?? null;
+    }
+    return null;
   }
 
   /**

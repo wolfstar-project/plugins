@@ -567,7 +567,7 @@ a store:
 | any entity                   | `cache.get` resolves to `undefined`, `fetch` hits the API, previous state `null` |
 | `emojis` / `stickers`        | only `guildEmojisUpdate` / `guildStickersUpdate`, no granular diff events        |
 | `guilds` (able to enumerate) | guilds left while offline are not reconciled on `READY`                          |
-| `presences`                  | `presences.fetch` rejects: presences only come from the gateway                  |
+| `presences`                  | `presences.fetch` rejects, `presences.resolve` answers `null`: gateway only      |
 | `roles`                      | overwrite types and member roles are read from one `GET /guilds/:id/roles`       |
 | `threadMembers`              | `thread.joined` is `null` unless the payload carries the bot's member            |
 | a relation's entity          | the relation getter (`message.guild`, `member.voice`, ...) returns `null`        |
