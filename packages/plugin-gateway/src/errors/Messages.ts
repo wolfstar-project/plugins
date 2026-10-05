@@ -88,6 +88,13 @@ export const GatewayErrorMessages = {
   MessageContentType: "The content of a message must be a string",
   MessageNonceLength: "A message nonce must be at most 25 characters long",
   MessageNonceType: "A message nonce must be an integer",
+  MessageSearchContentLength: "The content of a message search cannot exceed 1024 characters",
+  MessageSearchSlop: "The slop of a message search must be an integer from 0 to 100",
+  MessageSearchChannelIdsLimit: "A message search cannot filter by more than 500 channels",
+  MessageSearchLimit: "The limit of a message search must be an integer from 1 to 25",
+  MessageSearchOffset: "The offset of a message search must be an integer from 0 to 9975",
+  SearchIndexNotYetAvailable: (guildId: string, retryAfter: number, documentsIndexed: number) =>
+    `The message search index of guild ${guildId} is not available yet (${documentsIndexed} documents indexed), retry after ${retryAfter}s`,
   MessageForwardChannelMissing: "Forwarding a message by ID needs its channel",
   MessageReferenceMissing: (messageId: string) => `Message ${messageId} references no message`,
   MessagePollMissing: (messageId: string) => `Message ${messageId} has no poll`,

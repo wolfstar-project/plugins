@@ -37,6 +37,10 @@ import type { GuildStickerManager } from "../../managers/GuildStickerManager.js"
 import { isPromiseLike } from "../../util/cache.js";
 import { cdn } from "../../util/cdn.js";
 import type { ImageResolvable } from "../../util/DataResolver.js";
+import type {
+  GuildSearchMessagesOptions,
+  GuildSearchMessagesResult,
+} from "../../util/messageSearch.js";
 import { transformAPIIncidentsData, type IncidentActions } from "../../util/Transformers.js";
 import type { Webhook } from "../webhooks/Webhook.js";
 import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from "../../util/flags.js";
@@ -565,6 +569,15 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public fetchAuditLogs(options?: GuildAuditLogsFetchOptions): Promise<GuildAuditLogs> {
     return this.client.guilds.fetchAuditLogs(this.id, options);
+  }
+
+  /**
+   * Searches the messages of the guild, see `GuildManager#searchMessages`.
+   *
+   * @param options What to search for, and how.
+   */
+  public searchMessages(options?: GuildSearchMessagesOptions): Promise<GuildSearchMessagesResult> {
+    return this.client.guilds.searchMessages(this.id, options);
   }
 
   /**
