@@ -1,5 +1,11 @@
 # @wolfstar/plugin-sharder
 
+## 0.2.0
+
+### Minor Changes
+
+- [#190](https://github.com/wolfstar-project/plugins/pull/190) [`e2ff310`](https://github.com/wolfstar-project/plugins/commit/e2ff310297f611ebbe0a18685829f33a0749a62a) - Add `@wolfstar/plugin-sharder/module`: list it in `modules` in `stars.config` to add the package to the auto imports. It needs the optional `@wolfstar/kit` peer; the main entrypoint is unchanged.
+
 ## 0.1.1
 
 ### Patch Changes

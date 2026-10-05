@@ -1,5 +1,11 @@
 # @wolfstar/plugin-api
 
+## 2.1.0
+
+### Minor Changes
+
+- [#194](https://github.com/wolfstar-project/plugins/pull/194) [`0199279`](https://github.com/wolfstar-project/plugins/commit/01992796d7379c891b435f28b9d4788ad7cfe95e) - Add `@wolfstar/plugin-api/module` and `@wolfstar/plugin-api/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
 ## 2.0.1
 
 ### Patch Changes
