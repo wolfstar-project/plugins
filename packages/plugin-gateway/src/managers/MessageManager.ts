@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   MessageFlags,
@@ -9,7 +10,11 @@ import {
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Message } from "../structures/messages/Message.js";
+import { Message, type PartialMessage } from "../structures/messages/Message.js";
+import { bindClient } from "../structures/Structure.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
+import type { MessageResolvable } from "../types.js";
+import { Partials } from "../util/Partials.js";
 import {
   ReactionEmoji,
   type EmojiIdentifierResolvable,
@@ -262,29 +267,54 @@ export class MessageManager extends CachedManager<
   }
 
   /**
-   * Deletes up to 100 messages at once, skipping the ones older than 14 days that Discord refuses.
+   * Deletes up to 100 messages at once, like discord.js's `TextBasedChannel#bulkDelete`.
    *
    * @param channelId The ID of the channel.
-   * @param messages The IDs of the messages, or how many of the latest ones to delete.
+   * @param messages The messages, their IDs, or how many of the latest ones to delete.
    * @param filterOld Whether to drop the messages older than 14 days instead of letting the request fail.
-   * @returns The IDs of the deleted messages.
+   * @returns The deleted messages by ID: the cached one, else a partial one with `Partials.Message`, else `undefined`.
+   * @throws {@link GatewayTypeError} When `messages` is neither a `Collection`, an array, nor a number.
    */
   public async bulkDelete(
     channelId: string,
-    messages: readonly string[] | number,
+    messages: Collection<string, Message> | readonly MessageResolvable[] | number,
     filterOld = false,
-  ): Promise<string[]> {
-    let ids =
-      typeof messages === "number"
-        ? (await this.list(channelId, { limit: messages })).map((message) => message.id)
-        : [...messages];
+  ): Promise<Collection<string, Message | PartialMessage | undefined>> {
+    if (typeof messages === "number" && !Number.isNaN(messages)) {
+      return this.bulkDelete(
+        channelId,
+        new Collection((await this.list(channelId, { limit: messages })).map((m) => [m.id, m])),
+        filterOld,
+      );
+    }
+
+    let ids: string[];
+    if (messages instanceof Collection) ids = [...messages.keys()];
+    else if (Array.isArray(messages)) {
+      ids = (messages as readonly MessageResolvable[]).map((message) =>
+        typeof message === "string" ? message : message.id,
+      );
+    } else throw new GatewayTypeError("MessageBulkDeleteType");
 
     if (filterOld) {
       const oldest = Date.now() - BulkDeleteMaxAge;
       ids = ids.filter((id) => Number((BigInt(id) >> 22n) + 1_420_070_400_000n) > oldest);
     }
 
-    if (ids.length === 0) return [];
+    const deleted = new Collection<string, Message | PartialMessage | undefined>();
+    if (ids.length === 0) return deleted;
+
+    // The cache entries go with the request: read them first.
+    const guildId = await this.guildIdOf(channelId);
+    for (const id of ids) {
+      deleted.set(
+        id,
+        (await this.cache.get(this.resolveKey(channelId, id))) ??
+          this._partial(channelId, id, guildId) ??
+          undefined,
+      );
+    }
+
     if (ids.length === 1) {
       await this.delete(channelId, ids[0]!);
     } else {
@@ -292,7 +322,28 @@ export class MessageManager extends CachedManager<
       await Promise.all(ids.map((id) => this.cache.delete(this.resolveKey(channelId, id))));
     }
 
-    return ids;
+    return deleted;
+  }
+
+  /**
+   * Builds the partial message of an ID alone, when `Partials.Message` is enabled. It is never cached.
+   *
+   * @internal
+   */
+  public _partial(channelId: string, messageId: string, guildId?: string): PartialMessage | null {
+    if (!this.client.partials.includes(Partials.Message)) return null;
+    return bindClient(
+      new Message({ id: messageId, channel_id: channelId, guild_id: guildId } as never),
+      this.client,
+    ) as unknown as PartialMessage;
+  }
+
+  private async guildIdOf(channelId: string): Promise<string | undefined> {
+    if (!this.client.partials.includes(Partials.Message)) return undefined;
+    const channel = (await this.client.channels.cache.get(channelId)) as
+      | { guildId?: string | null }
+      | undefined;
+    return channel?.guildId ?? undefined;
   }
 
   /**

@@ -33,6 +33,7 @@
               "_getShallow",
               "_hydrate",
               "_hydrateInGuild",
+              "_partial",
               "_patchCached",
               "_resolveData"
             ],

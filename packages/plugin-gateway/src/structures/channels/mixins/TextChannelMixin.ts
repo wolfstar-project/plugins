@@ -78,17 +78,6 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
-   * Deletes up to 100 messages at once.
-   *
-   * @param messages The IDs of the messages, or how many of the latest ones to delete.
-   * @param filterOld Whether to drop the messages older than 14 days, which Discord refuses.
-   * @returns The IDs of the deleted messages.
-   */
-  public bulkDelete(messages: readonly string[] | number, filterOld = false): Promise<string[]> {
-    return this.client.messages.bulkDelete(this.id, messages, filterOld);
-  }
-
-  /**
    * Fetches the last message of the channel, cache first.
    */
   public async fetchLastMessage(): Promise<Message | null> {

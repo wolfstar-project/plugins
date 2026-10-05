@@ -21,20 +21,29 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { MessageThreadCreateOptions } from "../../managers/MessageManager.js";
 import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
-import { createComponent, type MessageTopLevelComponent } from "../../util/components.js";
+import {
+  createComponent,
+  findComponentByCustomId,
+  type AnyComponent,
+  type MessageTopLevelComponent,
+} from "../../util/components.js";
+import type { APIAnyComponent } from "../components/Component.js";
 import { isDeepEqual } from "../../util/equal.js";
 import {
   transformAPIMessageActivity,
   transformAPIMessageCall,
   transformAPIMessageInteractionMetadata,
   transformAPIMessageReference,
+  transformAPIMessageSharedClientTheme,
   transformAPIRoleSubscriptionData,
   type MessageActivity,
   type MessageCall,
   type MessageInteractionMetadata,
   type MessageReference,
   type RoleSubscriptionData,
+  type SharedClientTheme,
 } from "../../util/Transformers.js";
+import type { Webhook } from "../webhooks/Webhook.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
 import { requireMe } from "../../util/permissions.js";
 import { withOwnReaction } from "../../util/reactions.js";
@@ -68,6 +77,14 @@ import {
 } from "../Structure.js";
 import { User } from "../users/User.js";
 import { GatewayError } from "../../errors/GatewayError.js";
+import type {
+  GuildTextBasedChannel,
+  If,
+  Partialize,
+  TextBasedChannel,
+  TextBasedChannelResolvable,
+} from "../../types.js";
+import type { GroupDMChannel } from "../channels/GroupDMChannel.js";
 
 const ZeroWidthSpace = String.fromCodePoint(0x20_0b);
 
@@ -104,7 +121,52 @@ const NonSystemTypes: readonly MessageType[] = [
   MessageType.ContextMenuCommand,
 ];
 
-export interface Message extends StructureMixin<CacheEntityTypes["messages"], MessageRelations> {}
+// oxlint-disable-next-line no-unused-vars -- merged with the class, which uses it; the declarations must match.
+export interface Message<InGuild extends boolean = boolean> extends StructureMixin<
+  CacheEntityTypes["messages"],
+  MessageRelations
+> {}
+
+/**
+ * A message built from its IDs alone, like discord.js's `PartialMessage`: `partial` is `true`, and `content`, `author`
+ * and `cleanContent` may be missing. Narrow a `Message | PartialMessage` with `partial`; {@link Message.fetch}
+ * completes it.
+ */
+export interface PartialMessage<InGuild extends boolean = boolean> extends Partialize<
+  Message<InGuild>,
+  "pinned" | "system" | "tts" | "type",
+  "author" | "cleanContent" | "content"
+> {}
+
+/**
+ * A structure whose `channel` can not be a group direct message, like discord.js's `OmitPartialGroupDMChannel`: what
+ * the message actions resolve to.
+ */
+export type OmitPartialGroupDMChannel<Structure extends { channel: AnyChannel | null }> =
+  Structure & { channel: Exclude<Structure["channel"], GroupDMChannel> };
+
+/**
+ * A snapshot of a forwarded message, like discord.js's `MessageSnapshot`: only the data Discord keeps, the rest may be
+ * `null`.
+ */
+export type MessageSnapshot = Partialize<
+  Message,
+  null,
+  Exclude<
+    keyof Message,
+    | "attachments"
+    | "client"
+    | "components"
+    | "content"
+    | "createdTimestamp"
+    | "editedTimestamp"
+    | "embeds"
+    | "flags"
+    | "mentions"
+    | "stickers"
+    | "type"
+  >
+>;
 
 /**
  * A Discord message: `@discordjs/structures`' `Message`, with its relations, substructures, and actions through the
@@ -117,7 +179,7 @@ export interface Message extends StructureMixin<CacheEntityTypes["messages"], Me
  * the checks answer a promise read from the cache, typed as one once `GatewayCacheConfig` declares the cache
  * asynchronous. The `fetch*able()` twins also ask the API for what is not cached.
  */
-export class Message extends BaseMessage<""> {
+export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> {
   /**
    * Keeps the raw `timestamp` and `edited_timestamp`, which `@discordjs/structures` strips and re-serializes in its own
    * format, so that {@link Message.toJSON} returns the message as received.
@@ -151,8 +213,8 @@ export class Message extends BaseMessage<""> {
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
-  public get guildId(): string | null {
-    return this[kData].guild_id ?? null;
+  public get guildId(): If<InGuild, string> {
+    return (this[kData].guild_id ?? null) as If<InGuild, string>;
   }
 
   /**
@@ -187,16 +249,22 @@ export class Message extends BaseMessage<""> {
    * The guild the message was sent in, from the cache. `null` outside of guilds, when the guild is not cached, or when
    * the cache is asynchronous: use {@link Message.fetchGuild} to always get it.
    */
-  public get guild(): Guild | null {
-    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
+  public get guild(): If<InGuild, Guild | null, null> {
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id)) as If<
+      InGuild,
+      Guild | null,
+      null
+    >;
   }
 
   /**
    * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the cache is
    * asynchronous: use {@link Message.fetchChannel} to always get it.
    */
-  public get channel(): AnyChannel | null {
-    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
+  public get channel(): If<InGuild, GuildTextBasedChannel, TextBasedChannel> | null {
+    return this.lazyRelation("channel", (client) =>
+      cachedChannel(client, this[kData].channel_id),
+    ) as If<InGuild, GuildTextBasedChannel, TextBasedChannel> | null;
   }
 
   public override get flags(): Readonly<MessageFlagsBitField> {
@@ -245,8 +313,8 @@ export class Message extends BaseMessage<""> {
    * The users, members, roles, and channels the message mentions: their cached copies when the message was built by
    * `client.messages`, like discord.js.
    */
-  public get mentions(): MessageMentions {
-    return new MessageMentions(this[kData], {
+  public get mentions(): MessageMentions<InGuild> {
+    return new MessageMentions<InGuild>(this[kData], {
       guild: this.guild,
       ...this[kRelations].mentions,
     });
@@ -294,8 +362,8 @@ export class Message extends BaseMessage<""> {
    * The snapshots of the messages this one forwards, as a collection of messages carrying the IDs of the forwarded
    * message, by that ID, like discord.js's `Message#messageSnapshots`.
    */
-  public get messageSnapshots(): Collection<string, Message> {
-    const collection = new Collection<string, Message>();
+  public get messageSnapshots(): Collection<string, MessageSnapshot> {
+    const collection = new Collection<string, MessageSnapshot>();
     const snapshots = this[kData].message_snapshots;
     if (!snapshots?.length) return collection;
     const reference = this[kData].message_reference;
@@ -307,7 +375,10 @@ export class Message extends BaseMessage<""> {
         channel_id: reference?.channel_id ?? this.channelId,
         guild_id: reference?.guild_id,
       } as CacheEntityTypes["messages"]);
-      collection.set(message.id, client ? bindClient(message, client) : message);
+      collection.set(
+        message.id,
+        (client ? bindClient(message, client) : message) as unknown as MessageSnapshot,
+      );
     }
 
     return collection;
@@ -346,6 +417,14 @@ export class Message extends BaseMessage<""> {
   public get roleSubscriptionData(): RoleSubscriptionData | null {
     const data = this[kData].role_subscription_data;
     return data ? transformAPIRoleSubscriptionData(data) : null;
+  }
+
+  /**
+   * The custom client theme the message was shared with, camel-cased like discord.js's `Message#sharedClientTheme`.
+   */
+  public get sharedClientTheme(): SharedClientTheme | null {
+    const theme = this[kData].shared_client_theme;
+    return theme ? transformAPIMessageSharedClientTheme(theme) : null;
   }
 
   /**
@@ -427,7 +506,7 @@ export class Message extends BaseMessage<""> {
   /**
    * Whether the message was sent in a guild.
    */
-  public inGuild(): boolean {
+  public inGuild(): this is Message<true> {
     return this.guildId !== null;
   }
 
@@ -449,10 +528,13 @@ export class Message extends BaseMessage<""> {
   /**
    * Fetches the message this one replies to, crossposts, or forwards.
    */
-  public async fetchReference(): Promise<Message> {
+  public async fetchReference(): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
     const reference = this.reference;
     if (!reference?.messageId) throw new GatewayError("MessageReferenceMissing", this.id);
-    return this.client.messages.fetch(reference.channelId ?? this.channelId, reference.messageId);
+    return (await this.client.messages.fetch(
+      reference.channelId ?? this.channelId,
+      reference.messageId,
+    )) as unknown as OmitPartialGroupDMChannel<Message<InGuild>>;
   }
 
   /**
@@ -566,19 +648,43 @@ export class Message extends BaseMessage<""> {
    * a message built from its IDs alone for an event about an uncached message (see `Partials.Message`), or from an
    * update that carried neither. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch}
    * completes it.
+   *
+   * Typed `false`, like discord.js: a partial message is a {@link PartialMessage}, whose `partial` is `true`.
    */
-  public get partial(): boolean {
-    return typeof this[kData].content !== "string" || this[kData].author === undefined;
+  public get partial(): false {
+    return (typeof this[kData].content !== "string" || this[kData].author === undefined) as false;
   }
 
   /**
-   * Fetches the message from the API and patches this structure with the result.
+   * Finds a component of the message by its custom ID, like discord.js's `Message#resolveComponent`.
+   *
+   * @param customId The custom ID.
    */
-  public async fetch(): Promise<this> {
-    const message = await this.client.messages.fetch(this.channelId, this.id, {
-      force: true,
-    });
-    return this[kPatch](message.toJSON());
+  public resolveComponent(customId: string): AnyComponent | APIAnyComponent | null {
+    return findComponentByCustomId(this.components, customId);
+  }
+
+  /**
+   * Fetches the webhook that sent the message, like discord.js's `Message#fetchWebhook`.
+   *
+   * @throws A `GatewayError`: `WebhookMessage` when a webhook did not send the message, `WebhookApplication` when the
+   * webhook belongs to an application.
+   */
+  public async fetchWebhook(): Promise<Webhook> {
+    const { webhookId } = this;
+    if (!webhookId) throw new GatewayError("WebhookMessage");
+    if (webhookId === this.applicationId) throw new GatewayError("WebhookApplication");
+    return this.client.fetchWebhook(webhookId);
+  }
+
+  /**
+   * Fetches the message and patches this structure with the result.
+   *
+   * @param force Whether to ask the API even when the message is cached. Defaults to `true`, like discord.js.
+   */
+  public async fetch(force = true): Promise<OmitPartialGroupDMChannel<this>> {
+    const message = await this.client.messages.fetch(this.channelId, this.id, { force });
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -586,13 +692,15 @@ export class Message extends BaseMessage<""> {
    *
    * @param options The changes, or the new content.
    */
-  public async edit(options: MessagePayloadResolvable<MessageEditOptions>): Promise<this> {
+  public async edit(
+    options: MessagePayloadResolvable<MessageEditOptions>,
+  ): Promise<OmitPartialGroupDMChannel<this>> {
     const message = await this.client.messages.edit(
       this.channelId,
       this.id,
       MessagePayload.create(this, options, { edit: true }),
     );
-    return this[kPatch](message.toJSON());
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -600,7 +708,9 @@ export class Message extends BaseMessage<""> {
    *
    * @param options The reply, or its content.
    */
-  public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
+  public reply(
+    options: MessagePayloadResolvable<MessageCreateOptions>,
+  ): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
     const payload = MessagePayload.create(this, options);
     return this.client.messages.send(
       this.channelId,
@@ -608,31 +718,36 @@ export class Message extends BaseMessage<""> {
         ...payload.options,
         reply: { messageReference: this },
       }),
-    );
+    ) as unknown as Promise<OmitPartialGroupDMChannel<Message<InGuild>>>;
   }
 
   /**
    * Forwards the message to another channel.
    *
-   * @param channelId The ID of the channel to forward it to.
+   * @param channel The channel to forward it to, or its ID.
    */
-  public forward(channelId: string): Promise<Message> {
-    return this.client.messages.forward(this.channelId, this.id, channelId);
+  public forward(
+    channel: Exclude<TextBasedChannelResolvable, GroupDMChannel>,
+  ): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
+    const channelId = typeof channel === "string" ? channel : channel.id;
+    return this.client.messages.forward(this.channelId, this.id, channelId) as unknown as Promise<
+      OmitPartialGroupDMChannel<Message<InGuild>>
+    >;
   }
 
-  public async delete(reason?: string): Promise<this> {
+  public async delete(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.delete(this.channelId, this.id, reason);
-    return this;
+    return this as OmitPartialGroupDMChannel<this>;
   }
 
-  public async pin(reason?: string): Promise<this> {
+  public async pin(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.pin(this.channelId, this.id, reason);
-    return this[kPatch]({ pinned: true });
+    return this[kPatch]({ pinned: true }) as OmitPartialGroupDMChannel<this>;
   }
 
-  public async unpin(reason?: string): Promise<this> {
+  public async unpin(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.unpin(this.channelId, this.id, reason);
-    return this[kPatch]({ pinned: false });
+    return this[kPatch]({ pinned: false }) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -656,9 +771,9 @@ export class Message extends BaseMessage<""> {
   /**
    * Publishes the message of an announcement channel to the channels following it.
    */
-  public async crosspost(): Promise<this> {
+  public async crosspost(): Promise<OmitPartialGroupDMChannel<this>> {
     const message = await this.client.messages.crosspost(this.channelId, this.id);
-    return this[kPatch](message.toJSON());
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -675,7 +790,7 @@ export class Message extends BaseMessage<""> {
    *
    * @param suppress Whether to hide them.
    */
-  public suppressEmbeds(suppress = true): Promise<this> {
+  public suppressEmbeds(suppress = true): Promise<OmitPartialGroupDMChannel<this>> {
     const flags = new MessageFlagsBitField(this.flags.bitField);
     if (suppress) flags.add(MessageFlags.SuppressEmbeds);
     else flags.remove(MessageFlags.SuppressEmbeds);
@@ -685,7 +800,7 @@ export class Message extends BaseMessage<""> {
   /**
    * Removes every attachment of the message.
    */
-  public removeAttachments(): Promise<this> {
+  public removeAttachments(): Promise<OmitPartialGroupDMChannel<this>> {
     return this.edit({ attachments: [] });
   }
 

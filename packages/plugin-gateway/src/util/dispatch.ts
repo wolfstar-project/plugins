@@ -32,7 +32,7 @@ import { GuildMember } from "../structures/guilds/GuildMember.js";
 import { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import type { Sticker } from "../structures/stickers/Sticker.js";
-import { Message } from "../structures/messages/Message.js";
+import type { Message } from "../structures/messages/Message.js";
 import { MessageReaction } from "../structures/messages/MessageReaction.js";
 import { Poll } from "../structures/polls/Poll.js";
 import { PollAnswer } from "../structures/polls/PollAnswer.js";
@@ -910,11 +910,8 @@ function partialMessage(
   messageId: string,
   guildId?: string,
 ): Message | null {
-  if (!wants(client, Partials.Message)) return null;
-  return bindClient(
-    new Message({ id: messageId, channel_id: channelId, guild_id: guildId } as never),
-    client,
-  );
+  // Events keep typing their messages as `Message`: only `bulkDelete` hands out `PartialMessage`s.
+  return client.messages._partial(channelId, messageId, guildId) as unknown as Message | null;
 }
 
 function partialUser(client: GatewayClient, userId: string): User | null {

@@ -1,5 +1,7 @@
+import type { Collection } from "@discordjs/collection";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Message } from "../structures/messages/Message.js";
+import type { Message, PartialMessage } from "../structures/messages/Message.js";
+import type { MessageResolvable } from "../types.js";
 import type { FetchOptions } from "./CachedManager.js";
 import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
 import type { User } from "../structures/users/User.js";
@@ -86,7 +88,10 @@ export class ChannelMessageManager extends BaseManager {
     return this.client.messages.crosspost(this.channelId, messageId);
   }
 
-  public bulkDelete(messages: readonly string[] | number, filterOld = false): Promise<string[]> {
+  public bulkDelete(
+    messages: Collection<string, Message> | readonly MessageResolvable[] | number,
+    filterOld = false,
+  ): Promise<Collection<string, Message | PartialMessage | undefined>> {
     return this.client.messages.bulkDelete(this.channelId, messages, filterOld);
   }
 
