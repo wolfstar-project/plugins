@@ -443,6 +443,21 @@ describe("MessageManager", () => {
     expect(partial.channelId).toBe(channelId);
   });
 
+  test("GIVEN bulkDelete in a cached guild channel THEN the partial messages carry its guild", async () => {
+    const client = createClient({ partials: [Partials.Message] });
+    vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+    await client.channels._add({
+      id: channelId,
+      type: ChannelType.GuildText,
+      name: "general",
+      guild_id: guildId,
+    } as never);
+
+    const deleted = await client.messages.bulkDelete(channelId, [fresh, fresher]);
+
+    expect(deleted.get(fresher)!.guildId).toBe(guildId);
+  });
+
   test("GIVEN bulkDelete with messages and a Collection THEN it resolves their IDs", async () => {
     const client = createClient();
     const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);

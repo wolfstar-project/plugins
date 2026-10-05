@@ -7,3 +7,5 @@ Make `Message` match discord.js's typings. `Message<InGuild>` is generic: `guild
 Add `Message#fetch(force)` (answers from the cache with `false`), `Message#sharedClientTheme`, `Message#resolveComponent()` and `Message#fetchWebhook()` (rejects with the `WebhookMessage` and `WebhookApplication` errors). `Message#forward()` now accepts a channel as well as its ID.
 
 Breaking, under 0.x: `PartialMessage` is no longer assignable to `Message`. Narrow with `message.partial` before using one as a `Message`.
+
+The `messageUpdate`, `messageDelete`, `messageDeleteBulk` and reaction events still type their messages as `Message`, even though `Partials.Message` makes them hand out partial ones at runtime. Widening them to `Message | PartialMessage`, as discord.js does, would break listeners and is left to a follow-up.
