@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-subcommands-advanced.svg" width="40" height="40" alt="@wolfstar/plugin-subcommands-advanced" align="top"></a> @wolfstar/plugin-subcommands-advanced</h1>
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-subcommands-advanced.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-subcommands-advanced</h1>
 
 **Modular slash subcommands for `@wolfstar/http-framework`.**
 
