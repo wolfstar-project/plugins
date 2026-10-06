@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-broker
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-broker.svg" width="40" height="40" alt="@wolfstar/plugin-broker" align="top"></a> @wolfstar/plugin-broker</h1>
 
 **Distribute gateway events across processes over Redis Streams, with at-least-once delivery.**
 

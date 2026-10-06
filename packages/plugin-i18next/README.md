@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-i18next
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-i18next.svg" width="40" height="40" alt="@wolfstar/plugin-i18next" align="top"></a> @wolfstar/plugin-i18next</h1>
 
 **i18next-powered internationalization for HTTP interactions.**
 

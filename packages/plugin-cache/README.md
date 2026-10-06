@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-cache
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-cache.svg" width="40" height="40" alt="@wolfstar/plugin-cache" align="top"></a> @wolfstar/plugin-cache</h1>
 
 **A storage-agnostic Discord entity cache, in memory or in Redis.**
 

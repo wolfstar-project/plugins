@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-scheduled-tasks
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-scheduled-tasks.svg" width="40" height="40" alt="@wolfstar/plugin-scheduled-tasks" align="top"></a> @wolfstar/plugin-scheduled-tasks</h1>
 
 **Schedule one-off and repeated tasks, backed by BullMQ.**
 
