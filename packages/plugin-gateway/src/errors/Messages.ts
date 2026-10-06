@@ -56,6 +56,7 @@ export const GatewayErrorMessages = {
     `Channel ${channelId} has no category to sync its permissions with`,
   GuildChannelUnknown: (guildId: string, channelId: string) =>
     `Channel ${channelId} is not a channel of guild ${guildId}`,
+  CategoryChildCategory: "A category cannot be created inside a category",
   GuildResolve: "Cannot resolve the value to a guild ID",
   GuildRoleUnknown: (guildId: string, roleId: string) =>
     `Role ${roleId} is not a role of guild ${guildId}`,

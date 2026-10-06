@@ -339,6 +339,37 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     );
   }
 
+  /**
+   * Gets the cached channels of a guild whose category is the given one, for `CategoryChannelChildManager`.
+   * Synchronous when the channel cache is.
+   *
+   * @param guildId The ID of the guild.
+   * @param categoryId The ID of the category.
+   * @returns The channels, none when channels are not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
+   * @internal
+   */
+  public _inCategory(guildId: string, categoryId: string): Awaitable<AnyChannel[]> {
+    const store = this.iterableCache();
+    if (store === undefined) return [];
+
+    return whenAll([this.guard("entries", null, () => store.entries(), [])], ([entries]) => {
+      const ids = entries
+        .filter(
+          ([, data]) =>
+            channelGuildId(data) === guildId &&
+            !isThreadChannelType(data.type) &&
+            "parent_id" in data &&
+            data.parent_id === categoryId,
+        )
+        .map(([id]) => id);
+      return whenAll(
+        ids.map((id) => this.cache.get(id)),
+        (channels) => channels.filter((channel): channel is AnyChannel => channel !== undefined),
+      );
+    });
+  }
+
   // Reads a raw channel, without building its structure: a failing store is reported, and counts as a miss.
   private readRaw(channelId: string): Awaitable<CacheEntityTypes["channels"] | undefined> {
     return this.guard("get", channelId, () => this.rawStore?.get(channelId), undefined);
