@@ -26,6 +26,13 @@ export abstract class DataManager<
   public abstract resolveKey(...args: Args): string;
 
   /**
+   * The cache of the items this manager holds, like discord.js's `DataManager#valueOf`.
+   */
+  public valueOf(): Cache<Value> {
+    return this.cache;
+  }
+
+  /**
    * Resolves a structure or a cache key to a structure.
    *
    * @param value A structure, returned as is, or the cache key of an entity (its ID, for managers keyed by ID).

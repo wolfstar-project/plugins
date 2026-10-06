@@ -4,7 +4,10 @@ import { Collection } from "@discordjs/collection";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
+  GuildWidgetStyle,
   RESTJSONErrorCodes,
+  RouteBases,
+  Routes,
   type APIGuild,
   type APIMessageSearchResult,
   type RESTGetAPIGuildMessagesSearchResult,
@@ -51,7 +54,8 @@ import { WelcomeScreen } from "../structures/guilds/WelcomeScreen.js";
 import type { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import type { User } from "../structures/users/User.js";
 import type { Webhook } from "../structures/webhooks/Webhook.js";
-import { GatewayError } from "../errors/GatewayError.js";
+import { GatewayError, GatewayTypeError } from "../errors/GatewayError.js";
+import type { GuildResolvable } from "../types.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
 import {
@@ -683,6 +687,22 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public voiceStates(guildId: string): VoiceStateManager<true> {
     return new VoiceStateManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the URL of a guild's widget image.
+   *
+   * @param guild The guild, or anything carrying its ID.
+   * @param style The style of the image.
+   */
+  public widgetImageURL(
+    guild: GuildResolvable,
+    style: GuildWidgetStyle = GuildWidgetStyle.Shield,
+  ): string {
+    const guildId =
+      typeof guild === "string" ? guild : guild instanceof Guild ? guild.id : guild.guildId;
+    if (!guildId) throw new GatewayTypeError("GuildResolve");
+    return `${RouteBases.api}${Routes.guildWidgetImage(guildId)}?style=${style}`;
   }
 
   /**

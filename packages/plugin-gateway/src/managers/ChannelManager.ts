@@ -317,6 +317,28 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     });
   }
 
+  /**
+   * Counts the cached channels of a guild, threads excluded, for `GuildChannelManager.channelCountWithoutThreads`.
+   * Synchronous when the channel cache is.
+   *
+   * @param guildId The ID of the guild.
+   * @returns The count, `0` when channels are not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
+   * @internal
+   */
+  public _countInGuild(guildId: string): Awaitable<number> {
+    const store = this.iterableCache();
+    if (store === undefined) return 0;
+
+    return whenAll(
+      [this.guard("entries", null, () => store.entries(), [])],
+      ([entries]) =>
+        entries.filter(
+          ([, data]) => channelGuildId(data) === guildId && !isThreadChannelType(data.type),
+        ).length,
+    );
+  }
+
   // Reads a raw channel, without building its structure: a failing store is reported, and counts as a miss.
   private readRaw(channelId: string): Awaitable<CacheEntityTypes["channels"] | undefined> {
     return this.guard("get", channelId, () => this.rawStore?.get(channelId), undefined);

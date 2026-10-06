@@ -12,6 +12,7 @@ import {
   type GuildChannelEditOptions,
   type IdResolvable,
 } from "../util/channels.js";
+import { cacheRead, type CacheRead } from "../util/cache.js";
 import { computePositions, discordSort, getSortableGroupTypes } from "../util/Util.js";
 import type { AnyChannel } from "./ChannelManager.js";
 import { BaseManager } from "./BaseManager.js";
@@ -55,6 +56,16 @@ export class GuildChannelManager extends BaseManager {
   public constructor(client: GatewayClient, guildId: string) {
     super(client);
     this.guildId = guildId;
+  }
+
+  /**
+   * How many channels of the guild are cached, threads excluded: discord.js's `channelCountWithoutThreads`. A promise
+   * with an asynchronous cache.
+   *
+   * @throws {TypeError} When the channel store cannot enumerate its entries.
+   */
+  public get channelCountWithoutThreads(): CacheRead<number> {
+    return cacheRead(this.client.channels._countInGuild(this.guildId));
   }
 
   /**

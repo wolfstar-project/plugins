@@ -6,11 +6,17 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import {
+  ReactionEmoji,
+  type EmojiIdentifierResolvable,
+} from "../structures/emojis/ReactionEmoji.js";
 import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { resolveImage, type ImageResolvable } from "../util/DataResolver.js";
 import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
+
+const EmojiIdPattern = /^\d{17,20}$/;
 
 /**
  * The options to create an emoji with.
@@ -90,6 +96,24 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
 
   public resolveKey(emojiId: string): string {
     return emojiKey(this.guildId, emojiId);
+  }
+
+  /**
+   * Resolves an emoji of the guild, or anything identifying one, to the identifier reaction routes expect, like
+   * discord.js's `resolveIdentifier`.
+   *
+   * @param emoji An emoji, its ID, or anything {@link EmojiIdentifierResolvable}.
+   * @returns The identifier, `null` when an ID is not a cached emoji of this guild.
+   */
+  public resolveIdentifier(emoji: EmojiIdentifierResolvable): Awaitable<string | null> {
+    if (emoji instanceof GuildEmoji) return emoji.identifier;
+    if (typeof emoji === "string" && EmojiIdPattern.test(emoji)) {
+      return whenAll(
+        [this.cache.get(this.resolveKey(emoji))],
+        ([cached]) => cached?.identifier ?? null,
+      );
+    }
+    return ReactionEmoji.resolveIdentifier(emoji);
   }
 
   /**
