@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
+  <title id="t">@wolfstar/plugin-api</title>
+  <rect x="16" y="16" width="480" height="480" rx="120" fill="#14151F"/>
+  <rect x="24" y="24" width="464" height="464" rx="112" fill="none" stroke="#5B8CFF" stroke-opacity=".28" stroke-width="8"/>
+  <g id="icon"><rect x="124" y="134" width="264" height="96" rx="28" fill="none" stroke="#5B8CFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/><rect x="124" y="282" width="264" height="96" rx="28" fill="none" stroke="#5B8CFF" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/><circle cx="336" cy="182" r="14" fill="#5B8CFF"/><circle cx="336" cy="330" r="14" fill="#5B8CFF"/></g>
+</svg>
