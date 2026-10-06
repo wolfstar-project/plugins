@@ -6,7 +6,7 @@ import { Message } from "../structures/messages/Message.js";
 import { Presence } from "../structures/presences/Presence.js";
 import type { PresenceResolvable } from "../types.js";
 import { whenAll } from "../util/cache.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, fillGuildId, withGuildId, type GuildArgs } from "./CachedManager.js";
 import { GatewayError } from "../errors/GatewayError.js";
 
 /**
@@ -15,14 +15,33 @@ import { GatewayError } from "../errors/GatewayError.js";
  * @remarks
  * Presences only come from the gateway, with the `GuildPresences` intent: there is no API to fetch them, so `fetch`
  * rejects on a cache miss. Use `cache.get`, which answers `undefined` instead.
+ *
+ * The cache is keyed by guild and user. `guild.presences` (or `client.guilds.presences(guildId)`) reads it by user
+ * ID alone, like discord.js: `guild.presences.cache.get(userId)`.
+ *
+ * `guild.presences` (or `client.guilds.presences(guildId)`) is this manager built for one guild, like discord.js's:
+ * `cache` takes the user's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class PresenceManager extends CachedManager<
+export class PresenceManager<InGuild extends boolean = false> extends CachedManager<
   "presences",
   Presence,
-  [guildId: string, userId: string]
+  [guildId: string, userId: string],
+  GuildArgs<InGuild, [userId: string]>
 > {
-  public constructor(client: GatewayClient) {
-    super(client, "presences");
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.presences`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "presences", guildId);
+    this.guildId = guildId as this["guildId"];
   }
 
   protected createStructure(data: CacheEntityTypes["presences"]): Presence {
@@ -53,9 +72,9 @@ export class PresenceManager extends CachedManager<
    * Resolves a {@link PresenceResolvable} to the cached presence of its user in a guild.
    *
    * @remarks
-   * A string is a **user ID**, not a cache key: build the key with {@link PresenceManager.resolveKey} to read
-   * `cache.get` directly. It is a pure cache read, no request is made and a miss is `null`; presences only come from
-   * the gateway.
+   * A string is a **user ID**, not a cache key: read `guild.presences.cache.get(userId)`, or build the key with
+   * {@link PresenceManager.resolveKey} to read `cache.get` directly. It is a pure cache read, no request is made and
+   * a miss is `null`; presences only come from the gateway.
    *
    * The guild comes from a member or a message, else from a thread member's member or thread, and otherwise from
    * `guildId`. A message sent in a direct message belongs to no guild, so it resolves to `null` unless `guildId` is
@@ -72,10 +91,15 @@ export class PresenceManager extends CachedManager<
     if (presence instanceof Presence) return presence;
 
     const userId = this.resolveId(presence);
-    const guild = this.guildOf(presence) ?? guildId ?? null;
+    // The manager of a guild only reads that guild.
+    const guild = this.guildId ?? this.guildOf(presence) ?? guildId ?? null;
     if (userId === null || guild === null) return null;
 
-    return whenAll([this.cache.get(this.resolveKey(guild, userId))], ([cached]) => cached ?? null);
+    const { presences } = this.client;
+    return whenAll(
+      [presences.cache.get(presences.resolveKey(guild, userId))],
+      ([cached]) => cached ?? null,
+    );
   }
 
   /**
@@ -110,7 +134,8 @@ export class PresenceManager extends CachedManager<
    * @returns The cached entries, `[]` when this entity is not cached.
    * @throws {TypeError} When the store cannot enumerate its entries.
    */
-  public async listCached(guildId: string): Promise<Presence[]> {
+  public async listCached(...args: GuildArgs<InGuild, []>): Promise<Presence[]> {
+    const [guildId] = withGuildId<[]>(args);
     const prefix = `${guildId}:`;
     const cache = this.iterableCache();
     const entries = cache ? await this.guard("entries", null, () => cache.entries(), []) : [];
@@ -123,3 +148,5 @@ export class PresenceManager extends CachedManager<
     return Promise.reject(new GatewayError("PresenceNotFetchable", guildId, userId));
   }
 }
+
+fillGuildId(PresenceManager, (client) => client.presences, ["listCached"]);

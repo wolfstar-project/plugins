@@ -305,7 +305,7 @@ Every manager exposes its cache as `manager.cache`, the `Cache` of the discord.j
 
 ```typescript
 const user = client.users.cache.get(userId);
-const member = client.members.cache.get(client.members.resolveKey(guildId, userId));
+const member = guild.members.cache.get(userId);
 
 client.users.cache.has(userId);
 client.users.cache.getSize();
@@ -355,6 +355,32 @@ for most managers, and by `manager.resolveKey(...)` for the ones taking more tha
   `client.messages.fetch(channelId, messageId, { force: true })`;
 - `refresh` is `fetch` with `{ force: true }`;
 - `resolve` takes a structure (returned as is) or a cache key, like discord.js's `resolve`.
+
+The managers taking more than one argument are also handed out for one guild, channel, or thread, like
+discord.js's: the first ID is filled in, and `cache` takes the ID of the entity alone.
+
+```typescript
+const member = await guild.members.cache.get(userId);
+// instead of client.members.cache.get(client.members.resolveKey(guildId, userId))
+
+await guild.roles.cache.has(roleId);
+await channel.messages.cache.get(messageId);
+await guild.members.kick(userId, "spam"); // client.members.kick(guildId, userId, "spam")
+```
+
+| Manager             | From the client                      | `cache` is keyed by |
+| ------------------- | ------------------------------------ | ------------------- |
+| `guild.members`     | `client.guilds.members(guildId)`     | `userId`            |
+| `guild.roles`       | `client.guilds.roles(guildId)`       | `roleId`            |
+| `guild.voiceStates` | `client.guilds.voiceStates(guildId)` | `userId`            |
+| `guild.presences`   | `client.guilds.presences(guildId)`   | `userId`            |
+| `channel.messages`  | `new ChannelMessageManager(…)`       | `messageId`         |
+| `thread.members`    | `new ThreadChannelMemberManager(…)`  | `userId`            |
+
+The ones of a guild are the client's managers themselves, built for that guild (`guild.members` is a
+`GuildMemberManager<true>`): their `cache` is a `Cache` like the client's, counting and clearing the entries of the
+guild alone, and synchronous when the client's is. The `cache` of `channel.messages` and `thread.members` has `get`,
+`has`, and `delete`.
 
 Every API payload is written to the cache: a cached entry is patched with it (the fields a partial payload lacks
 keep their cached value) and the patched instance, or the newly built structure, is returned. Relations are
@@ -755,7 +781,7 @@ await member.timeout(10 * 60_000, "spam");
 if (member.permissions.has("BanMembers")) await member.ban(); // read from the cache, like discord.js
 if (member.kickable) await member.kick();
 
-const me = await client.members.me(guildId); // discord.js: guild.members.me, null when not cached
+const me = guild.members.me; // like discord.js, null when not cached; client.members.me(guildId) without a guild
 const cached = await member.roles.cache; // a Collection of the cached roles, @everyone included
 const highest = await member.roles.highest; // read from the cache, like discord.js
 await highest?.setColors({ primaryColor: 0xff0000 });
@@ -889,6 +915,17 @@ const post = await forum.threads.create({
 and disconnects members, and handles stage channels (`setSuppressed`, `setRequestToSpeak`).
 `Presence` has the status and `Activity`s, with their `RichPresenceAssets` URLs. Members have
 `fetchVoiceState()` and `fetchPresence()` (discord.js: `member.voice`, `member.presence`).
+
+`guild.voiceStates` and `guild.presences` read them by user ID alone, like discord.js, and so do
+`client.guilds.voiceStates(guildId)` and `client.guilds.presences(guildId)` when you only hold the guild's ID:
+
+```ts
+const presence = await guild.presences.cache.get(userId);
+const voiceState = await guild.voiceStates.cache.get(userId);
+
+await guild.presences.resolve(member); // null on a miss
+await guild.presences.listCached();
+```
 
 ```ts
 client.on("voiceStateUpdate", (oldState, newState) => {

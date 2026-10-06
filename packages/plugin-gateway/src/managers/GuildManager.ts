@@ -71,6 +71,10 @@ import { StageInstanceManager } from "./StageInstanceManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 import { GuildEmojiManager } from "./GuildEmojiManager.js";
 import { GuildInviteManager } from "./GuildInviteManager.js";
+import { PresenceManager } from "./PresenceManager.js";
+import { RoleManager } from "./RoleManager.js";
+import { GuildMemberManager } from "./GuildMemberManager.js";
+import { VoiceStateManager } from "./VoiceStateManager.js";
 import { GuildStickerManager } from "./GuildStickerManager.js";
 
 /**
@@ -643,6 +647,42 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public invites(guildId: string): GuildInviteManager {
     return new GuildInviteManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's presences.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public presences(guildId: string): PresenceManager<true> {
+    return new PresenceManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's members.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public members(guildId: string): GuildMemberManager<true> {
+    return new GuildMemberManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's roles.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public roles(guildId: string): RoleManager<true> {
+    return new RoleManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's voice states.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public voiceStates(guildId: string): VoiceStateManager<true> {
+    return new VoiceStateManager<true>(this.client, guildId);
   }
 
   /**

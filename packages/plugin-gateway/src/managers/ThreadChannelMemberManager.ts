@@ -2,6 +2,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { FetchOptions } from "./CachedManager.js";
 import type { ThreadMemberListOptions } from "./ThreadMemberManager.js";
+import { scopeCache, type ScopedCache } from "../util/cache.js";
 import { BaseManager } from "./BaseManager.js";
 
 /**
@@ -10,18 +11,29 @@ import { BaseManager } from "./BaseManager.js";
 export class ThreadChannelMemberManager extends BaseManager {
   public readonly threadId: string;
 
+  /**
+   * The cached members of the thread, by user ID.
+   *
+   * @example
+   * ```typescript
+   * const member = await thread.members.cache.get(userId);
+   * ```
+   */
+  public readonly cache: ScopedCache<ThreadMember>;
+
   public constructor(client: GatewayClient, threadId: string) {
     super(client);
     this.threadId = threadId;
+    this.cache = scopeCache(client.threadMembers.cache, (userId) =>
+      client.threadMembers.resolveKey(threadId, userId),
+    );
   }
 
   /**
-   * Gets a member of the thread from the cache.
+   * Gets a member of the thread from the cache. Same as `cache.get`, always answering a promise.
    */
   public async get(userId: string): Promise<ThreadMember | undefined> {
-    return this.client.threadMembers.cache.get(
-      this.client.threadMembers.resolveKey(this.threadId, userId),
-    );
+    return this.cache.get(userId);
   }
 
   /**
