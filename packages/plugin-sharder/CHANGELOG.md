@@ -1,5 +1,13 @@
 # @wolfstar/plugin-sharder
 
+## 0.2.1
+
+### Patch Changes
+
+- [#217](https://github.com/wolfstar-project/plugins/pull/217) [`9c2113e`](https://github.com/wolfstar-project/plugins/commit/9c2113edbe4c362978f7b16c42aa375b702c9dd3) - Fix `ClusterStrategy` throwing `Array.prototype.some called on null or undefined` when `execArgv` or `args` are not given: only the given options are passed to `cluster.setupPrimary`, so Node keeps its defaults.
+
+  A strategy throwing in `spawn` is now reported as a `ShardSpawnError` (carrying the cause) through `shardError` on every attempt, instead of being retried silently.
+
 ## 0.2.0
 
 ### Minor Changes

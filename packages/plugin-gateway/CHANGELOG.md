@@ -1,5 +1,53 @@
 # @wolfstar/plugin-gateway
 
+## 0.11.0
+
+### Minor Changes
+
+- [#206](https://github.com/wolfstar-project/plugins/pull/206) [`9f3c365`](https://github.com/wolfstar-project/plugins/commit/9f3c36517ca1dd48c448e7a889991e171c1a370d) - Make `bulkDelete` match discord.js's `TextBasedChannel#bulkDelete`. It accepts messages, message IDs, a `Collection` of messages, or a count, throws a `TypeError` (`MessageBulkDeleteType`) for anything else, and resolves to a `Collection<string, Message | PartialMessage | undefined>` of the deleted messages by ID: the cached message, else a partial one with `Partials.Message`, else `undefined`. This applies to `MessageManager#bulkDelete`, `ChannelMessageManager#bulkDelete` and the channels' `bulkDelete`. Add the `PartialMessage` type.
+
+  `bulkDelete` moves to the new `TextGuildChannelMixin`, applied to guild text, announcement, voice, stage and thread channels. `DMChannel` and `GroupDMChannel` no longer have it, as in discord.js: Discord refuses it there.
+
+  Breaking, under 0.x: `bulkDelete` resolved to the deleted IDs (`string[]`), and now resolves to a `Collection` keyed by them. Use `[...deleted.keys()]` for the IDs.
+
+- [#218](https://github.com/wolfstar-project/plugins/pull/218) [`f1c99b5`](https://github.com/wolfstar-project/plugins/commit/f1c99b543cacb5878db6735441581f78e9b80453) - Align `equals()` with discord.js (v14 and v15 share the same comparisons) on every structure that has one.
+
+  New: `GuildChannel#equals`, on every guild channel and thread (ID, type, name, topic, position, and permission overwrites in any order; the category is not compared, as in discord.js), and `SoundboardSound#equals`. Both accept the structure or its raw payload.
+
+  Changed comparisons:
+
+  - `Message#equals(message, rawData?)` compares the ID, author, content, `nonce`, `tts`, the attachments by ID, and the embeds through `Embed#equals`. With `rawData`, it also compares `mention_everyone` and the timestamps. A raw embed update (no author, no attachments) only compares the ID and the number of embeds. `pinned` and the content of attachments are no longer compared.
+  - `Embed#equals` deep-compares two embeds, and compares a raw embed field by field (author, color, description, footer, image, thumbnail, timestamp as a date, title, URL, video, fields with a missing `inline` as `false`, provider), so `type` and proxy URLs no longer matter there.
+  - `Guild#equals` compares the ID, `available`, name, icon, splashes, owner, `memberCount`, `large`, verification level, and features in order. The AFK and system channels, content filter, MFA level, banner, description and vanity code are no longer compared.
+  - `GuildMember#equals` also compares `partial`, banner, `pending`, the avatar decoration and the nameplate, and compares roles in order.
+  - `Role#equals` compares the three `colors` instead of `color`.
+  - `User#equals` also compares the avatar decoration SKU, the nameplate and the primary guild.
+  - `Sticker#equals` also compares the type, pack and sort value against a sticker, and only the ID, description, name and tags against a raw sticker. `GuildEmoji#equals` only compares the ID, name and roles against a raw emoji.
+
+  `Guild#equals`, `GuildMember#equals`, `Sticker#equals`, `GuildEmoji#equals`, `GuildChannel#equals` and `SoundboardSound#equals` take `unknown` and return `false` for a foreign argument instead of throwing; `Role#equals`, `User#equals`, `Embed#equals` and `Message#equals` accept `null` and `undefined`.
+
+  None of this affects `messageUpdate` or the other update events, which do not rely on `equals`; `emojiUpdate` and `stickerUpdate` still do.
+
+- [#201](https://github.com/wolfstar-project/plugins/pull/201) [`786d644`](https://github.com/wolfstar-project/plugins/commit/786d64426da646eb9ee3ceae7395e7d24a752d96) - `GuildMemberRoleManager#partial` reads `member.partial`, like discord.js, so a member's roles tell they are not known when the member is partial (built from its IDs alone for `Partials.GuildMember`).
+
+- [#202](https://github.com/wolfstar-project/plugins/pull/202) [`3be7397`](https://github.com/wolfstar-project/plugins/commit/3be739713ad44da13586b0986324ad8e494557a4) - Add `Guild#searchMessages(options?)` and `client.guilds.searchMessages(guildId, options?)`, the guild message search of discord.js (`GET /guilds/{guild.id}/messages/search`). The ID options take the usual resolvables, the result holds `Collection`s of `messages`, `threads` and `threadMembers` (by thread, then user) with `totalResults`, `doingDeepHistoricalIndex` and `documentsIndexed`, and the results are cached unless `cache: false`. While Discord indexes the guild the search waits the `retry_after` and retries, or throws `SearchIndexNotYetAvailable` with `retryOnMissingIndex: false`; a `signal` cancels the request and the wait. A query over the documented limits (content, slop, channels, limit, offset) throws a `GatewayRangeError` before the request.
+
+- [#206](https://github.com/wolfstar-project/plugins/pull/206) [`9f3c365`](https://github.com/wolfstar-project/plugins/commit/9f3c36517ca1dd48c448e7a889991e171c1a370d) - Make `Message` match discord.js's typings. `Message<InGuild>` is generic: `guildId`, `guild`, `channel` and `mentions` narrow with it, and `inGuild()` narrows to `Message<true>`. `PartialMessage` is now a `Partialize` of `Message`, with `partial: true` while `Message#partial` is `false`, so `partial` narrows a `Message | PartialMessage`. Add `MessageSnapshot`, `OmitPartialGroupDMChannel`, `GuildTextBasedChannel`, `If` and `Partialize`. `edit`, `delete`, `pin`, `unpin`, `crosspost`, `suppressEmbeds`, `removeAttachments`, `reply` and `forward` resolve to messages that are never from a group DM.
+
+  Add `Message#fetch(force)` (answers from the cache with `false`), `Message#sharedClientTheme`, `Message#resolveComponent()` and `Message#fetchWebhook()` (rejects with the `WebhookMessage` and `WebhookApplication` errors). `Message#forward()` now accepts a channel as well as its ID.
+
+  Breaking, under 0.x: `PartialMessage` is no longer assignable to `Message`. Narrow with `message.partial` before using one as a `Message`.
+
+  The `messageUpdate`, `messageDelete`, `messageDeleteBulk` and reaction events still type their messages as `Message`, even though `Partials.Message` makes them hand out partial ones at runtime. Widening them to `Message | PartialMessage`, as discord.js does, would break listeners and is left to a follow-up.
+
+- [#201](https://github.com/wolfstar-project/plugins/pull/201) [`786d644`](https://github.com/wolfstar-project/plugins/commit/786d64426da646eb9ee3ceae7395e7d24a752d96) - Add the `PartialGuildMember` type and `GuildMember#isPartial()`, a type guard narrowing to it. The `guildMemberUpdate` (old member), `guildMemberRemove` (member) and `typingStart` (`Typing#member`) payloads are now typed as `GuildMember | PartialGuildMember | null`, since they hand out a partial member for an uncached one with `Partials.GuildMember`.
+
+  `joinedAt` and `joinedTimestamp` stay `| null` on `GuildMember`: Discord types `joined_at` as nullable on gateway member payloads, so `partial` alone can not narrow them to a date. A listener that passes the old member or the removed member to code expecting a plain `GuildMember` now has to narrow it with `isPartial()` first.
+
+- [#197](https://github.com/wolfstar-project/plugins/pull/197) [`2dd4393`](https://github.com/wolfstar-project/plugins/commit/2dd43933337833d86cebea9cdc6a11e8d62b05d7) - `client.presences.resolve` and `resolveId` accept a `PresenceResolvable` (a `Presence`, a `GuildMember`, a `User`, a `ThreadMember`, a `Message`, or a user ID), like discord.js. `resolveId` returns the user ID, where it used to answer `null` for a `Presence`, and `resolve(value, guildId?)` reads the cached presence of the user in the member's, message's or given guild, answering `null` on a miss, a DM message, or an uncached entity.
+
+  **Breaking:** `presences.resolve(string)` now takes a user ID, not the cache key. Read a key with `presences.cache.get(presences.resolveKey(guildId, userId))`.
+
 ## 0.10.0
 
 ### Minor Changes
