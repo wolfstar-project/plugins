@@ -29,6 +29,7 @@ import {
   GatewayDispatchEvents,
   GatewayIntentBits,
   GatewayOpcodes,
+  type APIUser,
   type APIVoiceRegion,
   type GatewayDispatchPayload,
   type GatewayReadyDispatchData,
@@ -47,7 +48,7 @@ import { ThreadManager } from "./managers/ThreadManager.js";
 import { ThreadMemberManager } from "./managers/ThreadMemberManager.js";
 import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
-import type { ClientUser } from "./structures/users/ClientUser.js";
+import { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
 import { bindClient, type StructureMixin } from "./structures/Structure.js";
 import { Sticker } from "./structures/stickers/Sticker.js";
@@ -382,6 +383,11 @@ export class GatewayClient extends Client {
 
   /**
    * The bot user, set once the first shard receives `READY`.
+   *
+   * @remarks
+   * A shard that resumes a stored session gets `RESUMED` instead of `READY`: the user is then restored from the cache,
+   * or fetched from the API when the cache does not hold it. It can be stale until the next `USER_UPDATE`, and stays
+   * `null` if neither source answers (the failure is reported through `error`).
    */
   public user: ClientUser | null = null;
 
@@ -474,6 +480,9 @@ export class GatewayClient extends Client {
   // `readyTimeout`. Cleared and rescheduled every time `#checkClientReady` runs short of triggering it.
   #clientReadyTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // The in-flight restore of `client.user` after a resume, shared by the shards resuming together.
+  #userRestore: Promise<void> | null = null;
+
   #sessions: GatewaySessionMirror | null = null;
 
   // Set while a resumable `destroy` runs, see `sessionCallbacks`.
@@ -550,7 +559,10 @@ export class GatewayClient extends Client {
         this.runDispatch(payload, shardId, partition),
       );
     });
-    this.gateway.on(WebSocketShardEvents.Resumed, (shardId) => this.emit("shardResume", shardId));
+    this.gateway.on(WebSocketShardEvents.Resumed, (shardId) => {
+      this.emit("shardResume", shardId);
+      if (this.clientReadyTimestamp === null) void this.#readyAfterResume(shardId);
+    });
     this.gateway.on(WebSocketShardEvents.Closed, (code, shardId) =>
       this.emit("shardClose", shardId, code),
     );
@@ -1024,6 +1036,34 @@ export class GatewayClient extends Client {
     }
   }
 
+  // A shard resuming a stored session gets no `READY`, which is what sets `client.user` and runs the ready check. It has
+  // no guilds to wait for either: the cache already holds them.
+  async #readyAfterResume(shardId: number): Promise<void> {
+    // Best effort, like `reconcileGuilds`: a cache or REST outage must not keep the client from becoming ready, which
+    // would be the same bug under another trigger. `client.user` stays `null` and the failure is reported.
+    await this.#restoreUser().catch((error) => this.reportError(error, "RESUMED", shardId));
+    await this.#checkClientReady().catch((error) => this.reportError(error, "RESUMED", shardId));
+  }
+
+  #restoreUser(): Promise<void> {
+    if (this.user) return Promise.resolve();
+    this.#userRestore ??= this.#loadUser().finally(() => {
+      this.#userRestore = null;
+    });
+    return this.#userRestore;
+  }
+
+  async #loadUser(): Promise<void> {
+    let data: APIUser | undefined;
+    try {
+      data = await this.cache?.users?.get(this.id);
+    } catch {
+      // The API below is the fallback for a cache that cannot answer.
+    }
+    data ??= await this.api.users.getCurrent();
+    this.user ??= bindClient(new ClientUser(data), this);
+  }
+
   /**
    * Emits `clientReady` once every shard this client manages has connected and every guild `READY` listed as
    * initially unavailable became available, or {@link GatewayClientOptions.waitGuildTimeout} elapses, like
@@ -1034,6 +1074,8 @@ export class GatewayClient extends Client {
    * forgotten (so a later `GUILD_CREATE`/`GUILD_DELETE` for one of them does not spuriously re-run this), but every
    * shard connecting is never skipped, however long that takes — there is no such timeout for it, matching
    * `@discordjs/ws`, which waits for the network rather than giving up.
+   *
+   * A shard that resumes a stored session reaches it through `RESUMED` instead of `READY`, see {@link GatewayClient.user}.
    *
    * Unlike discord.js, `clientReady` only ever fires once: subsequent guild or shard activity does not re-trigger it.
    */
