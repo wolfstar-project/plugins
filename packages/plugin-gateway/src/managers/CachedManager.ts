@@ -47,6 +47,61 @@ export interface AddOptions {
 }
 
 /**
+ * The arguments of a method of a manager the client holds for every guild: they start with the guild's ID, which a
+ * manager built for one guild (`guild.members`, `client.guilds.members(guildId)`) fills in.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
+ * @typeParam Args The arguments after the guild's ID.
+ */
+export type GuildArgs<
+  InGuild extends boolean,
+  Args extends readonly unknown[],
+> = InGuild extends true ? Args : [guildId: string, ...Args];
+
+/**
+ * Types the arguments of a method declared with {@link GuildArgs}, which always start with the guild's ID once
+ * {@link fillGuildId} filled it in.
+ *
+ * @param args The arguments of the method.
+ * @internal
+ */
+export function withGuildId<Args extends readonly unknown[]>(
+  args: readonly unknown[],
+): [guildId: string, ...Args] {
+  return args as unknown as [guildId: string, ...Args];
+}
+
+/**
+ * Makes methods of a manager the client holds for every guild fill in the guild's ID: on an instance built for one
+ * guild, they call the client's manager, which holds the state and the cache, with that ID first.
+ *
+ * @param target The class of the manager.
+ * @param getManager Gets the client's manager.
+ * @param methods The names of the methods taking the guild's ID first.
+ * @internal
+ */
+export function fillGuildId<Manager extends { client: GatewayClient; guildId: string | undefined }>(
+  target: abstract new (...args: any[]) => Manager,
+  getManager: (client: GatewayClient) => object,
+  methods: readonly string[],
+): void {
+  const prototype = target.prototype as Record<string, (...args: unknown[]) => unknown>;
+  for (const name of methods) {
+    const method = prototype[name]!;
+    Reflect.defineProperty(prototype, name, {
+      configurable: true,
+      writable: true,
+      value(this: Manager, ...args: unknown[]) {
+        if (this.guildId === undefined) return method.apply(this, args);
+
+        const manager = getManager(this.client) as typeof prototype;
+        return manager[name]!(this.guildId, ...args);
+      },
+    });
+  }
+}
+
+/**
  * Manages the API methods of a data model with a mutable cache of instances: the `CachedManager` of the discord.js
  * RFC #11426.
  *
@@ -55,16 +110,20 @@ export interface AddOptions {
  * `cacheConstructor` (`CollectionCache` by default) and shared by every manager of the same entity.
  *
  * Caches keyed by more than an ID take the key built by `resolveKey`:
- * `client.members.cache.get(client.members.resolveKey(guildId, userId))`.
+ * `client.members.cache.get(client.members.resolveKey(guildId, userId))`. The managers of a guild, a channel or a
+ * thread take the ID alone: `guild.members.cache.get(userId)`.
  *
  * @typeParam Name The name of the entity this manager holds.
  * @typeParam Value The structure this manager builds.
  * @typeParam Args The arguments identifying an entity, e.g. `[id]` or `[guildId, userId]`.
+ * @typeParam FetchArgs The arguments `fetch` and `refresh` take, which differ from `Args` on a manager built for one
+ * guild.
  */
 export abstract class CachedManager<
   Name extends CacheEntityName,
   Value extends StructureMixin<object>,
   Args extends readonly string[],
+  FetchArgs extends readonly string[] = Args,
 > extends DataManager<Value, Args> {
   /**
    * The cache of this manager's entity.
@@ -73,6 +132,12 @@ export abstract class CachedManager<
    * ```typescript
    * const user = await client.users.cache.get(userId);
    * ```
+   *
+   * @remarks
+   * On a manager built for one guild (`guild.members`), it is the client's cache taking the ID of the entity alone.
+   * `get`, `has`, `set` and `delete` cost the same as on the client's; `getSize` and `clear` scan the keys of every
+   * guild to find the ones of this guild, unlike discord.js's per-guild collections: avoid calling them for every
+   * guild in a loop.
    */
   public readonly cache: Cache<Value>;
 
@@ -89,10 +154,62 @@ export abstract class CachedManager<
    */
   protected abstract createStructure(data: CacheEntityTypes[Name], ...extras: unknown[]): Value;
 
-  public constructor(client: GatewayClient, name: Name) {
+  /**
+   * @param client The client.
+   * @param name The name of the entity this manager holds.
+   * @param guildId The guild whose entities {@link CachedManager.cache} is narrowed to, for the managers the client
+   * holds for every guild.
+   */
+  public constructor(client: GatewayClient, name: Name, guildId?: string) {
     super(client);
     this.name = name;
-    this.cache = this.createCache();
+    this.cache = guildId === undefined ? this.createCache() : this.createGuildCache(guildId);
+  }
+
+  // The cache of one guild: the client's, taking the ID of the entity alone instead of the key built by `resolveKey`.
+  private createGuildCache(guildId: string): Cache<Value> {
+    const cache = this.createCache();
+    const resolveKey = this.resolveKey as unknown as (guildId: string, id: string) => string;
+    const key = (id: string) => resolveKey.call(this, guildId, id);
+    const prefix = key("");
+    // The client's cache holds every guild's entries under one map, so the ones of a guild are found by scanning its
+    // keys: without copying them when the cache is a `Map`.
+    const keys = (): Awaitable<Iterable<string>> => {
+      if (cache instanceof Map) return (cache as Map<string, Value>).keys();
+
+      const store = this.iterableCache();
+      return whenAll(
+        [store ? this.guard("entries", null, () => store.entries(), []) : []],
+        ([entries]) => entries.map(([entry]) => entry),
+      );
+    };
+
+    const guildCache: Cache<Value> = {
+      synchronous: cache.synchronous,
+      construct: cache.construct,
+      add: (data, overwrite) => cache.add(data, overwrite),
+      clear: () =>
+        whenAll([keys()], ([entries]) => {
+          // Collected first: deleting while iterating the keys of a `Map` is safe, but not of every cache.
+          const own: string[] = [];
+          for (const entry of entries) if (entry.startsWith(prefix)) own.push(entry);
+          return whenAll(
+            own.map((entry) => cache.delete(entry)),
+            () => undefined,
+          );
+        }),
+      delete: (id) => cache.delete(key(id)),
+      get: (id) => cache.get(key(id)),
+      getSize: () =>
+        whenAll([keys()], ([entries]) => {
+          let size = 0;
+          for (const entry of entries) if (entry.startsWith(prefix)) size++;
+          return size;
+        }),
+      has: (id) => cache.has(key(id)),
+      set: (id, value) => whenAll([cache.set(key(id), value)], () => guildCache),
+    };
+    return guildCache;
   }
 
   /**
@@ -302,7 +419,7 @@ export abstract class CachedManager<
    *
    * @param args The arguments identifying the entity, optionally followed by {@link FetchOptions}.
    */
-  public async fetch(...args: [...Args] | [...Args, FetchOptions]): Promise<Value> {
+  public async fetch(...args: [...FetchArgs] | [...FetchArgs, FetchOptions]): Promise<Value> {
     const ids = args.slice(0, this.resolveKey.length) as unknown as Args;
     const { force = false, cache = true } = (args[this.resolveKey.length] ?? {}) as FetchOptions;
     const id = this.resolveKey(...ids);
@@ -321,7 +438,7 @@ export abstract class CachedManager<
    *
    * @param args The arguments identifying the entity.
    */
-  public refresh(...args: Args): Promise<Value> {
+  public refresh(...args: FetchArgs): Promise<Value> {
     return this.fetch(...args, { force: true });
   }
 

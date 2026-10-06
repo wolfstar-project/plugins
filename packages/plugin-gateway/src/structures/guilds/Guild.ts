@@ -21,7 +21,10 @@ import type { GuildChannelManager } from "../../managers/GuildChannelManager.js"
 import type { FetchedThreads } from "../../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../../managers/GuildEmojiManager.js";
 import type { GuildIntegrationManager } from "../../managers/GuildIntegrationManager.js";
-import type { GuildMembersRequestOptions } from "../../managers/GuildMemberManager.js";
+import type {
+  GuildMemberManager,
+  GuildMembersRequestOptions,
+} from "../../managers/GuildMemberManager.js";
 import type {
   GuildAuditLogs,
   GuildAuditLogsFetchOptions,
@@ -33,6 +36,9 @@ import type {
 } from "../../managers/GuildManager.js";
 import type { GuildTemplateCreateOptions } from "../../managers/GuildTemplateManager.js";
 import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
+import type { PresenceManager } from "../../managers/PresenceManager.js";
+import type { RoleManager } from "../../managers/RoleManager.js";
+import type { VoiceStateManager } from "../../managers/VoiceStateManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
 import { isPromiseLike } from "../../util/cache.js";
 import { cdn } from "../../util/cdn.js";
@@ -592,6 +598,34 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get invites(): GuildInviteManager {
     return this.client.guilds.invites(this.id);
+  }
+
+  /**
+   * The presences of the guild: `guild.presences.cache.get(userId)`.
+   */
+  public get presences(): PresenceManager<true> {
+    return this.client.guilds.presences(this.id);
+  }
+
+  /**
+   * The members of the guild: `guild.members.cache.get(userId)`.
+   */
+  public get members(): GuildMemberManager<true> {
+    return this.client.guilds.members(this.id);
+  }
+
+  /**
+   * The roles of the guild: `guild.roles.cache.get(roleId)`.
+   */
+  public get roles(): RoleManager<true> {
+    return this.client.guilds.roles(this.id);
+  }
+
+  /**
+   * The voice states of the guild: `guild.voiceStates.cache.get(userId)`.
+   */
+  public get voiceStates(): VoiceStateManager<true> {
+    return this.client.guilds.voiceStates(this.id);
   }
 
   /**

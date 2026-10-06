@@ -22,10 +22,16 @@ import { GuildMember, type GuildMemberRelations } from "../structures/guilds/Gui
 import { Presence } from "../structures/presences/Presence.js";
 import { bindClient } from "../structures/Structure.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
-import { whenAll } from "../util/cache.js";
+import { whenAll, type CacheRead } from "../util/cache.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
-import { CachedManager, type AddOptions } from "./CachedManager.js";
+import {
+  CachedManager,
+  fillGuildId,
+  withGuildId,
+  type AddOptions,
+  type GuildArgs,
+} from "./CachedManager.js";
 import { GatewayError, GatewayTypeError, GatewayRangeError } from "../errors/GatewayError.js";
 import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
@@ -179,17 +185,38 @@ interface MembersRequest {
 
 /**
  * Manages the {@link GuildMember}s known to the client.
+ *
+ * `guild.members` (or `client.guilds.members(guildId)`) is this manager built for one guild, like discord.js's:
+ * `cache` takes the user's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class GuildMemberManager extends CachedManager<
+export class GuildMemberManager<InGuild extends boolean = false> extends CachedManager<
   "members",
   GuildMember,
-  [guildId: string, userId: string]
+  [guildId: string, userId: string],
+  GuildArgs<InGuild, [userId: string]>
 > {
   // The pending `request`s, by nonce.
   readonly #requests = new Map<string, MembersRequest>();
 
-  public constructor(client: GatewayClient) {
-    super(client, "members");
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.members`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "members", guildId);
+    this.guildId = guildId as this["guildId"];
+    if (guildId === undefined) {
+      this.me = ((id: string) => this.cachedMe(id)) as this["me"];
+    } else {
+      Reflect.defineProperty(this, "me", { get: () => client.members.me(guildId) });
+    }
   }
 
   protected createStructure(data: CacheEntityTypes["members"]): GuildMember {
@@ -280,13 +307,19 @@ export class GuildMemberManager extends CachedManager<
   }
 
   /**
-   * Gets the bot's own member in a guild from the cache, like discord.js's `guild.members.me`. Synchronous when the
-   * member cache is. Use {@link GuildMemberManager.fetchMe} to fall back to the API.
+   * The bot's own member in a guild, from the cache: `null` when it is not cached. Use
+   * {@link GuildMemberManager.fetchMe} to fall back to the API.
    *
-   * @param guildId The ID of the guild.
-   * @returns The member, or `null` when it is not cached.
+   * @remarks
+   * On the manager of a guild it is a getter, like discord.js's `guild.members.me`: the member itself, or a promise
+   * of it with an asynchronous cache (see `GatewayCacheConfig`). On `client.members` it is a function taking the
+   * guild's ID, synchronous when the member cache is.
    */
-  public me(guildId: string): Awaitable<GuildMember | null> {
+  declare public readonly me: InGuild extends true
+    ? CacheRead<GuildMember | null>
+    : (guildId: string) => Awaitable<GuildMember | null>;
+
+  private cachedMe(guildId: string): Awaitable<GuildMember | null> {
     const key = this.resolveKey(guildId, this.client.user?.id ?? this.client.id);
     return whenAll([this.cache.get(key)], ([member]) => member ?? null);
   }
@@ -296,8 +329,9 @@ export class GuildMemberManager extends CachedManager<
    *
    * @param guildId The ID of the guild.
    */
-  public fetchMe(guildId: string): Promise<GuildMember> {
-    return this.fetch(guildId, this.client.user?.id ?? this.client.id);
+  public fetchMe(...args: GuildArgs<InGuild, []>): Promise<GuildMember> {
+    const [guildId] = withGuildId<[]>(args);
+    return this.client.members.fetch(guildId, this.client.user?.id ?? this.client.id);
   }
 
   /**
@@ -307,9 +341,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options How many members to list (up to 1000), and after which user ID.
    */
   public async list(
-    guildId: string,
-    options: { limit?: number; after?: string } = {},
+    ...args: GuildArgs<InGuild, [options?: { limit?: number; after?: string }]>
   ): Promise<GuildMember[]> {
+    const [guildId, options = {}] =
+      withGuildId<[options?: { limit?: number; after?: string }]>(args);
     const members = await this.client.api.guilds.getMembers(guildId, {
       limit: options.limit ?? 1,
       after: options.after,
@@ -324,9 +359,9 @@ export class GuildMemberManager extends CachedManager<
    * @param options The query, and how many members to return (up to 1000).
    */
   public async search(
-    guildId: string,
-    options: { query: string; limit?: number },
+    ...args: GuildArgs<InGuild, [options: { query: string; limit?: number }]>
   ): Promise<GuildMember[]> {
+    const [guildId, options] = withGuildId<[options: { query: string; limit?: number }]>(args);
     const members = await this.client.api.guilds.searchForMembers(guildId, {
       query: options.query,
       limit: options.limit ?? 1,
@@ -348,9 +383,9 @@ export class GuildMemberManager extends CachedManager<
    * @returns The members, once the last chunk is cached.
    */
   public async request(
-    guildId: string,
-    options: GuildMembersRequestOptions = {},
+    ...args: GuildArgs<InGuild, [options?: GuildMembersRequestOptions]>
   ): Promise<GuildMember[]> {
+    const [guildId, options = {}] = withGuildId<[options?: GuildMembersRequestOptions]>(args);
     const { query, limit = 0, presences, time = 120_000 } = options;
     // An empty list of IDs (e.g. built dynamically) requests nothing, so it falls back to the default like no list at all.
     const userIds = options.userIds?.length ? options.userIds : undefined;
@@ -443,10 +478,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options The access token and the member's initial state.
    */
   public async add(
-    guildId: string,
-    userId: string,
-    options: GuildMemberAddOptions,
+    ...args: GuildArgs<InGuild, [userId: string, options: GuildMemberAddOptions]>
   ): Promise<GuildMember> {
+    const [guildId, userId, options] =
+      withGuildId<[userId: string, options: GuildMemberAddOptions]>(args);
     const body: RESTPutAPIGuildMemberJSONBody = {
       access_token: options.accessToken,
       nick: options.nick,
@@ -456,7 +491,7 @@ export class GuildMemberManager extends CachedManager<
     };
     // The API answers 204 without a body when the user already is a member.
     const member = await this.client.api.guilds.addMember(guildId, userId, body);
-    return member ? this.store(guildId, member) : this.fetch(guildId, userId);
+    return member ? this.store(guildId, member) : this.client.members.fetch(guildId, userId);
   }
 
   /**
@@ -467,10 +502,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options The fields to edit.
    */
   public async edit(
-    guildId: string,
-    userId: string,
-    options: GuildMemberEditOptions,
+    ...args: GuildArgs<InGuild, [userId: string, options: GuildMemberEditOptions]>
   ): Promise<GuildMember> {
+    const [guildId, userId, options] =
+      withGuildId<[userId: string, options: GuildMemberEditOptions]>(args);
     const until = options.communicationDisabledUntil;
     const body: RESTPatchAPIGuildMemberJSONBody = {
       nick: options.nick,
@@ -497,7 +532,10 @@ export class GuildMemberManager extends CachedManager<
    * @param guildId The ID of the guild.
    * @param options The fields to edit.
    */
-  public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
+  public async editMe(
+    ...args: GuildArgs<InGuild, [options: GuildMemberEditMeOptions]>
+  ): Promise<GuildMember> {
+    const [guildId, options] = withGuildId<[options: GuildMemberEditMeOptions]>(args);
     const { reason, avatar, banner, ...rest } = options;
     const body: RESTPatchAPICurrentGuildMemberJSONBody = {
       ...rest,
@@ -515,7 +553,8 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the member's user.
    * @param reason The reason for the audit log.
    */
-  public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
+  public async kick(...args: GuildArgs<InGuild, [userId: string, reason?: string]>): Promise<void> {
+    const [guildId, userId, reason] = withGuildId<[userId: string, reason?: string]>(args);
     await this.client.api.guilds.removeMember(guildId, userId, { reason });
     await this.cache.delete(this.resolveKey(guildId, userId));
   }
@@ -527,7 +566,11 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the user.
    * @param options How many seconds of messages to delete, and the reason for the audit log.
    */
-  public async ban(guildId: string, userId: string, options: BanOptions = {}): Promise<void> {
+  public async ban(
+    ...args: GuildArgs<InGuild, [userId: string, options?: BanOptions]>
+  ): Promise<void> {
+    const [guildId, userId, options = {}] =
+      withGuildId<[userId: string, options?: BanOptions]>(args);
     const body: RESTPutAPIGuildBanJSONBody = {
       delete_message_seconds: options.deleteMessageSeconds,
     };
@@ -542,7 +585,10 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the user.
    * @param reason The reason for the audit log.
    */
-  public async unban(guildId: string, userId: string, reason?: string): Promise<void> {
+  public async unban(
+    ...args: GuildArgs<InGuild, [userId: string, reason?: string]>
+  ): Promise<void> {
+    const [guildId, userId, reason] = withGuildId<[userId: string, reason?: string]>(args);
     await this.client.api.guilds.unbanUser(guildId, userId, { reason });
   }
 
@@ -555,10 +601,10 @@ export class GuildMemberManager extends CachedManager<
    * @returns The users that were banned, and the ones that could not be.
    */
   public async bulkBan(
-    guildId: string,
-    userIds: readonly string[],
-    options: BanOptions = {},
+    ...args: GuildArgs<InGuild, [userIds: readonly string[], options?: BanOptions]>
   ): Promise<{ bannedUsers: string[]; failedUsers: string[] }> {
+    const [guildId, userIds, options = {}] =
+      withGuildId<[userIds: readonly string[], options?: BanOptions]>(args);
     const body: RESTPostAPIGuildBulkBanJSONBody = {
       user_ids: [...userIds],
       delete_message_seconds: options.deleteMessageSeconds,
@@ -579,7 +625,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options The inactivity threshold and the roles to include.
    * @returns How many members were (or would be) pruned, `null` when `count` is `false`.
    */
-  public async prune(guildId: string, options: GuildPruneOptions = {}): Promise<number | null> {
+  public async prune(
+    ...args: GuildArgs<InGuild, [options?: GuildPruneOptions]>
+  ): Promise<number | null> {
+    const [guildId, options = {}] = withGuildId<[options?: GuildPruneOptions]>(args);
     const days = options.days ?? 7;
     if (options.dry) {
       const result = await this.client.api.guilds.getPruneCount(guildId, {
@@ -610,11 +659,10 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async addRole(
-    guildId: string,
-    userId: string,
-    roleId: string,
-    reason?: string,
+    ...args: GuildArgs<InGuild, [userId: string, roleId: string, reason?: string]>
   ): Promise<void> {
+    const [guildId, userId, roleId, reason] =
+      withGuildId<[userId: string, roleId: string, reason?: string]>(args);
     await this.client.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => [...new Set([...roles, roleId])]);
   }
@@ -628,11 +676,10 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async removeRole(
-    guildId: string,
-    userId: string,
-    roleId: string,
-    reason?: string,
+    ...args: GuildArgs<InGuild, [userId: string, roleId: string, reason?: string]>
   ): Promise<void> {
+    const [guildId, userId, roleId, reason] =
+      withGuildId<[userId: string, roleId: string, reason?: string]>(args);
     await this.client.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => roles.filter((id) => id !== roleId));
   }
@@ -665,3 +712,22 @@ export class GuildMemberManager extends CachedManager<
     }));
   }
 }
+
+fillGuildId(GuildMemberManager, (client) => client.members, [
+  "fetch",
+  "refresh",
+  "fetchMe",
+  "list",
+  "search",
+  "request",
+  "add",
+  "edit",
+  "editMe",
+  "kick",
+  "ban",
+  "unban",
+  "bulkBan",
+  "prune",
+  "addRole",
+  "removeRole",
+]);

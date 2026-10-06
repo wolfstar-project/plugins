@@ -2,7 +2,7 @@ import { voiceStateKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/
 import type { GatewayClient } from "../GatewayClient.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, fillGuildId, withGuildId, type GuildArgs } from "./CachedManager.js";
 import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
@@ -11,14 +11,30 @@ import { GatewayTypeError } from "../errors/GatewayError.js";
  * @remarks
  * The cache holds them when the bot has the `GuildVoiceStates` intent. `fetch` falls back to the API, which only
  * knows the voice states of connected members.
+ *
+ * `guild.voiceStates` (or `client.guilds.voiceStates(guildId)`) is this manager built for one guild, like
+ * discord.js's: `cache` takes the user's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class VoiceStateManager extends CachedManager<
+export class VoiceStateManager<InGuild extends boolean = false> extends CachedManager<
   "voiceStates",
   VoiceState,
-  [guildId: string, userId: string]
+  [guildId: string, userId: string],
+  GuildArgs<InGuild, [userId: string]>
 > {
-  public constructor(client: GatewayClient) {
-    super(client, "voiceStates");
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.voiceStates`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "voiceStates", guildId);
+    this.guildId = guildId as this["guildId"];
   }
 
   protected createStructure(data: CacheEntityTypes["voiceStates"]): VoiceState {
@@ -59,7 +75,8 @@ export class VoiceStateManager extends CachedManager<
    * @returns The cached entries, `[]` when this entity is not cached.
    * @throws {TypeError} When the store cannot enumerate its entries.
    */
-  public async listCached(guildId: string): Promise<VoiceState[]> {
+  public async listCached(...args: GuildArgs<InGuild, []>): Promise<VoiceState[]> {
+    const [guildId] = withGuildId<[]>(args);
     const prefix = `${guildId}:`;
     const cache = this.iterableCache();
     const entries = cache ? await this.guard("entries", null, () => cache.entries(), []) : [];
@@ -79,3 +96,5 @@ export class VoiceStateManager extends CachedManager<
     return { ...state, guild_id: guildId };
   }
 }
+
+fillGuildId(VoiceStateManager, (client) => client.voiceStates, ["fetch", "refresh", "listCached"]);

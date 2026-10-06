@@ -194,6 +194,81 @@ describe("PresenceManager#resolve without a cache entry", () => {
   });
 });
 
+describe.each(stores)("GuildPresenceManager with %s", (_name, makeClient, isAsync) => {
+  async function seeded() {
+    const client = makeClient();
+    await client.presences._add(presenceData as never);
+    return client;
+  }
+
+  test("GIVEN a user ID THEN cache.get reads the presence of the guild, like discord.js", async () => {
+    const client = await seeded();
+    const presences = client.guilds.presences(guildId);
+
+    const cached = presences.cache.get(userId);
+
+    expect(presences.cache.synchronous).toBe(!isAsync);
+    expect(cached instanceof Promise).toBe(isAsync);
+    expect((await cached)?.userId).toBe(userId);
+    expect(await presences.cache.has(userId)).toBe(true);
+    expect(await presences.cache.get(otherUserId)).toBeUndefined();
+    expect(await presences.cache.has(otherUserId)).toBe(false);
+  });
+
+  test("GIVEN another guild THEN its cache does not hold the presence", async () => {
+    const client = await seeded();
+    const presences = client.guilds.presences(otherGuildId);
+
+    expect(await presences.cache.get(userId)).toBeUndefined();
+    expect(await presences.cache.has(userId)).toBe(false);
+    expect(await presences.cache.delete(userId)).toBe(false);
+    expect(await client.guilds.presences(guildId).cache.has(userId)).toBe(true);
+  });
+
+  test("GIVEN cache.delete THEN the presence leaves client.presences", async () => {
+    const client = await seeded();
+
+    expect(await client.guilds.presences(guildId).cache.delete(userId)).toBe(true);
+    expect(
+      await client.presences.cache.get(client.presences.resolveKey(guildId, userId)),
+    ).toBeUndefined();
+  });
+
+  test("GIVEN a resolvable THEN resolve reads the guild of the manager, whatever guild it holds", async () => {
+    const client = await seeded();
+    const presences = client.guilds.presences(guildId);
+    const detached = new Presence({ ...presenceData, guild_id: otherGuildId } as never);
+
+    expect(presences.resolve(detached)).toBe(detached);
+    for (const value of [userId, new User(apiUser), guildMember(otherGuildId), message()]) {
+      expect((await presences.resolve(value))?.userId).toBe(userId);
+      expect(presences.resolveId(value)).toBe(userId);
+    }
+    expect(await presences.resolve(otherUserId)).toBeNull();
+    expect(await client.guilds.presences(otherGuildId).resolve(guildMember())).toBeNull();
+  });
+
+  test("GIVEN listCached THEN it lists the presences of the guild alone", async () => {
+    const client = await seeded();
+    await client.presences._add({ ...presenceData, guild_id: otherGuildId } as never);
+
+    const listed = await client.guilds.presences(guildId).listCached();
+
+    expect(listed.map((presence) => presence.guildId)).toEqual([guildId]);
+  });
+});
+
+describe("Guild#presences", () => {
+  test("GIVEN a guild THEN presences is the manager of its ID", async () => {
+    const client = createClient();
+    await client.presences._add(presenceData as never);
+    const guild = await client.guilds._add({ id: guildId, name: "Wolves" } as never);
+
+    expect(guild.presences.guildId).toBe(guildId);
+    expect((await guild.presences.cache.get(userId))?.userId).toBe(userId);
+  });
+});
+
 describe("PresenceManager#resolveId", () => {
   test("GIVEN every resolvable THEN it is the ID of the user, not the cache key", async () => {
     const client = createClient();

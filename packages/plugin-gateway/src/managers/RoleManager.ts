@@ -10,7 +10,7 @@ import { GatewayError } from "../errors/GatewayError.js";
 import { whenAll } from "../util/cache.js";
 import { computePositions, discordSort } from "../util/Util.js";
 import { PermissionsBitField, type PermissionResolvable } from "../util/PermissionsBitField.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, fillGuildId, withGuildId, type GuildArgs } from "./CachedManager.js";
 import type { SetPositionOptions } from "./GuildChannelManager.js";
 import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
 
@@ -48,10 +48,30 @@ export interface RolePosition {
 
 /**
  * Manages the {@link Role}s known to the client.
+ *
+ * `guild.roles` (or `client.guilds.roles(guildId)`) is this manager built for one guild, like discord.js's:
+ * `cache` takes the role's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class RoleManager extends CachedManager<"roles", Role, [guildId: string, roleId: string]> {
-  public constructor(client: GatewayClient) {
-    super(client, "roles");
+export class RoleManager<InGuild extends boolean = false> extends CachedManager<
+  "roles",
+  Role,
+  [guildId: string, roleId: string],
+  GuildArgs<InGuild, [roleId: string]>
+> {
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.roles`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "roles", guildId);
+    this.guildId = guildId as this["guildId"];
   }
 
   protected createStructure(data: CacheEntityTypes["roles"]): Role {
@@ -76,7 +96,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param guildId The ID of the guild.
    * @returns The roles, highest first.
    */
-  public async fetchAll(guildId: string): Promise<Role[]> {
+  public async fetchAll(...args: GuildArgs<InGuild, []>): Promise<Role[]> {
+    const [guildId] = withGuildId<[]>(args);
     const roles = await this.client.api.guilds.getRoles(guildId);
     const structures = await Promise.all(roles.map((role) => this.store(guildId, role)));
 
@@ -89,7 +110,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param guildId The ID of the guild.
    * @returns The member count of every role, by role ID.
    */
-  public async fetchMemberCounts(guildId: string): Promise<Map<string, number>> {
+  public async fetchMemberCounts(...args: GuildArgs<InGuild, []>): Promise<Map<string, number>> {
+    const [guildId] = withGuildId<[]>(args);
     const counts = await this.client.api.guilds.getRoleMemberCounts(guildId);
     return new Map(Object.entries(counts));
   }
@@ -100,7 +122,8 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param guildId The ID of the guild.
    * @param options The role's fields.
    */
-  public async create(guildId: string, options: RoleEditOptions = {}): Promise<Role> {
+  public async create(...args: GuildArgs<InGuild, [options?: RoleEditOptions]>): Promise<Role> {
+    const [guildId, options = {}] = withGuildId<[options?: RoleEditOptions]>(args);
     const role = await this.client.api.guilds.createRole(guildId, await toRoleBody(options), {
       reason: options.reason,
     });
@@ -114,7 +137,11 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param roleId The ID of the role.
    * @param options The fields to edit.
    */
-  public async edit(guildId: string, roleId: string, options: RoleEditOptions): Promise<Role> {
+  public async edit(
+    ...args: GuildArgs<InGuild, [roleId: string, options: RoleEditOptions]>
+  ): Promise<Role> {
+    const [guildId, roleId, options] =
+      withGuildId<[roleId: string, options: RoleEditOptions]>(args);
     const role = await this.client.api.guilds.editRole(guildId, roleId, await toRoleBody(options), {
       reason: options.reason,
     });
@@ -128,7 +155,10 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param roleId The ID of the role.
    * @param reason The reason for the audit log.
    */
-  public async delete(guildId: string, roleId: string, reason?: string): Promise<void> {
+  public async delete(
+    ...args: GuildArgs<InGuild, [roleId: string, reason?: string]>
+  ): Promise<void> {
+    const [guildId, roleId, reason] = withGuildId<[roleId: string, reason?: string]>(args);
     await this.client.api.guilds.deleteRole(guildId, roleId, { reason });
     await this.cache.delete(this.resolveKey(guildId, roleId));
   }
@@ -144,21 +174,23 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns Every role of the guild, highest first.
    */
   public async setPosition(
-    guildId: string,
-    roleId: string,
-    position: number,
-    options: SetPositionOptions | string = {},
+    ...args: GuildArgs<
+      InGuild,
+      [roleId: string, position: number, options?: SetPositionOptions | string]
+    >
   ): Promise<Role[]> {
+    const [guildId, roleId, position, options = {}] =
+      withGuildId<[roleId: string, position: number, options?: SetPositionOptions | string]>(args);
     const { relative = false, reason } =
       typeof options === "string" ? { reason: options } : options;
     // fetchAll sorts highest first: reversed, the roles are in discordSort order.
-    const sorted = (await this.fetchAll(guildId)).toReversed();
+    const sorted = (await this.client.roles.fetchAll(guildId)).toReversed();
     if (!sorted.some((role) => role.id === roleId)) {
       throw new GatewayError("GuildRoleUnknown", guildId, roleId);
     }
 
     const positions = computePositions(roleId, position, relative, sorted);
-    return this.setPositions(
+    return this.client.roles.setPositions(
       guildId,
       positions.map((entry) => ({ role: entry.id, position: entry.position })),
       reason,
@@ -174,10 +206,10 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @returns Every role of the guild, highest first.
    */
   public async setPositions(
-    guildId: string,
-    positions: readonly RolePosition[],
-    reason?: string,
+    ...args: GuildArgs<InGuild, [positions: readonly RolePosition[], reason?: string]>
   ): Promise<Role[]> {
+    const [guildId, positions, reason] =
+      withGuildId<[positions: readonly RolePosition[], reason?: string]>(args);
     const body: RESTPatchAPIGuildRolePositionsJSONBody = positions.map(({ role, position }) => ({
       id: role,
       position,
@@ -201,8 +233,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    *
    * @param guildId The ID of the guild.
    */
-  public everyone(guildId: string): Promise<Role> {
-    return this.fetch(guildId, guildId);
+  public everyone(...args: GuildArgs<InGuild, []>): Promise<Role> {
+    const [guildId] = withGuildId<[]>(args);
+    return this.client.roles.fetch(guildId, guildId);
   }
 
   /**
@@ -210,8 +243,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    *
    * @param guildId The ID of the guild.
    */
-  public async highest(guildId: string): Promise<Role | null> {
-    return (await this.fetchAll(guildId))[0] ?? null;
+  public async highest(...args: GuildArgs<InGuild, []>): Promise<Role | null> {
+    const [guildId] = withGuildId<[]>(args);
+    return (await this.client.roles.fetchAll(guildId))[0] ?? null;
   }
 
   /**
@@ -219,8 +253,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    *
    * @param guildId The ID of the guild.
    */
-  public async premiumSubscriberRole(guildId: string): Promise<Role | null> {
-    const roles = await this.fetchAll(guildId);
+  public async premiumSubscriberRole(...args: GuildArgs<InGuild, []>): Promise<Role | null> {
+    const [guildId] = withGuildId<[]>(args);
+    const roles = await this.client.roles.fetchAll(guildId);
     return roles.find((role) => role.tags?.premiumSubscriberRole) ?? null;
   }
 
@@ -230,8 +265,9 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
    * @param guildId The ID of the guild.
    * @param botId The ID of the bot user.
    */
-  public async botRoleFor(guildId: string, botId: string): Promise<Role | null> {
-    const roles = await this.fetchAll(guildId);
+  public async botRoleFor(...args: GuildArgs<InGuild, [botId: string]>): Promise<Role | null> {
+    const [guildId, botId] = withGuildId<[botId: string]>(args);
+    const roles = await this.client.roles.fetchAll(guildId);
     return roles.find((role) => role.tags?.botId === botId) ?? null;
   }
 
@@ -244,6 +280,22 @@ export class RoleManager extends CachedManager<"roles", Role, [guildId: string, 
     return this._add({ ...role, guild_id: guildId });
   }
 }
+
+fillGuildId(RoleManager, (client) => client.roles, [
+  "fetch",
+  "refresh",
+  "fetchAll",
+  "fetchMemberCounts",
+  "create",
+  "edit",
+  "delete",
+  "setPosition",
+  "setPositions",
+  "everyone",
+  "highest",
+  "premiumSubscriberRole",
+  "botRoleFor",
+]);
 
 async function toRoleBody(options: RoleEditOptions): Promise<RESTPatchAPIGuildRoleJSONBody> {
   const body: RESTPatchAPIGuildRoleJSONBody = {

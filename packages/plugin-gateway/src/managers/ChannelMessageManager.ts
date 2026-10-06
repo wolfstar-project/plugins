@@ -16,6 +16,7 @@ import type {
   MessageEditOptions,
   MessagePayloadResolvable,
 } from "../util/messages.js";
+import { scopeCache, type ScopedCache } from "../util/cache.js";
 import { BaseManager } from "./BaseManager.js";
 
 /**
@@ -24,18 +25,29 @@ import { BaseManager } from "./BaseManager.js";
 export class ChannelMessageManager extends BaseManager {
   public readonly channelId: string;
 
+  /**
+   * The cached messages of the channel, by message ID.
+   *
+   * @example
+   * ```typescript
+   * const message = await channel.messages.cache.get(messageId);
+   * ```
+   */
+  public readonly cache: ScopedCache<Message>;
+
   public constructor(client: GatewayClient, channelId: string) {
     super(client);
     this.channelId = channelId;
+    this.cache = scopeCache(client.messages.cache, (messageId) =>
+      client.messages.resolveKey(channelId, messageId),
+    );
   }
 
   /**
-   * Gets a message of the channel from the cache.
+   * Gets a message of the channel from the cache. Same as `cache.get`, always answering a promise.
    */
   public async get(messageId: string): Promise<Message | undefined> {
-    return this.client.messages.cache.get(
-      this.client.messages.resolveKey(this.channelId, messageId),
-    );
+    return this.cache.get(messageId);
   }
 
   /**

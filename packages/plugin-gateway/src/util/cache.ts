@@ -167,6 +167,53 @@ export interface Cache<
 }
 
 /**
+ * The cache of the manager of one channel or thread: the keyed methods of the {@link Cache} it reads, taking the ID
+ * of the entity alone instead of the key built by `resolveKey`, like the caches of discord.js's channel managers.
+ *
+ * @typeParam Value The structure the cache hands out.
+ */
+export interface ScopedCache<Value extends StructureMixin<object>> {
+  /**
+   * Whether every method answers synchronously, never with a promise.
+   */
+  readonly synchronous: boolean;
+
+  /**
+   * Deletes an item from the cache.
+   */
+  delete(id: string): Awaitable<boolean>;
+
+  /**
+   * Retrieves an item from the cache.
+   */
+  get(id: string): Awaitable<Value | undefined>;
+
+  /**
+   * Checks if an item exists in the cache.
+   */
+  has(id: string): Awaitable<boolean>;
+}
+
+/**
+ * Scopes a {@link Cache} keyed by more than an ID to the entries of one parent.
+ *
+ * @param cache The cache.
+ * @param resolveKey Builds the key of the cache from the ID of an entity.
+ * @internal
+ */
+export function scopeCache<Value extends StructureMixin<object>>(
+  cache: Cache<Value>,
+  resolveKey: (id: string) => string,
+): ScopedCache<Value> {
+  return {
+    synchronous: cache.synchronous,
+    delete: (id) => cache.delete(resolveKey(id)),
+    get: (id) => cache.get(resolveKey(id)),
+    has: (id) => cache.has(resolveKey(id)),
+  };
+}
+
+/**
  * The options of the cache of one entity, set per entity through the client's `cacheOptions` option.
  */
 export interface CacheEntityOptions {
