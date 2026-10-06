@@ -445,15 +445,21 @@ export class ShardChannel extends EventEmitter<ShardChannelEvents> {
       messageHandler: this.manager.codec.handler.name,
       transformers: this.manager.codec.transformers.map((transformer) => transformer.name),
     };
-    instance.transport = this.manager.strategy.spawn(
-      context,
-      {
-        message: (data) => void this.#receive(instance, data),
-        exit: (code) => this.#exited(instance, code),
-        error: (error) => this.#failed(instance, error),
-      },
-      { env: this.manager.spawnEnv },
-    );
+    try {
+      instance.transport = this.manager.strategy.spawn(
+        context,
+        {
+          message: (data) => void this.#receive(instance, data),
+          exit: (code) => this.#exited(instance, code),
+          error: (error) => this.#failed(instance, error),
+        },
+        { env: this.manager.spawnEnv },
+      );
+    } catch (error) {
+      const spawnError = new ShardSpawnError(this.id, null, error);
+      this.manager.reportShardError(this, spawnError);
+      throw spawnError;
+    }
 
     const estimate = this.manager.readyEstimate;
     if (estimate !== null) {
