@@ -146,18 +146,34 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   /**
-   * Whether this emoji has the same data as another one.
-   * @param emoji The emoji to compare with.
+   * Whether this emoji has the same data as another one, like discord.js's `GuildEmoji#equals`. Against an emoji, it
+   * compares the ID, name, `managed`, `available`, `requiresColons`, and roles; against a raw emoji, only the ID,
+   * name, and roles. `false` for anything else.
+   *
+   * @param other The emoji, or raw emoji, to compare with.
    */
-  public equals(emoji: GuildEmoji): boolean {
+  public equals(other: unknown): boolean {
+    const roleIds = this.roleIds;
+    if (other instanceof GuildEmoji) {
+      return (
+        other.id === this.id &&
+        other.name === this.name &&
+        other.managed === this.managed &&
+        other.available === this.available &&
+        other.requiresColons === this.requiresColons &&
+        other.roleIds.length === roleIds.length &&
+        other.roleIds.every((id) => roleIds.includes(id))
+      );
+    }
+
+    if (typeof other !== "object" || other === null) return false;
+    const raw = other as Partial<CacheEntityTypes["emojis"]>;
+    const roles = raw.roles ?? [];
     return (
-      this.id === emoji.id &&
-      this.name === emoji.name &&
-      this.managed === emoji.managed &&
-      this.available === emoji.available &&
-      this.requiresColons === emoji.requiresColons &&
-      this.roleIds.length === emoji.roleIds.length &&
-      this.roleIds.every((id) => emoji.roleIds.includes(id))
+      raw.id === this.id &&
+      raw.name === this.name &&
+      roles.length === roleIds.length &&
+      roles.every((id) => roleIds.includes(id))
     );
   }
 }

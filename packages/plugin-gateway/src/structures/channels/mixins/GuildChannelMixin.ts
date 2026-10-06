@@ -16,6 +16,7 @@ import { kData } from "../../Structure.js";
 import type { GuildChannelCreateOptions, GuildChannelEditOptions } from "../../../util/channels.js";
 import type { AnyChannel } from "../../../managers/ChannelManager.js";
 import { editChannel } from "./edit.js";
+import { sameOverwrites } from "./ChannelPermissionMixin.js";
 import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = { guild_id?: string; name?: string | null };
@@ -73,6 +74,29 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
 
   public get name(): string {
     return (this[kData] as Data).name ?? "";
+  }
+
+  /**
+   * Whether this channel has the same data as another one, like discord.js's `GuildChannel#equals`: the same ID, type,
+   * name, topic, position, and permission overwrites (in any order). The category is not compared, as in discord.js.
+   * `false` for anything that is neither a channel nor a raw one.
+   *
+   * @param other The channel, or raw channel, to compare with.
+   */
+  public equals(other: unknown): boolean {
+    if (typeof other !== "object" || other === null || !("id" in other)) return false;
+    const raw = (
+      "toJSON" in other && typeof other.toJSON === "function" ? other.toJSON() : other
+    ) as CloneableData & { id: string; type?: ChannelType };
+    const data = this[kData] as CloneableData;
+    return (
+      this.id === raw.id &&
+      this.type === raw.type &&
+      (data.name ?? "") === (raw.name ?? "") &&
+      (data.topic ?? null) === (raw.topic ?? null) &&
+      (data.position ?? 0) === (raw.position ?? 0) &&
+      sameOverwrites(data, raw)
+    );
   }
 
   /**

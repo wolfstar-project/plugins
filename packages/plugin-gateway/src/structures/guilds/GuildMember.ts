@@ -651,21 +651,36 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * Whether this member has the same data as another one.
+   * Whether this member has the same data as another one, like discord.js's `GuildMember#equals`: the same user,
+   * guild, `partial`, nickname, avatar, banner, `pending`, timestamps, flags, roles (in the same order), avatar
+   * decoration, and nameplate. `false` for anything that is not a member.
+   *
    * @param member The member to compare with.
    */
-  public equals(member: GuildMember): boolean {
+  public equals(member: unknown): boolean {
+    if (!(member instanceof GuildMember)) return false;
+    const nameplate = this.collectibles?.nameplate;
+    const otherNameplate = member.collectibles?.nameplate;
     return (
       this.id === member.id &&
+      this.partial === member.partial &&
       this.guildId === member.guildId &&
+      this.joinedTimestamp === member.joinedTimestamp &&
       this.nickname === member.nickname &&
       this.avatar === member.avatar &&
-      this.joinedTimestamp === member.joinedTimestamp &&
+      this.banner === member.banner &&
+      this.pending === member.pending &&
       this.premiumSinceTimestamp === member.premiumSinceTimestamp &&
       this.communicationDisabledUntilTimestamp === member.communicationDisabledUntilTimestamp &&
       this.flags.bitField === member.flags.bitField &&
       this.roleIds.length === member.roleIds.length &&
-      this.roleIds.every((id) => member.roleIds.includes(id))
+      this.roleIds.every((id, index) => id === member.roleIds[index]) &&
+      this.avatarDecorationData?.asset === member.avatarDecorationData?.asset &&
+      this.avatarDecorationData?.skuId === member.avatarDecorationData?.skuId &&
+      nameplate?.skuId === otherNameplate?.skuId &&
+      nameplate?.asset === otherNameplate?.asset &&
+      nameplate?.label === otherNameplate?.label &&
+      nameplate?.palette === otherNameplate?.palette
     );
   }
 

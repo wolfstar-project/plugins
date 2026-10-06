@@ -28,7 +28,6 @@ import {
   type MessageTopLevelComponent,
 } from "../../util/components.js";
 import type { APIAnyComponent } from "../components/Component.js";
-import { isDeepEqual } from "../../util/equal.js";
 import {
   transformAPIMessageActivity,
   transformAPIMessageCall,
@@ -805,21 +804,47 @@ export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> 
   }
 
   /**
-   * Whether this message has the same data as another one, or as a raw message.
-   * @param message The message to compare with.
+   * Whether this message has the same data as another one, like discord.js's `Message#equals`: the same ID, author,
+   * content, `nonce`, `tts`, attachments (by ID), and embeds (through `Embed#equals`, in order). A change of `pinned`,
+   * flags, or reactions does not make messages differ; compare `toJSON()` for that.
+   *
+   * @param message The message, or raw message, to compare with. A raw embed update, which carries neither an author nor
+   * attachments, only compares the ID and the number of embeds.
+   * @param rawData The raw message `message` comes from. When given, `mention_everyone` and the timestamps are compared
+   * too.
    */
-  public equals(message: Message | APIMessage): boolean {
-    const other = message instanceof Message ? message.toJSON() : message;
-    return (
+  public equals(
+    message: Message | APIMessage | null | undefined,
+    rawData?: Partial<APIMessage>,
+  ): boolean {
+    if (!message) return false;
+    const other: Partial<APIMessage> = message instanceof Message ? message.toJSON() : message;
+    const data = this[kData];
+    const embeds = this.embeds;
+    const otherEmbeds = other.embeds ?? [];
+    if (!other.author && !other.attachments) {
+      return this.id === other.id && embeds.length === otherEmbeds.length;
+    }
+
+    const attachments = data.attachments ?? [];
+    const otherAttachments = other.attachments ?? [];
+    const equal =
       this.id === other.id &&
+      this.author.id === other.author?.id &&
       this.content === other.content &&
-      this.author.id === other.author.id &&
-      this.pinned === other.pinned &&
+      data.nonce === other.nonce &&
       this.tts === other.tts &&
+      attachments.length === otherAttachments.length &&
+      embeds.length === otherEmbeds.length &&
+      attachments.every(({ id }) => otherAttachments.some((attachment) => attachment.id === id)) &&
+      embeds.every((embed, index) => embed.equals(otherEmbeds[index]));
+    if (!equal || !rawData) return equal;
+
+    return (
+      Boolean(data.mention_everyone) === Boolean(other.mention_everyone) &&
+      this.createdTimestamp === Date.parse(rawData.timestamp ?? "") &&
       this.editedTimestamp ===
-        (other.edited_timestamp ? Date.parse(other.edited_timestamp) : null) &&
-      isDeepEqual(this[kData].embeds, other.embeds) &&
-      isDeepEqual(this[kData].attachments, other.attachments)
+        (rawData.edited_timestamp ? Date.parse(rawData.edited_timestamp) : null)
     );
   }
 

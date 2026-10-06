@@ -113,6 +113,32 @@ export class SoundboardSound extends BaseSoundboardSound {
     });
   }
 
+  /**
+   * Whether this sound has the same data as another one, like discord.js's `SoundboardSound#equals`. `false` for
+   * anything that is neither a sound nor a raw one.
+   *
+   * @param other The sound, or raw sound, to compare with.
+   */
+  public equals(other: unknown): boolean {
+    const sound =
+      other instanceof SoundboardSound
+        ? other
+        : typeof other === "object" && other !== null && "sound_id" in other
+          ? new SoundboardSound(other as APISoundboardSound)
+          : null;
+    if (!sound) return false;
+    return (
+      this.soundId === sound.soundId &&
+      this.name === sound.name &&
+      this.volume === sound.volume &&
+      this.emojiId === sound.emojiId &&
+      this.emojiName === sound.emojiName &&
+      this.guildId === sound.guildId &&
+      this.available === sound.available &&
+      this[kData].user?.id === sound[kData].user?.id
+    );
+  }
+
   private withGuild(action: (guildId: string) => Promise<this>): Promise<this> {
     const { guildId } = this;
     if (!guildId) return Promise.reject(new GatewayError("NotGuildSoundboardSound"));

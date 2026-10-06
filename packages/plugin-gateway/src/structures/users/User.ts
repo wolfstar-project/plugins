@@ -203,10 +203,17 @@ export class User extends BaseUser {
   }
 
   /**
-   * Whether this user has the same data as another one.
+   * Whether this user has the same data as another one, like discord.js's `User#equals`: the same ID, username,
+   * discriminator, global name, avatar, flags, banner, accent color, avatar decoration, nameplate, and primary guild.
+   *
    * @param user The user to compare with.
    */
-  public equals(user: User): boolean {
+  public equals(user: User | null | undefined): boolean {
+    if (!user) return false;
+    const nameplate = this.collectibles?.nameplate;
+    const otherNameplate = user.collectibles?.nameplate;
+    const primaryGuild = this.primaryGuild;
+    const otherPrimaryGuild = user.primaryGuild;
     return (
       this.id === user.id &&
       this.username === user.username &&
@@ -216,7 +223,16 @@ export class User extends BaseUser {
       this.flags.bitField === user.flags.bitField &&
       this.banner === user.banner &&
       this.accentColor === user.accentColor &&
-      this.avatarDecorationData?.asset === user.avatarDecorationData?.asset
+      this.avatarDecorationData?.asset === user.avatarDecorationData?.asset &&
+      this.avatarDecorationData?.skuId === user.avatarDecorationData?.skuId &&
+      nameplate?.skuId === otherNameplate?.skuId &&
+      nameplate?.asset === otherNameplate?.asset &&
+      nameplate?.label === otherNameplate?.label &&
+      nameplate?.palette === otherNameplate?.palette &&
+      primaryGuild?.identityGuildId === otherPrimaryGuild?.identityGuildId &&
+      primaryGuild?.identityEnabled === otherPrimaryGuild?.identityEnabled &&
+      primaryGuild?.tag === otherPrimaryGuild?.tag &&
+      primaryGuild?.badge === otherPrimaryGuild?.badge
     );
   }
 
