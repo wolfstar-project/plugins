@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
-  <title id="t">@wolfstar/plugin-broker</title>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="#14151F"/>
-  <rect x="24" y="24" width="464" height="464" rx="112" fill="none" stroke="#FF8A4C" stroke-opacity=".28" stroke-width="8"/>
-  <g id="icon"><path d="M178 256H246M246 256L334 150M246 256H334M246 256L334 362" fill="none" stroke="#FF8A4C" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/><circle cx="150" cy="256" r="32" fill="#FF8A4C"/><circle cx="362" cy="150" r="26" fill="#FF8A4C"/><circle cx="362" cy="256" r="26" fill="#FF8A4C"/><circle cx="362" cy="362" r="26" fill="#FF8A4C"/></g>
-</svg>

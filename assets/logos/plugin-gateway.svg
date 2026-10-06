@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
-  <title id="t">@wolfstar/plugin-gateway</title>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="#14151F"/>
-  <rect x="24" y="24" width="464" height="464" rx="112" fill="none" stroke="#A78BFA" stroke-opacity=".28" stroke-width="8"/>
-  <g id="icon"><path d="M294 104L170 288H246L222 408L346 224H270Z" fill="#A78BFA" stroke="#A78BFA" stroke-width="16" stroke-linejoin="round"/></g>
-</svg>

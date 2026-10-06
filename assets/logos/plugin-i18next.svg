@@ -1,6 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="t">
-  <title id="t">@wolfstar/plugin-i18next</title>
-  <rect x="16" y="16" width="480" height="480" rx="120" fill="#14151F"/>
-  <rect x="24" y="24" width="464" height="464" rx="112" fill="none" stroke="#34D399" stroke-opacity=".28" stroke-width="8"/>
-  <g id="icon"><circle cx="256" cy="256" r="122" fill="none" stroke="#34D399" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/><ellipse cx="256" cy="256" rx="54" ry="122" fill="none" stroke="#34D399" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/><path d="M134 256H378" fill="none" stroke="#34D399" stroke-width="28" stroke-linecap="round" stroke-linejoin="round"/></g>
-</svg>
