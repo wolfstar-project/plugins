@@ -172,18 +172,35 @@ export class Sticker extends BaseSticker {
   }
 
   /**
-   * Whether this sticker has the same data as another one.
-   * @param sticker The sticker to compare with.
+   * Whether this sticker has the same data as another one, like discord.js's `Sticker#equals`. Against a sticker, it
+   * compares the ID, description, type, format, name, pack, tags, availability, guild, and sort value; against a raw
+   * sticker, only the ID, description, name, and tags. `false` for anything else.
+   *
+   * @param other The sticker, or raw sticker, to compare with.
    */
-  public equals(sticker: Sticker): boolean {
+  public equals(other: unknown): boolean {
+    if (other instanceof Sticker) {
+      return (
+        other.id === this.id &&
+        other.description === this.description &&
+        other.type === this.type &&
+        other.format === this.format &&
+        other.name === this.name &&
+        other.packId === this.packId &&
+        other.tags === this.tags &&
+        other.available === this.available &&
+        other.guildId === this.guildId &&
+        other.sortValue === this.sortValue
+      );
+    }
+
+    if (typeof other !== "object" || other === null) return false;
+    const raw = other as Partial<APISticker>;
     return (
-      this.id === sticker.id &&
-      this.name === sticker.name &&
-      this.description === sticker.description &&
-      this.tags === sticker.tags &&
-      this.formatType === sticker.formatType &&
-      this.available === sticker.available &&
-      this.guildId === sticker.guildId
+      raw.id === this.id &&
+      raw.description === this.description &&
+      raw.name === this.name &&
+      raw.tags === this.tags
     );
   }
 

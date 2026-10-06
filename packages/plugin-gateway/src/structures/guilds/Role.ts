@@ -313,17 +313,24 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Whether this role has the same data as another one.
+   * Whether this role has the same data as another one, like discord.js's `Role#equals`: the same ID, name, colors,
+   * `hoist`, position, permissions, `managed`, icon, and unicode emoji.
+   *
    * @param role The role to compare with.
    */
-  public equals(role: Role): boolean {
+  public equals(role: Role | null | undefined): boolean {
+    if (!role) return false;
+    const colors = this.colors;
+    const otherColors = role.colors;
     return (
       this.id === role.id &&
       this.name === role.name &&
-      this.color === role.color &&
+      colors.primaryColor === otherColors.primaryColor &&
+      colors.secondaryColor === otherColors.secondaryColor &&
+      colors.tertiaryColor === otherColors.tertiaryColor &&
       this.hoist === role.hoist &&
       this.position === role.position &&
-      this[kData].permissions === role[kData].permissions &&
+      this.permissions.bitField === role.permissions.bitField &&
       this.managed === role.managed &&
       this.icon === role.icon &&
       this.unicodeEmoji === role.unicodeEmoji

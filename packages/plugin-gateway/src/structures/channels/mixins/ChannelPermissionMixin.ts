@@ -24,7 +24,7 @@ type Data = {
 };
 
 // Whether two channels have the same permission overwrites, in any order.
-function sameOverwrites(channel: Data, parent: Data): boolean {
+export function sameOverwrites(channel: Data, parent: Data): boolean {
   const own = channel.permission_overwrites ?? [];
   const theirs = parent.permission_overwrites ?? [];
   return (

@@ -832,28 +832,27 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   }
 
   /**
-   * Whether this guild has the same data as another one.
+   * Whether this guild has the same data as another one, like discord.js's `Guild#equals`: the same ID, availability,
+   * name, icon, splashes, owner, member count, `large`, verification level, and features, in the same order. `false`
+   * for anything that is not a guild.
+   *
    * @param guild The guild to compare with.
    */
-  public equals(guild: Guild): boolean {
+  public equals(guild: unknown): boolean {
     return (
+      guild instanceof Guild &&
       this.id === guild.id &&
-      this.name === guild.name &&
-      this.icon === guild.icon &&
+      this.available === guild.available &&
       this.splash === guild.splash &&
       this.discoverySplash === guild.discoverySplash &&
+      this.name === guild.name &&
+      this.memberCount === guild.memberCount &&
+      this.large === guild.large &&
+      this.icon === guild.icon &&
       this.ownerId === guild.ownerId &&
-      this.afkTimeout === guild.afkTimeout &&
-      this.afkChannelId === guild.afkChannelId &&
-      this.systemChannelId === guild.systemChannelId &&
       this.verificationLevel === guild.verificationLevel &&
-      this.explicitContentFilter === guild.explicitContentFilter &&
-      this.mfaLevel === guild.mfaLevel &&
-      this.banner === guild.banner &&
-      this.description === guild.description &&
-      this.vanityURLCode === guild.vanityURLCode &&
       this.features.length === guild.features.length &&
-      this.features.every((feature) => guild.features.includes(feature))
+      this.features.every((feature, index) => feature === guild.features[index])
     );
   }
 }

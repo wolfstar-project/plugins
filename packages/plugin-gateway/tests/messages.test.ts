@@ -21,6 +21,7 @@ import {
   MessageReaction,
   Partials,
   ReactionEmoji,
+  snowflakeTimestamp,
   Sticker,
   type GatewayClientOptions,
   type TextChannel,
@@ -379,10 +380,53 @@ describe("Message", () => {
     expect(msg.flags.has(MessageFlags.SuppressEmbeds)).toBe(true);
   });
 
-  test("GIVEN equals THEN it compares content and embeds", () => {
+  test("GIVEN equals THEN it compares like discord.js", () => {
+    const msg = new Message(message({ embeds: [{ title: "a" }], nonce: "n" }));
+    expect(msg.equals(message({ embeds: [{ title: "a" }], nonce: "n" }))).toBe(true);
+    expect(msg.equals(new Message(message({ embeds: [{ title: "a" }], nonce: "n" })))).toBe(true);
+    expect(msg.equals(message({ embeds: [], nonce: "n" }))).toBe(false);
+    expect(msg.equals(message({ embeds: [{ title: "a" }], nonce: "n", content: "bye" }))).toBe(
+      false,
+    );
+    expect(msg.equals(message({ embeds: [{ title: "a" }] }))).toBe(false);
+    expect(msg.equals(null)).toBe(false);
+  });
+
+  test("GIVEN equals THEN a pin is not a difference, a changed embed or attachment is", () => {
+    const attachment = (id: string) => ({
+      id,
+      filename: "a.png",
+      size: 1,
+      url: "u",
+      proxy_url: "p",
+    });
+    const msg = new Message(message({ embeds: [{ title: "a" }], attachments: [attachment("1")] }));
+    const same = { embeds: [{ title: "a" }], attachments: [attachment("1")] };
+    expect(msg.equals(message({ ...same, pinned: true }))).toBe(true);
+    expect(msg.equals(message({ ...same, embeds: [{ title: "b" }] }))).toBe(false);
+    expect(msg.equals(new Message(message({ ...same, embeds: [{ title: "b" }] })))).toBe(false);
+    expect(msg.equals(message({ ...same, attachments: [attachment("2")] }))).toBe(false);
+  });
+
+  test("GIVEN a raw embed update THEN equals compares the ID and the embed count", () => {
     const msg = new Message(message({ embeds: [{ title: "a" }] }));
-    expect(msg.equals(message({ embeds: [{ title: "a" }] }))).toBe(true);
-    expect(msg.equals(message({ embeds: [{ title: "b" }] }))).toBe(false);
+    const update = { id: msg.id, channel_id: channelId, embeds: [{ title: "b" }] };
+    expect(msg.equals(update as never)).toBe(true);
+    expect(msg.equals({ ...update, embeds: [] } as never)).toBe(false);
+    expect(msg.equals({ ...update, id: "1" } as never)).toBe(false);
+  });
+
+  test("GIVEN equals with rawData THEN mentions and timestamps are compared too", () => {
+    const raw = message({
+      timestamp: new Date(snowflakeTimestamp(message().id)).toISOString(),
+      edited_timestamp: "2026-01-02T00:00:00.000Z",
+    });
+    const msg = new Message(raw);
+    expect(msg.equals(raw, raw)).toBe(true);
+    expect(msg.equals(message({ mention_everyone: true }), raw)).toBe(false);
+    expect(msg.equals(raw, { ...raw, timestamp: "2026-01-03T00:00:00.000Z" })).toBe(false);
+    expect(msg.equals(raw, { ...raw, edited_timestamp: null })).toBe(false);
+    expect(msg.equals(raw)).toBe(true);
   });
 });
 
