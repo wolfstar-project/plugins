@@ -63,9 +63,9 @@ export class ShardSpawnError extends Error {
 
   public constructor(channelId: number, code: number | null, cause?: unknown) {
     super(
-      cause instanceof Error
-        ? `Shard ${channelId} failed to start: ${cause.message}`
-        : `Shard ${channelId} exited with code ${code} before it was ready`,
+      cause === undefined
+        ? `Shard ${channelId} exited with code ${code} before it was ready`
+        : `Shard ${channelId} failed to start: ${cause instanceof Error ? cause.message : String(cause)}`,
       { cause },
     );
     this.name = "ShardSpawnError";

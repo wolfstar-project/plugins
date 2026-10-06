@@ -123,6 +123,23 @@ test("GIVEN a strategy throwing in spawn THEN every attempt is reported", async 
   expect(errors[0]).toMatchObject({ name: "ShardSpawnError", channelId: 0, cause });
 });
 
+test("GIVEN a strategy throwing a non-Error THEN the report names it", async () => {
+  const manager = track(
+    new ShardManager({
+      strategy: new ForkStrategy({ path: script, execArgv }),
+      shards: 1,
+      spawn: { delay: 0, timeout: 500 },
+      supervisor: { intensity: 0 },
+    }),
+  );
+  vi.spyOn(manager.strategy, "spawn").mockImplementation(() => {
+    throw "no such script";
+  });
+  manager.on("shardError", () => undefined);
+
+  await expect(manager.spawn()).rejects.toThrow("Shard 0 failed to start: no such script");
+});
+
 test(
   "GIVEN mismatched transformers THEN the shard's messages are invalid",
   { timeout: 30_000 },
