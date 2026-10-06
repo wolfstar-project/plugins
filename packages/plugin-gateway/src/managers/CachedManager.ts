@@ -132,6 +132,12 @@ export abstract class CachedManager<
    * ```typescript
    * const user = await client.users.cache.get(userId);
    * ```
+   *
+   * @remarks
+   * On a manager built for one guild (`guild.members`), it is the client's cache taking the ID of the entity alone.
+   * `get`, `has`, `set` and `delete` cost the same as on the client's; `getSize` and `clear` scan the keys of every
+   * guild to find the ones of this guild, unlike discord.js's per-guild collections: avoid calling them for every
+   * guild in a loop.
    */
   public readonly cache: Cache<Value>;
 
@@ -166,17 +172,15 @@ export abstract class CachedManager<
     const resolveKey = this.resolveKey as unknown as (guildId: string, id: string) => string;
     const key = (id: string) => resolveKey.call(this, guildId, id);
     const prefix = key("");
-    const keys = (): Awaitable<string[]> => {
-      if (cache instanceof Map) {
-        return [...(cache as Map<string, Value>).keys()].filter((entry) =>
-          entry.startsWith(prefix),
-        );
-      }
+    // The client's cache holds every guild's entries under one map, so the ones of a guild are found by scanning its
+    // keys: without copying them when the cache is a `Map`.
+    const keys = (): Awaitable<Iterable<string>> => {
+      if (cache instanceof Map) return (cache as Map<string, Value>).keys();
 
       const store = this.iterableCache();
       return whenAll(
         [store ? this.guard("entries", null, () => store.entries(), []) : []],
-        ([entries]) => entries.map(([entry]) => entry).filter((entry) => entry.startsWith(prefix)),
+        ([entries]) => entries.map(([entry]) => entry),
       );
     };
 
@@ -185,15 +189,23 @@ export abstract class CachedManager<
       construct: cache.construct,
       add: (data, overwrite) => cache.add(data, overwrite),
       clear: () =>
-        whenAll([keys()], ([entries]) =>
-          whenAll(
-            entries.map((entry) => cache.delete(entry)),
+        whenAll([keys()], ([entries]) => {
+          // Collected first: deleting while iterating the keys of a `Map` is safe, but not of every cache.
+          const own: string[] = [];
+          for (const entry of entries) if (entry.startsWith(prefix)) own.push(entry);
+          return whenAll(
+            own.map((entry) => cache.delete(entry)),
             () => undefined,
-          ),
-        ),
+          );
+        }),
       delete: (id) => cache.delete(key(id)),
       get: (id) => cache.get(key(id)),
-      getSize: () => whenAll([keys()], ([entries]) => entries.length),
+      getSize: () =>
+        whenAll([keys()], ([entries]) => {
+          let size = 0;
+          for (const entry of entries) if (entry.startsWith(prefix)) size++;
+          return size;
+        }),
       has: (id) => cache.has(key(id)),
       set: (id, value) => whenAll([cache.set(key(id), value)], () => guildCache),
     };
