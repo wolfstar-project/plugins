@@ -879,8 +879,9 @@ events keep them current for cached channels, and `client.channels.requestInfo(g
 resolves with the cached `VoiceChannel`s Discord sent info for, once they are updated (the reply is
 also emitted as `channelInfo`), and rejects with a `GuildChannelInfoTimeoutError` after `time`
 milliseconds (10 seconds by default). The reply carries no nonce, so requests for one guild run one
-after the other, and only the process that sent a request resolves it (like `members.request`, this
-matters with `plugin-broker`). A `GUILD_CREATE` replaces the channel and resets both fields to `null`.
+after the other, and a reply arriving after its request timed out resolves the next queued one,
+with info that may lack its fields. Only the process that sent a request resolves it (like
+`members.request`, this matters with `plugin-broker`). A `GUILD_CREATE` replaces the channel and resets both fields to `null`.
 The gateway API is new, so discord.js may rename these members when it ships its own.
 
 ```ts

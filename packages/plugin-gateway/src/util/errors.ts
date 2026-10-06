@@ -72,7 +72,8 @@ export class GuildMembersTimeoutError extends GatewayError<"GuildMembersTimeout"
  * Thrown by `ChannelManager#requestInfo` when Discord does not answer with the `CHANNEL_INFO` of the guild.
  *
  * @remarks
- * The request is dropped: a reply arriving later still updates the cache and emits `channelInfo`.
+ * The request is dropped: a reply arriving later still updates the cache and emits `channelInfo`. When another request
+ * for the guild is queued, that reply also resolves it, as the reply carries no nonce to tell them apart.
  */
 export class GuildChannelInfoTimeoutError extends GatewayError<"GuildChannelInfoTimeout"> {
   /**

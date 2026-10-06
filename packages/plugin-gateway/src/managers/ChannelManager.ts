@@ -435,6 +435,10 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
    * `channelInfo`. The reply has no nonce, so requests for the same guild run one after the other. The request is sent
    * on the guild's shard, which must be one this client runs, and only the process that sent it resolves it.
    *
+   * Because the reply cannot be matched to a request, a reply arriving after its request timed out resolves the next
+   * request queued for the guild instead, with info that may lack that request's `fields`. Read the cache after such a
+   * timeout, or request the same fields again.
+   *
    * @param guildId The ID of the guild.
    * @param options The fields to request.
    * @returns The cached voice channels of the guild Discord sent info for, once it is cached.
