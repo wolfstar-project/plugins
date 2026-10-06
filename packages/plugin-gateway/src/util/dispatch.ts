@@ -28,6 +28,7 @@ import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import { createChannel } from "../managers/ChannelManager.js";
 import type { DataManager } from "../managers/DataManager.js";
 import type { DMChannel } from "../structures/channels/DMChannel.js";
+import { VoiceChannel } from "../structures/channels/VoiceChannel.js";
 import { GuildMember } from "../structures/guilds/GuildMember.js";
 import { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
@@ -716,6 +717,30 @@ export const MultiDispatchHandlers: {
       );
     },
   },
+  [GatewayDispatchEvents.VoiceChannelStatusUpdate]: {
+    before: (client, data) => previousOf(client.channels, data.id),
+    emit: (client, data, previous) =>
+      voiceChannelChange(client, data.id, previous, GatewayEvents.VoiceChannelStatusUpdate),
+  },
+  [GatewayDispatchEvents.VoiceChannelStartTimeUpdate]: {
+    before: (client, data) => previousOf(client.channels, data.id),
+    emit: (client, data, previous) =>
+      voiceChannelChange(client, data.id, previous, GatewayEvents.VoiceChannelStartTimeUpdate),
+  },
+  [GatewayDispatchEvents.ChannelInfo]: {
+    emit: async (client, data) => {
+      const channels: VoiceChannel[] = [];
+      for (const { id } of data.channels) {
+        const channel = await cachedOrUndefined(() => client.channels.cache.get(id));
+        if (channel instanceof VoiceChannel) channels.push(channel);
+      }
+
+      const guild = await cachedOrUndefined(() => client.guilds.cache.get(data.guild_id));
+      // The info is cached by now, so a request resolving with it is followed by reads that see it.
+      client.channels.handleChannelInfo(channels, data);
+      return [[GatewayEvents.ChannelInfo, channels, guild ?? null]];
+    },
+  },
   [GatewayDispatchEvents.GuildStickersUpdate]: {
     before: (client, data) =>
       cachedList(client.cache?.stickers, () => client.guilds.stickers(data.guild_id).listCached()),
@@ -740,6 +765,19 @@ export const MultiDispatchHandlers: {
     },
   },
 };
+
+// The change of a voice channel: only a cached one has a previous state to compare the new one with.
+async function voiceChannelChange(
+  client: GatewayClient,
+  channelId: string,
+  previous: unknown,
+  event: GatewayEvents.VoiceChannelStatusUpdate | GatewayEvents.VoiceChannelStartTimeUpdate,
+): Promise<GatewayEventTuple[]> {
+  if (!(previous instanceof VoiceChannel)) return [];
+
+  const current = await cachedOrUndefined(() => client.channels.cache.get(channelId));
+  return current instanceof VoiceChannel ? [[event, previous, current]] : [];
+}
 
 // The cached list to diff against, `undefined` when there is none: no store, or one that cannot enumerate.
 async function cachedList<Value extends { [kClone](): Value }>(

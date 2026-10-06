@@ -13,6 +13,8 @@ import {
   type RESTPatchAPIGuildJSONBody,
 } from "discord-api-types/v10";
 import type { AutoModerationRuleManager } from "../../managers/AutoModerationRuleManager.js";
+import type { ChannelInfoRequestOptions } from "../../managers/ChannelManager.js";
+import type { VoiceChannel } from "../channels/VoiceChannel.js";
 import type { GuildBanManager } from "../../managers/GuildBanManager.js";
 import type { GuildScheduledEventManager } from "../../managers/GuildScheduledEventManager.js";
 import type { GuildSoundboardSoundManager } from "../../managers/GuildSoundboardSoundManager.js";
@@ -660,6 +662,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public requestMembers(options?: GuildMembersRequestOptions): Promise<GuildMember[]> {
     return this.client.members.request(this.id, options);
+  }
+
+  /**
+   * Requests the ephemeral info (status, start time of the voice session) of the voice channels of this guild over the
+   * gateway, and caches it. discord.js: `guild.fetchChannelInfo()`. See `client.channels.requestInfo`.
+   *
+   * @param options The fields to request.
+   */
+  public requestChannelInfo(options: ChannelInfoRequestOptions): Promise<VoiceChannel[]> {
+    return this.client.channels.requestInfo(this.id, options);
   }
 
   /**

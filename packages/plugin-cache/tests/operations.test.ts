@@ -569,3 +569,113 @@ describe("addReaction", () => {
     });
   });
 });
+
+describe("voice channel info", () => {
+  const voice = { id: "50", type: ChannelType.GuildVoice, guild_id: "10", name: "den" };
+
+  async function cacheWithVoiceChannel() {
+    const cache = createInMemoryCache();
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.ChannelCreate, voice));
+    return cache;
+  }
+
+  test("GIVEN a VOICE_CHANNEL_STATUS_UPDATE THEN the cached channel's status is replaced or cleared", async () => {
+    const cache = await cacheWithVoiceChannel();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: "movie night",
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ name: "den", status: "movie night" });
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: null,
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ name: "den", status: null });
+  });
+
+  test("GIVEN a VOICE_CHANNEL_START_TIME_UPDATE THEN the start time is kept, and a missing one clears it", async () => {
+    const cache = await cacheWithVoiceChannel();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1_700_000_000,
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ voice_start_time: 1_700_000_000 });
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, { id: "50", guild_id: "10" }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ voice_start_time: null });
+  });
+
+  test("GIVEN a CHANNEL_INFO THEN only the fields it carries are patched", async () => {
+    const cache = await cacheWithVoiceChannel();
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1_700_000_000,
+      }),
+    );
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ChannelInfo, {
+        guild_id: "10",
+        channels: [{ id: "50", status: "hello" }],
+      }),
+    );
+
+    expect(cache.channels.get("50")).toMatchObject({
+      name: "den",
+      status: "hello",
+      voice_start_time: 1_700_000_000,
+    });
+  });
+
+  test("GIVEN an uncached channel THEN none of the events caches it", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: "x",
+      }),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1,
+      }),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ChannelInfo, {
+        guild_id: "10",
+        channels: [{ id: "50", status: "x", voice_start_time: 1 }],
+      }),
+    );
+
+    expect(cache.channels.get("50")).toBeUndefined();
+  });
+});

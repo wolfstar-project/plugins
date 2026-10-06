@@ -23,6 +23,7 @@ import { Presence } from "../structures/presences/Presence.js";
 import { bindClient } from "../structures/Structure.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll, type CacheRead } from "../util/cache.js";
+import { shardIdOf } from "../util/shards.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
 import {
@@ -403,8 +404,7 @@ export class GuildMemberManager<InGuild extends boolean = false> extends CachedM
     const d: GatewayRequestGuildMembersData = userIds
       ? { guild_id: guildId, user_ids: [...userIds], presences, nonce }
       : { guild_id: guildId, query: query ?? "", limit, presences, nonce };
-    const shardCount = BigInt(await this.client.gateway.getShardCount());
-    const shardId = Number((BigInt(guildId) >> 22n) % shardCount);
+    const shardId = await shardIdOf(this.client, guildId);
 
     // The nonce is the only link between the request and its chunks, so it must be unique while pending.
     if (this.#requests.has(nonce)) {

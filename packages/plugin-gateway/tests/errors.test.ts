@@ -6,6 +6,7 @@ import {
   GatewayRangeError,
   GatewaySessionStoreError,
   GatewayTypeError,
+  GuildChannelInfoTimeoutError,
   GuildMembersTimeoutError,
   getGatewayClient,
 } from "../src/index.js";
@@ -54,6 +55,11 @@ describe("GatewayError", () => {
     expect(store.message).toBe("Cannot write the session of shard 2 in the session store");
     expect(store.cause).toBe(cause);
     expect(timeout.code).toBe(GatewayErrorCodes.GuildMembersTimeout);
+
+    const info = new GuildChannelInfoTimeoutError("1", 1000);
+    expect(info).toBeInstanceOf(GatewayError);
+    expect(info.name).toBe("GuildChannelInfoTimeoutError [GuildChannelInfoTimeout]");
+    expect(info.message).toBe("Requesting the channel info of guild 1 took longer than 1000ms");
   });
 
   test("GIVEN a thrown error of the package THEN it carries its code", () => {

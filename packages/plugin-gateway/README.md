@@ -106,61 +106,63 @@ value is the plain event name, so it is interchangeable with the string literal.
 client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content));
 ```
 
-| Event                                                     | Arguments                                               |
-| --------------------------------------------------------- | ------------------------------------------------------- |
-| `raw`                                                     | `payload`, `shardId` — every dispatch                   |
-| `shardReady`                                              | `shardId`, `user`                                       |
-| `clientReady`                                             | `client` — once, see below                              |
-| `shardResume` / `shardClose` / `shardError`               | `shardId` / `shardId, code` / `error, shardId`          |
-| `guildCreate`                                             | `guild`                                                 |
-| `guildUpdate`                                             | `oldGuild \| null`, `newGuild`                          |
-| `guildDelete`                                             | `guild \| null`, `data`                                 |
-| `channelCreate` / `channelDelete`                         | `channel`                                               |
-| `channelUpdate`                                           | `oldChannel \| null`, `newChannel`                      |
-| `threadCreate` / `threadUpdate` / `threadDelete`          | same shapes as channels                                 |
-| `threadListSync`                                          | `threads`, `members`, `data`                            |
-| `threadMemberUpdate`                                      | `oldMember \| null`, `newMember`                        |
-| `threadMembersUpdate`                                     | `added`, `removed`, `thread \| null`, `data`            |
-| `messageCreate`                                           | `message`                                               |
-| `messageUpdate`                                           | `oldMessage \| null`, `newMessage`                      |
-| `messageDelete`                                           | `message \| null`, `data`                               |
-| `messageDeleteBulk`                                       | `messages`, `data`                                      |
-| `messageReactionAdd` / `messageReactionRemove`            | `reaction`, `user \| null`, `details`                   |
-| `messageReactionRemoveAll`                                | `message \| null`, `reactions` (a `Collection`), `data` |
-| `messageReactionRemoveEmoji`                              | `reaction`                                              |
-| `messagePollVoteAdd` / `messagePollVoteRemove`            | `answer`, `userId`                                      |
-| `guildMemberAdd`                                          | `member`                                                |
-| `guildMemberUpdate`                                       | `oldMember \| null`, `newMember`                        |
-| `guildMemberRemove`                                       | `member \| null`, `data`                                |
-| `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete` | same shapes as members                                  |
-| `guildMembersChunk`                                       | `members`, `guild \| null`, `data`                      |
-| `userUpdate`                                              | `oldUser \| null`, `newUser`                            |
-| `emojiCreate` / `emojiDelete`                             | `emoji`                                                 |
-| `emojiUpdate`                                             | `oldEmoji`, `newEmoji`                                  |
-| `stickerCreate` / `stickerDelete`                         | `sticker`                                               |
-| `stickerUpdate`                                           | `oldSticker`, `newSticker`                              |
-| `inviteCreate`                                            | `invite`                                                |
-| `inviteDelete`                                            | `invite \| null`, `data`                                |
-| `voiceStateUpdate`                                        | `oldState \| null`, `newState`                          |
-| `presenceUpdate`                                          | `oldPresence \| null`, `newPresence`                    |
-| `guildScheduledEventCreate` / `guildScheduledEventDelete` | `event`                                                 |
-| `guildScheduledEventUpdate`                               | `oldEvent \| null`, `newEvent`                          |
-| `guildScheduledEventUserAdd` / `...UserRemove`            | `event \| null`, `user \| null`, `data`                 |
-| `stageInstanceCreate` / `stageInstanceDelete`             | `stageInstance`                                         |
-| `stageInstanceUpdate`                                     | `oldStageInstance \| null`, `newStageInstance`          |
-| `guildSoundboardSoundCreate`                              | `sound`                                                 |
-| `guildSoundboardSoundUpdate`                              | `oldSound \| null`, `newSound`                          |
-| `guildSoundboardSoundDelete`                              | `sound \| null`, `data`                                 |
-| `guildSoundboardSoundsUpdate` / `soundboardSounds`        | `sounds`, `guildId`                                     |
-| `guildBanAdd` / `guildBanRemove`                          | `ban`                                                   |
-| `guildAuditLogEntryCreate`                                | `entry`                                                 |
-| `autoModerationRuleCreate` / `autoModerationRuleDelete`   | `rule`                                                  |
-| `autoModerationRuleUpdate`                                | `oldRule \| null`, `newRule`                            |
-| `autoModerationActionExecution`                           | `execution`                                             |
-| `guildIntegrationsUpdate`                                 | `guild \| null`, `data`                                 |
-| `integrationCreate`                                       | `integration`                                           |
-| `integrationUpdate`                                       | `oldIntegration \| null`, `newIntegration`              |
-| `integrationDelete`                                       | `integration \| null`, `data`                           |
+| Event                                                      | Arguments                                               |
+| ---------------------------------------------------------- | ------------------------------------------------------- |
+| `raw`                                                      | `payload`, `shardId` — every dispatch                   |
+| `shardReady`                                               | `shardId`, `user`                                       |
+| `clientReady`                                              | `client` — once, see below                              |
+| `shardResume` / `shardClose` / `shardError`                | `shardId` / `shardId, code` / `error, shardId`          |
+| `guildCreate`                                              | `guild`                                                 |
+| `guildUpdate`                                              | `oldGuild \| null`, `newGuild`                          |
+| `guildDelete`                                              | `guild \| null`, `data`                                 |
+| `channelCreate` / `channelDelete`                          | `channel`                                               |
+| `channelUpdate`                                            | `oldChannel \| null`, `newChannel`                      |
+| `threadCreate` / `threadUpdate` / `threadDelete`           | same shapes as channels                                 |
+| `threadListSync`                                           | `threads`, `members`, `data`                            |
+| `threadMemberUpdate`                                       | `oldMember \| null`, `newMember`                        |
+| `threadMembersUpdate`                                      | `added`, `removed`, `thread \| null`, `data`            |
+| `messageCreate`                                            | `message`                                               |
+| `messageUpdate`                                            | `oldMessage \| null`, `newMessage`                      |
+| `messageDelete`                                            | `message \| null`, `data`                               |
+| `messageDeleteBulk`                                        | `messages`, `data`                                      |
+| `messageReactionAdd` / `messageReactionRemove`             | `reaction`, `user \| null`, `details`                   |
+| `messageReactionRemoveAll`                                 | `message \| null`, `reactions` (a `Collection`), `data` |
+| `messageReactionRemoveEmoji`                               | `reaction`                                              |
+| `messagePollVoteAdd` / `messagePollVoteRemove`             | `answer`, `userId`                                      |
+| `guildMemberAdd`                                           | `member`                                                |
+| `guildMemberUpdate`                                        | `oldMember \| null`, `newMember`                        |
+| `guildMemberRemove`                                        | `member \| null`, `data`                                |
+| `guildRoleCreate` / `guildRoleUpdate` / `guildRoleDelete`  | same shapes as members                                  |
+| `guildMembersChunk`                                        | `members`, `guild \| null`, `data`                      |
+| `userUpdate`                                               | `oldUser \| null`, `newUser`                            |
+| `emojiCreate` / `emojiDelete`                              | `emoji`                                                 |
+| `emojiUpdate`                                              | `oldEmoji`, `newEmoji`                                  |
+| `stickerCreate` / `stickerDelete`                          | `sticker`                                               |
+| `stickerUpdate`                                            | `oldSticker`, `newSticker`                              |
+| `inviteCreate`                                             | `invite`                                                |
+| `inviteDelete`                                             | `invite \| null`, `data`                                |
+| `voiceStateUpdate`                                         | `oldState \| null`, `newState`                          |
+| `voiceChannelStatusUpdate` / `voiceChannelStartTimeUpdate` | `oldChannel`, `newChannel`                              |
+| `channelInfo`                                              | `channels`, `guild \| null`                             |
+| `presenceUpdate`                                           | `oldPresence \| null`, `newPresence`                    |
+| `guildScheduledEventCreate` / `guildScheduledEventDelete`  | `event`                                                 |
+| `guildScheduledEventUpdate`                                | `oldEvent \| null`, `newEvent`                          |
+| `guildScheduledEventUserAdd` / `...UserRemove`             | `event \| null`, `user \| null`, `data`                 |
+| `stageInstanceCreate` / `stageInstanceDelete`              | `stageInstance`                                         |
+| `stageInstanceUpdate`                                      | `oldStageInstance \| null`, `newStageInstance`          |
+| `guildSoundboardSoundCreate`                               | `sound`                                                 |
+| `guildSoundboardSoundUpdate`                               | `oldSound \| null`, `newSound`                          |
+| `guildSoundboardSoundDelete`                               | `sound \| null`, `data`                                 |
+| `guildSoundboardSoundsUpdate` / `soundboardSounds`         | `sounds`, `guildId`                                     |
+| `guildBanAdd` / `guildBanRemove`                           | `ban`                                                   |
+| `guildAuditLogEntryCreate`                                 | `entry`                                                 |
+| `autoModerationRuleCreate` / `autoModerationRuleDelete`    | `rule`                                                  |
+| `autoModerationRuleUpdate`                                 | `oldRule \| null`, `newRule`                            |
+| `autoModerationActionExecution`                            | `execution`                                             |
+| `guildIntegrationsUpdate`                                  | `guild \| null`, `data`                                 |
+| `integrationCreate`                                        | `integration`                                           |
+| `integrationUpdate`                                        | `oldIntegration \| null`, `newIntegration`              |
+| `integrationDelete`                                        | `integration \| null`, `data`                           |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -867,6 +869,26 @@ const members = await client.members.request(guildId); // every member
 const [wolf] = await client.members.request(guildId, { userIds: [userId], presences: true });
 ```
 
+### Voice channel status and start time
+
+`VoiceChannel` has `status` (a string, or `null`), `voiceStartTimestamp` (milliseconds) and
+`voiceStartAt` (a `Date`), plus `setStatus(status, reason?)` (needs `SetVoiceChannelStatus`). They
+are `null` until Discord sends them: the `voiceChannelStatusUpdate` and `voiceChannelStartTimeUpdate`
+events keep them current for cached channels, and `client.channels.requestInfo(guildId, { fields })`
+(or `guild.requestChannelInfo({ fields })`) asks the guild's shard for them over the gateway. It
+resolves with the cached `VoiceChannel`s Discord sent info for, once they are updated (the reply is
+also emitted as `channelInfo`), and rejects with a `GuildChannelInfoTimeoutError` after `time`
+milliseconds (10 seconds by default). The reply carries no nonce, so requests for one guild run one
+after the other, and only the process that sent a request resolves it (like `members.request`, this
+matters with `plugin-broker`). A `GUILD_CREATE` replaces the channel and resets both fields to `null`.
+The gateway API is new, so discord.js may rename these members when it ships its own.
+
+```ts
+await client.channels.requestInfo(guildId, { fields: ["status", "voice_start_time"] });
+const channel = await client.channels.cache.get(channelId);
+if (channel instanceof VoiceChannel) console.log(channel.status, channel.voiceStartAt);
+```
+
 ### Channels and permissions
 
 Guild channels follow discord.js: `edit`, `setName`, `clone`, `delete`, and the setters of each
@@ -1056,8 +1078,8 @@ Like discord.js's `DiscordjsError`, every error the package throws or emits carr
 `GatewayErrorCodes`, and its message comes from `GatewayErrorMessages`. `GatewayError`,
 `GatewayTypeError`, and `GatewayRangeError` extend `Error`, `TypeError`, and `RangeError`, and are
 named after their code (`GatewayError [WebhookTokenUnavailable]`). The errors with extra data
-(`DispatchTimeoutError`, `GuildMembersTimeoutError`, `GuildMembersRateLimitError`, and
-`GatewaySessionStoreError`) extend `GatewayError`.
+(`DispatchTimeoutError`, `GuildMembersTimeoutError`, `GuildChannelInfoTimeoutError`,
+`GuildMembersRateLimitError`, and `GatewaySessionStoreError`) extend `GatewayError`.
 
 ```typescript
 import { GatewayError, GatewayErrorCodes } from "@wolfstar/plugin-gateway";

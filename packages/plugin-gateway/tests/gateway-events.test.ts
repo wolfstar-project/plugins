@@ -89,6 +89,9 @@ const eventMapKeys: Record<GatewayEventName, true> = {
   integrationUpdate: true,
   integrationDelete: true,
   voiceStateUpdate: true,
+  voiceChannelStatusUpdate: true,
+  voiceChannelStartTimeUpdate: true,
+  channelInfo: true,
   presenceUpdate: true,
 };
 

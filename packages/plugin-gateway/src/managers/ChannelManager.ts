@@ -10,7 +10,9 @@ import {
   GatewayDispatchEvents,
   GatewayOpcodes,
   type APIOverwrite,
+  type GatewayChannelInfoDispatchData,
   type GatewayDispatchPayload,
+  type GatewayRequestChannelInfoField,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnnouncementChannel } from "../structures/channels/AnnouncementChannel.js";
@@ -34,7 +36,9 @@ import { whenAll, type Cache } from "../util/cache.js";
 import { resolveId, toChannelBody, type GuildChannelEditOptions } from "../util/channels.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
-import { GatewayTypeError } from "../errors/GatewayError.js";
+import { GatewayRangeError, GatewayTypeError } from "../errors/GatewayError.js";
+import { GuildChannelInfoTimeoutError } from "../util/errors.js";
+import { shardIdOf } from "../util/shards.js";
 
 /**
  * Any of the channel structures {@link ChannelManager} builds.
@@ -171,6 +175,28 @@ class ChannelCache implements Cache<AnyChannel> {
 }
 
 /**
+ * The options to request the ephemeral info of the voice channels of a guild over the gateway with.
+ */
+export interface ChannelInfoRequestOptions {
+  /**
+   * The fields to request: `"status"` and `"voice_start_time"` for now. A field Discord does not know is ignored by it.
+   */
+  fields: readonly (`${GatewayRequestChannelInfoField}` | (string & {}))[];
+  /**
+   * How long to wait for the reply, in milliseconds, before rejecting with a `GuildChannelInfoTimeoutError`.
+   *
+   * @default 10_000
+   */
+  time?: number;
+}
+
+interface ChannelInfoRequest {
+  timer: NodeJS.Timeout | null;
+  resolve(channels: VoiceChannel[]): void;
+  reject(error: Error): void;
+}
+
+/**
  * Manages the channels known to the client, threads included.
  *
  * @remarks
@@ -178,6 +204,12 @@ class ChannelCache implements Cache<AnyChannel> {
  * to, so a thread ID resolves like any other channel ID.
  */
 export class ChannelManager extends CachedManager<"channels", AnyChannel, [channelId: string]> {
+  // The pending `requestInfo`s, by guild: the reply carries no nonce, so a guild has one in flight at a time.
+  readonly #infoRequests = new Map<string, ChannelInfoRequest>();
+
+  // Where the next request of a guild waits for the one in flight.
+  readonly #infoQueues = new Map<string, Promise<unknown>>();
+
   public constructor(client: GatewayClient) {
     super(client, "channels");
   }
@@ -392,6 +424,89 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
     return isThreadChannelType(data.type)
       ? this.client.threads._add(data as CacheEntityTypes["threads"], cache, options)
       : super._add(data, cache, options);
+  }
+
+  /**
+   * Requests the ephemeral info (status, start time of the voice session) of the voice channels of a guild over the
+   * gateway, and caches it. discord.js: `guild.fetchChannelInfo()`.
+   *
+   * @remarks
+   * Discord answers with a `CHANNEL_INFO` dispatch, which also updates the cached channels and is emitted as
+   * `channelInfo`. The reply has no nonce, so requests for the same guild run one after the other. The request is sent
+   * on the guild's shard, which must be one this client runs, and only the process that sent it resolves it.
+   *
+   * @param guildId The ID of the guild.
+   * @param options The fields to request.
+   * @returns The cached voice channels of the guild Discord sent info for, once it is cached.
+   */
+  public async requestInfo(
+    guildId: string,
+    options: ChannelInfoRequestOptions,
+  ): Promise<VoiceChannel[]> {
+    const { fields, time = 10_000 } = options;
+    if (fields.length === 0) throw new GatewayRangeError("ChannelInfoFieldsEmpty");
+
+    const previous = this.#infoQueues.get(guildId) ?? Promise.resolve();
+    const run = previous.then(() => this.sendInfoRequest(guildId, [...fields], time));
+    // The queue never sees a rejection: a failed request must not fail the ones queued behind it.
+    const tail = run.catch(() => undefined);
+    this.#infoQueues.set(guildId, tail);
+    void tail.then(() => {
+      if (this.#infoQueues.get(guildId) === tail) this.#infoQueues.delete(guildId);
+    });
+    return run;
+  }
+
+  private async sendInfoRequest(
+    guildId: string,
+    fields: string[],
+    time: number,
+  ): Promise<VoiceChannel[]> {
+    const shardId = await shardIdOf(this.client, guildId);
+
+    let request!: ChannelInfoRequest;
+    const promise = new Promise<VoiceChannel[]>((resolve, reject) => {
+      request = { timer: null, resolve, reject };
+    });
+    this.#infoRequests.set(guildId, request);
+
+    try {
+      await this.client.gateway.send(shardId, {
+        op: GatewayOpcodes.RequestChannelInfo,
+        d: { guild_id: guildId, fields },
+      });
+    } catch (error) {
+      this.settleInfo(guildId, request);
+      throw error;
+    }
+
+    // The timeout starts once the request is sent, not while it waits for the shard or its rate limit.
+    if (this.#infoRequests.get(guildId) === request) {
+      request.timer = setTimeout(() => {
+        this.settleInfo(guildId, request);
+        request.reject(new GuildChannelInfoTimeoutError(guildId, time));
+      }, time);
+      request.timer.unref?.();
+    }
+    return promise;
+  }
+
+  /**
+   * Resolves the pending request of the guild a cached `CHANNEL_INFO` is for.
+   *
+   * @internal
+   */
+  public handleChannelInfo(channels: VoiceChannel[], data: GatewayChannelInfoDispatchData): void {
+    const request = this.#infoRequests.get(data.guild_id);
+    if (!request) return;
+
+    this.settleInfo(data.guild_id, request);
+    request.resolve(channels);
+  }
+
+  private settleInfo(guildId: string, request: ChannelInfoRequest): void {
+    if (request.timer) clearTimeout(request.timer);
+    if (this.#infoRequests.get(guildId) === request) this.#infoRequests.delete(guildId);
   }
 
   /**
