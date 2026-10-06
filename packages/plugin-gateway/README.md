@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-gateway
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-gateway.svg" width="40" height="40" alt="@wolfstar/plugin-gateway" align="top"></a> @wolfstar/plugin-gateway</h1>
 
 **Gateway events, Discord structures, and API managers for `@wolfstar/http-framework`.**
 
