@@ -29,10 +29,10 @@ Applies to both repos. Where they differ it is noted.
 
 It prints the issue, then every comment, and tags the Pullfrog plan with `<<< PULLFROG PLAN`. Read the whole thread, because the plan is only one voice:
 
-- The plan is an issue comment by `pullfrog[bot]` with a `## Plan` / `### Plan` section, often preceded by a duplicate check and sometimes a "Corrections to the issue" list. If it was edited, `updated` is later than `created`; use the current text.
+- The plan is an issue comment by `pullfrog[bot]` with a heading such as `## Plan` or `### Plan`, often preceded by a duplicate check and sometimes a "Corrections to the issue" list. If it was edited, `updated` is later than `created`; use the current text.
 - Maintainer comments written after the plan can change scope. They win over the plan.
 - Where "Corrections to the issue" contradicts the issue body, the correction usually reflects what the code really looks like (wrong helper name, a type that already exists, a breaking change hiding in a rename). Follow it after confirming in step 3.
-- **No plan found:** do not make one up silently. Tell the user, and either wait for them to ask `@pullfrog` for a plan or get an explicit go-ahead to write your own short plan from the issue and the code.
+- **No plan found:** the script only tags headings that contain "plan", so first skim the `pullfrog[bot]` comments it printed by hand (a plan can be titled differently, for example "Implementation plan"). If there really is none, do not make one up silently. Tell the user, and either wait for them to ask `@pullfrog` for a plan or get an explicit go-ahead to write your own short plan from the issue and the code.
 - The plan says "duplicate of #N": stop and tell the user.
 
 ## 3. Verify the plan against the code
@@ -68,7 +68,7 @@ For a stack: every PR uses `Refs #<issue>` and a Context line listing the whole 
 
 ## 7. Quality gates
 
-Run in this order, and fix before moving on; later gates depend on earlier ones (typecheck reads built `dist/*.d.ts`):
+Run in this order and fix before moving on, so a failure is caught at the cheapest gate. In `stars-components` the order is also required: `typecheck` resolves cross-package imports against built `dist/*.d.ts`, so it needs `pnpm build` first. In `plugins` `typecheck` is independent of the package builds, but keep the same order:
 
 ```bash
 pnpm lint && pnpm build && pnpm typecheck && pnpm test
