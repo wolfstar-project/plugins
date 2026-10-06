@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-api.svg" width="40" height="40" alt="@wolfstar/plugin-api" align="top"></a> @wolfstar/plugin-api</h1>
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-api.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-api</h1>
 
 **A standalone REST API server for `@wolfstar/http-framework`.**
 

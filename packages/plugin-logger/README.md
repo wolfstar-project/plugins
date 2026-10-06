@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-logger.svg" width="40" height="40" alt="@wolfstar/plugin-logger" align="top"></a> @wolfstar/plugin-logger</h1>
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-logger.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-logger</h1>
 
 **Pluggable logging with swappable transports for `@wolfstar/http-framework`.**
 

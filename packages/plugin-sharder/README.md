@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-sharder.svg" width="40" height="40" alt="@wolfstar/plugin-sharder" align="top"></a> @wolfstar/plugin-sharder</h1>
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-sharder.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-sharder</h1>
 
 **Multi-process and multi-machine sharding for `@wolfstar/plugin-gateway`, or any bot.**
 
