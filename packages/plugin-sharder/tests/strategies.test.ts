@@ -1,3 +1,4 @@
+import cluster from "node:cluster";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   ClusterStrategy,
@@ -7,6 +8,7 @@ import {
   ShardManagerProxy,
   WorkerStrategy,
   type ChannelStrategy,
+  type ShardContext,
 } from "../src/index.js";
 
 const script = new URL("fixtures/shard.mjs", import.meta.url);
@@ -77,6 +79,48 @@ describe.each(local)("%s", (name, create) => {
       expect(manager.channels.every((channel) => !channel.running)).toBe(true);
     },
   );
+});
+
+test("GIVEN no options THEN ClusterStrategy leaves Node's cluster defaults alone", () => {
+  const setup = vi.spyOn(cluster, "setupPrimary").mockImplementation(() => undefined);
+  const stub = { on() {}, once() {} };
+  const fork = vi.spyOn(cluster, "fork").mockImplementation(() => ({ process: stub }) as never);
+  try {
+    const strategy = new ClusterStrategy();
+    strategy.spawn(
+      { id: 0, shards: [0], shardCount: 1 } as ShardContext,
+      { message() {}, error() {}, exit() {} },
+      { env: {} },
+    );
+
+    expect(setup).toHaveBeenCalledWith({ serialization: "advanced" });
+    expect(Object.keys(setup.mock.calls[0]![0]!)).toEqual(["serialization"]);
+  } finally {
+    setup.mockRestore();
+    fork.mockRestore();
+  }
+});
+
+test("GIVEN a strategy throwing in spawn THEN every attempt is reported", async () => {
+  const cause = new Error("boom");
+  const manager = track(
+    new ShardManager({
+      strategy: new ForkStrategy({ path: script, execArgv }),
+      shards: 1,
+      spawn: { delay: 0, timeout: 500 },
+      supervisor: { intensity: 1 },
+    }),
+  );
+  vi.spyOn(manager.strategy, "spawn").mockImplementation(() => {
+    throw cause;
+  });
+  const errors: unknown[] = [];
+  manager.on("shardError", (_channel, error) => errors.push(error));
+
+  await expect(manager.spawn()).rejects.toThrow(/failed to start: boom/);
+
+  expect(errors).toHaveLength(2);
+  expect(errors[0]).toMatchObject({ name: "ShardSpawnError", channelId: 0, cause });
 });
 
 test(
