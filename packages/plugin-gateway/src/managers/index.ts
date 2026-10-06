@@ -1,6 +1,7 @@
 export * from "./AutoModerationRuleManager.js";
 export * from "./BaseManager.js";
 export * from "./CachedManager.js";
+export * from "./CategoryChannelChildManager.js";
 export * from "./ChannelManager.js";
 export * from "./ChannelMessageManager.js";
 export * from "./ChannelThreadManager.js";
@@ -20,6 +21,7 @@ export * from "./GuildStickerManager.js";
 export * from "./GuildTemplateManager.js";
 export * from "./MessageManager.js";
 export * from "./PermissionOverwriteManager.js";
+export * from "./PollAnswerVoterManager.js";
 export * from "./PresenceManager.js";
 export * from "./ReactionManager.js";
 export * from "./ReactionUserManager.js";
