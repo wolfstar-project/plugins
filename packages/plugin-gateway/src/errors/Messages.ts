@@ -77,6 +77,9 @@ export const GatewayErrorMessages = {
     `Requesting the members of guild ${guildId} (${nonce}) took longer than ${timeout}ms`,
   GuildMembersRateLimited: (guildId: string, nonce: string, retryAfter: number) =>
     `Requesting the members of guild ${guildId} (${nonce}) is rate limited, retry after ${retryAfter}ms`,
+  ChannelInfoFieldsEmpty: "Cannot request the info of the channels without any field",
+  GuildChannelInfoTimeout: (guildId: string, timeout: number) =>
+    `Requesting the channel info of guild ${guildId} took longer than ${timeout}ms`,
   PresenceNotFetchable: (guildId: string, userId: string) =>
     `Presences cannot be fetched from the API, they are only received from the gateway (user ${userId} of guild ${guildId} is not cached); enable the presences cache to read them later`,
   InviteGuildUnknown: (code: string) => `Invite ${code} has no known guild`,

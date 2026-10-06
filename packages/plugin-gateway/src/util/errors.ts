@@ -69,6 +69,31 @@ export class GuildMembersTimeoutError extends GatewayError<"GuildMembersTimeout"
 }
 
 /**
+ * Thrown by `ChannelManager#requestInfo` when Discord does not answer with the `CHANNEL_INFO` of the guild.
+ *
+ * @remarks
+ * The request is dropped: a reply arriving later still updates the cache and emits `channelInfo`. When another request
+ * for the guild is queued, that reply also resolves it, as the reply carries no nonce to tell them apart.
+ */
+export class GuildChannelInfoTimeoutError extends GatewayError<"GuildChannelInfoTimeout"> {
+  /**
+   * The ID of the guild whose channel info was requested.
+   */
+  public readonly guildId: string;
+
+  /**
+   * The timeout that was exceeded, in milliseconds.
+   */
+  public readonly timeout: number;
+
+  public constructor(guildId: string, timeout: number) {
+    super("GuildChannelInfoTimeout", guildId, timeout);
+    this.guildId = guildId;
+    this.timeout = timeout;
+  }
+}
+
+/**
  * Thrown by `GuildMemberManager#request` when Discord answers with `RATE_LIMITED` instead of the members' chunks.
  */
 export class GuildMembersRateLimitError extends GatewayError<"GuildMembersRateLimited"> {

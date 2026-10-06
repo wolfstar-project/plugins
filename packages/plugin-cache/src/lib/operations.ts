@@ -741,6 +741,27 @@ export function createCacheOperations(
       break;
     }
 
+    // The three voice channel dispatches only patch ephemeral fields of a cached channel: they never cache one.
+    case GatewayDispatchEvents.VoiceChannelStatusUpdate: {
+      const data = payload.d;
+      operations.push(patchChannel(data.id, { status: data.status ?? null }));
+      break;
+    }
+
+    case GatewayDispatchEvents.VoiceChannelStartTimeUpdate: {
+      const data = payload.d;
+      operations.push(patchChannel(data.id, { voice_start_time: data.voice_start_time ?? null }));
+      break;
+    }
+
+    case GatewayDispatchEvents.ChannelInfo: {
+      for (const channel of payload.d.channels) {
+        const { id, ...fields } = channel;
+        operations.push(patchChannel(id, fields));
+      }
+      break;
+    }
+
     case GatewayDispatchEvents.VoiceStateUpdate: {
       const data = payload.d;
       if (!data.guild_id) break;
@@ -1170,6 +1191,16 @@ function updateMessage(
     store: "messages",
     key: messageKey(channelId, messageId),
     update: (value) => update(value as APIMessage),
+  };
+}
+
+// An `update` of a cached channel; a channel the cache does not hold stays uncached.
+function patchChannel(channelId: Snowflake, fields: Record<string, unknown>): CacheOperation {
+  return {
+    type: "update",
+    store: "channels",
+    key: channelId,
+    update: (value) => ({ ...(value as object), ...fields }),
   };
 }
 

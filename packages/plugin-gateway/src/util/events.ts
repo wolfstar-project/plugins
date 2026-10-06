@@ -47,6 +47,7 @@ import type { Sticker } from "../structures/stickers/Sticker.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { Typing } from "../structures/channels/Typing.js";
 import type { User } from "../structures/users/User.js";
+import type { VoiceChannel } from "../structures/channels/VoiceChannel.js";
 import type { VoiceState } from "../structures/voice/VoiceState.js";
 import type { SweepableEntityName } from "./Sweepers.js";
 
@@ -372,6 +373,21 @@ export interface GatewayEventMap {
    */
   voiceStateUpdate: [oldState: VoiceState | null, newState: VoiceState];
   /**
+   * Emitted when the status of a cached voice channel changes. Not emitted for a channel that is not cached, which
+   * leaves nothing to compare the new status with.
+   */
+  voiceChannelStatusUpdate: [oldChannel: VoiceChannel, newChannel: VoiceChannel];
+  /**
+   * Emitted when the start time of the voice session of a cached voice channel changes. Not emitted for a channel
+   * that is not cached.
+   */
+  voiceChannelStartTimeUpdate: [oldChannel: VoiceChannel, newChannel: VoiceChannel];
+  /**
+   * Emitted with the cached voice channels of a guild whose info Discord sent, in answer to
+   * `client.channels.requestInfo`.
+   */
+  channelInfo: [channels: VoiceChannel[], guild: Guild | null];
+  /**
    * Emitted when a member's status or activities change. Needs the `GuildPresences` intent.
    */
   presenceUpdate: [oldPresence: Presence | null, newPresence: Presence];
@@ -474,6 +490,9 @@ export enum GatewayEvents {
   IntegrationUpdate = "integrationUpdate",
   IntegrationDelete = "integrationDelete",
   VoiceStateUpdate = "voiceStateUpdate",
+  VoiceChannelStatusUpdate = "voiceChannelStatusUpdate",
+  VoiceChannelStartTimeUpdate = "voiceChannelStartTimeUpdate",
+  ChannelInfo = "channelInfo",
   PresenceUpdate = "presenceUpdate",
 }
 

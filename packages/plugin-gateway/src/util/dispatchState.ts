@@ -105,6 +105,8 @@ export const DispatchStateCodecs: { [Type in GatewayDispatchEvents]?: DispatchSt
   [GatewayDispatchEvents.GuildUpdate]: single((client) => client.guilds),
   [GatewayDispatchEvents.GuildDelete]: single((client) => client.guilds),
   [GatewayDispatchEvents.ChannelUpdate]: single((client) => client.channels),
+  [GatewayDispatchEvents.VoiceChannelStatusUpdate]: single((client) => client.channels),
+  [GatewayDispatchEvents.VoiceChannelStartTimeUpdate]: single((client) => client.channels),
   [GatewayDispatchEvents.ThreadUpdate]: single((client) => client.threads),
   [GatewayDispatchEvents.ThreadDelete]: single((client) => client.threads),
   [GatewayDispatchEvents.ThreadMemberUpdate]: single((client) => client.threadMembers),
