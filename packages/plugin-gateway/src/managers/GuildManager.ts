@@ -42,6 +42,9 @@ import {
 import { bindClient } from "../structures/Structure.js";
 import { resolveAuditLogTarget, type AuditLogEntities } from "../util/auditLogs.js";
 import { whenAll } from "../util/cache.js";
+import { GuildSoundboardSoundsTimeoutError } from "../util/errors.js";
+import { shardIdOf } from "../util/shards.js";
+import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
 import { GuildPreview } from "../structures/guilds/GuildPreview.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { GuildOnboarding } from "../structures/guilds/GuildOnboarding.js";
@@ -205,9 +208,36 @@ export interface GuildOnboardingEditOptions {
 }
 
 /**
+ * The options to request the soundboard sounds of guilds over the gateway with.
+ */
+export interface GuildSoundboardSoundsRequestOptions {
+  /**
+   * How long to wait for the replies, in milliseconds, before rejecting with a `GuildSoundboardSoundsTimeoutError`. Each
+   * reply restarts it.
+   *
+   * @default 10_000
+   */
+  time?: number;
+}
+
+interface SoundboardSoundsRequest {
+  // The requested guilds, in the order of the result.
+  ids: string[];
+  // The guilds whose sounds did not arrive yet.
+  pending: Set<string>;
+  sounds: Collection<string, Collection<string, SoundboardSound>>;
+  timer: NodeJS.Timeout | null;
+  resolve(sounds: Collection<string, Collection<string, SoundboardSound>>): void;
+  reject(error: Error): void;
+}
+
+/**
  * Manages the {@link Guild}s known to the client.
  */
 export class GuildManager extends CachedManager<"guilds", Guild, [guildId: string]> {
+  // The pending `fetchSoundboardSounds`: the replies carry no nonce, so they are matched to a request by guild.
+  readonly #soundboardRequests = new Set<SoundboardSoundsRequest>();
+
   public constructor(client: GatewayClient) {
     super(client, "guilds");
   }
@@ -286,6 +316,99 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public soundboardSounds(guildId: string): GuildSoundboardSoundManager {
     return new GuildSoundboardSoundManager(this.client, guildId);
+  }
+
+  /**
+   * Requests the soundboard sounds of several guilds over the gateway, and caches them. discord.js:
+   * `client.guilds.fetchSoundboardSounds()`.
+   *
+   * @remarks
+   * Discord answers with one `SOUNDBOARD_SOUNDS` dispatch per guild, which also updates the cache and is emitted as
+   * `soundboardSounds`. The guilds are grouped by shard and each shard gets one request, so every shard of the guilds must
+   * be one this client runs. The replies carry no nonce, so a reply resolves every pending request waiting for its guild,
+   * and only the process that sent a request resolves it. A reply arriving after the request timed out is only cached.
+   *
+   * @param guildIds The IDs of the guilds, repeated IDs are requested once.
+   * @param options How long to wait for the replies.
+   * @returns The sounds of each guild, keyed by guild ID in the order of `guildIds` and then by sound ID, once all of them
+   * are cached.
+   */
+  public async fetchSoundboardSounds(
+    guildIds: readonly string[],
+    options: GuildSoundboardSoundsRequestOptions = {},
+  ): Promise<Collection<string, Collection<string, SoundboardSound>>> {
+    const { time = 10_000 } = options;
+    const ids = [...new Set(guildIds)];
+    if (ids.length === 0) return new Collection();
+
+    const shards = new Map<number, string[]>();
+    for (const guildId of ids) {
+      const shardId = await shardIdOf(this.client, guildId);
+      const guilds = shards.get(shardId);
+      if (guilds) guilds.push(guildId);
+      else shards.set(shardId, [guildId]);
+    }
+
+    let request!: SoundboardSoundsRequest;
+    const promise = new Promise<Collection<string, Collection<string, SoundboardSound>>>(
+      (resolve, reject) => {
+        request = {
+          ids,
+          pending: new Set(ids),
+          sounds: new Collection(),
+          timer: null,
+          resolve,
+          reject,
+        };
+      },
+    );
+    this.#soundboardRequests.add(request);
+
+    try {
+      await Promise.all(
+        [...shards].map(([shardId, guild_ids]) =>
+          this.client.gateway.send(shardId, {
+            op: GatewayOpcodes.RequestSoundboardSounds,
+            d: { guild_ids },
+          }),
+        ),
+      );
+    } catch (error) {
+      this.#soundboardRequests.delete(request);
+      throw error;
+    }
+
+    // The timeout starts once every payload is sent, not while one waits for its shard or its rate limit.
+    if (this.#soundboardRequests.has(request)) {
+      request.timer = setTimeout(() => {
+        this.#soundboardRequests.delete(request);
+        request.reject(new GuildSoundboardSoundsTimeoutError([...request.pending], time));
+      }, time);
+      request.timer.unref?.();
+    }
+    return promise;
+  }
+
+  /**
+   * Hands the cached sounds of a `SOUNDBOARD_SOUNDS` dispatch to the pending requests waiting for their guild, resolving
+   * the ones that now have every guild.
+   *
+   * @internal
+   */
+  public handleSoundboardSounds(sounds: SoundboardSound[], guildId: string): void {
+    for (const request of this.#soundboardRequests) {
+      if (!request.pending.delete(guildId)) continue;
+
+      request.sounds.set(guildId, new Collection(sounds.map((sound) => [sound.soundId, sound])));
+      request.timer?.refresh();
+      if (request.pending.size > 0) continue;
+
+      this.#soundboardRequests.delete(request);
+      if (request.timer) clearTimeout(request.timer);
+      request.resolve(
+        new Collection(request.ids.map((id) => [id, request.sounds.get(id)!] as const)),
+      );
+    }
   }
 
   /**
