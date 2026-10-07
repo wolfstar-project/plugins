@@ -550,11 +550,13 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
   [GatewayDispatchEvents.SoundboardSounds]: {
     event: GatewayEvents.SoundboardSounds,
     build: async (client, data) => {
-      const sounds = client.guilds.soundboardSounds(data.guild_id);
-      return [
-        await Promise.all(data.soundboard_sounds.map((sound) => sounds._build(sound))),
-        data.guild_id,
-      ];
+      const manager = client.guilds.soundboardSounds(data.guild_id);
+      const sounds = await Promise.all(
+        data.soundboard_sounds.map((sound) => manager._build(sound)),
+      );
+      // The sounds are cached by now, so a request resolving with them is followed by reads that see them.
+      client.guilds.handleSoundboardSounds(sounds, data.guild_id);
+      return [sounds, data.guild_id];
     },
   },
 
