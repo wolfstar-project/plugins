@@ -7,7 +7,7 @@ import type { ScheduledTasksPluginOptions } from "./lib/types/ScheduledTaskTypes
  *
  * @remarks
  * The options are written into the built entry, so they have to be JSON-serialisable: `bull.connection` is a plain
- * connection object here. To pass an `ioredis` instance, use `ClientOptions.tasks` or `scheduledTasks()`.
+ * connection object here. To pass an `ioredis` instance or the `ready` function, use `ClientOptions.tasks` or `scheduledTasks()`.
  *
  * @example
  * ```ts

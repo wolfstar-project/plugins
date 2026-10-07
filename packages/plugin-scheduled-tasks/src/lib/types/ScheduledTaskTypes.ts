@@ -14,6 +14,48 @@ export interface ScheduledTaskHandlerOptions {
    * The BullMQ queue options. The worker shares its `connection`, `prefix`, and the other options common to both.
    */
   bull: QueueOptions;
+  /**
+   * Whether the app is ready to run the tasks that set the `waitForReady` task option: `true` or a promise
+   * that resolves (to anything but `false`) means it is. A job waits for it before its task runs.
+   *
+   * @remarks
+   * A function cannot be written in `stars.config`, so this is for `scheduledTasks()` and `ClientOptions.tasks`.
+   *
+   * @example
+   * ```ts
+   * scheduledTasks({ ready: () => container.gatewayClient.isClientReady() });
+   * ```
+   */
+  ready?: () => boolean | PromiseLike<boolean | void>;
+  /**
+   * How long (in milliseconds) a job waits for {@link ScheduledTaskHandlerOptions.ready} before it is delayed.
+   *
+   * @remarks
+   * The worker runs one job at a time, so a waiting job holds back the others for up to this long.
+   *
+   * @default 30_000
+   */
+  readyTimeout?: number;
+  /**
+   * How long (in milliseconds) a job that timed out waiting for the app is pushed back before it is picked up again.
+   * @default 30_000
+   */
+  readyDelay?: number;
+}
+
+/**
+ * What a worker gives the handler about the job it is running: needed to delay the job, absent when a task is run by
+ * hand.
+ */
+export interface ScheduledTaskRunContext {
+  /**
+   * The BullMQ job being processed.
+   */
+  job?: Job;
+  /**
+   * The lock token of the job.
+   */
+  token?: string;
 }
 
 /**

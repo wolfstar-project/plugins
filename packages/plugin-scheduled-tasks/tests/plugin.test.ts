@@ -85,6 +85,23 @@ describe("scheduledTasks", () => {
     expect(Worker.instances.at(-1)!.opts).toMatchObject({ connection: override, prefix: "p" });
   });
 
+  test("GIVEN ready options THEN ClientOptions.tasks overrides the plugin's, key by key", async () => {
+    const pluginReady = vi.fn(() => false);
+    const clientReady = vi.fn(() => true);
+    createClient(
+      { bull: { connection }, ready: pluginReady, readyTimeout: 10 },
+      { tasks: { ready: clientReady } },
+    );
+
+    await expect(container.tasks.waitForReady()).resolves.toBe(true);
+    expect(clientReady).toHaveBeenCalledOnce();
+    expect(pluginReady).not.toHaveBeenCalled();
+
+    // `readyTimeout` is only set on the plugin, so it still applies.
+    createClient({ bull: { connection }, ready: () => false, readyTimeout: 0 });
+    await expect(container.tasks.waitForReady()).resolves.toBe(false);
+  });
+
   test("GIVEN no connection THEN the client fails with the plugin's name", () => {
     expect(() => createClient()).toThrow(PluginHookError);
     expect(() => createClient()).toThrow(/@wolfstar\/plugin-scheduled-tasks.*bull\.connection/s);

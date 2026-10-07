@@ -79,6 +79,9 @@ does nothing.
 | `bull`               |                     | BullMQ's `QueueOptions`. `bull.connection` is required and is also the worker's.   |
 | `queue`              | `"scheduled-tasks"` | The name of the BullMQ queue.                                                      |
 | `loadErrorListeners` | `true`              | Load the listeners that log task and connection errors through `container.logger`. |
+| `ready`              |                     | Tells whether the app is ready, for tasks that wait for it. See below.             |
+| `readyTimeout`       | `30000`             | How long a job waits for `ready`, in milliseconds.                                 |
+| `readyDelay`         | `30000`             | How long a job that timed out is pushed back, in milliseconds.                     |
 
 ### Writing a task
 
@@ -147,10 +150,49 @@ Deleting the piece does not delete the scheduler from Redis: remove it with
 `container.tasks.deleteRepeated("report")`, and list the existing ones with
 `container.tasks.listRepeated()`.
 
+### Waiting for the app to be ready
+
+A job that was due while the bot was down is taken as soon as the worker starts, which can be before
+the app has what the task needs (the gateway cache, for instance). Tell the plugin when the app is
+ready, and mark the tasks that need it:
+
+```ts
+const client = new Client({
+  plugins: [
+    scheduledTasks({
+      // `true`, or a promise that resolves (to anything but `false`), means ready.
+      ready: () => container.gatewayClient.isClientReady(),
+      readyTimeout: 30_000,
+      readyDelay: 30_000,
+    }),
+  ],
+});
+```
+
+```ts
+export class PostStatsTask extends ScheduledTask<"poststats"> {
+  public constructor(context: ScheduledTask.LoaderContext) {
+    super(context, { pattern: "*/10 * * * *", waitForReady: true });
+  }
+}
+```
+
+Before a `waitForReady` task runs, the job waits up to `readyTimeout` for `ready` (a `ready` that
+returns `false` is asked again every 250 ms). If the app is still not ready, the job is moved back
+to `delayed` for `readyDelay` and the client emits `scheduledTaskNotReady`: it costs no attempt and
+is not a `scheduledTaskError`. Tasks without `waitForReady` never wait, and the option does nothing
+without `ready`. To wait by hand, `await container.tasks.waitForReady()`, which resolves to whether
+the app is ready.
+
+`ready` is a function, so it cannot be written in `stars.config`: use `scheduledTasks()` or
+`ClientOptions.tasks`. The worker runs one job at a time, so a job that is waiting holds back the
+other tasks for up to `readyTimeout`. Lower it if that matters.
+
 ### Events
 
 The client emits `scheduledTaskRun`, `scheduledTaskSuccess`, `scheduledTaskError`,
-`scheduledTaskFinished` and `scheduledTaskNotFound` around every run, and
+`scheduledTaskFinished` and `scheduledTaskNotFound` around every run, `scheduledTaskNotReady` when a
+task that waits for the app is delayed (no listener is installed, so log it if you want it), and
 `scheduledTaskStrategyConnectError`, `scheduledTaskStrategyClientError` and
 `scheduledTaskStrategyWorkerError` for Redis and BullMQ failures. Their names are in
 `ScheduledTaskEvents`.

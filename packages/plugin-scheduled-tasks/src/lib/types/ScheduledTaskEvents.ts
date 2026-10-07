@@ -10,6 +10,11 @@ export const ScheduledTaskEvents = {
    */
   ScheduledTaskNotFound: "scheduledTaskNotFound" as const,
   /**
+   * Event that is emitted when a task that waits for the app to be ready was not run because the app was still not
+   * ready after the timeout. The job is delayed, which costs it no attempt.
+   */
+  ScheduledTaskNotReady: "scheduledTaskNotReady" as const,
+  /**
    * Event that is emitted before a task's "run" method is called
    */
   ScheduledTaskRun: "scheduledTaskRun" as const,
@@ -42,6 +47,7 @@ export const ScheduledTaskEvents = {
 declare module "@wolfstar/http-framework" {
   interface ClientEvents {
     [ScheduledTaskEvents.ScheduledTaskNotFound]: [task: string, payload: unknown];
+    [ScheduledTaskEvents.ScheduledTaskNotReady]: [task: ScheduledTask, payload: unknown];
     [ScheduledTaskEvents.ScheduledTaskRun]: [task: ScheduledTask, payload: unknown];
     [ScheduledTaskEvents.ScheduledTaskError]: [
       error: unknown,

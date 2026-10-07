@@ -3,6 +3,7 @@
 import {
   ScheduledTask,
   type ScheduledTaskHandler,
+  type ScheduledTaskHandlerOptions,
   type ScheduledTasksKeysNoPayload,
   type ScheduledTasksPayload,
 } from "../../src/index.js";
@@ -56,3 +57,22 @@ export class SweepTask extends ScheduledTask<"Sweep"> {
     void payload;
   }
 }
+
+export class WaitingTask extends ScheduledTask<"Sweep"> {
+  public constructor(context: ScheduledTask.LoaderContext) {
+    super(context, { pattern: "*/10 * * * *", waitForReady: true });
+  }
+
+  public override run(): void {}
+}
+
+export const readyOptions: Partial<ScheduledTaskHandlerOptions> = {
+  ready: () => true,
+  readyTimeout: 30_000,
+  readyDelay: 30_000,
+};
+export const asyncReady: Partial<ScheduledTaskHandlerOptions> = { ready: async () => {} };
+// @ts-expect-error -- `ready` returns a boolean, or a promise of one or of nothing.
+export const wrongReady: Partial<ScheduledTaskHandlerOptions> = { ready: () => "yes" };
+
+export const isReady: Promise<boolean> = handler.waitForReady(1_000);
