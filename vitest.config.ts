@@ -18,16 +18,11 @@ export default defineConfig({
       },
     ],
   },
-  // plugin-subcommands-advanced's tests use legacy decorators transformed here.
-  // Vite 8 defaults to oxc, which ignores this esbuild option in favor of
-  // oxc.typescript.decorators — migrate to that before upgrading past Vite 7.
-  esbuild: {
+  // The tests of plugin-subcommands-advanced, plugin-broker and plugin-gateway use legacy decorators,
+  // transformed here. Vite 8 transforms with oxc, which ignores the old esbuild.tsconfigRaw option.
+  oxc: {
     target: "es2022",
-    tsconfigRaw: {
-      compilerOptions: {
-        experimentalDecorators: true,
-      },
-    },
+    decorator: { legacy: true },
   },
   test: {
     globals: true,
