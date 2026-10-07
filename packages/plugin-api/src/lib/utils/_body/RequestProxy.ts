@@ -2,7 +2,7 @@ import { Blob } from "node:buffer";
 import type { IncomingMessage } from "node:http";
 import { arrayBuffer } from "node:stream/consumers";
 import { ReadableStream } from "node:stream/web";
-import { Response, type FormData } from "undici";
+import { Response } from "undici";
 import { RequestHeadersProxy } from "./RequestHeadersProxy";
 import { RequestURLProxy } from "./RequestURLProxy";
 
@@ -103,9 +103,11 @@ export class RequestProxy implements Request {
 
   public async formData(): Promise<FormData> {
     if (this.body !== null) this.#bodyUsed = true;
+    // undici 8 types its `FormData` against `node:buffer`'s `File`, which the global `FormData` (from
+    // `undici-types`) doesn't accept; the runtime shapes are identical.
     return new Response(this.body as never, {
       headers: { "content-type": this.headers.get("content-type") ?? "" },
-    }).formData();
+    }).formData() as unknown as Promise<FormData>;
   }
 
   public async json(): Promise<unknown> {
