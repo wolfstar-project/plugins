@@ -13,6 +13,14 @@ export interface FakeJob {
   remove: () => Promise<void>;
 }
 
+/** Thrown by a processor to tell the worker the job was moved elsewhere and must be left alone. */
+export class DelayedError extends Error {
+  public constructor(message = "delayed") {
+    super(message);
+    this.name = "DelayedError";
+  }
+}
+
 export interface Call {
   method: string;
   args: unknown[];
@@ -106,7 +114,10 @@ export class Worker extends EventEmitter {
 
   public constructor(
     public readonly name: string,
-    public readonly processor: (job: { name: string; data: unknown }) => Promise<unknown>,
+    public readonly processor: (
+      job: { name: string; data: unknown },
+      token?: string,
+    ) => Promise<unknown>,
     public readonly opts: Record<string, unknown>,
   ) {
     super();

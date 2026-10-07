@@ -1,6 +1,7 @@
 import { container } from "@wolfstar/http-framework";
 import { Stopwatch } from "@sapphire/stopwatch";
 import {
+  DelayedError,
   isNotConnectionError,
   Queue,
   Worker,
@@ -11,7 +12,7 @@ import {
   type RepeatOptions,
   type WorkerOptions,
 } from "bullmq";
-import type { ScheduledTaskCustomJobOptions } from "./structures/ScheduledTask.js";
+import type { ScheduledTask, ScheduledTaskCustomJobOptions } from "./structures/ScheduledTask.js";
 import type { ScheduledTaskStore } from "./structures/ScheduledTaskStore.js";
 import { ScheduledTaskEvents } from "./types/ScheduledTaskEvents.js";
 import type {
@@ -21,6 +22,7 @@ import type {
   ScheduledTaskListOptions,
   ScheduledTaskListRepeatedOptions,
   ScheduledTaskListRepeatedReturnType,
+  ScheduledTaskRunContext,
   ScheduledTasksJob,
   ScheduledTasksKeys,
   ScheduledTasksKeysNoPayload,
@@ -44,17 +46,24 @@ export class ScheduledTaskHandler {
   #client: BullClient;
   #worker: Worker;
   #started = false;
+  #ready: ScheduledTaskHandlerOptions["ready"];
+  #readyTimeout: number;
+  #readyDelay: number;
 
   public constructor(options: ScheduledTaskHandlerOptions) {
     this.queue = options.queue ?? "scheduled-tasks";
     this.options = options.bull;
+    this.#ready = options.ready;
+    this.#readyTimeout = options.readyTimeout ?? DefaultReadyTimeout;
+    this.#readyDelay = options.readyDelay ?? DefaultReadyDelay;
 
     this.#client = new Queue(this.queue, this.options);
     // `autorun: false`: the worker only starts consuming in `start()`, once the task pieces are loaded. A worker
     // that ran from here would take jobs whose piece is not in the store yet, and they would be lost as not found.
     this.#worker = new Worker(
       this.queue,
-      async (job) => this.run({ name: job.name as ScheduledTasksKeys, payload: job.data }),
+      async (job, token) =>
+        this.run({ name: job.name as ScheduledTasksKeys, payload: job.data }, { job, token }),
       { ...toWorkerOptions(this.options), autorun: false },
     );
 
@@ -220,14 +229,51 @@ export class ScheduledTaskHandler {
   }
 
   /**
+   * Waits for the app to be ready, as defined by the `ready` option.
+   *
+   * @param timeout - How long to wait, in milliseconds.
+   * @returns Whether the app is ready: `false` if it still was not after the timeout. Without a `ready` option, the
+   * app is always ready.
+   *
+   * @remarks
+   * A `ready` that returns `false` is polled until the timeout, and a promise is waited for until it. If `ready`
+   * throws or rejects, so does this.
+   */
+  public async waitForReady(timeout: number = this.#readyTimeout): Promise<boolean> {
+    const ready = this.#ready;
+    if (!ready) return true;
+
+    const deadline = Date.now() + timeout;
+    for (;;) {
+      const value = ready();
+      const result =
+        typeof value === "boolean" ? value : await withTimeout(value, deadline - Date.now());
+      if (result === TimedOut) return false;
+      if (result !== false) return true;
+
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) return false;
+      await sleep(Math.min(ReadyPollInterval, remaining));
+    }
+  }
+
+  /**
    * Runs a scheduled task with the given name and payload.
    *
    * @param task - The name of the scheduled task to run.
+   * @param context - The job being processed, which lets a task that waits for the app to be ready be delayed.
    * @returns The duration of the run in milliseconds.
    *
-   * @remarks `undefined` will be returned if the task was not found.
+   * @remarks
+   * - `undefined` will be returned if the task was not found, or if it waits for the app to be ready, which it was
+   *   not after the timeout, and there is no job to delay.
+   * - With a job, a task that was not ready in time moves its job to `delayed` and throws BullMQ's `DelayedError`,
+   *   which the worker takes as "leave the job alone": it costs no attempt and is not a task error.
    */
-  public async run(task: ScheduledTasksResolvable): Promise<number | undefined> {
+  public async run(
+    task: ScheduledTasksResolvable,
+    context: ScheduledTaskRunContext = {},
+  ): Promise<number | undefined> {
     const { name: taskName, payload } = this.resolveTask(task);
     const piece = this.store.get(taskName);
 
@@ -235,6 +281,16 @@ export class ScheduledTaskHandler {
       container.client.emit(ScheduledTaskEvents.ScheduledTaskNotFound, taskName, payload);
 
       return undefined;
+    }
+
+    if (piece.waitForReady && this.#ready && !(await this.#isReady(piece, payload))) {
+      container.client.emit(ScheduledTaskEvents.ScheduledTaskNotReady, piece, payload);
+
+      const { job, token } = context;
+      if (!job) return undefined;
+
+      await job.moveToDelayed(Date.now() + this.#readyDelay, token);
+      throw new DelayedError();
     }
 
     let duration: number;
@@ -278,12 +334,50 @@ export class ScheduledTaskHandler {
     return { name: task.name, payload: undefined };
   }
 
+  /**
+   * {@link ScheduledTaskHandler.waitForReady}, where a failing `ready` is an error of the task.
+   */
+  async #isReady(piece: ScheduledTask, payload: unknown): Promise<boolean> {
+    try {
+      return await this.waitForReady();
+    } catch (error) {
+      container.client.emit(ScheduledTaskEvents.ScheduledTaskError, error, piece, payload);
+      throw error;
+    }
+  }
+
   #emitWorkerError(error: Error): void {
     if (isNotConnectionError(error)) {
       container.client.emit(ScheduledTaskEvents.ScheduledTaskStrategyWorkerError, error);
     } else {
       container.client.emit(ScheduledTaskEvents.ScheduledTaskStrategyConnectError, error);
     }
+  }
+}
+
+const DefaultReadyTimeout = 30_000;
+const DefaultReadyDelay = 30_000;
+/** How often a `ready` that returns `false` is asked again, in milliseconds. */
+const ReadyPollInterval = 250;
+const TimedOut = Symbol("timed out");
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Settles with what `promise` settles with, or with {@link TimedOut} once `ms` pass.
+ */
+async function withTimeout<T>(promise: PromiseLike<T>, ms: number): Promise<T | typeof TimedOut> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof TimedOut>((resolve) => {
+    timer = setTimeout(() => resolve(TimedOut), Math.max(ms, 0));
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 

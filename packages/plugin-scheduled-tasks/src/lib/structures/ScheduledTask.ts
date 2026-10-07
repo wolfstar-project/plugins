@@ -14,6 +14,7 @@ export abstract class ScheduledTask<
   public readonly pattern: string | null;
   public readonly timezone: string;
   public readonly customJobOptions?: ScheduledTaskCustomJobOptions;
+  public readonly waitForReady: boolean;
 
   public constructor(context: ScheduledTask.LoaderContext, options: Options = {} as Options) {
     super(context, options);
@@ -21,6 +22,7 @@ export abstract class ScheduledTask<
     this.pattern = options.pattern ?? null;
     this.customJobOptions = options.customJobOptions;
     this.timezone = options.timezone ?? "UTC";
+    this.waitForReady = options.waitForReady ?? false;
   }
 
   public abstract run(payload: ScheduledTasksPayload<Task>): unknown;
@@ -48,6 +50,13 @@ export interface ScheduledTaskOptions extends Piece.Options {
    * @default 'UTC'
    */
   timezone?: string | null;
+
+  /**
+   * Whether the task waits for the app to be ready before it runs, as defined by the plugin's `ready` option. If the
+   * app is not ready after `readyTimeout`, the job is delayed instead of failed. It does nothing without `ready`.
+   * @default false
+   */
+  waitForReady?: boolean;
 }
 
 /**

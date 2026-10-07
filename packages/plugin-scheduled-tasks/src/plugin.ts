@@ -40,6 +40,9 @@ export default definePlugin((pluginOptions: ScheduledTasksPluginOptions = {}) =>
     container.tasks = new ScheduledTaskHandler({
       queue,
       bull: { ...bull, connection: bull.connection },
+      ready: options.tasks?.ready ?? pluginOptions.ready,
+      readyTimeout: options.tasks?.readyTimeout ?? pluginOptions.readyTimeout,
+      readyDelay: options.tasks?.readyDelay ?? pluginOptions.readyDelay,
     });
   },
 

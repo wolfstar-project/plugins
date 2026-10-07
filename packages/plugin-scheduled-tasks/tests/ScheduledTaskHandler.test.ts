@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { DelayedError } from "bullmq";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ScheduledTaskEvents } from "../src/index.js";
 import { ConnectionErrorMessage, resetBullmq } from "./fixtures/bullmq.js";
 import { connection, createHandler, loadTask } from "./fixtures/setup.js";
@@ -7,6 +8,11 @@ vi.mock("bullmq", () => import("./fixtures/bullmq.js"));
 
 // The task names are not registered in `ScheduledTasks` here: the type-level behaviour is covered by `tests/types`.
 type AnyTask = never;
+
+/** A BullMQ job as a worker hands it over, recording the delay it is given. */
+function createJob() {
+  return { name: "poststats", data: undefined, moveToDelayed: vi.fn(async () => {}) };
+}
 
 describe("ScheduledTaskHandler", () => {
   beforeEach(() => resetBullmq());
@@ -328,6 +334,196 @@ describe("ScheduledTaskHandler", () => {
       await worker.processor({ name: "mute", data: { id: "2" } });
 
       expect(run).toHaveBeenCalledWith({ id: "2" });
+    });
+  });
+
+  describe("waitForReady", () => {
+    afterEach(() => vi.useRealTimers());
+
+    test("GIVEN no ready option THEN it resolves true", async () => {
+      const { handler } = createHandler();
+
+      await expect(handler.waitForReady()).resolves.toBe(true);
+    });
+
+    test.each([true, undefined])(
+      "GIVEN a ready that resolves %s THEN it is ready",
+      async (value) => {
+        const { handler } = createHandler(undefined, {}, { ready: () => Promise.resolve(value) });
+
+        await expect(handler.waitForReady()).resolves.toBe(true);
+      },
+    );
+
+    test("GIVEN a ready that turns true THEN it is polled until then", async () => {
+      vi.useFakeTimers();
+      let ready = false;
+      const { handler } = createHandler(undefined, {}, { ready: () => ready });
+
+      const result = handler.waitForReady(5_000);
+      await vi.advanceTimersByTimeAsync(1_000);
+      ready = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(result).resolves.toBe(true);
+    });
+
+    test("GIVEN a ready that stays false THEN it resolves false at the timeout", async () => {
+      vi.useFakeTimers();
+      const ready = vi.fn(() => false);
+      const { handler } = createHandler(undefined, {}, { ready, readyTimeout: 1_000 });
+
+      const result = handler.waitForReady();
+      await vi.advanceTimersByTimeAsync(1_000);
+
+      await expect(result).resolves.toBe(false);
+      expect(ready.mock.calls.length).toBeGreaterThan(1);
+    });
+
+    test("GIVEN a promise that does not settle THEN it resolves false at the timeout", async () => {
+      vi.useFakeTimers();
+      const { handler } = createHandler(undefined, {}, { ready: () => new Promise(() => {}) });
+
+      const result = handler.waitForReady(500);
+      await vi.advanceTimersByTimeAsync(500);
+
+      await expect(result).resolves.toBe(false);
+    });
+
+    test("GIVEN a ready that throws THEN it rejects", async () => {
+      const error = new Error("boom");
+      const ready = () => {
+        throw error;
+      };
+      const { handler } = createHandler(undefined, {}, { ready });
+
+      await expect(handler.waitForReady()).rejects.toBe(error);
+    });
+  });
+
+  describe("run when the app is not ready", () => {
+    afterEach(() => vi.useRealTimers());
+
+    test("GIVEN a task that does not wait THEN it runs without asking ready", async () => {
+      const ready = vi.fn(() => false);
+      const { handler, store } = createHandler(undefined, {}, { ready });
+      const run = vi.fn();
+      await loadTask(store, "poststats", {}, run);
+
+      await handler.run("poststats" as AnyTask);
+
+      expect(run).toHaveBeenCalledOnce();
+      expect(ready).not.toHaveBeenCalled();
+    });
+
+    test("GIVEN a task that waits and no ready option THEN it runs", async () => {
+      const { handler, store } = createHandler();
+      const run = vi.fn();
+      await loadTask(store, "poststats", { waitForReady: true }, run);
+
+      await handler.run("poststats" as AnyTask);
+
+      expect(run).toHaveBeenCalledOnce();
+    });
+
+    test("GIVEN a task that waits and an app that is ready THEN it runs", async () => {
+      const { handler, store } = createHandler(undefined, {}, { ready: () => true });
+      const run = vi.fn();
+      await loadTask(store, "poststats", { waitForReady: true }, run);
+
+      await handler.run("poststats" as AnyTask);
+
+      expect(run).toHaveBeenCalledOnce();
+    });
+
+    test("GIVEN an app that becomes ready within the timeout THEN the task runs", async () => {
+      vi.useFakeTimers();
+      let ready = false;
+      const { handler, store } = createHandler(undefined, {}, { ready: () => ready });
+      const run = vi.fn();
+      await loadTask(store, "poststats", { waitForReady: true }, run);
+      const job = createJob();
+
+      const result = handler.run("poststats" as AnyTask, { job: job as never, token: "t" });
+      await vi.advanceTimersByTimeAsync(1_000);
+      ready = true;
+      await vi.advanceTimersByTimeAsync(1_000);
+      await result;
+
+      expect(run).toHaveBeenCalledOnce();
+      expect(job.moveToDelayed).not.toHaveBeenCalled();
+    });
+
+    test("GIVEN an app that is not ready in time THEN the job is delayed without an error", async () => {
+      vi.useFakeTimers({ now: 1_000_000 });
+      const { handler, store, emitted } = createHandler(
+        undefined,
+        {},
+        { ready: () => false, readyTimeout: 1_000, readyDelay: 20_000 },
+      );
+      const run = vi.fn();
+      const piece = await loadTask(store, "poststats", { waitForReady: true }, run);
+      const job = createJob();
+
+      const result = handler.run("poststats" as AnyTask, { job: job as never, token: "t" });
+      const rejection = expect(result).rejects.toBeInstanceOf(DelayedError);
+      await vi.advanceTimersByTimeAsync(1_000);
+      await rejection;
+
+      expect(run).not.toHaveBeenCalled();
+      expect(job.moveToDelayed).toHaveBeenCalledExactlyOnceWith(1_000_000 + 1_000 + 20_000, "t");
+      expect(emitted).toEqual([
+        { event: ScheduledTaskEvents.ScheduledTaskNotReady, args: [piece, undefined] },
+      ]);
+    });
+
+    test("GIVEN a job taken by the worker THEN its job and token are used to delay it", async () => {
+      vi.useFakeTimers();
+      const { worker, store } = createHandler(
+        undefined,
+        {},
+        { ready: () => false, readyTimeout: 0, readyDelay: 5 },
+      );
+      await loadTask(store, "poststats", { waitForReady: true });
+      const job = createJob();
+
+      await expect(worker.processor(job, "lock")).rejects.toBeInstanceOf(DelayedError);
+
+      expect(job.moveToDelayed).toHaveBeenCalledExactlyOnceWith(Date.now() + 5, "lock");
+    });
+
+    test("GIVEN no job THEN it emits not ready and returns undefined", async () => {
+      const { handler, store, emitted } = createHandler(
+        undefined,
+        {},
+        { ready: () => false, readyTimeout: 0 },
+      );
+      const run = vi.fn();
+      const piece = await loadTask(store, "poststats", { waitForReady: true }, run);
+
+      await expect(handler.run("poststats" as AnyTask)).resolves.toBeUndefined();
+
+      expect(run).not.toHaveBeenCalled();
+      expect(emitted).toEqual([
+        { event: ScheduledTaskEvents.ScheduledTaskNotReady, args: [piece, undefined] },
+      ]);
+    });
+
+    test("GIVEN a ready that throws THEN it emits the task error and rethrows", async () => {
+      const error = new Error("boom");
+      const ready = () => {
+        throw error;
+      };
+      const { handler, store, emitted } = createHandler(undefined, {}, { ready });
+      const run = vi.fn();
+      const piece = await loadTask(store, "poststats", { waitForReady: true }, run);
+
+      await expect(handler.run("poststats" as AnyTask)).rejects.toBe(error);
+
+      expect(run).not.toHaveBeenCalled();
+      expect(emitted).toEqual([
+        { event: ScheduledTaskEvents.ScheduledTaskError, args: [error, piece, undefined] },
+      ]);
     });
   });
 
