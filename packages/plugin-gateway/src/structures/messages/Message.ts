@@ -1,3 +1,13 @@
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import {
+  cachedChannel,
+  cachedGuild,
+  cacheRead,
+  peekCache,
+  whenAll,
+  type CacheRead,
+} from "../../util/cache.js";
+import { Collection } from "@discordjs/collection";
 import { Message as BaseMessage, Structure as BaseStructure } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
@@ -11,8 +21,31 @@ import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { MessageThreadCreateOptions } from "../../managers/MessageManager.js";
 import { ReactionManager } from "../../managers/ReactionManager.js";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
-import { isDeepEqual } from "../../util/equal.js";
+import {
+  createComponent,
+  findComponentByCustomId,
+  type AnyComponent,
+  type MessageTopLevelComponent,
+} from "../../util/components.js";
+import type { APIAnyComponent } from "../components/Component.js";
+import {
+  transformAPIMessageActivity,
+  transformAPIMessageCall,
+  transformAPIMessageInteractionMetadata,
+  transformAPIMessageReference,
+  transformAPIMessageSharedClientTheme,
+  transformAPIRoleSubscriptionData,
+  type MessageActivity,
+  type MessageCall,
+  type MessageInteractionMetadata,
+  type MessageReference,
+  type RoleSubscriptionData,
+  type SharedClientTheme,
+} from "../../util/Transformers.js";
+import type { Webhook } from "../webhooks/Webhook.js";
 import { MessageFlagsBitField } from "../../util/flags.js";
+import { requireMe } from "../../util/permissions.js";
+import { withOwnReaction } from "../../util/reactions.js";
 import {
   MessagePayload,
   type MessageCreateOptions,
@@ -24,14 +57,17 @@ import { Attachment } from "./Attachment.js";
 import { Embed } from "./Embed.js";
 import type { Guild } from "../guilds/Guild.js";
 import { GuildMember } from "../guilds/GuildMember.js";
+import type { MessageReaction } from "./MessageReaction.js";
 import { MessageMentions, type MessageMentionsRelations } from "./MessageMentions.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
 import { Poll } from "../polls/Poll.js";
+import { Sticker } from "../stickers/Sticker.js";
 import type { EmojiIdentifierResolvable } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import {
   bindClient,
   initStructure,
+  kClient,
   kData,
   kPatch,
   kRelations,
@@ -39,6 +75,15 @@ import {
   StructureMixin,
 } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
+import type {
+  GuildTextBasedChannel,
+  If,
+  Partialize,
+  TextBasedChannel,
+  TextBasedChannelResolvable,
+} from "../../types.js";
+import type { GroupDMChannel } from "../channels/GroupDMChannel.js";
 
 const ZeroWidthSpace = String.fromCodePoint(0x20_0b);
 
@@ -75,17 +120,65 @@ const NonSystemTypes: readonly MessageType[] = [
   MessageType.ContextMenuCommand,
 ];
 
-export interface Message extends StructureMixin<CacheEntityTypes["messages"], MessageRelations> {}
+// oxlint-disable-next-line no-unused-vars -- merged with the class, which uses it; the declarations must match.
+export interface Message<InGuild extends boolean = boolean> extends StructureMixin<
+  CacheEntityTypes["messages"],
+  MessageRelations
+> {}
+
+/**
+ * A message built from its IDs alone, like discord.js's `PartialMessage`: `partial` is `true`, and `content`, `author`
+ * and `cleanContent` may be missing. Narrow a `Message | PartialMessage` with `partial`; {@link Message.fetch}
+ * completes it.
+ */
+export interface PartialMessage<InGuild extends boolean = boolean> extends Partialize<
+  Message<InGuild>,
+  "pinned" | "system" | "tts" | "type",
+  "author" | "cleanContent" | "content"
+> {}
+
+/**
+ * A structure whose `channel` can not be a group direct message, like discord.js's `OmitPartialGroupDMChannel`: what
+ * the message actions resolve to.
+ */
+export type OmitPartialGroupDMChannel<Structure extends { channel: AnyChannel | null }> =
+  Structure & { channel: Exclude<Structure["channel"], GroupDMChannel> };
+
+/**
+ * A snapshot of a forwarded message, like discord.js's `MessageSnapshot`: only the data Discord keeps, the rest may be
+ * `null`.
+ */
+export type MessageSnapshot = Partialize<
+  Message,
+  null,
+  Exclude<
+    keyof Message,
+    | "attachments"
+    | "client"
+    | "components"
+    | "content"
+    | "createdTimestamp"
+    | "editedTimestamp"
+    | "embeds"
+    | "flags"
+    | "mentions"
+    | "stickers"
+    | "type"
+  >
+>;
 
 /**
  * A Discord message: `@discordjs/structures`' `Message`, with its relations, substructures, and actions through the
  * client.
  *
  * @remarks
- * Relations discord.js reads synchronously from its cache are asynchronous here: `fetchChannel()`, `fetchGuild()`,
- * `fetchReference()`, and the `fetch*able()` permission checks, which apply the channel's overwrites.
+ * What discord.js reads synchronously from its cache is read the same way here with a synchronous cache: `guild`,
+ * `channel`, and the `editable`, `deletable`, ... permission checks, which apply the channel's overwrites. With an
+ * asynchronous cache the relation getters are `null` (use `fetchChannel()`, `fetchGuild()`, `fetchReference()`), and
+ * the checks answer a promise read from the cache, typed as one once `GatewayCacheConfig` declares the cache
+ * asynchronous. The `fetch*able()` twins also ask the API for what is not cached.
  */
-export class Message extends BaseMessage<""> {
+export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> {
   /**
    * Keeps the raw `timestamp` and `edited_timestamp`, which `@discordjs/structures` strips and re-serializes in its own
    * format, so that {@link Message.toJSON} returns the message as received.
@@ -119,8 +212,8 @@ export class Message extends BaseMessage<""> {
     return StructureMixin.prototype[kPatch].call(this, data) as this;
   }
 
-  public get guildId(): string | null {
-    return this[kData].guild_id ?? null;
+  public get guildId(): If<InGuild, string> {
+    return (this[kData].guild_id ?? null) as If<InGuild, string>;
   }
 
   /**
@@ -153,26 +246,40 @@ export class Message extends BaseMessage<""> {
 
   /**
    * The guild the message was sent in, from the cache. `null` outside of guilds, when the guild is not cached, or when
-   * the message was not built by a manager: use {@link Message.fetchGuild} to always get it.
+   * the cache is asynchronous: use {@link Message.fetchGuild} to always get it.
    */
-  public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+  public get guild(): If<InGuild, Guild | null, null> {
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id)) as If<
+      InGuild,
+      Guild | null,
+      null
+    >;
   }
 
   /**
-   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the message
-   * was not built by a manager: use {@link Message.fetchChannel} to always get it.
+   * The channel the message was sent in, from the cache. `null` when the channel is not cached, or when the cache is
+   * asynchronous: use {@link Message.fetchChannel} to always get it.
    */
-  public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+  public get channel(): If<InGuild, GuildTextBasedChannel, TextBasedChannel> | null {
+    return this.lazyRelation("channel", (client) =>
+      cachedChannel(client, this[kData].channel_id),
+    ) as If<InGuild, GuildTextBasedChannel, TextBasedChannel> | null;
   }
 
   public override get flags(): Readonly<MessageFlagsBitField> {
     return new MessageFlagsBitField(this[kData].flags ?? 0).freeze();
   }
 
-  public get attachments(): Attachment[] {
-    return (this[kData].attachments ?? []).map((attachment) => new Attachment(attachment));
+  /**
+   * The attachments of the message, by ID, like discord.js's `Message#attachments`.
+   */
+  public get attachments(): Collection<string, Attachment> {
+    return new Collection(
+      (this[kData].attachments ?? []).map((attachment) => [
+        attachment.id,
+        new Attachment(attachment),
+      ]),
+    );
   }
 
   public get embeds(): Embed[] {
@@ -180,25 +287,33 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The raw components of the message. Build components with `@discordjs/builders`.
+   * The top-level components of the message, like discord.js'. Their `toJSON` returns the raw components; build new
+   * ones with `@discordjs/builders`.
    */
-  public get components() {
-    return this[kData].components ?? [];
+  public get components(): MessageTopLevelComponent[] {
+    return (this[kData].components ?? []).map((component) => createComponent(component));
   }
 
   /**
-   * The raw sticker items of the message; fetch a full sticker with `client.fetchSticker(id)`.
+   * The stickers of the message, by ID, like discord.js's `Message#stickers`: partial stickers carrying the ID, name,
+   * and format of the payload's sticker items. Fetch a full one with `client.fetchSticker(id)`.
    */
-  public get stickers() {
-    return this[kData].sticker_items ?? [];
+  public get stickers(): Collection<string, Sticker> {
+    const client = this[kClient];
+    return new Collection(
+      (this[kData].sticker_items ?? []).map((item) => {
+        const sticker = new Sticker(item as never);
+        return [item.id, client ? bindClient(sticker, client) : sticker];
+      }),
+    );
   }
 
   /**
    * The users, members, roles, and channels the message mentions: their cached copies when the message was built by
    * `client.messages`, like discord.js.
    */
-  public get mentions(): MessageMentions {
-    return new MessageMentions(this[kData], {
+  public get mentions(): MessageMentions<InGuild> {
+    return new MessageMentions<InGuild>(this[kData], {
       guild: this.guild,
       ...this[kRelations].mentions,
     });
@@ -234,45 +349,81 @@ export class Message extends BaseMessage<""> {
   }
 
   /**
-   * The reference of a reply, crosspost, forward, or pin notice, if any.
+   * The reference of a reply, crosspost, forward, or pin notice, if any, camel-cased like discord.js's
+   * `Message#reference`.
    */
-  public get reference() {
-    return this[kData].message_reference ?? null;
+  public get reference(): MessageReference | null {
+    const reference = this[kData].message_reference;
+    return reference ? transformAPIMessageReference(reference) : null;
   }
 
   /**
-   * The snapshots of the messages this one forwards.
+   * The snapshots of the messages this one forwards, as a collection of messages carrying the IDs of the forwarded
+   * message, by that ID, like discord.js's `Message#messageSnapshots`.
    */
-  public get messageSnapshots() {
-    return this[kData].message_snapshots ?? [];
+  public get messageSnapshots(): Collection<string, MessageSnapshot> {
+    const collection = new Collection<string, MessageSnapshot>();
+    const snapshots = this[kData].message_snapshots;
+    if (!snapshots?.length) return collection;
+    const reference = this[kData].message_reference;
+    const client = this[kClient];
+    for (const snapshot of snapshots) {
+      const message = new Message({
+        ...snapshot.message,
+        id: reference?.message_id ?? this.id,
+        channel_id: reference?.channel_id ?? this.channelId,
+        guild_id: reference?.guild_id,
+      } as CacheEntityTypes["messages"]);
+      collection.set(
+        message.id,
+        (client ? bindClient(message, client) : message) as unknown as MessageSnapshot,
+      );
+    }
+
+    return collection;
   }
 
   /**
-   * The rich presence activity the message was sent with, e.g. a game invite.
+   * The rich presence activity the message was sent with, e.g. a game invite, camel-cased like discord.js's
+   * `Message#activity`.
    */
-  public get activity() {
-    return this[kData].activity ?? null;
+  public get activity(): MessageActivity | null {
+    const activity = this[kData].activity;
+    return activity ? transformAPIMessageActivity(activity) : null;
   }
 
   /**
-   * The metadata of the interaction the message answers, if any.
+   * The metadata of the interaction the message answers, if any, camel-cased like discord.js's
+   * `Message#interactionMetadata`.
    */
-  public get interactionMetadata() {
-    return this[kData].interaction_metadata ?? null;
+  public get interactionMetadata(): MessageInteractionMetadata | null {
+    const metadata = this[kData].interaction_metadata;
+    return metadata ? transformAPIMessageInteractionMetadata(metadata, this[kClient]) : null;
   }
 
   /**
-   * The call a call message is about.
+   * The call a call message is about, camel-cased like discord.js's `Message#call`.
    */
-  public get call() {
-    return this[kData].call ?? null;
+  public get call(): MessageCall | null {
+    const call = this[kData].call;
+    return call ? transformAPIMessageCall(call) : null;
   }
 
   /**
-   * The subscription a role subscription purchase message is about.
+   * The subscription a role subscription purchase message is about, camel-cased like discord.js's
+   * `Message#roleSubscriptionData`.
    */
-  public get roleSubscriptionData() {
-    return this[kData].role_subscription_data ?? null;
+  public get roleSubscriptionData(): RoleSubscriptionData | null {
+    const data = this[kData].role_subscription_data;
+    return data ? transformAPIRoleSubscriptionData(data) : null;
+  }
+
+  /**
+   * The custom client theme the message was shared with, camel-cased like discord.js's `Message#sharedClientTheme`.
+   */
+  public get sharedClientTheme(): SharedClientTheme | null {
+    const theme = this[kData].shared_client_theme;
+    return theme ? transformAPIMessageSharedClientTheme(theme) : null;
   }
 
   /**
@@ -290,7 +441,7 @@ export class Message extends BaseMessage<""> {
     const resolved = this[kRelations].thread;
     if (resolved) return resolved;
     const { thread } = this[kData] as APIMessage & { thread?: APIThreadChannel };
-    return thread ? this.client.threads.createStructure(thread) : null;
+    return thread ? this.client.threads.cache.construct(thread) : null;
   }
 
   /**
@@ -354,7 +505,7 @@ export class Message extends BaseMessage<""> {
   /**
    * Whether the message was sent in a guild.
    */
-  public inGuild(): boolean {
+  public inGuild(): this is Message<true> {
     return this.guildId !== null;
   }
 
@@ -376,29 +527,90 @@ export class Message extends BaseMessage<""> {
   /**
    * Fetches the message this one replies to, crossposts, or forwards.
    */
-  public async fetchReference(): Promise<Message> {
+  public async fetchReference(): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
     const reference = this.reference;
-    if (!reference?.message_id) throw new Error(`Message ${this.id} references no message`);
-    return this.client.messages.fetch(reference.channel_id ?? this.channelId, reference.message_id);
+    if (!reference?.messageId) throw new GatewayError("MessageReferenceMissing", this.id);
+    return (await this.client.messages.fetch(
+      reference.channelId ?? this.channelId,
+      reference.messageId,
+    )) as unknown as OmitPartialGroupDMChannel<Message<InGuild>>;
   }
 
   /**
-   * Whether the bot can edit the message: it is the author.
+   * Whether the bot can edit the message, like discord.js's `Message#editable`: it is the author.
    */
-  public async fetchEditable(): Promise<boolean> {
+  public get editable(): boolean {
     const client = this.client;
     return this.author.id === (client.user?.id ?? client.id);
   }
 
   /**
+   * Whether the bot can delete the message, like discord.js's `Message#deletable`: it is the author, or it has
+   * `ManageMessages` in the channel.
+   *
+   * @throws A `GatewayError` when the permissions are needed: `GuildUncachedMe`, `GuildUncached` or `ChannelUncached` on a cache miss.
+   */
+  public get deletable(): CacheRead<boolean> {
+    return cacheRead(this.editable || this.hasCachedPermission("ManageMessages"));
+  }
+
+  /**
+   * Whether the bot can bulk delete the message, like discord.js's `Message#bulkDeletable`: it is newer than 14 days,
+   * and the bot has `ManageMessages`. It throws like {@link Message.deletable}.
+   */
+  public get bulkDeletable(): CacheRead<boolean> {
+    return cacheRead(
+      Date.now() - this.createdTimestamp < 14 * 24 * 60 * 60 * 1000 &&
+        this.hasCachedPermission("ManageMessages"),
+    );
+  }
+
+  /**
+   * Whether the bot can pin the message, like discord.js's `Message#pinnable`: it is not a system message, and the
+   * bot has `PinMessages`. It throws like {@link Message.deletable}.
+   */
+  public get pinnable(): CacheRead<boolean> {
+    if (this.system) return cacheRead(false);
+    return cacheRead(!this.inGuild() || this.hasCachedPermission("PinMessages"));
+  }
+
+  /**
+   * Whether the bot can publish the message, like discord.js's `Message#crosspostable`: it is in an announcement
+   * channel, not crossposted yet, and the bot authored it or has `ManageMessages`. It throws like
+   * {@link Message.deletable}.
+   */
+  public get crosspostable(): CacheRead<boolean> {
+    if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) {
+      return cacheRead(false);
+    }
+
+    // Not the `channel` getter, which is `null` with an asynchronous cache.
+    const cached =
+      this[kRelations].channel ?? peekCache(this.client.channels.cache, this.channelId);
+    return cacheRead(
+      whenAll([cached], ([channel]) => {
+        if (!channel) throw new GatewayError("ChannelUncached", this.channelId);
+        if (channel.type !== ChannelType.GuildAnnouncement) return false;
+        return this.editable || this.hasCachedPermission("ManageMessages");
+      }),
+    );
+  }
+
+  /**
    * Whether the bot can delete the message: it is the author, or it has `ManageMessages` in the guild.
+   *
+   * @deprecated Use {@link Message.deletable}. When the guild, the channel or the bot's member may be missing from the
+   * cache (a filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`), then read
+   * the getter.
    */
   public async fetchDeletable(): Promise<boolean> {
-    return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
+    return this.editable || this.hasPermission("ManageMessages");
   }
 
   /**
    * Whether the bot can bulk delete the message: it can delete it, and it is newer than 14 days.
+   *
+   * @deprecated Use {@link Message.bulkDeletable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchBulkDeletable(): Promise<boolean> {
     return (
@@ -409,6 +621,8 @@ export class Message extends BaseMessage<""> {
 
   /**
    * Whether the bot can pin the message: it is not a system message, and the bot has `PinMessages`.
+   *
+   * @deprecated Use {@link Message.pinnable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchPinnable(): Promise<boolean> {
     if (this.system) return false;
@@ -418,31 +632,58 @@ export class Message extends BaseMessage<""> {
   /**
    * Whether the bot can publish the message: it is in an announcement channel, not crossposted yet, and the bot
    * authored it or has `ManageMessages`.
+   *
+   * @deprecated Use {@link Message.crosspostable}. See {@link Message.fetchDeletable} for the cache-miss fallback.
    */
   public async fetchCrosspostable(): Promise<boolean> {
     if (this.flags.has(MessageFlags.Crossposted) || this.system || !this.inGuild()) return false;
     const channel = await this.fetchChannel();
     if (channel.type !== ChannelType.GuildAnnouncement) return false;
-    return (await this.fetchEditable()) || this.hasPermission("ManageMessages");
+    return this.editable || this.hasPermission("ManageMessages");
   }
 
   /**
-   * Whether the message is partial: built from its IDs alone for an event about an uncached message, see
-   * `Partials.Message`. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch} completes
-   * it.
+   * Whether the message is partial, like discord.js's `Message#partial`: it lacks its content or its author. That is
+   * a message built from its IDs alone for an event about an uncached message (see `Partials.Message`), or from an
+   * update that carried neither. Only `id`, `channelId`, and `guildId` are reliable then, and {@link Message.fetch}
+   * completes it.
+   *
+   * Typed `false`, like discord.js: a partial message is a {@link PartialMessage}, whose `partial` is `true`.
    */
-  public get partial(): boolean {
-    return this[kData].author === undefined;
+  public get partial(): false {
+    return (typeof this[kData].content !== "string" || this[kData].author === undefined) as false;
   }
 
   /**
-   * Fetches the message from the API and patches this structure with the result.
+   * Finds a component of the message by its custom ID, like discord.js's `Message#resolveComponent`.
+   *
+   * @param customId The custom ID.
    */
-  public async fetch(): Promise<this> {
-    const message = await this.client.messages.fetch(this.channelId, this.id, {
-      force: true,
-    });
-    return this[kPatch](message.toJSON());
+  public resolveComponent(customId: string): AnyComponent | APIAnyComponent | null {
+    return findComponentByCustomId(this.components, customId);
+  }
+
+  /**
+   * Fetches the webhook that sent the message, like discord.js's `Message#fetchWebhook`.
+   *
+   * @throws A `GatewayError`: `WebhookMessage` when a webhook did not send the message, `WebhookApplication` when the
+   * webhook belongs to an application.
+   */
+  public async fetchWebhook(): Promise<Webhook> {
+    const { webhookId } = this;
+    if (!webhookId) throw new GatewayError("WebhookMessage");
+    if (webhookId === this.applicationId) throw new GatewayError("WebhookApplication");
+    return this.client.fetchWebhook(webhookId);
+  }
+
+  /**
+   * Fetches the message and patches this structure with the result.
+   *
+   * @param force Whether to ask the API even when the message is cached. Defaults to `true`, like discord.js.
+   */
+  public async fetch(force = true): Promise<OmitPartialGroupDMChannel<this>> {
+    const message = await this.client.messages.fetch(this.channelId, this.id, { force });
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -450,13 +691,15 @@ export class Message extends BaseMessage<""> {
    *
    * @param options The changes, or the new content.
    */
-  public async edit(options: MessagePayloadResolvable<MessageEditOptions>): Promise<this> {
+  public async edit(
+    options: MessagePayloadResolvable<MessageEditOptions>,
+  ): Promise<OmitPartialGroupDMChannel<this>> {
     const message = await this.client.messages.edit(
       this.channelId,
       this.id,
       MessagePayload.create(this, options, { edit: true }),
     );
-    return this[kPatch](message.toJSON());
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -464,7 +707,9 @@ export class Message extends BaseMessage<""> {
    *
    * @param options The reply, or its content.
    */
-  public reply(options: MessagePayloadResolvable<MessageCreateOptions>): Promise<Message> {
+  public reply(
+    options: MessagePayloadResolvable<MessageCreateOptions>,
+  ): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
     const payload = MessagePayload.create(this, options);
     return this.client.messages.send(
       this.channelId,
@@ -472,49 +717,62 @@ export class Message extends BaseMessage<""> {
         ...payload.options,
         reply: { messageReference: this },
       }),
-    );
+    ) as unknown as Promise<OmitPartialGroupDMChannel<Message<InGuild>>>;
   }
 
   /**
    * Forwards the message to another channel.
    *
-   * @param channelId The ID of the channel to forward it to.
+   * @param channel The channel to forward it to, or its ID.
    */
-  public forward(channelId: string): Promise<Message> {
-    return this.client.messages.forward(this.channelId, this.id, channelId);
+  public forward(
+    channel: Exclude<TextBasedChannelResolvable, GroupDMChannel>,
+  ): Promise<OmitPartialGroupDMChannel<Message<InGuild>>> {
+    const channelId = typeof channel === "string" ? channel : channel.id;
+    return this.client.messages.forward(this.channelId, this.id, channelId) as unknown as Promise<
+      OmitPartialGroupDMChannel<Message<InGuild>>
+    >;
   }
 
-  public async delete(reason?: string): Promise<this> {
+  public async delete(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.delete(this.channelId, this.id, reason);
-    return this;
+    return this as OmitPartialGroupDMChannel<this>;
   }
 
-  public async pin(reason?: string): Promise<this> {
+  public async pin(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.pin(this.channelId, this.id, reason);
-    return this[kPatch]({ pinned: true });
+    return this[kPatch]({ pinned: true }) as OmitPartialGroupDMChannel<this>;
   }
 
-  public async unpin(reason?: string): Promise<this> {
+  public async unpin(reason?: string): Promise<OmitPartialGroupDMChannel<this>> {
     await this.client.messages.unpin(this.channelId, this.id, reason);
-    return this[kPatch]({ pinned: false });
+    return this[kPatch]({ pinned: false }) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
    * Reacts to the message as the bot.
    *
    * @param emoji The emoji.
+   * @returns The reaction, counting the bot, like discord.js's `Message#react`.
    */
-  public async react(emoji: EmojiIdentifierResolvable): Promise<this> {
+  public async react(emoji: EmojiIdentifierResolvable): Promise<MessageReaction> {
+    // Counting the bot adds no custom emoji the cache was not asked for already: the resolved ones stay valid.
+    const { emojis } = this[kRelations];
     await this.client.messages.react(this.channelId, this.id, emoji);
-    return this;
+    // With a cache of instances the manager already patched this very message: the bot is counted once.
+    const current = this[kData].reactions;
+    const reactions = withOwnReaction(current, emoji);
+    if (reactions !== current) this[kPatch]({ reactions });
+    if (emojis && !this[kRelations].emojis) this[kRelations] = { ...this[kRelations], emojis };
+    return this.reactions.resolve(emoji)!;
   }
 
   /**
    * Publishes the message of an announcement channel to the channels following it.
    */
-  public async crosspost(): Promise<this> {
+  public async crosspost(): Promise<OmitPartialGroupDMChannel<this>> {
     const message = await this.client.messages.crosspost(this.channelId, this.id);
-    return this[kPatch](message.toJSON());
+    return this[kPatch](message.toJSON()) as OmitPartialGroupDMChannel<this>;
   }
 
   /**
@@ -531,7 +789,7 @@ export class Message extends BaseMessage<""> {
    *
    * @param suppress Whether to hide them.
    */
-  public suppressEmbeds(suppress = true): Promise<this> {
+  public suppressEmbeds(suppress = true): Promise<OmitPartialGroupDMChannel<this>> {
     const flags = new MessageFlagsBitField(this.flags.bitField);
     if (suppress) flags.add(MessageFlags.SuppressEmbeds);
     else flags.remove(MessageFlags.SuppressEmbeds);
@@ -541,26 +799,52 @@ export class Message extends BaseMessage<""> {
   /**
    * Removes every attachment of the message.
    */
-  public removeAttachments(): Promise<this> {
+  public removeAttachments(): Promise<OmitPartialGroupDMChannel<this>> {
     return this.edit({ attachments: [] });
   }
 
   /**
-   * Whether this message has the same data as another one, or as a raw message.
-   * @param message The message to compare with.
+   * Whether this message has the same data as another one, like discord.js's `Message#equals`: the same ID, author,
+   * content, `nonce`, `tts`, attachments (by ID), and embeds (through `Embed#equals`, in order). A change of `pinned`,
+   * flags, or reactions does not make messages differ; compare `toJSON()` for that.
+   *
+   * @param message The message, or raw message, to compare with. A raw embed update, which carries neither an author nor
+   * attachments, only compares the ID and the number of embeds.
+   * @param rawData The raw message `message` comes from. When given, `mention_everyone` and the timestamps are compared
+   * too.
    */
-  public equals(message: Message | APIMessage): boolean {
-    const other = message instanceof Message ? message.toJSON() : message;
-    return (
+  public equals(
+    message: Message | APIMessage | null | undefined,
+    rawData?: Partial<APIMessage>,
+  ): boolean {
+    if (!message) return false;
+    const other: Partial<APIMessage> = message instanceof Message ? message.toJSON() : message;
+    const data = this[kData];
+    const embeds = this.embeds;
+    const otherEmbeds = other.embeds ?? [];
+    if (!other.author && !other.attachments) {
+      return this.id === other.id && embeds.length === otherEmbeds.length;
+    }
+
+    const attachments = data.attachments ?? [];
+    const otherAttachments = other.attachments ?? [];
+    const equal =
       this.id === other.id &&
+      this.author.id === other.author?.id &&
       this.content === other.content &&
-      this.author.id === other.author.id &&
-      this.pinned === other.pinned &&
+      data.nonce === other.nonce &&
       this.tts === other.tts &&
+      attachments.length === otherAttachments.length &&
+      embeds.length === otherEmbeds.length &&
+      attachments.every(({ id }) => otherAttachments.some((attachment) => attachment.id === id)) &&
+      embeds.every((embed, index) => embed.equals(otherEmbeds[index]));
+    if (!equal || !rawData) return equal;
+
+    return (
+      Boolean(data.mention_everyone) === Boolean(other.mention_everyone) &&
+      this.createdTimestamp === Date.parse(rawData.timestamp ?? "") &&
       this.editedTimestamp ===
-        (other.edited_timestamp ? Date.parse(other.edited_timestamp) : null) &&
-      isDeepEqual(this[kData].embeds, other.embeds) &&
-      isDeepEqual(this[kData].attachments, other.attachments)
+        (rawData.edited_timestamp ? Date.parse(rawData.edited_timestamp) : null)
     );
   }
 
@@ -570,6 +854,15 @@ export class Message extends BaseMessage<""> {
 
   public toString(): string {
     return this.content;
+  }
+
+  // `hasPermission` from the cache alone.
+  private hasCachedPermission(permission: PermissionsString): Awaitable<boolean> {
+    const { guildId } = this;
+    if (!guildId) return false;
+    return whenAll([requireMe(this.client, guildId)], ([me]) =>
+      whenAll([me.permissionsIn(this.channelId)], ([permissions]) => permissions.has(permission)),
+    );
   }
 
   // The bot's permissions in the message's channel, overwrites included.

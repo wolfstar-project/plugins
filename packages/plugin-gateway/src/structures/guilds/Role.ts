@@ -1,15 +1,23 @@
+import { cachedGuild, cacheRead, whenAll, type CacheRead } from "../../util/cache.js";
 import type { ImageURLOptions } from "@discordjs/rest";
 import type { Partialize } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type { APIRoleTags } from "discord-api-types/v10";
+import type { SetPositionOptions } from "../../managers/GuildChannelManager.js";
 import type { RoleEditOptions } from "../../managers/RoleManager.js";
 import { cdn } from "../../util/cdn.js";
+import type { ImageResolvable } from "../../util/DataResolver.js";
+import { transformAPIRoleTags, type RoleTagData } from "../../util/Transformers.js";
 import { RoleFlagsBitField } from "../../util/flags.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
-import { compareRolePositions, computePermissionsIn } from "../../util/permissions.js";
+import {
+  compareRolePositions,
+  computePermissionsIn,
+  computeCachedPermissionsIn,
+  requireMe,
+} from "../../util/permissions.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "./Guild.js";
-import { kData, kPatch, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
+import { kData, kPatch, type kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 
 /**
  * The colors of a role: `primaryColor` alone for a solid color, with `secondaryColor` for a gradient, and with
@@ -61,11 +69,11 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the role was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -115,9 +123,23 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
    * role overwrites applied. discord.js: `role.permissionsIn(channel)`.
    *
    * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   *
+   * @deprecated Use {@link Role.permissionsIn}. When the guild or the channel may be missing from the cache, fetch
+   * them first (`client.guilds.fetch(guildId)`, `client.channels.fetch(channelId)`), then call the method.
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this as unknown as Role);
+  }
+
+  /**
+   * The role's permissions in a channel, like discord.js's `Role#permissionsIn`: its permissions and `@everyone`'s,
+   * with the channel's `@everyone` and role overwrites applied, read from the cache.
+   *
+   * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
+   * @throws A `GatewayError`: `ChannelUncached` when the channel is not cached.
+   */
+  public permissionsIn(channel: AnyChannel | string): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(computeCachedPermissionsIn(channel, this as unknown as Role));
   }
 
   public get hoist() {
@@ -141,10 +163,12 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * What the role belongs to: a bot, an integration, the server boosters, or a subscription listing.
+   * What the role belongs to: a bot, an integration, the server boosters, or a subscription listing. Camel-cased
+   * like discord.js's `Role#tags`.
    */
-  public get tags(): APIRoleTags | null {
-    return this[kData].tags ?? null;
+  public get tags(): RoleTagData | null {
+    const tags = this[kData].tags;
+    return tags ? transformAPIRoleTags(tags) : null;
   }
 
   public get flags(): Readonly<RoleFlagsBitField> {
@@ -179,7 +203,34 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
+   * Whether the bot can edit this role, like discord.js's `Role#editable`: the role is not managed, and the bot has
+   * `ManageRoles` and a higher role.
+   *
+   * @throws A `GatewayError`: `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get editable(): CacheRead<boolean> {
+    if (this.managed) return cacheRead(false);
+
+    return cacheRead(
+      whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+        whenAll([me.permissions], ([permissions]) =>
+          permissions.has("ManageRoles")
+            ? whenAll(
+                [me.roles.highest],
+                ([highest]) => highest !== null && highest.comparePositionTo(this) > 0,
+              )
+            : false,
+        ),
+      ),
+    );
+  }
+
+  /**
    * Whether the client's member can edit this role, i.e. it has `ManageRoles` and a higher role.
+   *
+   * @deprecated Use {@link Role.editable}. When the bot's member or its roles may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`, then
+   * `me.roles.fetch()`), then read the getter.
    */
   public async fetchEditable(): Promise<boolean> {
     if (this.managed) return false;
@@ -225,9 +276,9 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Sets the role's icon, as a data URI (`data:image/png;base64,...`), or removes it with `null`.
+   * Sets the role's icon: a data URI (`data:image/png;base64,...`) or anything `resolveImage` reads. `null` removes it.
    */
-  public setIcon(icon: string | null, reason?: string): Promise<this> {
+  public setIcon(icon: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ icon, reason });
   }
 
@@ -236,17 +287,16 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Moves the role.
+   * Moves the role among the roles of its guild, like discord.js's `Role#setPosition`.
    *
-   * @param position The new position.
-   * @param reason The reason for the audit log.
+   * @param position The index to move it to, lowest role first, or the offset to move it by with `relative`.
+   * @param options Whether the position is relative and the reason for the audit log, or the reason alone.
    */
-  public async setPosition(position: number, reason?: string): Promise<this> {
-    const roles = await this.client.roles.setPositions(
-      this.guildId,
-      [{ role: this.id, position }],
-      reason,
-    );
+  public async setPosition(
+    position: number,
+    options: SetPositionOptions | string = {},
+  ): Promise<this> {
+    const roles = await this.client.roles.setPosition(this.guildId, this.id, position, options);
     // Discord may clamp or shift the requested position: keep what it actually applied.
     const updated = roles.find((role) => role.id === this.id);
     return updated ? this[kPatch](updated.toJSON()) : this;
@@ -263,17 +313,24 @@ export class Role<Omitted extends keyof CacheEntityTypes["roles"] | "" = ""> ext
   }
 
   /**
-   * Whether this role has the same data as another one.
+   * Whether this role has the same data as another one, like discord.js's `Role#equals`: the same ID, name, colors,
+   * `hoist`, position, permissions, `managed`, icon, and unicode emoji.
+   *
    * @param role The role to compare with.
    */
-  public equals(role: Role): boolean {
+  public equals(role: Role | null | undefined): boolean {
+    if (!role) return false;
+    const colors = this.colors;
+    const otherColors = role.colors;
     return (
       this.id === role.id &&
       this.name === role.name &&
-      this.color === role.color &&
+      colors.primaryColor === otherColors.primaryColor &&
+      colors.secondaryColor === otherColors.secondaryColor &&
+      colors.tertiaryColor === otherColors.tertiaryColor &&
       this.hoist === role.hoist &&
       this.position === role.position &&
-      this[kData].permissions === role[kData].permissions &&
+      this.permissions.bitField === role.permissions.bitField &&
       this.managed === role.managed &&
       this.icon === role.icon &&
       this.unicodeEmoji === role.unicodeEmoji

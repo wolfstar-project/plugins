@@ -1,5 +1,7 @@
+import { cachedGuild, cachedUser } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { AuditLogEvent, type APIAuditLogChange } from "discord-api-types/v10";
+import { AuditLogEvent } from "discord-api-types/v10";
+import { transformAPIAuditLogChange, type AuditLogChange } from "../../util/Transformers.js";
 import type { Guild } from "./Guild.js";
 import { kData, kRelations, snowflakeTimestamp, Structure } from "../Structure.js";
 import type { User } from "../users/User.js";
@@ -143,10 +145,10 @@ export class GuildAuditLogsEntry extends Structure<CacheEntityTypes["auditLogEnt
   }
 
   /**
-   * The changed fields, with their old and new values.
+   * The changed fields, with their `old` and `new` values, like discord.js's `GuildAuditLogsEntry#changes`.
    */
-  public get changes(): readonly APIAuditLogChange[] {
-    return this[kData].changes ?? [];
+  public get changes(): AuditLogChange[] {
+    return (this[kData].changes ?? []).map(transformAPIAuditLogChange);
   }
 
   /**
@@ -157,11 +159,11 @@ export class GuildAuditLogsEntry extends Structure<CacheEntityTypes["auditLogEnt
   }
 
   public get executor(): User | null {
-    return this[kRelations].executor ?? null;
+    return this.lazyRelation("executor", (client) => cachedUser(client, this[kData].user_id));
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public get createdTimestamp() {

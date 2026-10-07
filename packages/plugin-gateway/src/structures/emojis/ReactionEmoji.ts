@@ -1,5 +1,7 @@
-import { FormattingPatterns, type APIPartialEmoji } from "discord-api-types/v10";
+import type { APIPartialEmoji } from "discord-api-types/v10";
 import { Emoji } from "./Emoji.js";
+import { GatewayTypeError } from "../../errors/GatewayError.js";
+import { resolvePartialEmoji } from "../../util/Util.js";
 
 /**
  * Anything identifying an emoji: a Unicode emoji, a custom emoji mention (`<a:name:id>`), a `name:id` pair, a bare
@@ -8,11 +10,6 @@ import { Emoji } from "./Emoji.js";
 export type EmojiIdentifierResolvable =
   | string
   | { id?: string | null; name?: string | null; animated?: boolean | null };
-
-/**
- * Matches a `name:id` or `a:name:id` pair without the mention brackets.
- */
-const CustomEmojiPattern = /^(?:(?<animated>a):)?(?<name>\w{2,32}):(?<id>\d{17,20})$/;
 
 /**
  * The emoji of a reaction or of a poll answer: a Unicode emoji, or a custom one known only by its ID and name.
@@ -25,24 +22,20 @@ export class ReactionEmoji extends Emoji<APIPartialEmoji> {
    * @throws A `TypeError` when the value identifies no emoji.
    */
   public static resolveIdentifier(emoji: EmojiIdentifierResolvable): string {
-    if (typeof emoji === "string") {
-      const decoded = emoji.includes("%") ? decodeURIComponent(emoji) : emoji;
-      if (/^\d{17,20}$/.test(decoded)) return `_:${decoded}`;
+    if (emoji === "") throw new GatewayTypeError("EmojiEmpty");
 
-      const custom = FormattingPatterns.Emoji.exec(decoded) ?? CustomEmojiPattern.exec(decoded);
-      if (custom?.groups) {
-        const { animated, name, id } = custom.groups;
-        return `${animated ? "a:" : ""}${name}:${id}`;
+    const partial = resolvePartialEmoji(emoji);
+    if (!partial) {
+      // A string with a colon that is no custom emoji: let the API decide.
+      if (typeof emoji === "string") {
+        return encodeURIComponent(emoji.includes("%") ? decodeURIComponent(emoji) : emoji);
       }
-
-      if (!decoded) throw new TypeError("Cannot resolve an empty string to an emoji");
-      return encodeURIComponent(decoded);
+      throw new GatewayTypeError("EmojiType");
     }
 
-    const { id, name, animated } = emoji;
-    if (id) return `${animated ? "a:" : ""}${name ?? "_"}:${id}`;
-    if (name) return encodeURIComponent(name);
-    throw new TypeError("Cannot resolve an emoji without an ID nor a name");
+    if (!("name" in partial)) return `_:${partial.id}`;
+    if (partial.id) return `${partial.animated ? "a:" : ""}${partial.name}:${partial.id}`;
+    return encodeURIComponent(partial.name);
   }
 
   /**
@@ -55,17 +48,10 @@ export class ReactionEmoji extends Emoji<APIPartialEmoji> {
     name: string | null;
     animated: boolean;
   } {
-    if (typeof emoji !== "string") {
-      return { id: emoji.id ?? null, name: emoji.name ?? null, animated: emoji.animated ?? false };
-    }
-
-    if (/^\d{17,20}$/.test(emoji)) return { id: emoji, name: null, animated: false };
-    const custom = FormattingPatterns.Emoji.exec(emoji) ?? CustomEmojiPattern.exec(emoji);
-    if (custom?.groups) {
-      const { animated, name, id } = custom.groups;
-      return { id: id!, name: name!, animated: Boolean(animated) };
-    }
-
-    return { id: null, name: emoji, animated: false };
+    const partial = resolvePartialEmoji(emoji);
+    if (!partial)
+      return { id: null, name: typeof emoji === "string" ? emoji : null, animated: false };
+    if (!("name" in partial)) return { id: partial.id, name: null, animated: false };
+    return { id: partial.id ?? null, name: partial.name, animated: partial.animated };
   }
 }

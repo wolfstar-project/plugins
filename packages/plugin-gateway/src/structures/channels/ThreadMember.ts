@@ -1,8 +1,10 @@
+import { cachedChannel } from "../../util/cache.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { AnyThreadChannel } from "../../managers/ThreadManager.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import type { User } from "../users/User.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link ThreadMember}, resolved from the cache by `client.threadMembers`.
@@ -67,8 +69,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
    */
   public async fetch(): Promise<this> {
     const { threadId, id } = this;
-    if (!threadId || !id)
-      throw new Error("A thread member without a thread or user ID cannot be fetched");
+    if (!threadId || !id) throw new GatewayError("ThreadMemberIdsMissing", "fetched");
     const member = await this.client.threadMembers.fetch(threadId, id, { force: true });
     return this[kPatch](member.toJSON());
   }
@@ -97,10 +98,13 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
 
   /**
    * The thread, from the cache, like discord.js's `ThreadMember#thread`. `null` when it is not cached, or when the
-   * thread member was not built by a manager.
+   * cache is asynchronous.
    */
   public get thread(): AnyThreadChannel | null {
-    return this[kRelations].thread ?? null;
+    return this.lazyRelation(
+      "thread",
+      (client) => cachedChannel(client, this.threadId) as AnyThreadChannel | undefined,
+    );
   }
 
   /**
@@ -115,7 +119,7 @@ export class ThreadMember extends Structure<CacheEntityTypes["threadMembers"]> {
    */
   public async remove(): Promise<this> {
     const { id, threadId } = this;
-    if (!id || !threadId) throw new Error("Cannot remove a thread member without its IDs");
+    if (!id || !threadId) throw new GatewayError("ThreadMemberIdsMissing", "removed");
     await this.client.threadMembers.remove(threadId, id);
     return this;
   }

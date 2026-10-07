@@ -1,3 +1,5 @@
+import { cachedGuild } from "../../../util/cache.js";
+import { lazyRelation } from "../../Structure.js";
 import type {
   APIGuildForumDefaultReactionEmoji,
   APIGuildForumTag,
@@ -10,10 +12,12 @@ import type {
 } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
 import type { Guild } from "../../guilds/Guild.js";
-import { kData, kRelations } from "../../Structure.js";
+import { kData } from "../../Structure.js";
 import type { GuildChannelCreateOptions, GuildChannelEditOptions } from "../../../util/channels.js";
 import type { AnyChannel } from "../../../managers/ChannelManager.js";
 import { editChannel } from "./edit.js";
+import { sameOverwrites } from "./ChannelPermissionMixin.js";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = { guild_id?: string; name?: string | null };
 
@@ -51,11 +55,13 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the channel was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return lazyRelation(this, "guild", (client) =>
+      cachedGuild(client, (this[kData] as Data).guild_id),
+    );
   }
 
   /**
@@ -68,6 +74,29 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
 
   public get name(): string {
     return (this[kData] as Data).name ?? "";
+  }
+
+  /**
+   * Whether this channel has the same data as another one, like discord.js's `GuildChannel#equals`: the same ID, type,
+   * name, topic, position, and permission overwrites (in any order). The category is not compared, as in discord.js.
+   * `false` for anything that is neither a channel nor a raw one.
+   *
+   * @param other The channel, or raw channel, to compare with.
+   */
+  public equals(other: unknown): boolean {
+    if (typeof other !== "object" || other === null || !("id" in other)) return false;
+    const raw = (
+      "toJSON" in other && typeof other.toJSON === "function" ? other.toJSON() : other
+    ) as CloneableData & { id: string; type?: ChannelType };
+    const data = this[kData] as CloneableData;
+    return (
+      this.id === raw.id &&
+      this.type === raw.type &&
+      (data.name ?? "") === (raw.name ?? "") &&
+      (data.topic ?? null) === (raw.topic ?? null) &&
+      (data.position ?? 0) === (raw.position ?? 0) &&
+      sameOverwrites(data, raw)
+    );
   }
 
   /**
@@ -90,7 +119,7 @@ export class GuildChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public async clone(options: Partial<GuildChannelCreateOptions> = {}): Promise<AnyChannel> {
     const { guildId } = this;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
 
     const data = this[kData] as CloneableData;
     return this.client.guilds.channels(guildId).create({

@@ -1,9 +1,16 @@
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
+import { setTimeout as sleep } from "node:timers/promises";
+import { Collection } from "@discordjs/collection";
 import {
   GatewayDispatchEvents,
   GatewayOpcodes,
+  GuildWidgetStyle,
+  RESTJSONErrorCodes,
+  RouteBases,
+  Routes,
   type APIGuild,
-  type APIIncidentsData,
+  type APIMessageSearchResult,
+  type RESTGetAPIGuildMessagesSearchResult,
   type APIVoiceRegion,
   type RESTGetAPIGuildVanityUrlResult,
   type RESTPatchAPIGuildJSONBody,
@@ -22,6 +29,8 @@ import {
   type RESTPutAPIGuildOnboardingJSONBody,
 } from "discord-api-types/v10";
 import { applyGatewayDispatch } from "@wolfstar/plugin-cache";
+import { resolveImageOption } from "../util/DataResolver.js";
+import { transformAPIIncidentsData, type IncidentActions } from "../util/Transformers.js";
 import type { GatewayClient } from "../GatewayClient.js";
 import { AnonymousGuild } from "../structures/guilds/AnonymousGuild.js";
 import {
@@ -33,6 +42,9 @@ import {
 import { bindClient } from "../structures/Structure.js";
 import { resolveAuditLogTarget, type AuditLogEntities } from "../util/auditLogs.js";
 import { whenAll } from "../util/cache.js";
+import { GuildSoundboardSoundsTimeoutError } from "../util/errors.js";
+import { shardIdOf } from "../util/shards.js";
+import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
 import { GuildPreview } from "../structures/guilds/GuildPreview.js";
 import { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import { GuildOnboarding } from "../structures/guilds/GuildOnboarding.js";
@@ -45,7 +57,15 @@ import { WelcomeScreen } from "../structures/guilds/WelcomeScreen.js";
 import type { AutoModerationRule } from "../structures/automoderation/AutoModerationRule.js";
 import type { User } from "../structures/users/User.js";
 import type { Webhook } from "../structures/webhooks/Webhook.js";
+import { GatewayError, GatewayTypeError } from "../errors/GatewayError.js";
+import type { GuildResolvable } from "../types.js";
+import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { resolveId, type IdResolvable } from "../util/channels.js";
+import {
+  toSearchQuery,
+  type GuildSearchMessagesOptions,
+  type GuildSearchMessagesResult,
+} from "../util/messageSearch.js";
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
@@ -58,6 +78,10 @@ import { StageInstanceManager } from "./StageInstanceManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 import { GuildEmojiManager } from "./GuildEmojiManager.js";
 import { GuildInviteManager } from "./GuildInviteManager.js";
+import { PresenceManager } from "./PresenceManager.js";
+import { RoleManager } from "./RoleManager.js";
+import { GuildMemberManager } from "./GuildMemberManager.js";
+import { VoiceStateManager } from "./VoiceStateManager.js";
 import { GuildStickerManager } from "./GuildStickerManager.js";
 
 /**
@@ -184,14 +208,41 @@ export interface GuildOnboardingEditOptions {
 }
 
 /**
+ * The options to request the soundboard sounds of guilds over the gateway with.
+ */
+export interface GuildSoundboardSoundsRequestOptions {
+  /**
+   * How long to wait for the replies, in milliseconds, before rejecting with a `GuildSoundboardSoundsTimeoutError`. Each
+   * reply restarts it.
+   *
+   * @default 10_000
+   */
+  time?: number;
+}
+
+interface SoundboardSoundsRequest {
+  // The requested guilds, in the order of the result.
+  ids: string[];
+  // The guilds whose sounds did not arrive yet.
+  pending: Set<string>;
+  sounds: Collection<string, Collection<string, SoundboardSound>>;
+  timer: NodeJS.Timeout | null;
+  resolve(sounds: Collection<string, Collection<string, SoundboardSound>>): void;
+  reject(error: Error): void;
+}
+
+/**
  * Manages the {@link Guild}s known to the client.
  */
 export class GuildManager extends CachedManager<"guilds", Guild, [guildId: string]> {
+  // The pending `fetchSoundboardSounds`: the replies carry no nonce, so they are matched to a request by guild.
+  readonly #soundboardRequests = new Set<SoundboardSoundsRequest>();
+
   public constructor(client: GatewayClient) {
     super(client, "guilds");
   }
 
-  public createStructure(data: CacheEntityTypes["guilds"]): Guild {
+  protected createStructure(data: CacheEntityTypes["guilds"]): Guild {
     return new Guild(data);
   }
 
@@ -230,7 +281,8 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    * @internal
    */
   public _getShallow(guildId: string): Awaitable<Guild | undefined> {
-    return whenAll([this.cache?.get(guildId)], ([raw]) =>
+    const read = this.guard("get", guildId, () => this.rawStore?.get(guildId), undefined);
+    return whenAll([read], ([raw]) =>
       raw === undefined ? undefined : bindClient(this.createStructure(raw), this.client),
     );
   }
@@ -264,6 +316,99 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public soundboardSounds(guildId: string): GuildSoundboardSoundManager {
     return new GuildSoundboardSoundManager(this.client, guildId);
+  }
+
+  /**
+   * Requests the soundboard sounds of several guilds over the gateway, and caches them. discord.js:
+   * `client.guilds.fetchSoundboardSounds()`.
+   *
+   * @remarks
+   * Discord answers with one `SOUNDBOARD_SOUNDS` dispatch per guild, which also updates the cache and is emitted as
+   * `soundboardSounds`. The guilds are grouped by shard and each shard gets one request, so every shard of the guilds must
+   * be one this client runs. The replies carry no nonce, so a reply resolves every pending request waiting for its guild,
+   * and only the process that sent a request resolves it. A reply arriving after the request timed out is only cached.
+   *
+   * @param guildIds The IDs of the guilds, repeated IDs are requested once.
+   * @param options How long to wait for the replies.
+   * @returns The sounds of each guild, keyed by guild ID in the order of `guildIds` and then by sound ID, once all of them
+   * are cached.
+   */
+  public async fetchSoundboardSounds(
+    guildIds: readonly string[],
+    options: GuildSoundboardSoundsRequestOptions = {},
+  ): Promise<Collection<string, Collection<string, SoundboardSound>>> {
+    const { time = 10_000 } = options;
+    const ids = [...new Set(guildIds)];
+    if (ids.length === 0) return new Collection();
+
+    const shards = new Map<number, string[]>();
+    for (const guildId of ids) {
+      const shardId = await shardIdOf(this.client, guildId);
+      const guilds = shards.get(shardId);
+      if (guilds) guilds.push(guildId);
+      else shards.set(shardId, [guildId]);
+    }
+
+    let request!: SoundboardSoundsRequest;
+    const promise = new Promise<Collection<string, Collection<string, SoundboardSound>>>(
+      (resolve, reject) => {
+        request = {
+          ids,
+          pending: new Set(ids),
+          sounds: new Collection(),
+          timer: null,
+          resolve,
+          reject,
+        };
+      },
+    );
+    this.#soundboardRequests.add(request);
+
+    try {
+      await Promise.all(
+        [...shards].map(([shardId, guild_ids]) =>
+          this.client.gateway.send(shardId, {
+            op: GatewayOpcodes.RequestSoundboardSounds,
+            d: { guild_ids },
+          }),
+        ),
+      );
+    } catch (error) {
+      this.#soundboardRequests.delete(request);
+      throw error;
+    }
+
+    // The timeout starts once every payload is sent, not while one waits for its shard or its rate limit.
+    if (this.#soundboardRequests.has(request)) {
+      request.timer = setTimeout(() => {
+        this.#soundboardRequests.delete(request);
+        request.reject(new GuildSoundboardSoundsTimeoutError([...request.pending], time));
+      }, time);
+      request.timer.unref?.();
+    }
+    return promise;
+  }
+
+  /**
+   * Hands the cached sounds of a `SOUNDBOARD_SOUNDS` dispatch to the pending requests waiting for their guild, resolving
+   * the ones that now have every guild.
+   *
+   * @internal
+   */
+  public handleSoundboardSounds(sounds: SoundboardSound[], guildId: string): void {
+    for (const request of this.#soundboardRequests) {
+      if (!request.pending.delete(guildId)) continue;
+
+      request.sounds.set(guildId, new Collection(sounds.map((sound) => [sound.soundId, sound])));
+      request.timer?.refresh();
+      if (request.pending.size > 0) continue;
+
+      this.#soundboardRequests.delete(request);
+      if (request.timer) clearTimeout(request.timer);
+      request.resolve(
+        new Collection(request.ids.map((id) => [id, request.sounds.get(id)!] as const)),
+      );
+    }
   }
 
   /**
@@ -342,14 +487,10 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     const settings = await this.client.api.guilds.editWidgetSettings(guildId, body, {
       reason: options.reason,
     });
-    const cached = await this.cache?.get(guildId);
-    if (cached) {
-      await this.cache!.set(guildId, {
-        ...cached,
-        widget_enabled: settings.enabled,
-        widget_channel_id: settings.channel_id,
-      });
-    }
+    await this._patchCached(guildId, {
+      widget_enabled: settings.enabled,
+      widget_channel_id: settings.channel_id,
+    });
 
     return { enabled: settings.enabled, channelId: settings.channel_id };
   }
@@ -450,14 +591,14 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     const integrations = this.integrations(guildId);
     const [webhooks, autoModerationRules, threads, pageIntegrations] = await Promise.all([
       Promise.all(log.webhooks.map((webhook) => this.client.webhooks.hydrate(webhook))),
-      Promise.all(log.auto_moderation_rules.map((rule) => rules.hydrate(rule))),
+      Promise.all(log.auto_moderation_rules.map((rule) => rules._build(rule))),
       Promise.all(
-        log.threads.map((thread) => this.client.threads.hydrate(thread as APIThreadChannel)),
+        log.threads.map((thread) => this.client.threads._build(thread as APIThreadChannel)),
       ),
       // Partial: the page only holds an ID, a name, a type, and an account.
       Promise.all(
         log.integrations.map((integration) =>
-          integrations.hydrate({ ...integration, guild_id: guildId } as never),
+          integrations._build({ ...integration, guild_id: guildId } as never),
         ),
       ),
     ]);
@@ -495,6 +636,111 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   }
 
   /**
+   * Searches the messages of a guild.
+   *
+   * @remarks
+   * Needs the `ReadMessageHistory` permission, and the content of the messages is empty without the `MessageContent`
+   * intent. Discord may return fewer messages than `limit`, and `totalResults` is approximate while messages are
+   * created or deleted, so do not paginate on `messages.size`: advance `offset` by `limit` until it passes
+   * `totalResults`.
+   *
+   * While Discord indexes the guild, the search waits the `retry_after` it answers and retries until the index is
+   * ready, so pass a `signal` to bound it, or `retryOnMissingIndex: false` to throw `SearchIndexNotYetAvailable`
+   * instead. Threads of the results are cached before their messages.
+   *
+   * @param guildId The ID of the guild.
+   * @param options What to search for, and how.
+   * @throws {GatewayRangeError} When an option exceeds a limit Discord documents.
+   * @throws {GatewayError} `SearchIndexNotYetAvailable` when the index is not ready and `retryOnMissingIndex` is
+   * `false`, with the `retryAfter` (in seconds) and the `documentsIndexed` Discord answered.
+   */
+  public async searchMessages(
+    guildId: string,
+    options: GuildSearchMessagesOptions = {},
+  ): Promise<GuildSearchMessagesResult> {
+    const { cache = true, retryOnMissingIndex = true, signal } = options;
+    const query = toSearchQuery(this.client, options);
+    // `Routes.guildMessagesSearch` exists at runtime but is missing from the typings of discord-api-types@0.38.54.
+    const route = `/guilds/${guildId}/messages/search` as const;
+
+    for (;;) {
+      const body = (await this.client.api.rest.get(route, {
+        query,
+        signal,
+      })) as RESTGetAPIGuildMessagesSearchResult;
+      if (!("code" in body) || body.code !== RESTJSONErrorCodes.IndexNotYetAvailable) {
+        return this.searchResult(guildId, body as APIMessageSearchResult, cache);
+      }
+
+      // A `retry_after` of 0 means "after a short delay", not "now".
+      const retryAfter =
+        Number.isFinite(body.retry_after) && body.retry_after > 0 ? body.retry_after : 1;
+      if (!retryOnMissingIndex) {
+        const documentsIndexed = body.documents_indexed ?? 0;
+        throw Object.assign(
+          new GatewayError("SearchIndexNotYetAvailable", guildId, retryAfter, documentsIndexed),
+          { retryAfter, documentsIndexed },
+        );
+      }
+
+      // Clamped: a timer longer than 2^31 - 1 ms fires immediately.
+      await sleep(Math.min(retryAfter * 1000, 2_147_483_647), undefined, { signal });
+    }
+  }
+
+  private async searchResult(
+    guildId: string,
+    body: APIMessageSearchResult,
+    cache: boolean,
+  ): Promise<GuildSearchMessagesResult> {
+    const threads: GuildSearchMessagesResult["threads"] = new Collection();
+    // Before the messages, so that these resolve their thread from the cache.
+    for (const raw of body.threads ?? []) {
+      threads.set(
+        raw.id,
+        await this.client.threads._add({ ...raw, guild_id: raw.guild_id ?? guildId }, cache),
+      );
+    }
+
+    const messages: GuildSearchMessagesResult["messages"] = new Collection();
+    const added = await Promise.all(
+      body.messages
+        .flat()
+        // The search leaves `reactions` out, and a message of an uncached channel still needs its guild.
+        .map((message) =>
+          this.client.messages._add({ ...message, guild_id: guildId } as never, cache),
+        ),
+    );
+    for (const message of added) messages.set(message.id, message);
+
+    const threadMembers: GuildSearchMessagesResult["threadMembers"] = new Collection();
+    const members = await Promise.all(
+      (body.members ?? []).map(
+        async (raw) =>
+          [
+            raw,
+            await this.client.threadMembers._add({ ...raw, guild_id: guildId }, cache),
+          ] as const,
+      ),
+    );
+    for (const [raw, member] of members) {
+      if (!raw.id || !raw.user_id) continue;
+      let ofThread: Collection<string, ThreadMember> | undefined = threadMembers.get(raw.id);
+      if (!ofThread) threadMembers.set(raw.id, (ofThread = new Collection()));
+      ofThread.set(raw.user_id, member);
+    }
+
+    return {
+      messages,
+      threads,
+      threadMembers,
+      totalResults: body.total_results,
+      doingDeepHistoricalIndex: body.doing_deep_historical_index,
+      ...(body.documents_indexed === undefined ? {} : { documentsIndexed: body.documents_indexed }),
+    };
+  }
+
+  /**
    * Gets the manager of a guild's channels.
    *
    * @param guildId The ID of the guild.
@@ -528,6 +774,58 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public invites(guildId: string): GuildInviteManager {
     return new GuildInviteManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's presences.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public presences(guildId: string): PresenceManager<true> {
+    return new PresenceManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's members.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public members(guildId: string): GuildMemberManager<true> {
+    return new GuildMemberManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's roles.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public roles(guildId: string): RoleManager<true> {
+    return new RoleManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's voice states.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public voiceStates(guildId: string): VoiceStateManager<true> {
+    return new VoiceStateManager<true>(this.client, guildId);
+  }
+
+  /**
+   * Gets the URL of a guild's widget image.
+   *
+   * @param guild The guild, or anything carrying its ID.
+   * @param style The style of the image.
+   */
+  public widgetImageURL(
+    guild: GuildResolvable,
+    style: GuildWidgetStyle = GuildWidgetStyle.Shield,
+  ): string {
+    const guildId =
+      typeof guild === "string" ? guild : guild instanceof Guild ? guild.id : guild.guildId;
+    if (!guildId) throw new GatewayTypeError("GuildResolve");
+    return `${RouteBases.api}${Routes.guildWidgetImage(guildId)}?style=${style}`;
   }
 
   /**
@@ -574,10 +872,10 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
       explicit_content_filter: options.explicitContentFilter,
       afk_channel_id: options.afkChannel,
       afk_timeout: options.afkTimeout,
-      icon: options.icon,
-      splash: options.splash,
-      discovery_splash: options.discoverySplash,
-      banner: options.banner,
+      icon: await resolveImageOption(options.icon),
+      splash: await resolveImageOption(options.splash),
+      discovery_splash: await resolveImageOption(options.discoverySplash),
+      banner: await resolveImageOption(options.banner),
       system_channel_id: options.systemChannel,
       system_channel_flags:
         options.systemChannelFlags === undefined
@@ -651,15 +949,14 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
   public async setIncidentActions(
     guildId: string,
     options: GuildIncidentActionsOptions,
-  ): Promise<APIIncidentsData> {
+  ): Promise<IncidentActions> {
     const body: RESTPutAPIGuildIncidentActionsJSONBody = {
       invites_disabled_until: toISO(options.invitesDisabledUntil),
       dms_disabled_until: toISO(options.dmsDisabledUntil),
     };
     const incidents = await this.client.api.guilds.editIncidentActions(guildId, body);
-    const cached = await this.cache?.get(guildId);
-    if (cached) await this.cache!.set(guildId, { ...cached, incidents_data: incidents });
-    return incidents;
+    await this._patchCached(guildId, { incidents_data: incidents });
+    return transformAPIIncidentsData(incidents);
   }
 
   protected async fetchRaw(guildId: string) {
@@ -676,21 +973,22 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     screen: APIGuildWelcomeScreen,
   ): Promise<WelcomeScreen> {
     const channels = screen.welcome_channels;
-    const [guild, cachedChannels, emojis] = await Promise.all([
+    const emojis = this.emojis(guildId);
+    const [guild, cachedChannels, cachedEmojis] = await Promise.all([
       this.cachedGuild(guildId),
       cachedMap(
         channels.map((channel) => channel.channel_id),
-        (id) => this.client.channels.get(id),
+        (id) => this.client.channels.cache.get(id),
       ),
       cachedMap(
         channels.flatMap((channel) => (channel.emoji_id ? [channel.emoji_id] : [])),
-        (id) => this.emojis(guildId).get(id),
+        (id) => emojis.cache.get(emojis.resolveKey(id)),
       ),
     ]);
     return bindClient(
       new WelcomeScreen(
         { ...screen, guild_id: guildId },
-        { guild, channels: cachedChannels, emojis },
+        { guild, channels: cachedChannels, emojis: cachedEmojis },
       ),
       this.client,
     );
@@ -702,23 +1000,24 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
     onboarding: APIGuildOnboarding,
   ): Promise<GuildOnboarding> {
     const options = onboarding.prompts.flatMap((prompt) => prompt.options);
-    const [guild, channels, roles, emojis] = await Promise.all([
+    const emojis = this.emojis(guildId);
+    const [guild, channels, roles, cachedEmojis] = await Promise.all([
       this.cachedGuild(guildId),
       cachedMap(
         [...onboarding.default_channel_ids, ...options.flatMap((option) => option.channel_ids)],
-        (id) => this.client.channels.get(id),
+        (id) => this.client.channels.cache.get(id),
       ),
       cachedMap(
         options.flatMap((option) => option.role_ids),
-        (id) => this.client.roles.get(guildId, id),
+        (id) => this.client.roles.cache.get(this.client.roles.resolveKey(guildId, id)),
       ),
       cachedMap(
         options.flatMap((option) => (option.emoji?.id ? [option.emoji.id] : [])),
-        (id) => this.emojis(guildId).get(id),
+        (id) => emojis.cache.get(emojis.resolveKey(id)),
       ),
     ]);
     return bindClient(
-      new GuildOnboarding(onboarding, { guild, channels, roles, emojis }),
+      new GuildOnboarding(onboarding, { guild, channels, roles, emojis: cachedEmojis }),
       this.client,
     );
   }
@@ -742,10 +1041,18 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
 // Reads the cached structures of some IDs, skipping the ones that are not cached (or whose read fails).
 async function cachedMap<Value>(
   ids: readonly string[],
-  get: (id: string) => Promise<Value | undefined>,
+  get: (id: string) => Awaitable<Value | undefined>,
 ): Promise<Map<string, Value>> {
   const unique = [...new Set(ids)];
-  const values = await Promise.all(unique.map((id) => get(id).catch(() => undefined)));
+  const values = await Promise.all(
+    unique.map(async (id) => {
+      try {
+        return await get(id);
+      } catch {
+        return undefined;
+      }
+    }),
+  );
   const map = new Map<string, Value>();
   for (const [index, value] of values.entries()) if (value) map.set(unique[index]!, value);
   return map;

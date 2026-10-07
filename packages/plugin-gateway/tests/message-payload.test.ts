@@ -150,6 +150,19 @@ describe("MessagePayload", () => {
     });
   });
 
+  test("GIVEN a poll answer emoji as a bare ID THEN it is sent as an ID", async () => {
+    const client = createClient();
+    const { body } = await MessagePayload.create(client, {
+      poll: {
+        question: { text: "Howl?" },
+        answers: [{ text: "Yes", emoji: "123456789012345678" }],
+        duration: 24,
+        allowMultiselect: false,
+      },
+    }).resolve();
+    expect(body.poll?.answers[0]?.poll_media.emoji).toEqual({ id: "123456789012345678" });
+  });
+
   test("GIVEN an edit THEN null clears fields", async () => {
     const client = createClient();
     const { body } = await MessagePayload.create(

@@ -1,5 +1,55 @@
 # @wolfstar/plugin-broker
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc)]:
+  - @wolfstar/plugin-cache@0.7.0
+
+## 0.5.0
+
+### Minor Changes
+
+- [#192](https://github.com/wolfstar-project/plugins/pull/192) [`aa389c8`](https://github.com/wolfstar-project/plugins/commit/aa389c8925cfc26bb5ea6db65cda5f76855f6e33) - Add `@wolfstar/plugin-broker/module` and `@wolfstar/plugin-broker/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
+### Patch Changes
+
+- Updated dependencies [[`69129e9`](https://github.com/wolfstar-project/plugins/commit/69129e9910c83f973701d55611ddd123b88d39c4)]:
+  - @wolfstar/plugin-cache@0.6.0
+
+## 0.4.1
+
+### Patch Changes
+
+- [#176](https://github.com/wolfstar-project/plugins/pull/176) [`c989f83`](https://github.com/wolfstar-project/plugins/commit/c989f8396af21be2038ffbb513e38eb1189ccbde) - Accept `@wolfstar/http-framework` v6 in the peer range (`|| ^6.0.0`).
+
+## 0.4.0
+
+### Minor Changes
+
+- [#168](https://github.com/wolfstar-project/plugins/pull/168) [`8780f43`](https://github.com/wolfstar-project/plugins/commit/8780f43239145b7ad21d1f3dcd03f934264eab9b) - Add `replayGatewayDispatches`, replaying the dispatches `forwardGatewayDispatches` publishes on a `GatewayClient` that never connects to Discord, so workers run `EventGatewayListener` pieces with the same Structures and previous state (`old` arguments) as the gateway process. Stream entries gain an optional `state` (the previous state of the dispatch's entity, encoded like the payload), `shard` and `sequence` (the gateway sequence number) field, `publish` takes them as `options`, and `BrokerMessage` exposes them; entries without them, and consumers unaware of them, work as before.
+
+### Patch Changes
+
+- Updated dependencies [[`6468763`](https://github.com/wolfstar-project/plugins/commit/646876363da7dc2b730a8fb7ed3011cd11a38859)]:
+  - @wolfstar/plugin-cache@0.5.1
+
+## 0.3.1
+
+### Patch Changes
+
+- Updated dependencies [[`a2da4d8`](https://github.com/wolfstar-project/plugins/commit/a2da4d886a9e6b2f4ed54f6ba79b93bdd076746e)]:
+  - @wolfstar/plugin-cache@0.5.0
+
+## 0.3.0
+
+### Minor Changes
+
+- [#147](https://github.com/wolfstar-project/plugins/pull/147) [`77aa9cc`](https://github.com/wolfstar-project/plugins/commit/77aa9cc4602b6b77fd38decbea103e644cd7b9af) - Complete the at-least-once delivery story of `BrokerConsumer`: `claimIdle` claims (`XAUTOCLAIM`) the entries any consumer of the group left pending for too long, e.g. one that crashed and never restarted under the same name; `maxDeliveries` moves an entry that keeps failing to a dead-letter stream (`deadLetterStream`, `<stream>:dead` by default) instead of retrying it forever; and `shutdownSignals` stops the consumer on the given process signals, awaiting the in-flight entry, before letting the signal terminate the process. Add `forwardGatewayDispatches`, which publishes every dispatch a `@wolfstar/plugin-gateway` `GatewayClient` receives onto a broker once it is written to the client's cache.
+
+  Also fix a consumer whose own pending entries could never be drained: reading a consumer's history resolves to an empty list rather than `null` once exhausted, and an entry that failed again was re-read forever, so the consumer never moved on to new entries. An entry trimmed from the stream while pending is now acknowledged instead of failing to decode.
+
 ## 0.2.0
 
 ### Minor Changes

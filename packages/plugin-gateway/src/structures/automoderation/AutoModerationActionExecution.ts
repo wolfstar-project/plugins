@@ -1,9 +1,14 @@
+import { cachedChannel, cachedGuild, cachedMember, cachedUser } from "../../util/cache.js";
 import type { GatewayAutoModerationActionExecutionDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { AutoModerationRule } from "./AutoModerationRule.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { kData, kRelations, Structure } from "../Structure.js";
+import {
+  transformAPIAutoModerationAction,
+  type AutoModerationAction,
+} from "../../util/Transformers.js";
 import type { User } from "../users/User.js";
 
 /**
@@ -39,10 +44,11 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
   }
 
   /**
-   * The action taken: blocking the message, alerting a channel, or timing the member out.
+   * The action taken: blocking the message, alerting a channel, or timing the member out. Camel-cased like
+   * discord.js's `AutoModerationActionExecution#action`.
    */
-  public get action() {
-    return this[kData].action;
+  public get action(): AutoModerationAction {
+    return transformAPIAutoModerationAction(this[kData].action);
   }
 
   public get ruleId() {
@@ -91,25 +97,27 @@ export class AutoModerationActionExecution extends Structure<GatewayAutoModerati
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   public get user(): User | null {
-    return this[kRelations].user ?? null;
+    return this.lazyRelation("user", (client) => cachedUser(client, this[kData].user_id));
   }
 
   /**
    * The member who triggered the rule, from the cache, like discord.js's `AutoModerationActionExecution#member`.
    */
   public get member(): GuildMember | null {
-    return this[kRelations].member ?? null;
+    return this.lazyRelation("member", (client) =>
+      cachedMember(client, this[kData].guild_id, this[kData].user_id),
+    );
   }
 
   /**
    * The channel the rule was triggered in, from the cache: `null` when there is none or it is not cached.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**

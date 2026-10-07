@@ -7,6 +7,7 @@ import type { ThreadMember } from "../ThreadMember.js";
 import { kData, kRelations } from "../../Structure.js";
 import { editChannel } from "./edit.js";
 import type { APIThreadMetadata } from "discord-api-types/v10";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = {
   parent_id?: string | null;
@@ -73,10 +74,12 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Whether the bot is a member of the thread, like discord.js's `ThreadChannel#joined`: from the thread member cache
-   * when the thread was built by a manager, else whether the payload carries the bot's thread member.
+   * when the thread was built by a manager, else `true` when the payload carries the bot's thread member.
+   *
+   * @returns `null` when it cannot be told: no thread member cache, and no thread member in the payload.
    */
-  public get joined(): boolean {
-    return this[kRelations].joined ?? (this[kData] as Data).member !== undefined;
+  public get joined(): boolean | null {
+    return this[kRelations].joined ?? ((this[kData] as Data).member === undefined ? null : true);
   }
 
   /**
@@ -129,7 +132,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public fetchStarterMessage(): Promise<Message> {
     const { parent_id: parentId } = this[kData] as Data;
-    if (!parentId) throw new Error(`Thread ${this.id} has no known parent`);
+    if (!parentId) throw new GatewayError("ThreadParentUnknown", this.id);
     return this.client.messages.fetch(parentId, this.id);
   }
 
@@ -138,7 +141,7 @@ export class ThreadChannelMixin<Type extends ChannelType = ChannelType> {
    */
   public fetchOwner(): Promise<ThreadMember> {
     const { owner_id: ownerId } = this[kData] as Data;
-    if (!ownerId) throw new Error(`Thread ${this.id} has no known owner`);
+    if (!ownerId) throw new GatewayError("ThreadOwnerUnknown", this.id);
     return this.client.threadMembers.fetch(this.id, ownerId);
   }
 }

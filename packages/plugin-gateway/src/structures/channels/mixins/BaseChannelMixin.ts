@@ -9,6 +9,7 @@ import {
   snowflakeTimestamp,
   type StructureMixin,
 } from "../../Structure.js";
+import { GatewayTypeError } from "../../../errors/GatewayError.js";
 
 export interface BaseChannelMixin<Type extends ChannelType = ChannelType>
   extends BaseChannelStructure<Type>, StructureMixin<ChannelDataType<Type>, ChannelRelations> {}
@@ -70,7 +71,7 @@ export class BaseChannelMixin<Type extends ChannelType = ChannelType> {
   public async fetch(): Promise<this> {
     const data = await this.client.api.channels.get(this.id);
     if (data.type !== this.type) {
-      throw new TypeError(`Channel ${this.id} changed type from ${this.type} to ${data.type}`);
+      throw new GatewayTypeError("ChannelTypeChanged", this.id, this.type, data.type);
     }
 
     return this[kPatch](data as ChannelDataType<Type>);

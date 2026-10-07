@@ -9,6 +9,12 @@ import {
 import type { GatewayClient } from "../GatewayClient.js";
 import type { Guild } from "../structures/guilds/Guild.js";
 import { GuildTemplate } from "../structures/guilds/GuildTemplate.js";
+import {
+  resolveGuildTemplateCode,
+  resolveImageOption,
+  type ImageResolvable,
+} from "../util/DataResolver.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * The options to create a template with.
@@ -32,19 +38,17 @@ export interface GuildTemplateEditOptions {
 export interface GuildTemplateCreateGuildOptions {
   name: string;
   /**
-   * The icon, as a data URI.
+   * The icon: a data URI, or anything `resolveImage` reads.
    */
-  icon?: string;
+  icon?: ImageResolvable;
 }
 
 /**
  * Manages guild templates. Discord does not send them over the gateway, so they are never cached.
  */
-export class GuildTemplateManager {
-  public readonly client: GatewayClient;
-
+export class GuildTemplateManager extends BaseManager {
   public constructor(client: GatewayClient) {
-    this.client = client;
+    super(client);
   }
 
   /**
@@ -53,9 +57,7 @@ export class GuildTemplateManager {
    * @param code The code of the template, or its URL.
    */
   public async fetch(code: string): Promise<GuildTemplate> {
-    // Accept `https://discord.new/code` as well as the bare code.
-    const resolved = code.split("/").pop()!;
-    return this.build(await this.client.api.guilds.getTemplate(resolved));
+    return this.build(await this.client.api.guilds.getTemplate(resolveGuildTemplateCode(code)));
   }
 
   /**
@@ -134,7 +136,10 @@ export class GuildTemplateManager {
    * @param options The name and icon of the guild.
    */
   public async createGuild(code: string, options: GuildTemplateCreateGuildOptions): Promise<Guild> {
-    const body: RESTPostAPITemplateCreateGuildJSONBody = { name: options.name, icon: options.icon };
+    const body: RESTPostAPITemplateCreateGuildJSONBody = {
+      name: options.name,
+      icon: (await resolveImageOption(options.icon)) ?? undefined,
+    };
     const guild = (await this.client.api.rest.post(Routes.template(code), {
       body,
     })) as APIGuild;
@@ -143,7 +148,7 @@ export class GuildTemplateManager {
 
   private async build(template: APITemplate): Promise<GuildTemplate> {
     const creator = await this.client.users._add(template.creator);
-    const guild = (await this.client.guilds.get(template.source_guild_id)) ?? null;
+    const guild = (await this.client.guilds.cache.get(template.source_guild_id)) ?? null;
     return new GuildTemplate(template, { guild, creator });
   }
 }

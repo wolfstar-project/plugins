@@ -1,5 +1,6 @@
 import { CategoryChannel as BaseCategoryChannel } from "@discordjs/structures";
 import type { ChannelType } from "discord-api-types/v10";
+import { CategoryChannelChildManager } from "../../managers/CategoryChannelChildManager.js";
 import type { ChannelDataType, ChannelRelations } from "./Channel.js";
 import { Mixin, type MixinTypes } from "../Mixin.js";
 import { initStructure, StructureMixin } from "../Structure.js";
@@ -33,6 +34,13 @@ export class CategoryChannel extends BaseCategoryChannel {
   ) {
     super(data);
     initStructure(this, data, relations);
+  }
+
+  /**
+   * The channels of the category, like discord.js's `CategoryChannel#children`.
+   */
+  public get children(): CategoryChannelChildManager {
+    return new CategoryChannelChildManager(this);
   }
 }
 

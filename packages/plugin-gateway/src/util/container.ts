@@ -1,5 +1,6 @@
 import { container } from "@wolfstar/http-framework";
 import type { GatewayClient } from "../GatewayClient.js";
+import { GatewayError } from "../errors/GatewayError.js";
 
 /**
  * Gets the {@link GatewayClient} registered in the framework's container.
@@ -11,10 +12,21 @@ import type { GatewayClient } from "../GatewayClient.js";
 export function getGatewayClient(): GatewayClient {
   const { client } = container;
   if (!client || !("gateway" in client)) {
-    throw new Error("No GatewayClient has been constructed yet");
+    throw new GatewayError("ClientNotConstructed");
   }
 
   return client as GatewayClient;
+}
+
+/**
+ * Gets the {@link GatewayClient} registered in the framework's container, if any: {@link getGatewayClient} for the
+ * code that can do without a client.
+ *
+ * @internal
+ */
+export function existingGatewayClient(): GatewayClient | undefined {
+  const { client } = container;
+  return client && "gateway" in client ? (client as GatewayClient) : undefined;
 }
 
 declare module "@sapphire/pieces" {

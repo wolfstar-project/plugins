@@ -1,4 +1,9 @@
-import { stageInstanceKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  scheduledEventKey,
+  stageInstanceKey,
+  type Awaitable,
+  type CacheEntityTypes,
+} from "@wolfstar/plugin-cache";
 import {
   type RESTPatchAPIStageInstanceJSONBody,
   type RESTPostAPIStageInstanceJSONBody,
@@ -49,7 +54,7 @@ export class StageInstanceManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["stageInstances"]): StageInstance {
+  protected createStructure(data: CacheEntityTypes["stageInstances"]): StageInstance {
     return new StageInstance(data);
   }
 
@@ -65,9 +70,11 @@ export class StageInstanceManager extends CachedManager<
     return whenAll(
       [
         this.cachedGuild(data.guild_id),
-        this.client.channels._get(data.channel_id),
+        this.client.channels.cache.get(data.channel_id),
         data.guild_scheduled_event_id
-          ? this.client.guilds.scheduledEvents(data.guild_id)._get(data.guild_scheduled_event_id)
+          ? this.client.guilds
+              .scheduledEvents(data.guild_id)
+              .cache.get(scheduledEventKey(data.guild_id, data.guild_scheduled_event_id))
           : undefined,
       ],
       ([guild, channel, guildScheduledEvent]) =>
@@ -128,7 +135,7 @@ export class StageInstanceManager extends CachedManager<
    */
   public async delete(channelId: string, reason?: string): Promise<void> {
     await this.client.api.stageInstances.delete(channelId, { reason });
-    await this.cache?.delete(this.resolveKey(channelId));
+    await this.cache.delete(this.resolveKey(channelId));
   }
 
   protected async fetchRaw(channelId: string) {

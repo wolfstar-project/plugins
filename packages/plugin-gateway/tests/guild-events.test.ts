@@ -20,6 +20,7 @@ import {
   GatewayClient,
   GuildScheduledEvent,
   SoundboardSound,
+  type GatewayClientOptions,
   type GatewayEventMap,
   type GatewayEventName,
   type StageChannel,
@@ -32,13 +33,14 @@ const eventId = "300000000000000030";
 const userId = "600000000000000600";
 const user = { id: userId, username: "wolf", discriminator: "0", global_name: null, avatar: null };
 
-function createClient() {
+// Pass `{}` for the default cache of structure instances.
+function createClient(options: Partial<GatewayClientOptions> = { cache: createInMemoryCache() }) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: createInMemoryCache(),
+    ...options,
   });
 }
 
@@ -127,7 +129,7 @@ describe("scheduled events", () => {
     vi.spyOn(container.rest, "patch").mockResolvedValue(
       scheduledEvent({ status: GuildScheduledEventStatus.Active }),
     );
-    const event = await client.guilds.scheduledEvents(guildId).hydrate(scheduledEvent());
+    const event = await client.guilds.scheduledEvents(guildId)._build(scheduledEvent());
 
     await event.setStatus(GuildScheduledEventStatus.Active);
 
@@ -143,7 +145,7 @@ describe("scheduled events", () => {
         member: { roles: [], joined_at: "2026-01-01T00:00:00.000Z" },
       },
     ]);
-    const event = await client.guilds.scheduledEvents(guildId).hydrate(scheduledEvent());
+    const event = await client.guilds.scheduledEvents(guildId)._build(scheduledEvent());
 
     const [subscriber] = await event.fetchSubscribers({ withMember: true });
 
@@ -194,7 +196,7 @@ describe("stage instances", () => {
       name: "stage",
       guild_id: guildId,
     } as never);
-    return (await client.channels.get(channelId)) as StageChannel;
+    return (await client.channels.cache.get(channelId)) as StageChannel;
   }
 
   test("GIVEN createStageInstance and setTopic THEN the stage is started and edited", async () => {
@@ -268,7 +270,7 @@ describe("soundboard", () => {
     vi.spyOn(container.rest, "get").mockResolvedValue([
       sound({ sound_id: "1", guild_id: undefined }),
     ]);
-    const channel = (await client.channels.get(channelId)) as VoiceChannel;
+    const channel = (await client.channels.cache.get(channelId)) as VoiceChannel;
 
     const [howl] = await client.fetchDefaultSoundboardSounds();
     await channel.sendSoundboardSound(howl!);
@@ -290,5 +292,33 @@ describe("soundboard", () => {
     });
 
     expect(calls[0]![0]?.name).toBe("howl");
+  });
+});
+
+describe("guild deletion", () => {
+  test("GIVEN GUILD_DELETE under the default cache THEN the guild's entities leave the manager caches", async () => {
+    const client = createClient({});
+    await dispatch(client, GatewayDispatchEvents.GuildCreate, {
+      id: guildId,
+      name: "Pack",
+      channels: [{ id: channelId, type: ChannelType.GuildText, name: "general" }],
+      members: [
+        { user, roles: [], joined_at: "2026-01-01T00:00:00.000Z", deaf: false, mute: false },
+      ],
+      roles: [{ id: guildId, name: "@everyone", permissions: "0", position: 0 }],
+      emojis: [],
+      stickers: [],
+    });
+    expect(await client.guilds.cache.has(guildId)).toBe(true);
+    expect(await client.channels.cache.getSize()).toBe(1);
+    expect(await client.roles.cache.getSize()).toBe(1);
+    expect(await client.members.cache.getSize()).toBe(1);
+
+    await dispatch(client, GatewayDispatchEvents.GuildDelete, { id: guildId });
+
+    expect(await client.guilds.cache.has(guildId)).toBe(false);
+    expect(await client.channels.cache.getSize()).toBe(0);
+    expect(await client.roles.cache.getSize()).toBe(0);
+    expect(await client.members.cache.getSize()).toBe(0);
   });
 });

@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-subcommands-advanced",
-  "version": "2.0.5",
+  "version": "2.1.0",
   "description": "Plugin for @wolfstar/http-framework to modularize slash subcommands into separate command classes",
   "keywords": [
     "discord",
@@ -41,6 +41,18 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/esm/plugin.d.ts",
+        "default": "./dist/esm/plugin.js"
+      }
+    },
+    "./module": {
+      "import": {
+        "types": "./dist/esm/module.d.ts",
+        "default": "./dist/esm/module.js"
+      }
     }
   },
   "publishConfig": {
@@ -59,11 +71,18 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^5.1.0",
-    "@wolfstar/http-framework-test-utils": "^3.0.9"
+    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/http-framework-test-utils": "^4.0.2",
+    "@wolfstar/kit": "^0.1.0"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.1.0 || ^5.0.0"
+    "@wolfstar/http-framework": "^3.1.0 || ^5.0.0 || ^6.0.0",
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@wolfstar/kit": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"

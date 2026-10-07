@@ -1,3 +1,5 @@
+import { cachedGuild, cacheRead, whenAll, type CacheRead } from "../../util/cache.js";
+import { requireMe } from "../../util/permissions.js";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { GuildEmojiEditOptions } from "../../managers/GuildEmojiManager.js";
 import { GuildEmojiRoleManager } from "../../managers/GuildEmojiRoleManager.js";
@@ -40,11 +42,11 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the emoji was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -83,7 +85,7 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
    * The roles allowed to use the emoji.
    */
   public get roles(): GuildEmojiRoleManager {
-    return new GuildEmojiRoleManager(this.client, this.guildId, this.id, this.roleIds);
+    return new GuildEmojiRoleManager(this);
   }
 
   /**
@@ -95,7 +97,26 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   /**
+   * Whether the bot can delete the emoji, like discord.js's `GuildEmoji#deletable`: it is not managed, and the bot
+   * has `ManageGuildExpressions`.
+   *
+   * @throws A `GatewayError`: `GuildUncachedMe` or `GuildUncached` on a cache miss.
+   */
+  public get deletable(): CacheRead<boolean> {
+    if (this.managed) return cacheRead(false);
+    return cacheRead(
+      whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+        whenAll([me.permissions], ([permissions]) => permissions.has("ManageGuildExpressions")),
+      ),
+    );
+  }
+
+  /**
    * Whether the bot can delete the emoji: it is not managed, and the bot has `ManageGuildExpressions`.
+   *
+   * @deprecated Use {@link GuildEmoji.deletable}. When the guild or the bot's member may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.members.fetchMe(guildId)`), then read the
+   * getter.
    */
   public async fetchDeletable(): Promise<boolean> {
     if (this.managed) return false;
@@ -125,18 +146,34 @@ export class GuildEmoji extends Emoji<CacheEntityTypes["emojis"], GuildEmojiRela
   }
 
   /**
-   * Whether this emoji has the same data as another one.
-   * @param emoji The emoji to compare with.
+   * Whether this emoji has the same data as another one, like discord.js's `GuildEmoji#equals`. Against an emoji, it
+   * compares the ID, name, `managed`, `available`, `requiresColons`, and roles; against a raw emoji, only the ID,
+   * name, and roles. `false` for anything else.
+   *
+   * @param other The emoji, or raw emoji, to compare with.
    */
-  public equals(emoji: GuildEmoji): boolean {
+  public equals(other: unknown): boolean {
+    const roleIds = this.roleIds;
+    if (other instanceof GuildEmoji) {
+      return (
+        other.id === this.id &&
+        other.name === this.name &&
+        other.managed === this.managed &&
+        other.available === this.available &&
+        other.requiresColons === this.requiresColons &&
+        other.roleIds.length === roleIds.length &&
+        other.roleIds.every((id) => roleIds.includes(id))
+      );
+    }
+
+    if (typeof other !== "object" || other === null) return false;
+    const raw = other as Partial<CacheEntityTypes["emojis"]>;
+    const roles = raw.roles ?? [];
     return (
-      this.id === emoji.id &&
-      this.name === emoji.name &&
-      this.managed === emoji.managed &&
-      this.available === emoji.available &&
-      this.requiresColons === emoji.requiresColons &&
-      this.roleIds.length === emoji.roleIds.length &&
-      this.roleIds.every((id) => emoji.roleIds.includes(id))
+      raw.id === this.id &&
+      raw.name === this.name &&
+      roles.length === roleIds.length &&
+      roles.every((id) => roleIds.includes(id))
     );
   }
 }

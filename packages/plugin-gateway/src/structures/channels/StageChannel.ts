@@ -13,7 +13,9 @@ import { ChannelWebhooksMixin } from "./mixins/ChannelWebhooksMixin.js";
 import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
 import { TextChannelMixin } from "./mixins/TextChannelMixin.js";
+import { TextGuildChannelMixin } from "./mixins/TextGuildChannelMixin.js";
 import { VoiceChannelMixin } from "./mixins/VoiceChannelMixin.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 export interface StageChannel
   extends
@@ -23,6 +25,7 @@ export interface StageChannel
       [
         BaseChannelMixin<ChannelType.GuildStageVoice>,
         TextChannelMixin<ChannelType.GuildStageVoice>,
+        TextGuildChannelMixin<ChannelType.GuildStageVoice>,
         GuildChannelMixin<ChannelType.GuildStageVoice>,
         ChannelParentMixin<ChannelType.GuildStageVoice>,
         ChannelPermissionMixin<ChannelType.GuildStageVoice>,
@@ -82,7 +85,7 @@ export class StageChannel extends BaseStageChannel {
    */
   public createStageInstance(options: StageInstanceCreateOptions): Promise<StageInstance> {
     const { guildId } = this;
-    if (!guildId) return Promise.reject(new Error(`Channel ${this.id} has no known guild`));
+    if (!guildId) return Promise.reject(new GatewayError("ChannelGuildUnknown", this.id));
     return this.client.guilds.stageInstances(guildId).create(this.id, options);
   }
 }
@@ -91,6 +94,7 @@ Mixin(StageChannel, [
   StructureMixin,
   BaseChannelMixin,
   TextChannelMixin,
+  TextGuildChannelMixin,
   GuildChannelMixin,
   ChannelParentMixin,
   ChannelPermissionMixin,

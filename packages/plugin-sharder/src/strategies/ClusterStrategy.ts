@@ -1,4 +1,4 @@
-import cluster, { type Worker as ClusterWorker } from "node:cluster";
+import cluster, { type ClusterSettings, type Worker as ClusterWorker } from "node:cluster";
 import { fileURLToPath } from "node:url";
 import {
   ShardContextVariable,
@@ -34,12 +34,12 @@ export class ClusterStrategy extends ProcessStrategy {
 
   protected createProcess(context: ShardContext, options: SpawnOptions): ClusterWorker {
     const { path, args, execArgv, env } = this.options;
-    cluster.setupPrimary({
-      exec: path instanceof URL ? fileURLToPath(path) : path,
-      args: args ? [...args] : undefined,
-      execArgv: execArgv ? [...execArgv] : undefined,
-      serialization: "advanced",
-    });
+    // An explicit `undefined` would override Node's defaults, so only the given keys are set.
+    const settings: ClusterSettings = { serialization: "advanced" };
+    if (path) settings.exec = path instanceof URL ? fileURLToPath(path) : path;
+    if (args) settings.args = [...args];
+    if (execArgv) settings.execArgv = [...execArgv];
+    cluster.setupPrimary(settings);
     return cluster.fork({ ...env, ...options.env, [ShardContextVariable]: encodeContext(context) });
   }
 }

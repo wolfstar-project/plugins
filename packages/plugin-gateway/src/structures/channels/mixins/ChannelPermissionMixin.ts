@@ -1,14 +1,20 @@
 import type { ChannelType } from "discord-api-types/v10";
 import type { Channel } from "../Channel.js";
-import { kData, kPatch, kRelations } from "../../Structure.js";
+import { kData, kPatch, lazyRelation } from "../../Structure.js";
+import { cachedChannel, cacheRead, type CacheRead } from "../../../util/cache.js";
 import type { APIOverwrite } from "discord-api-types/v10";
+import type { SetPositionOptions } from "../../../managers/GuildChannelManager.js";
 import { PermissionOverwriteManager } from "../../../managers/PermissionOverwriteManager.js";
 import type { IdResolvable } from "../../../util/channels.js";
-import { computeTargetPermissions } from "../../../util/permissions.js";
+import {
+  computeTargetPermissions,
+  computeCachedTargetPermissions,
+} from "../../../util/permissions.js";
 import type { PermissionsBitField } from "../../../util/PermissionsBitField.js";
 import type { GuildMember } from "../../guilds/GuildMember.js";
 import type { Role } from "../../guilds/Role.js";
 import { editChannel } from "./edit.js";
+import { GatewayError } from "../../../errors/GatewayError.js";
 
 type Data = {
   guild_id?: string;
@@ -18,7 +24,7 @@ type Data = {
 };
 
 // Whether two channels have the same permission overwrites, in any order.
-function sameOverwrites(channel: Data, parent: Data): boolean {
+export function sameOverwrites(channel: Data, parent: Data): boolean {
   const own = channel.permission_overwrites ?? [];
   const theirs = parent.permission_overwrites ?? [];
   return (
@@ -63,33 +69,31 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Whether the channel's overwrites are the same as its category's, like discord.js's
-   * `GuildChannel#permissionsLocked`: `null` when it has no category, or when the category is not cached (see
+   * `GuildChannel#permissionsLocked`: `null` when it has no category, or when the category is not in a synchronous cache (see
    * {@link ChannelPermissionMixin.fetchPermissionsLocked}).
    */
   public get permissionsLocked(): boolean | null {
-    const { parent } = this[kRelations];
+    const parent = lazyRelation<{ toJSON(): unknown }>(this, "parent", (client) =>
+      cachedChannel(client, (this[kData] as Data).parent_id),
+    );
     if (!parent) return null;
     return sameOverwrites(this[kData] as Data, parent.toJSON() as Data);
   }
 
   /**
-   * Moves the channel.
+   * Moves the channel among the channels it is sorted with, like discord.js's `GuildChannel#setPosition`.
    *
-   * @param position The new position, or the offset from the current one with `relative`.
+   * @param position The index to move it to among them, or the offset to move it by with `relative`.
    * @param options Whether the position is relative, and the reason for the audit log.
    */
-  public async setPosition(
-    position: number,
-    options: { relative?: boolean; reason?: string } = {},
-  ): Promise<this> {
+  public async setPosition(position: number, options: SetPositionOptions = {}): Promise<this> {
     const { guild_id: guildId } = this[kData] as Data;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
 
-    const target = options.relative ? this.position + position : position;
-    await this.client.guilds
+    const moved = await this.client.guilds
       .channels(guildId)
-      .setPositions([{ channel: this.id, position: target }], options.reason);
-    return this[kPatch]({ position: target } as never);
+      .setPosition(this.id, position, options);
+    return this[kPatch]({ position: (moved.toJSON() as Data).position } as never);
   }
 
   /**
@@ -120,7 +124,7 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
    */
   public lockPermissions(reason?: string): Promise<this> {
     if (!(this[kData] as Data).parent_id) {
-      throw new Error(`Channel ${this.id} has no category to sync its permissions with`);
+      throw new GatewayError("GuildChannelOrphan", this.id);
     }
 
     return editChannel(this, { lockPermissions: true, reason });
@@ -128,6 +132,9 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
 
   /**
    * Fetches whether the channel's overwrites are the same as its category's. `null` without a category.
+   *
+   * @deprecated Use {@link ChannelPermissionMixin.permissionsLocked}. When the category may be missing from the cache,
+   * fetch it first (`client.channels.fetch(channel.parentId)`), then read the getter.
    */
   public async fetchPermissionsLocked(): Promise<boolean | null> {
     const { parent_id: parentId } = this[kData] as Data;
@@ -138,16 +145,35 @@ export class ChannelPermissionMixin<Type extends ChannelType = ChannelType> {
   }
 
   /**
+   * The permissions of a member or role in the channel, like discord.js's `GuildChannel#permissionsFor`: their guild
+   * permissions with the channel's overwrites applied, read from the cache.
+   *
+   * @param target A member, a role, or the ID of a cached member.
+   * @throws A `GatewayError`: `GuildMemberUncached` or `GuildUncached` on a miss.
+   */
+  public permissionsFor(
+    target: GuildMember | Role | string,
+  ): CacheRead<Readonly<PermissionsBitField>> {
+    const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
+    return cacheRead(computeCachedTargetPermissions(guildId, overwrites, target, this.client));
+  }
+
+  /**
    * Fetches the permissions of a member or role in the channel: their guild permissions with the channel's overwrites
    * applied. discord.js: `channel.permissionsFor(memberOrRole)`.
    *
    * @param target A member, a role, or the ID of a member.
+   *
+   * @deprecated Use {@link ChannelPermissionMixin.permissionsFor}. When the guild or the member may be missing from the
+   * cache, fetch them first (`client.guilds.fetch(guildId)`, `client.members.fetch(guildId, userId)`), then call the
+   * method.
    */
   public async fetchPermissionsFor(
     target: GuildMember | Role | string,
   ): Promise<Readonly<PermissionsBitField>> {
     const { guild_id: guildId, permission_overwrites: overwrites = [] } = this[kData] as Data;
-    if (!guildId) throw new Error(`Channel ${this.id} has no known guild`);
+    if (!guildId) throw new GatewayError("ChannelGuildUnknown", this.id);
     return computeTargetPermissions(guildId, overwrites, target);
   }
 }

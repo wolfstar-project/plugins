@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-i18next
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-i18next.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-i18next</h1>
 
 **i18next-powered internationalization for HTTP interactions.**
 
@@ -30,6 +28,38 @@ pnpm add @wolfstar/http-framework @wolfstar/plugin-i18next
 ```
 
 ## Usage
+
+### Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer):
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: [["@wolfstar/plugin-i18next/module", { defaultLanguageDirectory: "./languages" }]],
+});
+```
+
+The options are written into the built entry, so they must be JSON-serialisable. `fetchLanguage` and
+the functions in `hmr.options` are not: set `fetchLanguage` through `ClientOptions.i18n`, which is
+merged (shallowly) over the module options. Because the merge is shallow, `hmr: { options }` set
+through `ClientOptions.i18n` replaces the module's whole `hmr` object: when you need functions in it,
+set the entire `hmr` object, including `enabled: true`, through `ClientOptions.i18n`.
+
+Never combine the module (or the `@wolfstar/plugin-i18next/plugin` factory below) with
+`import "@wolfstar/plugin-i18next/register"`: both paths install the same hooks, so combining them
+installs them twice.
+
+Without Stars, pass the `definePlugin` factory to `plugins` instead:
+
+```ts
+import i18nPlugin from "@wolfstar/plugin-i18next/plugin";
+
+const client = new Client({ plugins: [i18nPlugin({ defaultName: "en-US" })] });
+```
+
+### `register` entrypoint (framework v3/v5/v6)
 
 Import the register entrypoint **before** creating the client:
 
@@ -239,6 +269,21 @@ import { I18nextPlugin } from "@wolfstar/plugin-i18next/register";
 
 await I18nextPlugin.watcher?.close();
 ```
+
+The `./plugin` factory exposes the same watcher as `watcher` on the plugin it returns (`null` until
+`postListen` has run, and when HMR is not enabled):
+
+```typescript
+import i18nPlugin from "@wolfstar/plugin-i18next/plugin";
+
+const plugin = i18nPlugin({ hmr: { enabled: true } });
+const client = new Client({ plugins: [plugin] });
+
+await plugin.watcher?.close();
+```
+
+A module activated through `stars.config` is built by the CLI, so there is no plugin instance to read
+the watcher from.
 
 ## Options
 

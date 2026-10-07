@@ -15,3 +15,13 @@ export const consumer = new BrokerConsumer({
   group: "workers",
   consumer: "worker-1",
 });
+
+export const consumerWithClaims = new BrokerConsumer({
+  redis,
+  stream: "events",
+  group: "workers",
+  consumer: "worker-1",
+  claimIdle: 60_000,
+  maxDeliveries: 5,
+  shutdownSignals: ["SIGTERM", "SIGINT"],
+});

@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-cache",
-  "version": "0.4.0",
+  "version": "0.7.0",
   "description": "Pluggable, storage-agnostic Discord entity cache (in-memory and Redis, with optional compression) for @wolfstar/plugin-gateway",
   "keywords": [
     "cache",
@@ -47,6 +47,12 @@
         "types": "./dist/esm/msgpack.d.ts",
         "default": "./dist/esm/msgpack.js"
       }
+    },
+    "./module": {
+      "import": {
+        "types": "./dist/esm/module.d.ts",
+        "default": "./dist/esm/module.js"
+      }
     }
   },
   "publishConfig": {
@@ -63,13 +69,18 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
+    "@wolfstar/kit": "^0.1.0",
     "ioredis": "^6.0.0",
     "msgpackr": "^2.1.0"
   },
   "peerDependencies": {
+    "@wolfstar/kit": "^0.1.0",
     "msgpackr": "^2.0.0"
   },
   "peerDependenciesMeta": {
+    "@wolfstar/kit": {
+      "optional": true
+    },
     "msgpackr": {
       "optional": true
     }

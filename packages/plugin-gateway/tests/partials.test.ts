@@ -33,7 +33,7 @@ function createClient(partials: readonly Partials[] = [], cache = true) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
     partials,
   });
 }
@@ -59,6 +59,22 @@ afterEach(() => {
 });
 
 describe("Partials", () => {
+  test("GIVEN a message without content or without author THEN it is partial", () => {
+    const author = {
+      id: "1",
+      username: "wolf",
+      discriminator: "0",
+      global_name: null,
+      avatar: null,
+    };
+
+    expect(new Message({ id: "3", channel_id: "20", author } as never).partial).toBe(true);
+    expect(new Message({ id: "3", channel_id: "20", content: "hi" } as never).partial).toBe(true);
+    expect(new Message({ id: "3", channel_id: "20", author, content: "" } as never).partial).toBe(
+      false,
+    );
+  });
+
   test("GIVEN the options THEN the client exposes a frozen copy", () => {
     const partials = [Partials.Message];
     const client = createClient(partials);
@@ -102,7 +118,7 @@ describe("Partials", () => {
     expect(message!.guildId).toBe(guildId);
     expect(message!.client).toBe(client);
     expect(message!.embeds).toEqual([]);
-    expect(message!.attachments).toEqual([]);
+    expect(message!.attachments.size).toBe(0);
   });
 
   test("GIVEN Partials.Message THEN bulk deletes list cached and partial messages in order", async () => {
@@ -149,6 +165,44 @@ describe("Partials", () => {
     expect(member!.id).toBe(userId);
     expect(member!.guildId).toBe(guildId);
     expect(member!.user?.username).toBe("wolf");
+  });
+
+  test("GIVEN a partial member THEN its role manager is partial, and a full member's is not", async () => {
+    const client = createClient([Partials.GuildMember]);
+    const calls = record(client, "guildMemberRemove");
+    await dispatch(client, GatewayDispatchEvents.GuildMemberRemove, { guild_id: guildId, user });
+    const [[partial]] = calls;
+
+    const full = await client.members._build({
+      guild_id: guildId,
+      user,
+      roles: [],
+      joined_at: "2024-01-01T00:00:00.000Z",
+      deaf: false,
+      mute: false,
+      flags: 0,
+    });
+
+    expect(partial!.roles.partial).toBe(true);
+    expect(full.partial).toBe(false);
+    expect(full.roles.partial).toBe(false);
+  });
+
+  test("GIVEN a presence of an uncached member THEN the member cache stays untouched", async () => {
+    const client = createClient([Partials.GuildMember]);
+
+    await dispatch(client, GatewayDispatchEvents.PresenceUpdate, {
+      user: { id: userId },
+      guild_id: guildId,
+      status: "online",
+      activities: [],
+      client_status: { desktop: "online" },
+    });
+
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, userId)),
+    ).toBeUndefined();
+    expect(await client.cache!.members!.has(`${guildId}:${userId}`)).toBe(false);
   });
 
   test("GIVEN Partials.User and Partials.Message THEN reactions carry a partial user and message", async () => {

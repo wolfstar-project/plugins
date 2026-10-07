@@ -2,19 +2,25 @@ import {
   ChannelType,
   GatewayDispatchEvents,
   GatewayOpcodes,
+  type APIMessage,
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import {
+  applyCacheOperations,
   applyGatewayDispatch,
+  createCache,
   createCacheOperations,
   createInMemoryCache,
+  MemoryEntityCache,
+  type EntityCache,
   memberKey,
   messageKey,
   roleKey,
   threadMemberKey,
 } from "../src/index.js";
+import { addReaction } from "../src/lib/reactions.js";
 
 const user: APIUser = {
   id: "1",
@@ -388,5 +394,288 @@ describe("reactions and poll votes", () => {
     expect((await cache.messages.get(key))?.poll?.results?.answer_counts).toEqual([
       { id: 1, count: 1, me_voted: false },
     ]);
+  });
+});
+
+describe("partial caches", () => {
+  const guildPayload = {
+    id: "10",
+    name: "Pack",
+    channels: [{ id: "20", type: ChannelType.GuildText, name: "general" }],
+    members: [
+      {
+        user,
+        roles: [],
+        joined_at: "2024-01-01T00:00:00.000Z",
+        deaf: false,
+        mute: false,
+        flags: 0,
+      },
+    ],
+    roles: [{ id: "10", name: "@everyone" }],
+    emojis: [],
+    stickers: [],
+  };
+
+  test("GIVEN a cache holding only guilds THEN a GUILD_CREATE writes only the guild", async () => {
+    const guilds = new MemoryEntityCache();
+    const cache = createCache({ makeCache: (entity) => (entity === "guilds" ? guilds : null) });
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guildPayload));
+
+    expect(guilds.keys()).toEqual(["10"]);
+  });
+
+  test("GIVEN an empty cache THEN every dispatch is a no-op", async () => {
+    const cache = createCache({ makeCache: () => null });
+
+    await expect(
+      applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildCreate, guild)),
+    ).resolves.toEqual([]);
+    await expect(
+      applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildDelete, { id: "10" })),
+    ).resolves.toEqual([]);
+  });
+
+  test("GIVEN a store that cannot enumerate THEN GUILD_DELETE skips its scan", async () => {
+    const inner = new MemoryEntityCache<any>();
+    inner.set("20", { id: "20", guild_id: "10" });
+    // Only the base contract: no keys, values, entries, nor deleteGuild.
+    const channels: EntityCache<any> = {
+      get: (key) => inner.get(key),
+      set: (key, value, options) => inner.set(key, value, options),
+      upsert: (key, data, options) => inner.upsert(key, data, options),
+      has: (key) => inner.has(key),
+      delete: (key) => inner.delete(key),
+      clear: () => inner.clear(),
+      getSize: () => inner.getSize(),
+    };
+    const cache = createCache({ makeCache: (entity) => (entity === "channels" ? channels : null) });
+
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.GuildDelete, { id: "10" }));
+
+    expect(inner.has("20")).toBe(true);
+  });
+});
+
+describe("applyCacheOperations results", () => {
+  test("GIVEN upserts THEN each result carries the entry before and after", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", user);
+
+    const results = await applyCacheOperations(cache, [
+      { type: "upsert", store: "users", key: "1", raw: { id: "1", username: "new" }, merge: true },
+      { type: "upsert", store: "users", key: "2", raw: { ...user, id: "2" } },
+      { type: "upsert", store: "members", key: "10:1", raw: {} },
+    ]);
+
+    expect(results).toEqual([
+      {
+        entity: "users",
+        key: "1",
+        type: "upsert",
+        existing: user,
+        added: { ...user, username: "new" },
+      },
+      {
+        entity: "users",
+        key: "2",
+        type: "upsert",
+        existing: undefined,
+        added: { ...user, id: "2" },
+      },
+    ]);
+  });
+
+  test("GIVEN a non-merged upsert THEN the cached entry is replaced", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", { ...user, bot: true });
+
+    await applyCacheOperations(cache, [{ type: "upsert", store: "users", key: "1", raw: user }]);
+
+    expect(cache.users!.get("1")).toEqual(user);
+  });
+
+  test("GIVEN updates and deletes THEN their results carry the previous entry", async () => {
+    const cache = createInMemoryCache({ entities: ["users"] });
+    cache.users!.set("1", user);
+    cache.users!.set("2", { ...user, id: "2" });
+
+    const results = await applyCacheOperations(cache, [
+      {
+        type: "update",
+        store: "users",
+        key: "1",
+        update: (value) => ({ ...(value as object), username: "u" }),
+      },
+      { type: "update", store: "users", key: "3", update: (value) => value },
+      { type: "delete", store: "users", key: "2" },
+      { type: "deleteWhere", store: "users", predicate: () => true },
+    ]);
+
+    expect(results).toEqual([
+      {
+        entity: "users",
+        key: "1",
+        type: "update",
+        existing: user,
+        added: { ...user, username: "u" },
+      },
+      { entity: "users", key: "2", type: "delete", existing: { ...user, id: "2" } },
+      { entity: "users", key: "1", type: "delete", existing: { ...user, username: "u" } },
+    ]);
+  });
+});
+
+describe("addReaction", () => {
+  const bot = "266624760782258186";
+  const emoji = { id: null, name: "🐺" };
+  const base = { id: "30", channel_id: "20" } as APIMessage;
+  const event = (userId: string, burst = false) =>
+    ({ user_id: userId, channel_id: "20", message_id: "30", emoji, burst, type: 0 }) as never;
+
+  test("GIVEN the bot's own reaction already counted THEN the message is returned unchanged", () => {
+    const cached = {
+      ...base,
+      reactions: [
+        {
+          emoji,
+          count: 1,
+          count_details: { normal: 1, burst: 0 },
+          me: true,
+          me_burst: false,
+          burst_colors: [],
+        },
+      ],
+    } as APIMessage;
+
+    expect(addReaction(cached, event(bot), bot)).toBe(cached);
+  });
+
+  test("GIVEN someone else's reaction on an emoji the bot reacted with THEN it is counted", () => {
+    const counted = addReaction(addReaction(base, event(bot), bot), event("1"), bot);
+
+    expect(counted.reactions?.[0]).toMatchObject({ count: 2, me: true });
+  });
+
+  test("GIVEN the bot's burst reaction on an emoji it reacted normally with THEN it is counted", () => {
+    const counted = addReaction(addReaction(base, event(bot), bot), event(bot, true), bot);
+
+    expect(counted.reactions?.[0]).toMatchObject({
+      count: 2,
+      count_details: { normal: 1, burst: 1 },
+      me: true,
+      me_burst: true,
+    });
+  });
+});
+
+describe("voice channel info", () => {
+  const voice = { id: "50", type: ChannelType.GuildVoice, guild_id: "10", name: "den" };
+
+  async function cacheWithVoiceChannel() {
+    const cache = createInMemoryCache();
+    await applyGatewayDispatch(cache, dispatch(GatewayDispatchEvents.ChannelCreate, voice));
+    return cache;
+  }
+
+  test("GIVEN a VOICE_CHANNEL_STATUS_UPDATE THEN the cached channel's status is replaced or cleared", async () => {
+    const cache = await cacheWithVoiceChannel();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: "movie night",
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ name: "den", status: "movie night" });
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: null,
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ name: "den", status: null });
+  });
+
+  test("GIVEN a VOICE_CHANNEL_START_TIME_UPDATE THEN the start time is kept, and a missing one clears it", async () => {
+    const cache = await cacheWithVoiceChannel();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1_700_000_000,
+      }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ voice_start_time: 1_700_000_000 });
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, { id: "50", guild_id: "10" }),
+    );
+    expect(cache.channels.get("50")).toMatchObject({ voice_start_time: null });
+  });
+
+  test("GIVEN a CHANNEL_INFO THEN only the fields it carries are patched", async () => {
+    const cache = await cacheWithVoiceChannel();
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1_700_000_000,
+      }),
+    );
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ChannelInfo, {
+        guild_id: "10",
+        channels: [{ id: "50", status: "hello" }],
+      }),
+    );
+
+    expect(cache.channels.get("50")).toMatchObject({
+      name: "den",
+      status: "hello",
+      voice_start_time: 1_700_000_000,
+    });
+  });
+
+  test("GIVEN an uncached channel THEN none of the events caches it", async () => {
+    const cache = createInMemoryCache();
+
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStatusUpdate, {
+        id: "50",
+        guild_id: "10",
+        status: "x",
+      }),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.VoiceChannelStartTimeUpdate, {
+        id: "50",
+        guild_id: "10",
+        voice_start_time: 1,
+      }),
+    );
+    await applyGatewayDispatch(
+      cache,
+      dispatch(GatewayDispatchEvents.ChannelInfo, {
+        guild_id: "10",
+        channels: [{ id: "50", status: "x", voice_start_time: 1 }],
+      }),
+    );
+
+    expect(cache.channels.get("50")).toBeUndefined();
   });
 });

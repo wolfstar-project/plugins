@@ -10,6 +10,7 @@ import type { InviteData } from "../structures/invites/BaseInvite.js";
 import { GuildInvite } from "../structures/invites/GuildInvite.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { resolveInviteCode } from "../util/DataResolver.js";
 
 /**
  * The options to create an invite with.
@@ -53,12 +54,12 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["invites"]): GuildInvite {
+  protected createStructure(data: CacheEntityTypes["invites"]): GuildInvite {
     return new GuildInvite(data);
   }
 
   public keyOf(data: CacheEntityTypes["invites"]): string {
-    return this.resolveKey(data.code);
+    return inviteKey(data.guild_id ?? this.guildId, resolveInviteCode(data.code));
   }
 
   /**
@@ -82,8 +83,8 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
       [
         data.inviter ? users._resolveData(data.inviter) : undefined,
         data.target_user ? users._resolveData(data.target_user) : undefined,
-        this.cachedGuild(this.guildId),
-        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+        this.cachedGuild(data.guild_id ?? this.guildId),
+        data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
       ],
       ([inviter, targetUser, guild, channel]) =>
         new GuildInvite(data, { inviter, targetUser, guild, channel: channel ?? null }),
@@ -91,7 +92,7 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
   }
 
   public resolveKey(code: string): string {
-    return inviteKey(this.guildId, code);
+    return inviteKey(this.guildId, resolveInviteCode(code));
   }
 
   /**
@@ -141,12 +142,14 @@ export class GuildInviteManager extends CachedManager<"invites", GuildInvite, [c
    * @param reason The reason for the audit log.
    */
   public async delete(code: string, reason?: string): Promise<void> {
-    await this.client.api.invites.delete(code, { reason });
-    await this.cache?.delete(this.resolveKey(code));
+    await this.client.api.invites.delete(resolveInviteCode(code), { reason });
+    await this.cache.delete(this.resolveKey(code));
   }
 
   protected async fetchRaw(code: string) {
-    const invite = await this.client.api.invites.get(code, { with_counts: true });
+    const invite = await this.client.api.invites.get(resolveInviteCode(code), {
+      with_counts: true,
+    });
     return this.toCached(invite);
   }
 

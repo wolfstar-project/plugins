@@ -1,16 +1,37 @@
+import type { Awaitable } from "@wolfstar/plugin-cache";
+import {
+  cachedGuild,
+  cachedPresence,
+  cachedVoiceState,
+  cacheRead,
+  whenAll,
+  type CacheRead,
+} from "../../util/cache.js";
 import { DiscordAPIError, type ImageURLOptions } from "@discordjs/rest";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type { APIAvatarDecorationData } from "discord-api-types/v10";
+import type { APICollectibles } from "discord-api-types/v10";
 import type { BanOptions, GuildMemberEditOptions } from "../../managers/GuildMemberManager.js";
 import { GuildMemberRoleManager } from "../../managers/GuildMemberRoleManager.js";
 import { cdn } from "../../util/cdn.js";
+import {
+  transformAPIAvatarDecorationData,
+  transformCollectibles,
+  type AvatarDecorationData,
+  type Collectibles,
+} from "../../util/Transformers.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../../util/flags.js";
 import {
   MessagePayload,
   type MessageCreateOptions,
   type MessagePayloadResolvable,
 } from "../messages/MessagePayload.js";
-import { computeGuildPermissions, computePermissionsIn } from "../../util/permissions.js";
+import {
+  computeGuildPermissions,
+  computePermissionsIn,
+  computeCachedPermissionsIn,
+  requireGuild,
+  requireMe,
+} from "../../util/permissions.js";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { PermissionsBitField } from "../../util/PermissionsBitField.js";
 import type { DMChannel } from "../channels/DMChannel.js";
@@ -18,8 +39,10 @@ import type { Message } from "../messages/Message.js";
 import type { Presence } from "../presences/Presence.js";
 import type { VoiceState } from "../voice/VoiceState.js";
 import type { Guild } from "./Guild.js";
+import type { Role } from "./Role.js";
 import { kData, kPatch, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link GuildMember}, resolved from the cache by `client.members`.
@@ -35,11 +58,18 @@ export interface GuildMemberRelations {
 }
 
 /**
+ * A {@link GuildMember} known to be partial, see {@link GuildMember.isPartial}.
+ */
+export type PartialGuildMember = GuildMember & { readonly partial: true };
+
+/**
  * A member of a Discord guild.
  *
  * @remarks
- * Relations are asynchronous, unlike discord.js: `member.roles` reads roles through the (possibly asynchronous)
- * cache, and discord.js's `permissions`, `manageable`, `kickable`, ... are the `fetch*` methods below.
+ * discord.js's `permissions`, `manageable`, `kickable`, ... are read from the cache like there: the plain value
+ * with a synchronous cache, a promise of it with an asynchronous one, typed as a promise once `GatewayCacheConfig`
+ * declares the cache asynchronous. They never call the API; their `fetch*` twins do, for what is not cached.
+ * `member.roles` reads roles through the (possibly asynchronous) cache, so its getters are `Awaitable`.
  */
 export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   declare public [kRelations]: GuildMemberRelations;
@@ -70,11 +100,11 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * The guild, from the cache. `null` when the guild is not cached, or when the member was not built by a manager: use
+   * The guild, from the cache. `null` when the guild is not cached, or when the cache is asynchronous: use
    * `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -118,10 +148,10 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * The member's roles. It needs the member's user ID, which every payload but some partial ones carries.
+   * The member's roles. Changing them needs the member's user ID, which every payload but some partial ones carries.
    */
   public get roles(): GuildMemberRoleManager {
-    return new GuildMemberRoleManager(this.client, this.guildId, this.requireId(), this.roleIds);
+    return new GuildMemberRoleManager(this);
   }
 
   public get joinedTimestamp(): number | null {
@@ -195,8 +225,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * The member's guild avatar decoration, if any.
    */
-  public get avatarDecorationData(): APIAvatarDecorationData | null {
-    return this[kData].avatar_decoration_data ?? null;
+  public get avatarDecorationData(): AvatarDecorationData | null {
+    const data = this[kData].avatar_decoration_data;
+    return data ? transformAPIAvatarDecorationData(data) : null;
+  }
+
+  /**
+   * The member's guild collectibles, camel-cased like discord.js's `GuildMember#collectibles`.
+   */
+  public get collectibles(): Collectibles | null {
+    const collectibles = (this[kData] as { collectibles?: APICollectibles | null }).collectibles;
+    return collectibles ? transformCollectibles(collectibles) : null;
   }
 
   /**
@@ -257,7 +296,32 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * Computes the member's guild-wide permissions, before channel overwrites.
+   * The member's guild-wide permissions, before channel overwrites, like discord.js's `GuildMember#permissions`:
+   * computed from the cached guild and roles, skipping the roles that are not cached.
+   *
+   * @throws A `GatewayError`: `GuildUncached` when the guild is not cached.
+   */
+  public get permissions(): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(
+      whenAll([requireGuild(this.client, this.guildId), this.roles.cache], ([guild, roles]) =>
+        computeGuildPermissions({
+          guildId: this.guildId,
+          ownerId: guild.ownerId,
+          userId: this.requireId(),
+          memberRoleIds: this.roleIds,
+          roles: roles.map((role) => role.toJSON()),
+        }),
+      ),
+    );
+  }
+
+  /**
+   * Fetches the member's guild-wide permissions, before channel overwrites: {@link GuildMember.permissions} with the
+   * guild and the roles fetched from the API when they are not cached, whatever the cache.
+   *
+   * @deprecated Use {@link GuildMember.permissions}. When the guild or some roles may be missing from the cache (a
+   * filtered cache, a `plugin-broker` worker), fetch them first (`client.guilds.fetch(guildId)`,
+   * `member.roles.fetch()`), then read the getter.
    */
   public async fetchPermissions(): Promise<Readonly<PermissionsBitField>> {
     const client = this.client;
@@ -277,26 +341,40 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * discord.js: `member.permissionsIn(channel)`.
    *
    * @param channel The channel, or its ID. Threads use their parent's overwrites.
+   *
+   * @deprecated Use {@link GuildMember.permissionsIn}. See {@link GuildMember.fetchPermissions} for the cache-miss
+   * fallback; fetch the channel too (`client.channels.fetch(channelId)`).
    */
   public fetchPermissionsIn(channel: AnyChannel | string): Promise<Readonly<PermissionsBitField>> {
     return computePermissionsIn(channel, this);
   }
 
   /**
+   * The member's permissions in a channel, like discord.js's `GuildMember#permissionsIn`: their guild permissions
+   * with the channel's overwrites applied, read from the cache.
+   *
+   * @param channel The channel, or the ID of a cached one. Threads use their parent's overwrites.
+   * @throws A `GatewayError`: `ChannelUncached` or `GuildUncached` when they are not cached.
+   */
+  public permissionsIn(channel: AnyChannel | string): CacheRead<Readonly<PermissionsBitField>> {
+    return cacheRead(computeCachedPermissionsIn(channel, this));
+  }
+
+  /**
    * The member's voice state, from the cache, like discord.js's `GuildMember#voice`: `null` when they are not
-   * connected, when the voice state is not cached (it needs the `GuildVoiceStates` intent), or when the member was not
-   * built by a manager. Use {@link GuildMember.fetchVoiceState} to ask the API.
+   * connected, when the voice state is not cached (it needs the `GuildVoiceStates` intent), or when the cache is
+   * asynchronous. Use {@link GuildMember.fetchVoiceState} to ask the API.
    */
   public get voice(): VoiceState | null {
-    return this[kRelations].voice ?? null;
+    return this.lazyRelation("voice", (client) => cachedVoiceState(client, this.guildId, this.id));
   }
 
   /**
    * The member's presence, from the cache, like discord.js's `GuildMember#presence`: `null` when it is not cached
-   * (it needs the `GuildPresences` intent), or when the member was not built by a manager.
+   * (it needs the `GuildPresences` intent), or when the cache is asynchronous.
    */
   public get presence(): Presence | null {
-    return this[kRelations].presence ?? null;
+    return this.lazyRelation("presence", (client) => cachedPresence(client, this.guildId, this.id));
   }
 
   /**
@@ -317,45 +395,136 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * Gets the member's presence from the cache. discord.js: `member.presence`.
    *
+   * Not deprecated, unlike the other `fetch*` twins of getters: it is not a duplicate of {@link GuildMember.presence},
+   * which is `null` with an asynchronous cache, so this is how to read the presence there.
+   *
    * @returns The presence, or `null` when it is not cached (the bot needs the `GuildPresences` intent).
    */
   public async fetchPresence(): Promise<Presence | null> {
-    return (await this.client.presences.get(this.guildId, this.requireId())) ?? null;
+    return (
+      (await this.client.presences.cache.get(
+        this.client.presences.resolveKey(this.guildId, this.requireId()),
+      )) ?? null
+    );
+  }
+
+  /**
+   * The color the member's name is displayed in, like discord.js's `GuildMember#displayColor`: the one of their
+   * highest cached role that has a color, `0` when none has.
+   */
+  public get displayColor(): CacheRead<number> {
+    return cacheRead(whenAll([this.roles.color], ([role]) => role?.colors.primaryColor ?? 0));
+  }
+
+  /**
+   * The color the member's name is displayed in, as a `#rrggbb` string, like discord.js's
+   * `GuildMember#displayHexColor`. It throws like {@link GuildMember.displayColor}.
+   */
+  public get displayHexColor(): CacheRead<`#${string}`> {
+    return cacheRead(
+      whenAll(
+        [this.displayColor],
+        ([color]) => `#${color.toString(16).padStart(6, "0")}` as `#${string}`,
+      ),
+    );
   }
 
   /**
    * Fetches the color the member's name is displayed in, `0` when none of their roles has one.
+   *
+   * @deprecated Use {@link GuildMember.displayColor}. When some roles may be missing from the cache, fetch them first
+   * (`member.roles.fetch()`), then read the getter.
    */
   public async fetchDisplayColor(): Promise<number> {
-    return (await this.roles.fetchColor())?.color ?? 0;
+    return (await this.roles.fetchColor())?.colors.primaryColor ?? 0;
   }
 
   /**
    * Fetches the color the member's name is displayed in, as a `#rrggbb` string.
+   *
+   * @deprecated Use {@link GuildMember.displayHexColor}. See {@link GuildMember.fetchDisplayColor} for the cache-miss
+   * fallback.
    */
   public async fetchDisplayHexColor(): Promise<`#${string}`> {
     return `#${(await this.fetchDisplayColor()).toString(16).padStart(6, "0")}`;
   }
 
   /**
-   * Whether the bot ranks above the member: it is not the guild owner, not the bot itself, and the bot's highest
-   * role is higher than theirs (or the bot owns the guild).
+   * Whether the bot ranks above the member, like discord.js's `GuildMember#manageable`: it is not the guild owner, not
+   * the bot itself, and the bot's highest role is higher than theirs (or the bot owns the guild).
+   *
+   * @throws A `GatewayError`: `GuildUncached` or `GuildUncachedMe` when the guild or the bot's member is
+   * not cached.
+   */
+  public get manageable(): CacheRead<boolean> {
+    const client = this.client;
+    return cacheRead(
+      whenAll([requireGuild(client, this.guildId)], ([guild]) => {
+        const settled = this.settledByOwnership(guild.ownerId);
+        if (settled !== null) return settled;
+
+        return whenAll([requireMe(client, this.guildId)], ([me]) =>
+          whenAll([me.roles.highest, this.roles.highest], ([mine, theirs]) =>
+            outranks(mine, theirs),
+          ),
+        );
+      }),
+    );
+  }
+
+  /**
+   * Fetches whether the bot ranks above the member: {@link GuildMember.manageable} with the guild, the bot's member,
+   * and the roles fetched from the API when they are not cached, whatever the cache.
+   *
+   * @deprecated Use {@link GuildMember.manageable}. When the guild, the bot's member or some roles may be missing from
+   * the cache (a filtered cache, a `plugin-broker` worker), fetch them first (`client.guilds.fetch(guildId)`,
+   * `client.members.fetchMe(guildId)`, `member.roles.fetch()`), then read the getter.
    */
   public async fetchManageable(): Promise<boolean> {
     const client = this.client;
-    const id = this.requireId();
     const guild = await client.guilds.fetch(this.guildId);
-    const meId = client.user?.id ?? client.id;
-    if (id === guild.ownerId || id === meId) return false;
-    if (meId === guild.ownerId) return true;
+    const settled = this.settledByOwnership(guild.ownerId);
+    if (settled !== null) return settled;
 
     const me = await client.members.fetchMe(this.guildId);
     const [mine, theirs] = await Promise.all([me.roles.fetchHighest(), this.roles.fetchHighest()]);
-    return mine !== null && theirs !== null && mine.comparePositionTo(theirs) > 0;
+    return outranks(mine, theirs);
+  }
+
+  /**
+   * Whether the bot can kick the member, like discord.js's `GuildMember#kickable`: it outranks them and has
+   * `KickMembers`. It throws like {@link GuildMember.manageable}.
+   */
+  public get kickable(): CacheRead<boolean> {
+    return cacheRead(this.managedWithCached("KickMembers"));
+  }
+
+  /**
+   * Whether the bot can ban the member, like discord.js's `GuildMember#bannable`: it outranks them and has
+   * `BanMembers`. It throws like {@link GuildMember.manageable}.
+   */
+  public get bannable(): CacheRead<boolean> {
+    return cacheRead(this.managedWithCached("BanMembers"));
+  }
+
+  /**
+   * Whether the bot can time the member out, like discord.js's `GuildMember#moderatable`: it outranks them, has
+   * `ModerateMembers`, and they are no administrator. It throws like {@link GuildMember.manageable}.
+   */
+  public get moderatable(): CacheRead<boolean> {
+    return cacheRead(
+      whenAll([this.managedWithCached("ModerateMembers")], ([managed]) =>
+        managed
+          ? whenAll([this.permissions], ([permissions]) => !permissions.has("Administrator"))
+          : false,
+      ),
+    );
   }
 
   /**
    * Whether the bot can kick the member: it outranks them and has `KickMembers`.
+   *
+   * @deprecated Use {@link GuildMember.kickable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchKickable(): Promise<boolean> {
     return this.managedWith("KickMembers");
@@ -363,6 +532,8 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can ban the member: it outranks them and has `BanMembers`.
+   *
+   * @deprecated Use {@link GuildMember.bannable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchBannable(): Promise<boolean> {
     return this.managedWith("BanMembers");
@@ -370,6 +541,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can time the member out: it outranks them, has `ModerateMembers`, and they are no administrator.
+   *
+   * @deprecated Use {@link GuildMember.moderatable}. See {@link GuildMember.fetchManageable} for the cache-miss
+   * fallback.
    */
   public async fetchModeratable(): Promise<boolean> {
     if (!(await this.managedWith("ModerateMembers"))) return false;
@@ -422,8 +596,13 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
     return this;
   }
 
-  public createDM(): Promise<DMChannel> {
-    return this.client.users.createDM(this.requireId());
+  /**
+   * Opens a direct message channel with the member, reusing the cached one.
+   *
+   * @param force Whether to skip the cache lookup and always call the API.
+   */
+  public createDM(force = false): Promise<DMChannel> {
+    return this.client.users.createDM(this.requireId(), { force });
   }
 
   public deleteDM(): Promise<DMChannel> {
@@ -444,6 +623,17 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
+   * Whether the member is partial, see {@link GuildMember.partial}, as a type guard: narrows to {@link PartialGuildMember}.
+   *
+   * @remarks
+   * `joinedAt` stays `Date | null` on a member that is not partial: Discord types `joined_at` as nullable on the
+   * gateway's member payloads, so `partial` alone can not tell that it is a date.
+   */
+  public isPartial(): this is PartialGuildMember {
+    return this.partial;
+  }
+
+  /**
    * Fetches the member from the API and patches this structure with the result.
    */
   public async fetch(): Promise<this> {
@@ -461,26 +651,63 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * Whether this member has the same data as another one.
+   * Whether this member has the same data as another one, like discord.js's `GuildMember#equals`: the same user,
+   * guild, `partial`, nickname, avatar, banner, `pending`, timestamps, flags, roles (in the same order), avatar
+   * decoration, and nameplate. `false` for anything that is not a member.
+   *
    * @param member The member to compare with.
    */
-  public equals(member: GuildMember): boolean {
+  public equals(member: unknown): boolean {
+    if (!(member instanceof GuildMember)) return false;
+    const nameplate = this.collectibles?.nameplate;
+    const otherNameplate = member.collectibles?.nameplate;
     return (
       this.id === member.id &&
+      this.partial === member.partial &&
       this.guildId === member.guildId &&
+      this.joinedTimestamp === member.joinedTimestamp &&
       this.nickname === member.nickname &&
       this.avatar === member.avatar &&
-      this.joinedTimestamp === member.joinedTimestamp &&
+      this.banner === member.banner &&
+      this.pending === member.pending &&
       this.premiumSinceTimestamp === member.premiumSinceTimestamp &&
       this.communicationDisabledUntilTimestamp === member.communicationDisabledUntilTimestamp &&
       this.flags.bitField === member.flags.bitField &&
       this.roleIds.length === member.roleIds.length &&
-      this.roleIds.every((id) => member.roleIds.includes(id))
+      this.roleIds.every((id, index) => id === member.roleIds[index]) &&
+      this.avatarDecorationData?.asset === member.avatarDecorationData?.asset &&
+      this.avatarDecorationData?.skuId === member.avatarDecorationData?.skuId &&
+      nameplate?.skuId === otherNameplate?.skuId &&
+      nameplate?.asset === otherNameplate?.asset &&
+      nameplate?.label === otherNameplate?.label &&
+      nameplate?.palette === otherNameplate?.palette
     );
   }
 
   public toString(): string {
     return this.id ? `<@${this.id}>` : "";
+  }
+
+  // What the ownership of the guild settles about the bot outranking this member, `null` when the roles decide.
+  private settledByOwnership(ownerId: string): boolean | null {
+    const client = this.client;
+    const id = this.requireId();
+    const meId = client.user?.id ?? client.id;
+    if (id === ownerId || id === meId) return false;
+    return meId === ownerId ? true : null;
+  }
+
+  // `managedWith` from the cache alone.
+  private managedWithCached(
+    permission: "KickMembers" | "BanMembers" | "ModerateMembers",
+  ): Awaitable<boolean> {
+    return whenAll([this.manageable], ([manageable]) =>
+      manageable
+        ? whenAll([requireMe(this.client, this.guildId)], ([me]) =>
+            whenAll([me.permissions], ([permissions]) => permissions.has(permission)),
+          )
+        : false,
+    );
   }
 
   private async managedWith(permission: "KickMembers" | "BanMembers" | "ModerateMembers") {
@@ -491,7 +718,12 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   private requireId(): string {
     const { id } = this;
-    if (id === null) throw new Error("This member has no user data: its ID is unknown");
+    if (id === null) throw new GatewayError("GuildMemberUserUnknown");
     return id;
   }
+}
+
+// Whether the bot's highest role is above the member's.
+function outranks(mine: Role | null, theirs: Role | null): boolean {
+  return mine !== null && theirs !== null && mine.comparePositionTo(theirs) > 0;
 }

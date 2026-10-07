@@ -12,11 +12,14 @@ import { GatewayClient, GatewayEvents, type GatewayEventName } from "../src/inde
 // `GatewayEvents`.
 const eventMapKeys: Record<GatewayEventName, true> = {
   raw: true,
+  dispatch: true,
   shardReady: true,
   clientReady: true,
   shardResume: true,
   shardClose: true,
   shardError: true,
+  cacheError: true,
+  cacheSweep: true,
   guildCreate: true,
   guildUpdate: true,
   guildDelete: true,
@@ -49,9 +52,11 @@ const eventMapKeys: Record<GatewayEventName, true> = {
   guildRoleUpdate: true,
   guildRoleDelete: true,
   userUpdate: true,
+  guildEmojisUpdate: true,
   emojiCreate: true,
   emojiUpdate: true,
   emojiDelete: true,
+  guildStickersUpdate: true,
   stickerCreate: true,
   stickerUpdate: true,
   stickerDelete: true,
@@ -84,6 +89,9 @@ const eventMapKeys: Record<GatewayEventName, true> = {
   integrationUpdate: true,
   integrationDelete: true,
   voiceStateUpdate: true,
+  voiceChannelStatusUpdate: true,
+  voiceChannelStartTimeUpdate: true,
+  channelInfo: true,
   presenceUpdate: true,
 };
 

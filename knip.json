@@ -27,6 +27,11 @@
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@sapphire/pieces"]
     },
+    "packages/plugin-scheduled-tasks": {
+      "entry": ["src/index.ts", "tests/types/*.ts"],
+      "project": ["src/**/*.ts", "tests/types/*.ts"],
+      "ignoreDependencies": ["@sapphire/pieces"]
+    },
     "packages/plugin-i18next": {
       "project": ["src/**/*.ts"],
       "ignoreDependencies": ["@wolfstar/i18next-type-generator"]

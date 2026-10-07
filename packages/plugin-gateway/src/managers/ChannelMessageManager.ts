@@ -1,5 +1,7 @@
+import type { Collection } from "@discordjs/collection";
 import type { GatewayClient } from "../GatewayClient.js";
-import type { Message } from "../structures/messages/Message.js";
+import type { Message, PartialMessage } from "../structures/messages/Message.js";
+import type { MessageResolvable } from "../types.js";
 import type { FetchOptions } from "./CachedManager.js";
 import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
 import type { User } from "../structures/users/User.js";
@@ -14,24 +16,38 @@ import type {
   MessageEditOptions,
   MessagePayloadResolvable,
 } from "../util/messages.js";
+import { scopeCache, type ScopedCache } from "../util/cache.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the messages of one channel: `client.messages`, with the channel's ID filled in.
  */
-export class ChannelMessageManager {
-  public readonly client: GatewayClient;
+export class ChannelMessageManager extends BaseManager {
   public readonly channelId: string;
 
+  /**
+   * The cached messages of the channel, by message ID.
+   *
+   * @example
+   * ```typescript
+   * const message = await channel.messages.cache.get(messageId);
+   * ```
+   */
+  public readonly cache: ScopedCache<Message>;
+
   public constructor(client: GatewayClient, channelId: string) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
+    this.cache = scopeCache(client.messages.cache, (messageId) =>
+      client.messages.resolveKey(channelId, messageId),
+    );
   }
 
   /**
-   * Gets a message of the channel from the cache.
+   * Gets a message of the channel from the cache. Same as `cache.get`, always answering a promise.
    */
-  public get(messageId: string): Promise<Message | undefined> {
-    return this.client.messages.get(this.channelId, messageId);
+  public async get(messageId: string): Promise<Message | undefined> {
+    return this.cache.get(messageId);
   }
 
   /**
@@ -84,7 +100,10 @@ export class ChannelMessageManager {
     return this.client.messages.crosspost(this.channelId, messageId);
   }
 
-  public bulkDelete(messages: readonly string[] | number, filterOld = false): Promise<string[]> {
+  public bulkDelete(
+    messages: Collection<string, Message> | readonly MessageResolvable[] | number,
+    filterOld = false,
+  ): Promise<Collection<string, Message | PartialMessage | undefined>> {
     return this.client.messages.bulkDelete(this.channelId, messages, filterOld);
   }
 

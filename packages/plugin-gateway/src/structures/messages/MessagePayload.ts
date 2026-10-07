@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import { basename } from "node:path";
 import type { RawFile } from "@discordjs/rest";
 import {
@@ -15,7 +14,10 @@ import {
   type RESTPostAPIChannelMessageJSONBody,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../../GatewayClient.js";
+import { resolveFile } from "../../util/DataResolver.js";
 import { MessageFlagsBitField, type MessageFlagsResolvable } from "../../util/flags.js";
+import { resolvePartialEmoji } from "../../util/Util.js";
+import { GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
 
 /**
  * Anything with a `toJSON` method, like the builders of `@discordjs/builders` and the structures of this package.
@@ -386,8 +388,7 @@ export class MessagePayload {
     const { content } = this.options;
     if (content === null) return this.isEdit ? "" : undefined;
     if (content === undefined) return undefined;
-    if (typeof content !== "string")
-      throw new TypeError("The content of a message must be a string");
+    if (typeof content !== "string") throw new GatewayTypeError("MessageContentType");
     return content;
   }
 
@@ -466,10 +467,10 @@ export class MessagePayload {
   private resolveNonce(nonce: string | number | undefined): string | number | undefined {
     if (nonce === undefined) return undefined;
     if (typeof nonce === "string" && nonce.length > 25) {
-      throw new RangeError("A message nonce must be at most 25 characters long");
+      throw new GatewayRangeError("MessageNonceLength");
     }
     if (typeof nonce === "number" && !Number.isInteger(nonce)) {
-      throw new RangeError("A message nonce must be an integer");
+      throw new GatewayRangeError("MessageNonceType");
     }
     return nonce;
   }
@@ -500,7 +501,7 @@ export class MessagePayload {
       const { message, channel, guild } = forward;
       const channelId =
         typeof message === "string" ? MessagePayload.id(channel) : message.channelId;
-      if (!channelId) throw new TypeError("Forwarding a message by ID needs its channel");
+      if (!channelId) throw new GatewayTypeError("MessageForwardChannelMissing");
       return {
         type: MessageReferenceType.Forward,
         message_id: typeof message === "string" ? message : message.id,
@@ -543,7 +544,7 @@ export class MessagePayload {
           ({
             poll_media: {
               text,
-              emoji: typeof emoji === "string" ? resolvePartialEmoji(emoji) : (emoji ?? undefined),
+              emoji: typeof emoji === "string" ? toPollEmoji(emoji) : (emoji ?? undefined),
             },
           }) as Omit<APIPollAnswer, "answer_id">,
       ),
@@ -615,7 +616,7 @@ export class MessagePayload {
     let name = payload.name ?? (typeof attachment === "string" ? nameOf(attachment) : "file.jpg");
     if (payload.spoiler && !name.startsWith("SPOILER_")) name = `SPOILER_${name}`;
 
-    const { data, contentType } = await resolveBuffer(attachment);
+    const { data, contentType } = await resolveFile(attachment);
     return contentType ? { name, data, contentType } : { name, data };
   }
 
@@ -658,9 +659,10 @@ function isCamelPoll(poll: object): boolean {
   return answers?.some((answer) => !("poll_media" in answer)) ?? false;
 }
 
-function resolvePartialEmoji(emoji: string): { id?: string; name?: string } {
-  const match = /<?(?:a?:)?(\w{2,32}):(\d{17,20})>?/.exec(emoji);
-  return match ? { name: match[1], id: match[2] } : { name: emoji };
+function toPollEmoji(emoji: string): { id?: string; name?: string } {
+  const partial = resolvePartialEmoji(emoji);
+  if (!partial) return { name: emoji };
+  return "name" in partial ? { name: partial.name, id: partial.id } : { id: partial.id };
 }
 
 function isRawFile(file: AttachmentResolvable): file is RawFile {
@@ -689,34 +691,4 @@ function nameOf(path: string): string {
     return name || "file.jpg";
   }
   return basename(path);
-}
-
-async function resolveBuffer(
-  attachment: BufferResolvable,
-): Promise<{ data: Uint8Array; contentType?: string }> {
-  if (attachment instanceof Uint8Array) return { data: attachment };
-  if (attachment instanceof ArrayBuffer) return { data: new Uint8Array(attachment) };
-  if (attachment instanceof Blob) {
-    return {
-      data: new Uint8Array(await attachment.arrayBuffer()),
-      contentType: attachment.type || undefined,
-    };
-  }
-  if (typeof attachment === "string") {
-    if (/^https?:\/\//.test(attachment)) {
-      const response = await fetch(attachment);
-      if (!response.ok) throw new Error(`Could not download ${attachment}: ${response.status}`);
-      return {
-        data: new Uint8Array(await response.arrayBuffer()),
-        contentType: response.headers.get("content-type") ?? undefined,
-      };
-    }
-    return { data: await readFile(attachment) };
-  }
-
-  const chunks: Uint8Array[] = [];
-  for await (const chunk of attachment) {
-    chunks.push(typeof chunk === "string" ? new TextEncoder().encode(chunk) : chunk);
-  }
-  return { data: Buffer.concat(chunks) };
 }

@@ -10,6 +10,7 @@ import {
   type OverwriteData,
   type PermissionOverwriteOptions,
 } from "../util/channels.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * The options of {@link PermissionOverwriteManager.create} and {@link PermissionOverwriteManager.edit}.
@@ -26,8 +27,7 @@ export interface PermissionOverwriteEditOptions {
 /**
  * Manages the permission overwrites of one channel, as they were in the channel's payload.
  */
-export class PermissionOverwriteManager {
-  public readonly client: GatewayClient;
+export class PermissionOverwriteManager extends BaseManager {
   public readonly channelId: string;
   public readonly guildId: string | null;
 
@@ -49,7 +49,7 @@ export class PermissionOverwriteManager {
     overwrites: readonly APIOverwrite[],
     channel: AnyChannel | null = null,
   ) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
     this.guildId = guildId;
     this.#overwrites = overwrites;
@@ -173,21 +173,27 @@ export class PermissionOverwriteManager {
       return "hoist" in target ? OverwriteType.Role : OverwriteType.Member;
     }
 
-    if (id === this.guildId) return OverwriteType.Role;
-    const role = this.guildId ? await this.client.roles.get(this.guildId, id) : undefined;
-    return role ? OverwriteType.Role : OverwriteType.Member;
+    if (id === this.guildId || !this.guildId) return OverwriteType.Role;
+    // With a roles cache, an uncached ID is a member's; without one, only the guild's roles tell.
+    if (this.client.cache?.roles) {
+      return (await this.client.roles.cache.get(this.client.roles.resolveKey(this.guildId, id)))
+        ? OverwriteType.Role
+        : OverwriteType.Member;
+    }
+
+    const roles = await this.client.roles.fetchAll(this.guildId);
+    return roles.some((role) => role.id === id) ? OverwriteType.Role : OverwriteType.Member;
   }
 
   // The overwrite endpoints answer 204 without the channel, so the cached entry is patched instead of refetched.
   private async patchCached(
     update: (overwrites: readonly APIOverwrite[]) => APIOverwrite[],
   ): Promise<void> {
-    const cache = this.client.cache?.channels;
-    const cached = await cache?.get(this.channelId);
-    if (!cached || !("permission_overwrites" in cached)) return;
-    await cache!.set(this.channelId, {
-      ...cached,
-      permission_overwrites: update(cached.permission_overwrites ?? []),
-    } as typeof cached);
+    await this.client.channels._patchCached(this.channelId, (cached) => {
+      const data = cached.toJSON() as { permission_overwrites?: APIOverwrite[] };
+      return "permission_overwrites" in data
+        ? ({ permission_overwrites: update(data.permission_overwrites ?? []) } as never)
+        : undefined;
+    });
   }
 }

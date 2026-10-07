@@ -47,7 +47,7 @@ function createClient(cache: Cache | null = createInMemoryCache()) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
   });
 }
 
@@ -127,7 +127,7 @@ describe("Guild", () => {
     const patch = vi
       .spyOn(container.rest, "patch")
       .mockResolvedValue(guildData({ name: "Renamed" }));
-    const guild = (await client.guilds.get(guildId))!;
+    const guild = (await client.guilds.cache.get(guildId))!;
 
     await guild.edit({
       name: "Renamed",
@@ -145,14 +145,14 @@ describe("Guild", () => {
       reason: "rename",
     });
     expect(guild.name).toBe("Renamed");
-    expect((await client.guilds.get(guildId))?.name).toBe("Renamed");
+    expect((await client.guilds.cache.get(guildId))?.name).toBe("Renamed");
   });
 
   test("GIVEN disableInvites THEN INVITES_DISABLED is added to the features, and removed again", async () => {
     const client = createClient();
     await client.cache!.guilds.set(guildId, guildData());
     const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(guildData());
-    const guild = (await client.guilds.get(guildId))!;
+    const guild = (await client.guilds.cache.get(guildId))!;
 
     await guild.disableInvites();
 
@@ -170,13 +170,18 @@ describe("Guild", () => {
     };
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(incidents);
 
-    await (await client.guilds.get(guildId))!.setIncidentActions({
+    await (await client.guilds.cache.get(guildId))!.setIncidentActions({
       invitesDisabledUntil: Date.parse("2024-06-01T01:00:00.000Z"),
       dmsDisabledUntil: null,
     });
 
     expect(put).toHaveBeenCalledWith(Routes.guildIncidentActions(guildId), { body: incidents });
-    expect((await client.guilds.get(guildId))?.incidentsData).toEqual(incidents);
+    expect((await client.guilds.cache.get(guildId))?.incidentsData).toEqual({
+      invitesDisabledUntil: new Date("2024-06-01T01:00:00.000Z"),
+      dmsDisabledUntil: null,
+      dmSpamDetectedAt: null,
+      raidDetectedAt: null,
+    });
   });
 
   test("GIVEN leave THEN the guild and everything it scopes leave the cache", async () => {
@@ -189,10 +194,12 @@ describe("Guild", () => {
     } as never);
     vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
 
-    await (await client.guilds.get(guildId))!.leave();
+    await (await client.guilds.cache.get(guildId))!.leave();
 
-    expect(await client.guilds.get(guildId)).toBeUndefined();
-    expect(await client.members.get(guildId, "600")).toBeUndefined();
+    expect(await client.guilds.cache.get(guildId)).toBeUndefined();
+    expect(
+      await client.members.cache.get(client.members.resolveKey(guildId, "600")),
+    ).toBeUndefined();
   });
 
   test("GIVEN fetchVanityData THEN the vanity code is patched in", async () => {
@@ -243,7 +250,9 @@ describe("GuildEmojiManager", () => {
       reason: undefined,
     });
     expect(created.guildId).toBe(guildId);
-    expect(await client.guilds.emojis(guildId).get("42")).toBeDefined();
+    expect(
+      await client.guilds.emojis(guildId).cache.get(client.guilds.emojis(guildId).resolveKey("42")),
+    ).toBeDefined();
   });
 
   test("GIVEN roles.add THEN the emoji is edited with the union of its roles", async () => {
@@ -392,10 +401,10 @@ describe("Invites", () => {
 
     await invites.create("20", { maxAge: 3600, unique: true });
     expect(post.mock.calls[0]![1]).toMatchObject({ body: { max_age: 3600, unique: true } });
-    expect(await invites.get("wolves")).toBeInstanceOf(GuildInvite);
+    expect(await invites.cache.get(invites.resolveKey("wolves"))).toBeInstanceOf(GuildInvite);
 
     await invites.delete("wolves");
-    expect(await invites.get("wolves")).toBeUndefined();
+    expect(await invites.cache.get(invites.resolveKey("wolves"))).toBeUndefined();
   });
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-broker",
-  "version": "0.2.0",
+  "version": "0.5.1",
   "description": "Plugin for @wolfstar/http-framework distributing gateway events across processes over Redis Streams, with at-least-once delivery",
   "keywords": [
     "broker",
@@ -44,6 +44,18 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/esm/plugin.d.ts",
+        "default": "./dist/esm/plugin.js"
+      }
+    },
+    "./module": {
+      "import": {
+        "types": "./dist/esm/module.d.ts",
+        "default": "./dist/esm/module.js"
+      }
     }
   },
   "publishConfig": {
@@ -61,11 +73,19 @@
   },
   "devDependencies": {
     "@sapphire/pieces": "^4.4.1",
-    "@wolfstar/http-framework": "^5.1.0",
+    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/kit": "^0.1.0",
+    "@wolfstar/plugin-gateway": "workspace:^",
     "ioredis": "^6.0.0"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.4.0 || ^5.0.0"
+    "@wolfstar/http-framework": "^3.4.0 || ^5.0.0 || ^6.0.0",
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@wolfstar/kit": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=20.0.0"

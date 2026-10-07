@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import type { StickerExtension } from "@discordjs/rest";
 import { Sticker as BaseSticker } from "@discordjs/structures";
 import { StickerFormatType, type APISticker } from "discord-api-types/v10";
@@ -15,6 +16,7 @@ import {
   StructureMixin,
 } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link Sticker}, resolved from the cache by the guild's sticker manager.
@@ -64,11 +66,11 @@ export class Sticker extends BaseSticker {
   }
 
   /**
-   * The guild, from the cache. `null` outside of guilds, when the guild is not cached, or when the sticker was not built by
-   * a manager: use `fetchGuild()` to always get it.
+   * The guild, from the cache. `null` outside of guilds, when the guild is not cached, or when the cache is
+   * asynchronous: use `fetchGuild()` to always get it.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -170,24 +172,41 @@ export class Sticker extends BaseSticker {
   }
 
   /**
-   * Whether this sticker has the same data as another one.
-   * @param sticker The sticker to compare with.
+   * Whether this sticker has the same data as another one, like discord.js's `Sticker#equals`. Against a sticker, it
+   * compares the ID, description, type, format, name, pack, tags, availability, guild, and sort value; against a raw
+   * sticker, only the ID, description, name, and tags. `false` for anything else.
+   *
+   * @param other The sticker, or raw sticker, to compare with.
    */
-  public equals(sticker: Sticker): boolean {
+  public equals(other: unknown): boolean {
+    if (other instanceof Sticker) {
+      return (
+        other.id === this.id &&
+        other.description === this.description &&
+        other.type === this.type &&
+        other.format === this.format &&
+        other.name === this.name &&
+        other.packId === this.packId &&
+        other.tags === this.tags &&
+        other.available === this.available &&
+        other.guildId === this.guildId &&
+        other.sortValue === this.sortValue
+      );
+    }
+
+    if (typeof other !== "object" || other === null) return false;
+    const raw = other as Partial<APISticker>;
     return (
-      this.id === sticker.id &&
-      this.name === sticker.name &&
-      this.description === sticker.description &&
-      this.tags === sticker.tags &&
-      this.formatType === sticker.formatType &&
-      this.available === sticker.available &&
-      this.guildId === sticker.guildId
+      raw.id === this.id &&
+      raw.description === this.description &&
+      raw.name === this.name &&
+      raw.tags === this.tags
     );
   }
 
   private requireGuildId(): string {
     const { guildId } = this;
-    if (!guildId) throw new Error("Only guild stickers can be edited or deleted");
+    if (!guildId) throw new GatewayError("NotGuildSticker");
     return guildId;
   }
 }

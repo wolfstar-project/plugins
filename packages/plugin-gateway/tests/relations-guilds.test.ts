@@ -61,7 +61,7 @@ function createClient(cache = true) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
   });
 }
 
@@ -156,21 +156,24 @@ describe("member relations", () => {
       client_status: {},
     } as never);
 
-    const resolved = (await client.members.get(guildId, userId))!;
+    const resolved = (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!;
 
     expect(resolved.voice?.channel?.id).toBe(stageId);
     expect(resolved.voice?.member).toBe(resolved);
     expect(resolved.presence?.status).toBe("online");
     expect(resolved.presence?.member).toBe(resolved);
     // The voice state's own member resolves the member's voice state in turn, without looping.
-    expect((await client.voiceStates.get(guildId, userId))?.member?.voice?.selfMute).toBe(true);
+    expect(
+      (await client.voiceStates.cache.get(client.voiceStates.resolveKey(guildId, userId)))?.member
+        ?.voice?.selfMute,
+    ).toBe(true);
   });
 
   test("GIVEN no voice state nor presence THEN they are null", async () => {
     const client = createClient();
     await seed(client);
 
-    const resolved = (await client.members.get(guildId, userId))!;
+    const resolved = (await client.members.cache.get(client.members.resolveKey(guildId, userId)))!;
 
     expect(resolved.voice).toBeNull();
     expect(resolved.presence).toBeNull();
@@ -198,7 +201,7 @@ describe("guild structure relations", () => {
 
     expect(template.creator.username).toBe("creator");
     expect(template.creator).toBe(template.creator);
-    expect((await client.users.get(userId))?.username).toBe("creator");
+    expect((await client.users.cache.get(userId))?.username).toBe("creator");
   });
 
   test("GIVEN a stage with a cached scheduled event THEN stageInstance.guildScheduledEvent resolves", async () => {
@@ -228,13 +231,15 @@ describe("guild structure relations", () => {
     };
     await client.cache!.stageInstances.set(stageInstanceKey(guildId, stageId), stage as never);
 
-    const instance = (await client.guilds.stageInstances(guildId).get(stageId))!;
+    const instance = (await client.guilds
+      .stageInstances(guildId)
+      .cache.get(client.guilds.stageInstances(guildId).resolveKey(stageId)))!;
     expect(instance.guildScheduledEvent?.name).toBe("Full moon");
 
     instance[kPatch]({ guild_scheduled_event_id: null });
     expect(instance.guildScheduledEvent).toBeNull();
     expect(
-      client.guilds.stageInstances(guildId).createStructure(stage).guildScheduledEvent,
+      client.guilds.stageInstances(guildId).cache.construct(stage).guildScheduledEvent,
     ).toBeNull();
   });
 
@@ -255,11 +260,13 @@ describe("guild structure relations", () => {
       sound as never,
     );
 
-    const cached = (await client.guilds.soundboardSounds(guildId).get(sound.sound_id))!;
+    const cached = (await client.guilds
+      .soundboardSounds(guildId)
+      .cache.get(client.guilds.soundboardSounds(guildId).resolveKey(sound.sound_id)))!;
     expect(cached.emoji).toBeInstanceOf(GuildEmoji);
     expect(cached.emoji?.name).toBe("howl");
 
-    const uncached = client.guilds.soundboardSounds(guildId).createStructure(sound as never);
+    const uncached = client.guilds.soundboardSounds(guildId).cache.construct(sound as never);
     expect(uncached.emoji).toBeInstanceOf(ReactionEmoji);
     expect(uncached.emoji?.id).toBe(emojiId);
   });
@@ -281,12 +288,15 @@ describe("guild structure relations", () => {
       integration as never,
     );
 
-    const resolved = (await client.guilds.integrations(guildId).get(integration.id))!;
+    const resolved = (await client.guilds
+      .integrations(guildId)
+      .cache.get(client.guilds.integrations(guildId).resolveKey(integration.id)))!;
     expect(resolved.role).toBeInstanceOf(Role);
     expect(resolved.role?.name).toBe("Alpha");
+    // Built without relations, the role is read from the cache by the getter.
     expect(
-      client.guilds.integrations(guildId).createStructure(integration as never).role,
-    ).toBeNull();
+      client.guilds.integrations(guildId).cache.construct(integration as never).role?.name,
+    ).toBe("Alpha");
   });
 
   test("GIVEN invites THEN channel is the cached channel, else the partial one", async () => {
@@ -301,7 +311,13 @@ describe("guild structure relations", () => {
     };
     await client.cache!.invites.set(inviteKey(guildId, "wolves"), invite as never);
     expect(
-      ((await client.guilds.invites(guildId).get("wolves"))!.channel as { name: string }).name,
+      (
+        (await client.guilds
+          .invites(guildId)
+          .cache.get(client.guilds.invites(guildId).resolveKey("wolves")))!.channel as {
+          name: string;
+        }
+      ).name,
     ).toBe("general");
 
     vi.spyOn(container.rest, "get").mockResolvedValue({

@@ -50,7 +50,7 @@ async function cachedChannel(client: GatewayClient, type = ChannelType.GuildText
     name: "general",
     guild_id: guildId,
   } as never);
-  return client.channels.get(channelId);
+  return client.channels.cache.get(channelId);
 }
 
 afterEach(() => {

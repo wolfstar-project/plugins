@@ -1,5 +1,46 @@
 # @wolfstar/plugin-cache
 
+## 0.7.0
+
+### Minor Changes
+
+- [#223](https://github.com/wolfstar-project/plugins/pull/223) [`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc) - Cache the status and start time of voice channels: `VOICE_CHANNEL_STATUS_UPDATE`, `VOICE_CHANNEL_START_TIME_UPDATE` and `CHANNEL_INFO` patch the `status` and `voice_start_time` of a cached channel, and leave an uncached one uncached.
+
+## 0.6.0
+
+### Minor Changes
+
+- [#189](https://github.com/wolfstar-project/plugins/pull/189) [`69129e9`](https://github.com/wolfstar-project/plugins/commit/69129e9910c83f973701d55611ddd123b88d39c4) - Add `@wolfstar/plugin-cache/module`: list it in `modules` in `stars.config` to add the package to the auto imports. It needs framework 6.1 and the optional `@wolfstar/kit` peer; the main entrypoint is unchanged.
+
+## 0.5.1
+
+### Patch Changes
+
+- [#169](https://github.com/wolfstar-project/plugins/pull/169) [`6468763`](https://github.com/wolfstar-project/plugins/commit/646876363da7dc2b730a8fb7ed3011cd11a38859) - discord.js parity for the structure members that had its names but not its contracts.
+
+  **Breaking (`@wolfstar/plugin-gateway`):**
+
+  - `Message#react()` resolves to the `MessageReaction` instead of the message, and counts the bot on the message and on its cached entry. `MessageReaction#react()` bumps its counts too.
+  - `Message#attachments`, `Message#stickers`, `Message#messageSnapshots` and `ReactionManager#cache` are `Collection`s instead of arrays: use `.first()`, `.size`, `.get(id)`. Reactions are keyed by emoji ID, or name for Unicode emojis. The `messageReactionRemoveAll` event carries a `Collection` as well.
+  - `Message#stickers` holds partial `Sticker` structures instead of raw sticker items (`format_type` → `format`).
+  - `Message#partial` is `true` when the message lacks its content, not only its author.
+  - `valueOf()` of a structure is its ID when it has one, so structures compare and sort by ID.
+
+  `@wolfstar/plugin-cache`: a `MESSAGE_REACTION_ADD` for the bot's own reaction is no longer counted when the cached reaction already has `me` set.
+
+## 0.5.0
+
+### Minor Changes
+
+- [#149](https://github.com/wolfstar-project/plugins/pull/149) [`a2da4d8`](https://github.com/wolfstar-project/plugins/commit/a2da4d886a9e6b2f4ed54f6ba79b93bdd076746e) - Align the cache with the discord.js RFC [#11426](https://github.com/wolfstar-project/plugins/issues/11426) (zero caching, complete flexibility):
+
+  - `Cache` is now partial: every entity cache is optional, and an entity kind the cache does not hold is not cached. `createInMemoryCache` and `createRedisCache` take `entities` to pick them, and `createCache({ makeCache, policies })` builds a cache out of any store per entity kind (the RFC's `CacheConstructor`).
+  - Add policies, `{ filter(value, key), ttl(value, key) }` per entity kind, applied by `withPolicy(store, policy)` to any store: `filter` returning `false` skips the write and deletes the cached entry, `ttl` sets the entry's time-to-live.
+  - `EntityCache` gains `upsert(key, data, { overwrite, ttl })`, resolving to `{ existing, added }` (the RFC's `add`), and `set` takes `{ ttl }` in milliseconds (`null` for none). `MemoryEntityCache` now supports time-to-live (`ttl`, `sweepInterval`, `sweep()`, `dispose()`), and `createInMemoryCache` takes `ttl` and `sweepInterval`.
+  - Enumerating a store is now optional: `keys`, `values`, and `entries` moved to `IterableEntityCache`, see `isIterableCache`. `applyCacheOperations` skips missing stores and the scans of stores that cannot enumerate, and both it and `applyGatewayDispatch` resolve to `CacheOperationResult[]` (`{ entity, key, type, existing, added }`).
+
+  Migration: custom stores must implement `upsert` and accept `set`'s options; code reading `cache.users` directly must handle `undefined`. `InMemoryCache` and `RedisCache` are now deprecated aliases of `Cache`.
+
 ## 0.4.0
 
 ### Minor Changes

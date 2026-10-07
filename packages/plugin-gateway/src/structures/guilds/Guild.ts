@@ -4,7 +4,6 @@ import {
   GuildFeature,
   GuildPremiumTier,
   type APIGuild,
-  type APIIncidentsData,
   type APIVoiceRegion,
   type GuildDefaultMessageNotifications,
   type GuildExplicitContentFilter,
@@ -14,6 +13,8 @@ import {
   type RESTPatchAPIGuildJSONBody,
 } from "discord-api-types/v10";
 import type { AutoModerationRuleManager } from "../../managers/AutoModerationRuleManager.js";
+import type { ChannelInfoRequestOptions } from "../../managers/ChannelManager.js";
+import type { VoiceChannel } from "../channels/VoiceChannel.js";
 import type { GuildBanManager } from "../../managers/GuildBanManager.js";
 import type { GuildScheduledEventManager } from "../../managers/GuildScheduledEventManager.js";
 import type { GuildSoundboardSoundManager } from "../../managers/GuildSoundboardSoundManager.js";
@@ -22,7 +23,10 @@ import type { GuildChannelManager } from "../../managers/GuildChannelManager.js"
 import type { FetchedThreads } from "../../managers/ThreadManager.js";
 import type { GuildEmojiManager } from "../../managers/GuildEmojiManager.js";
 import type { GuildIntegrationManager } from "../../managers/GuildIntegrationManager.js";
-import type { GuildMembersRequestOptions } from "../../managers/GuildMemberManager.js";
+import type {
+  GuildMemberManager,
+  GuildMembersRequestOptions,
+} from "../../managers/GuildMemberManager.js";
 import type {
   GuildAuditLogs,
   GuildAuditLogsFetchOptions,
@@ -34,8 +38,18 @@ import type {
 } from "../../managers/GuildManager.js";
 import type { GuildTemplateCreateOptions } from "../../managers/GuildTemplateManager.js";
 import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
+import type { PresenceManager } from "../../managers/PresenceManager.js";
+import type { RoleManager } from "../../managers/RoleManager.js";
+import type { VoiceStateManager } from "../../managers/VoiceStateManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
+import { isPromiseLike } from "../../util/cache.js";
 import { cdn } from "../../util/cdn.js";
+import type { ImageResolvable } from "../../util/DataResolver.js";
+import type {
+  GuildSearchMessagesOptions,
+  GuildSearchMessagesResult,
+} from "../../util/messageSearch.js";
+import { transformAPIIncidentsData, type IncidentActions } from "../../util/Transformers.js";
 import type { Webhook } from "../webhooks/Webhook.js";
 import { SystemChannelFlagsBitField, type SystemChannelFlagsResolvable } from "../../util/flags.js";
 import { AnonymousGuild } from "./AnonymousGuild.js";
@@ -77,18 +91,19 @@ export const GuildChannelFields = {
 } as const satisfies Record<keyof GuildRelations, string>;
 
 /**
- * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`), channels are IDs.
+ * The options to edit a guild with. Images are data URIs (`data:image/png;base64,...`) or anything `resolveImage`
+ * reads (contents, a path, a URL, a stream, a blob), channels are IDs.
  */
 export interface GuildEditOptions {
   afkChannel?: string | null;
   afkTimeout?: RESTPatchAPIGuildJSONBody["afk_timeout"];
-  banner?: string | null;
+  banner?: ImageResolvable | null;
   defaultMessageNotifications?: GuildDefaultMessageNotifications | null;
   description?: string | null;
-  discoverySplash?: string | null;
+  discoverySplash?: ImageResolvable | null;
   explicitContentFilter?: GuildExplicitContentFilter | null;
   features?: APIGuild["features"];
-  icon?: string | null;
+  icon?: ImageResolvable | null;
   name?: string;
   /**
    * The ID of the member to transfer the ownership to.
@@ -100,7 +115,7 @@ export interface GuildEditOptions {
   reason?: string;
   rulesChannel?: string | null;
   safetyAlertsChannel?: string | null;
-  splash?: string | null;
+  splash?: ImageResolvable | null;
   systemChannel?: string | null;
   systemChannelFlags?: SystemChannelFlagsResolvable;
   verificationLevel?: GuildVerificationLevel | null;
@@ -257,11 +272,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
     const channelId = (this[kData] as unknown as Record<string, string | null | undefined>)[
       GuildChannelFields[name]
     ];
-    if (!channelId || this.client.cache?.channels.synchronous !== true) return null;
+    const { cache } = this.client.channels;
+    if (!channelId || !cache.synchronous) return null;
     try {
-      return this.client.channels.cached(channelId) ?? null;
+      const channel = cache.get(channelId);
+      if (!isPromiseLike(channel)) return channel ?? null;
+      // A relation of the channel is read from an asynchronous cache. Nothing awaits the promise anymore, so its
+      // rejection must not go unhandled.
+      channel.catch(() => undefined);
+      return null;
     } catch {
-      // A relation of the channel is read from an asynchronous cache.
       return null;
     }
   }
@@ -319,8 +339,9 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   /**
    * Until when invites or direct messages are paused because of raid activity, as set with `setIncidentActions`.
    */
-  public get incidentsData(): APIIncidentsData | null {
-    return this[kData].incidents_data ?? null;
+  public get incidentsData(): IncidentActions | null {
+    const incidents = this[kData].incidents_data;
+    return incidents ? transformAPIIncidentsData(incidents) : null;
   }
 
   /**
@@ -559,6 +580,15 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   }
 
   /**
+   * Searches the messages of the guild, see `GuildManager#searchMessages`.
+   *
+   * @param options What to search for, and how.
+   */
+  public searchMessages(options?: GuildSearchMessagesOptions): Promise<GuildSearchMessagesResult> {
+    return this.client.guilds.searchMessages(this.id, options);
+  }
+
+  /**
    * The channels of the guild.
    */
   public get channels(): GuildChannelManager {
@@ -570,6 +600,34 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get invites(): GuildInviteManager {
     return this.client.guilds.invites(this.id);
+  }
+
+  /**
+   * The presences of the guild: `guild.presences.cache.get(userId)`.
+   */
+  public get presences(): PresenceManager<true> {
+    return this.client.guilds.presences(this.id);
+  }
+
+  /**
+   * The members of the guild: `guild.members.cache.get(userId)`.
+   */
+  public get members(): GuildMemberManager<true> {
+    return this.client.guilds.members(this.id);
+  }
+
+  /**
+   * The roles of the guild: `guild.roles.cache.get(roleId)`.
+   */
+  public get roles(): RoleManager<true> {
+    return this.client.guilds.roles(this.id);
+  }
+
+  /**
+   * The voice states of the guild: `guild.voiceStates.cache.get(userId)`.
+   */
+  public get voiceStates(): VoiceStateManager<true> {
+    return this.client.guilds.voiceStates(this.id);
   }
 
   /**
@@ -604,6 +662,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public requestMembers(options?: GuildMembersRequestOptions): Promise<GuildMember[]> {
     return this.client.members.request(this.id, options);
+  }
+
+  /**
+   * Requests the ephemeral info (status, start time of the voice session) of the voice channels of this guild over the
+   * gateway, and caches it. discord.js: `guild.fetchChannelInfo()`. See `client.channels.requestInfo`.
+   *
+   * @param options The fields to request.
+   */
+  public requestChannelInfo(options: ChannelInfoRequestOptions): Promise<VoiceChannel[]> {
+    return this.client.channels.requestInfo(this.id, options);
   }
 
   /**
@@ -651,30 +719,33 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   }
 
   /**
-   * Sets the icon of this guild, as a data URI, `null` to remove it.
+   * Sets the icon of this guild, `null` to remove it.
    */
-  public setIcon(icon: string | null, reason?: string): Promise<this> {
+  public setIcon(icon: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ icon, reason });
   }
 
   /**
-   * Sets the banner of this guild, as a data URI, `null` to remove it.
+   * Sets the banner of this guild, `null` to remove it.
    */
-  public setBanner(banner: string | null, reason?: string): Promise<this> {
+  public setBanner(banner: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ banner, reason });
   }
 
   /**
-   * Sets the invite splash image of this guild, as a data URI, `null` to remove it.
+   * Sets the invite splash image of this guild, `null` to remove it.
    */
-  public setSplash(splash: string | null, reason?: string): Promise<this> {
+  public setSplash(splash: ImageResolvable | null, reason?: string): Promise<this> {
     return this.edit({ splash, reason });
   }
 
   /**
-   * Sets the discovery splash image of this guild, as a data URI, `null` to remove it.
+   * Sets the discovery splash image of this guild, `null` to remove it.
    */
-  public setDiscoverySplash(discoverySplash: string | null, reason?: string): Promise<this> {
+  public setDiscoverySplash(
+    discoverySplash: ImageResolvable | null,
+    reason?: string,
+  ): Promise<this> {
     return this.edit({ discoverySplash, reason });
   }
 
@@ -777,9 +848,16 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    *
    * @param options Until when to pause each, `null` to resume.
    */
-  public async setIncidentActions(options: GuildIncidentActionsOptions): Promise<APIIncidentsData> {
+  public async setIncidentActions(options: GuildIncidentActionsOptions): Promise<IncidentActions> {
     const incidents = await this.client.guilds.setIncidentActions(this.id, options);
-    this[kPatch]({ incidents_data: incidents });
+    this[kPatch]({
+      incidents_data: {
+        invites_disabled_until: incidents.invitesDisabledUntil?.toISOString() ?? null,
+        dms_disabled_until: incidents.dmsDisabledUntil?.toISOString() ?? null,
+        dm_spam_detected_at: incidents.dmSpamDetectedAt?.toISOString() ?? null,
+        raid_detected_at: incidents.raidDetectedAt?.toISOString() ?? null,
+      },
+    });
     return incidents;
   }
 
@@ -800,28 +878,27 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
   }
 
   /**
-   * Whether this guild has the same data as another one.
+   * Whether this guild has the same data as another one, like discord.js's `Guild#equals`: the same ID, availability,
+   * name, icon, splashes, owner, member count, `large`, verification level, and features, in the same order. `false`
+   * for anything that is not a guild.
+   *
    * @param guild The guild to compare with.
    */
-  public equals(guild: Guild): boolean {
+  public equals(guild: unknown): boolean {
     return (
+      guild instanceof Guild &&
       this.id === guild.id &&
-      this.name === guild.name &&
-      this.icon === guild.icon &&
+      this.available === guild.available &&
       this.splash === guild.splash &&
       this.discoverySplash === guild.discoverySplash &&
+      this.name === guild.name &&
+      this.memberCount === guild.memberCount &&
+      this.large === guild.large &&
+      this.icon === guild.icon &&
       this.ownerId === guild.ownerId &&
-      this.afkTimeout === guild.afkTimeout &&
-      this.afkChannelId === guild.afkChannelId &&
-      this.systemChannelId === guild.systemChannelId &&
       this.verificationLevel === guild.verificationLevel &&
-      this.explicitContentFilter === guild.explicitContentFilter &&
-      this.mfaLevel === guild.mfaLevel &&
-      this.banner === guild.banner &&
-      this.description === guild.description &&
-      this.vanityURLCode === guild.vanityURLCode &&
       this.features.length === guild.features.length &&
-      this.features.every((feature) => guild.features.includes(feature))
+      this.features.every((feature, index) => feature === guild.features[index])
     );
   }
 }

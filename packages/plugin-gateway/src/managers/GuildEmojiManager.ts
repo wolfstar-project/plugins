@@ -6,23 +6,32 @@ import {
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
+import {
+  ReactionEmoji,
+  type EmojiIdentifierResolvable,
+} from "../structures/emojis/ReactionEmoji.js";
 import type { User } from "../structures/users/User.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { resolveImage, type ImageResolvable } from "../util/DataResolver.js";
+import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
+
+const EmojiIdPattern = /^\d{17,20}$/;
 
 /**
  * The options to create an emoji with.
  */
 export interface GuildEmojiCreateOptions {
   /**
-   * The image, as a data URI (`data:image/png;base64,...`), up to 256 KiB.
+   * The image, up to 256 KiB: a data URI (`data:image/png;base64,...`), its contents, a path, a URL, a stream, or a
+   * blob.
    */
-  attachment: string;
+  attachment: ImageResolvable;
   name: string;
   /**
-   * The IDs of the roles allowed to use the emoji, everyone when omitted.
+   * The roles allowed to use the emoji, everyone when omitted: an array of roles or IDs, or a `Collection` of roles.
    */
-  roles?: readonly string[];
+  roles?: RoleResolvables;
   reason?: string;
 }
 
@@ -32,9 +41,10 @@ export interface GuildEmojiCreateOptions {
 export interface GuildEmojiEditOptions {
   name?: string;
   /**
-   * The IDs of the roles allowed to use the emoji, `null` or empty for everyone.
+   * The roles allowed to use the emoji, `null` or empty for everyone: an array of roles or IDs, or a `Collection`
+   * of roles.
    */
-  roles?: readonly string[] | null;
+  roles?: RoleResolvables | null;
   reason?: string;
 }
 
@@ -52,7 +62,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["emojis"]): GuildEmoji {
+  protected createStructure(data: CacheEntityTypes["emojis"]): GuildEmoji {
     return new GuildEmoji(data);
   }
 
@@ -89,6 +99,24 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
   }
 
   /**
+   * Resolves an emoji of the guild, or anything identifying one, to the identifier reaction routes expect, like
+   * discord.js's `resolveIdentifier`.
+   *
+   * @param emoji An emoji, its ID, or anything {@link EmojiIdentifierResolvable}.
+   * @returns The identifier, `null` when an ID is not a cached emoji of this guild.
+   */
+  public resolveIdentifier(emoji: EmojiIdentifierResolvable): Awaitable<string | null> {
+    if (emoji instanceof GuildEmoji) return emoji.identifier;
+    if (typeof emoji === "string" && EmojiIdPattern.test(emoji)) {
+      return whenAll(
+        [this.cache.get(this.resolveKey(emoji))],
+        ([cached]) => cached?.identifier ?? null,
+      );
+    }
+    return ReactionEmoji.resolveIdentifier(emoji);
+  }
+
+  /**
    * Fetches every emoji of the guild, and caches them.
    */
   public async fetchAll(): Promise<GuildEmoji[]> {
@@ -103,9 +131,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    */
   public async create(options: GuildEmojiCreateOptions): Promise<GuildEmoji> {
     const body: RESTPostAPIGuildEmojiJSONBody = {
-      image: options.attachment,
+      image: (await resolveImage(options.attachment))!,
       name: options.name,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
     };
     const emoji = await this.client.api.guilds.createEmoji(this.guildId, body, {
       reason: options.reason,
@@ -123,7 +151,9 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
     const body: RESTPatchAPIGuildEmojiJSONBody = {
       name: options.name,
       roles:
-        options.roles === undefined || options.roles === null ? options.roles : [...options.roles],
+        options.roles === undefined || options.roles === null
+          ? options.roles
+          : resolveRoleIds(options.roles),
     };
     const emoji = await this.client.api.guilds.editEmoji(this.guildId, emojiId, body, {
       reason: options.reason,
@@ -139,7 +169,7 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    */
   public async delete(emojiId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteEmoji(this.guildId, emojiId, { reason });
-    await this.cache?.delete(this.resolveKey(emojiId));
+    await this.cache.delete(this.resolveKey(emojiId));
   }
 
   /**
@@ -158,16 +188,23 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * @remarks
    * It enumerates the whole entity cache, which a Redis store answers from its index: prefer `fetchAll` when the
    * cache may be incomplete.
+   *
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(): Promise<GuildEmoji[]> {
-    const cache = this.cache;
+    const cache = this.iterableCache();
     if (!cache) return [];
 
     const prefix = `${this.guildId}:`;
-    const keys = (await cache.keys()).filter((key) => key.startsWith(prefix));
-    const values = await Promise.all(keys.map((key) => cache.get(key)));
+    const keys = await this.guard("keys", null, () => cache.keys(), []);
+    const values = await Promise.all(
+      keys
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => this.guard("get", key, () => cache.get(key), undefined)),
+    );
     return Promise.all(
-      values.filter((value) => value !== undefined).map((value) => this.hydrate(value)),
+      values.filter((value) => value !== undefined).map((value) => this._build(value)),
     );
   }
 

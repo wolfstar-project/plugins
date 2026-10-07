@@ -1,5 +1,6 @@
 import { PollAnswer as BasePollAnswer } from "@discordjs/structures";
 import type { APIPollAnswer } from "discord-api-types/v10";
+import { PollAnswerVoterManager } from "../../managers/PollAnswerVoterManager.js";
 import { ReactionEmoji } from "../emojis/ReactionEmoji.js";
 import { Mixin } from "../Mixin.js";
 import type { GuildEmoji } from "../emojis/GuildEmoji.js";
@@ -109,12 +110,14 @@ export class PollAnswer extends BasePollAnswer {
    * @param options How many voters to fetch (up to 100), and after which user ID.
    */
   public fetchVoters(options: { limit?: number; after?: string } = {}): Promise<User[]> {
-    return this.client.messages.fetchPollAnswerVoters(
-      this.channelId,
-      this.messageId,
-      this.id,
-      options,
-    );
+    return this.voters.fetch(options);
+  }
+
+  /**
+   * The voters of the answer, like discord.js's `PollAnswer#voters`.
+   */
+  public get voters(): PollAnswerVoterManager {
+    return new PollAnswerVoterManager(this);
   }
 }
 

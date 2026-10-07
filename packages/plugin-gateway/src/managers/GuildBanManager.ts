@@ -33,7 +33,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["bans"]): GuildBan {
+  protected createStructure(data: CacheEntityTypes["bans"]): GuildBan {
     return new GuildBan(data);
   }
 
@@ -95,7 +95,7 @@ export class GuildBanManager extends CachedManager<"bans", GuildBan, [userId: st
   public async remove(user: IdResolvable, reason?: string): Promise<void> {
     const userId = resolveId(user);
     await this.client.members.unban(this.guildId, userId, reason);
-    await this.cache?.delete(this.resolveKey(userId));
+    await this.cache.delete(this.resolveKey(userId));
   }
 
   /**

@@ -1,3 +1,4 @@
+import { container } from "@wolfstar/http-framework";
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { createInMemoryCache, emojiKey, memberKey, roleKey } from "@wolfstar/plugin-cache";
 import {
@@ -10,7 +11,7 @@ import {
   type APIUser,
   type GatewayDispatchPayload,
 } from "discord-api-types/v10";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   GatewayClient,
   GuildEmoji,
@@ -46,7 +47,7 @@ function createClient(cache = true) {
     discordToken: "test-token",
     clientId: author.id,
     intents: 0,
-    cache: cache ? createInMemoryCache() : undefined,
+    cache: cache ? createInMemoryCache() : null,
   });
 }
 
@@ -139,7 +140,7 @@ describe("message mentions", () => {
     const client = createClient();
     await seed(client);
 
-    const resolved = await client.messages.hydrate(mentioning);
+    const resolved = await client.messages._build(mentioning);
     const { mentions } = resolved;
 
     expect(mentions.users[0]!.username).toBe("howl");
@@ -154,7 +155,7 @@ describe("message mentions", () => {
   test("GIVEN no cache THEN mentions fall back to the payload", async () => {
     const client = createClient(false);
 
-    const built = await client.messages.hydrate(mentioning);
+    const built = await client.messages._build(mentioning);
     const { mentions } = built;
 
     expect(mentions.users[0]!.username).toBe("stale");
@@ -168,7 +169,7 @@ describe("message mentions", () => {
   test("GIVEN a content patch THEN the resolved mentions are dropped", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(mentioning);
+    const resolved = await client.messages._build(mentioning);
 
     resolved[kPatch]({ content: "quiet", mentions: [], mention_roles: [] });
 
@@ -197,10 +198,10 @@ describe("message thread, reactions, and poll", () => {
     await seed(client);
     await client.cache!.threads.set(messageId, thread as never);
 
-    const withCopy = await client.messages.hydrate(
+    const withCopy = await client.messages._build(
       message({ thread: { ...thread, name: "stale" } } as never),
     );
-    const flagged = await client.messages.hydrate(message({ flags: MessageFlags.HasThread }));
+    const flagged = await client.messages._build(message({ flags: MessageFlags.HasThread }));
 
     expect(withCopy.thread?.name).toBe("fresh");
     expect(withCopy.thread?.parent?.id).toBe(channelId);
@@ -210,18 +211,18 @@ describe("message thread, reactions, and poll", () => {
   test("GIVEN no cached thread THEN message.thread is the payload's copy, else null", async () => {
     const client = createClient();
 
-    const withCopy = await client.messages.hydrate(
+    const withCopy = await client.messages._build(
       message({ thread: { ...thread, name: "stale" } } as never),
     );
 
     expect(withCopy.thread?.name).toBe("stale");
-    expect((await client.messages.hydrate(message())).thread).toBeNull();
+    expect((await client.messages._build(message())).thread).toBeNull();
   });
 
   test("GIVEN reactions THEN they know their message, and cached custom emojis resolve", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(
+    const resolved = await client.messages._build(
       message({
         reactions: [
           {
@@ -244,13 +245,39 @@ describe("message thread, reactions, and poll", () => {
       }),
     );
 
-    const [custom, unicode] = resolved.reactions.cache;
+    const [custom, unicode] = resolved.reactions.cache.values();
 
     expect(custom!.message).toBe(resolved);
     expect(custom!.emoji).toBeInstanceOf(GuildEmoji);
     expect(custom!.emoji.name).toBe("howl");
     expect(resolved.reactions.resolve(`old_name:${emojiId}`)).not.toBeNull();
     expect(unicode!.emoji).toBeInstanceOf(ReactionEmoji);
+  });
+
+  test("GIVEN react on a message with a cached custom emoji THEN the reaction keeps the cached emoji", async () => {
+    const client = createClient();
+    await seed(client);
+    const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const resolved = await client.messages._build(
+      message({
+        reactions: [
+          {
+            count: 2,
+            count_details: { normal: 2, burst: 0 },
+            me: false,
+            me_burst: false,
+            burst_colors: [],
+            emoji: { id: emojiId, name: "old_name" },
+          },
+        ],
+      }),
+    );
+
+    const reaction = await resolved.react(emojiId);
+    put.mockRestore();
+
+    expect(reaction.count).toBe(3);
+    expect(reaction.emoji).toBeInstanceOf(GuildEmoji);
   });
 
   test("GIVEN a reaction on an uncached message THEN the cached emoji resolves, the message is null", async () => {
@@ -277,7 +304,7 @@ describe("message thread, reactions, and poll", () => {
   test("GIVEN a poll THEN it knows its message and channel, and its answers their poll and emoji", async () => {
     const client = createClient();
     await seed(client);
-    const resolved = await client.messages.hydrate(
+    const resolved = await client.messages._build(
       message({
         poll: {
           question: { text: "Hunt?" },

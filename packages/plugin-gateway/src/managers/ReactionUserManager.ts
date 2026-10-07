@@ -1,12 +1,12 @@
 import type { ReactionType } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import { type User } from "../structures/users/User.js";
+import { BaseManager } from "./BaseManager.js";
 
 /**
  * Manages the users who reacted to a message with one emoji.
  */
-export class ReactionUserManager {
-  public readonly client: GatewayClient;
+export class ReactionUserManager extends BaseManager {
   public readonly channelId: string;
   public readonly messageId: string;
   /**
@@ -15,7 +15,7 @@ export class ReactionUserManager {
   public readonly emoji: string;
 
   public constructor(client: GatewayClient, channelId: string, messageId: string, emoji: string) {
-    this.client = client;
+    super(client);
     this.channelId = channelId;
     this.messageId = messageId;
     this.emoji = emoji;

@@ -17,6 +17,13 @@ import {
   type PermissionResolvable,
   type PermissionsString,
 } from "./PermissionsBitField.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
+import {
+  transformGuildDefaultReaction,
+  transformGuildForumTag,
+  type DefaultReactionEmoji,
+  type GuildForumTagOptions,
+} from "./Transformers.js";
 
 /**
  * Something with an ID: a structure, or the ID itself.
@@ -30,7 +37,7 @@ export type IdResolvable = string | { id: string | null };
  */
 export function resolveId(value: IdResolvable): string {
   const id = typeof value === "string" ? value : value.id;
-  if (!id) throw new TypeError("Cannot resolve an ID from a structure without one");
+  if (!id) throw new GatewayTypeError("IdUnresolvable");
   return id;
 }
 
@@ -92,10 +99,13 @@ export function resolveOverwriteOptions(
 }
 
 /**
- * A forum tag to set: an existing one (with its ID) or a new one.
+ * A forum tag to set: an existing one (with its ID) or a new one, camel-cased like discord.js's `GuildForumTagData`
+ * or raw.
  */
-export type GuildForumTagData = Omit<APIGuildForumTag, "id" | "moderated"> &
-  Partial<Pick<APIGuildForumTag, "id" | "moderated">>;
+export type GuildForumTagData =
+  | GuildForumTagOptions
+  | (Omit<APIGuildForumTag, "id" | "moderated"> &
+      Partial<Pick<APIGuildForumTag, "id" | "moderated">>);
 
 /**
  * The fields of a guild channel that can be edited. Each applies to the channel types that have it.
@@ -126,7 +136,10 @@ export interface GuildChannelEditOptions {
   videoQualityMode?: VideoQualityMode;
   defaultAutoArchiveDuration?: ThreadAutoArchiveDuration;
   availableTags?: readonly GuildForumTagData[];
-  defaultReactionEmoji?: APIGuildForumDefaultReactionEmoji | null;
+  /**
+   * The default reaction, camel-cased (`{ id, name }`) or raw.
+   */
+  defaultReactionEmoji?: DefaultReactionEmoji | APIGuildForumDefaultReactionEmoji | null;
   defaultThreadRateLimitPerUser?: number;
   defaultSortOrder?: SortOrderType | null;
   defaultForumLayout?: ForumLayoutType;
@@ -179,8 +192,9 @@ export function toChannelBody(
     rtc_region: options.rtcRegion,
     video_quality_mode: options.videoQualityMode,
     default_auto_archive_duration: options.defaultAutoArchiveDuration,
-    available_tags: options.availableTags,
-    default_reaction_emoji: options.defaultReactionEmoji,
+    available_tags: options.availableTags?.map(transformGuildForumTag),
+    default_reaction_emoji:
+      options.defaultReactionEmoji && transformGuildDefaultReaction(options.defaultReactionEmoji),
     default_thread_rate_limit_per_user: options.defaultThreadRateLimitPerUser,
     default_sort_order: options.defaultSortOrder,
     default_forum_layout: options.defaultForumLayout,

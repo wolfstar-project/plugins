@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-logger
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-logger.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-logger</h1>
 
 **Pluggable logging with swappable transports for `@wolfstar/http-framework`.**
 
@@ -41,6 +39,35 @@ pnpm add @sentry/node
 ```
 
 ## Usage
+
+### Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer):
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: [["@wolfstar/plugin-logger/module", { level: 20 }]],
+});
+```
+
+The options are written into the built entry, so they must be JSON-serialisable (`level`, ...).
+Transports are objects: set them through `ClientOptions.logger.transports`.
+
+Never combine the module (or the `@wolfstar/plugin-logger/plugin` factory below) with
+`import "@wolfstar/plugin-logger/register"`: both paths install the same hooks, so combining them
+installs them twice.
+
+Without Stars, pass the `definePlugin` factory to `plugins` instead:
+
+```ts
+import loggerPlugin from "@wolfstar/plugin-logger/plugin";
+
+const client = new Client({ plugins: [loggerPlugin({ level: LogLevel.Debug })] });
+```
+
+### `register` entrypoint (framework v3/v5/v6)
 
 Import the side-effecting `register` entrypoint **before** you create your `Client`:
 

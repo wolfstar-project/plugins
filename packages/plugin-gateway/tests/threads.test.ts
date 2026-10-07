@@ -14,6 +14,7 @@ import {
   GatewayClient,
   ThreadMember,
   type ForumChannel,
+  type GatewayClientOptions,
   type GatewayEventMap,
   type GatewayEventName,
   type PublicThreadChannel,
@@ -25,13 +26,14 @@ const channelId = "200000000000000020";
 const threadId = "200000000000000030";
 const userId = "600000000000000600";
 
-function createClient() {
+// Pass `{}` for the default cache of structure instances.
+function createClient(options: Partial<GatewayClientOptions> = { cache: createInMemoryCache() }) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: createInMemoryCache(),
+    ...options,
   });
 }
 
@@ -70,7 +72,7 @@ async function cacheParent(client: GatewayClient, type = ChannelType.GuildText) 
     name: "general",
     guild_id: guildId,
   } as never);
-  return client.channels.get(channelId);
+  return client.channels.cache.get(channelId);
 }
 
 async function dispatch(client: GatewayClient, t: GatewayDispatchEvents, d: unknown) {
@@ -184,7 +186,7 @@ describe("thread defaults", () => {
     const client = createClient();
     await client.cache!.threads.set(threadId, thread() as never);
     const get = vi.spyOn(container.rest, "get").mockResolvedValue(threadMember());
-    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+    const cached = (await client.threads.cache.get(threadId)) as PublicThreadChannel;
 
     await cached.members.fetch(userId, { withMember: true });
 
@@ -203,7 +205,7 @@ describe("thread actions", () => {
       .mockResolvedValue(
         thread({ thread_metadata: { ...thread().thread_metadata, archived: true } }),
       );
-    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+    const cached = (await client.threads.cache.get(threadId)) as PublicThreadChannel;
 
     await cached.setArchived(true, "done");
 
@@ -212,7 +214,7 @@ describe("thread actions", () => {
       reason: "done",
     });
     expect(cached.archived).toBe(true);
-    expect(((await client.threads.get(threadId)) as PublicThreadChannel).archived).toBe(true);
+    expect(((await client.threads.cache.get(threadId)) as PublicThreadChannel).archived).toBe(true);
     expect(await client.cache!.channels.get(threadId)).toBeUndefined();
   });
 
@@ -221,7 +223,7 @@ describe("thread actions", () => {
     await client.cache!.threads.set(threadId, thread() as never);
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
     const remove = vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
-    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+    const cached = (await client.threads.cache.get(threadId)) as PublicThreadChannel;
 
     await cached.join();
     await cached.leave();
@@ -236,7 +238,7 @@ describe("thread actions", () => {
     const client = createClient();
     await client.cache!.threads.set(threadId, thread() as never);
     vi.spyOn(container.rest, "get").mockResolvedValue([threadMember()]);
-    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+    const cached = (await client.threads.cache.get(threadId)) as PublicThreadChannel;
 
     const [member] = await cached.members.list();
 
@@ -266,7 +268,7 @@ describe("thread actions", () => {
       pinned: false,
       type: MessageType.Default,
     });
-    const cached = (await client.threads.get(threadId)) as PublicThreadChannel;
+    const cached = (await client.threads.cache.get(threadId)) as PublicThreadChannel;
 
     const starter = await cached.fetchStarterMessage();
 
@@ -366,5 +368,18 @@ describe("thread events", () => {
     const [[previous, current]] = calls;
     expect(previous?.flags).toBe(0);
     expect(current.flags).toBe(2);
+  });
+});
+
+describe("default cache", () => {
+  test("GIVEN a thread only in the thread cache THEN channels.cache resolves it", async () => {
+    const client = createClient({});
+    await client.threads._add(thread() as never);
+
+    expect(await client.channels.cache.has(threadId)).toBe(true);
+    expect((await client.channels.cache.get(threadId))?.id).toBe(threadId);
+    expect(await client.cache!.channels.has(threadId)).toBe(false);
+    expect(await client.channels.cache.delete(threadId)).toBe(true);
+    expect(await client.threads.cache.get(threadId)).toBeUndefined();
   });
 });

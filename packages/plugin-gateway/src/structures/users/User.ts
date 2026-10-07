@@ -1,12 +1,15 @@
 import type { BaseImageURLOptions, ImageURLOptions } from "@discordjs/rest";
 import { User as BaseUser } from "@discordjs/structures";
-import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
-import type {
-  APIAvatarDecorationData,
-  APICollectibles,
-  APIUserPrimaryGuild,
-} from "discord-api-types/v10";
+import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { cdn } from "../../util/cdn.js";
+import {
+  transformAPIAvatarDecorationData,
+  transformAPIUserPrimaryGuild,
+  transformCollectibles,
+  type AvatarDecorationData,
+  type Collectibles,
+  type UserPrimaryGuild,
+} from "../../util/Transformers.js";
 import { UserFlagsBitField } from "../../util/flags.js";
 import {
   MessagePayload,
@@ -49,19 +52,28 @@ export class User extends BaseUser {
     return `#${accentColor.toString(16).padStart(6, "0")}`;
   }
 
-  public get avatarDecorationData(): APIAvatarDecorationData | null {
-    return this[kData].avatar_decoration_data ?? null;
-  }
-
-  public get collectibles(): APICollectibles | null {
-    return this[kData].collectibles ?? null;
+  /**
+   * The user's avatar decoration, camel-cased like discord.js's `User#avatarDecorationData`.
+   */
+  public get avatarDecorationData(): AvatarDecorationData | null {
+    const data = this[kData].avatar_decoration_data;
+    return data ? transformAPIAvatarDecorationData(data) : null;
   }
 
   /**
-   * The guild whose tag the user displays, if any.
+   * The user's collectibles, camel-cased like discord.js's `User#collectibles`.
    */
-  public get primaryGuild(): APIUserPrimaryGuild | null {
-    return this[kData].primary_guild ?? null;
+  public get collectibles(): Collectibles | null {
+    const collectibles = this[kData].collectibles;
+    return collectibles ? transformCollectibles(collectibles) : null;
+  }
+
+  /**
+   * The guild whose tag the user displays, if any, camel-cased like discord.js's `User#primaryGuild`.
+   */
+  public get primaryGuild(): UserPrimaryGuild | null {
+    const guild = this[kData].primary_guild;
+    return guild ? transformAPIUserPrimaryGuild(guild) : null;
   }
 
   /**
@@ -136,16 +148,26 @@ export class User extends BaseUser {
    */
   public guildTagBadgeURL(options?: BaseImageURLOptions): string | null {
     const guild = this.primaryGuild;
-    return guild?.identity_guild_id && guild.badge
-      ? cdn.guildTagBadge(guild.identity_guild_id, guild.badge, options)
+    return guild?.identityGuildId && guild.badge
+      ? cdn.guildTagBadge(guild.identityGuildId, guild.badge, options)
       : null;
   }
 
   /**
-   * Opens a direct message channel with the user, or gets the existing one.
+   * The cached direct message channel with the user, see `UserManager#dmChannel`: `null` when there is none, or when
+   * the channel cache cannot be searched. Synchronous when the channel cache is.
    */
-  public createDM(): Promise<DMChannel> {
-    return this.client.users.createDM(this.id);
+  public get dmChannel(): Awaitable<DMChannel | null> {
+    return this.client.users.dmChannel(this.id);
+  }
+
+  /**
+   * Opens a direct message channel with the user, reusing the cached one.
+   *
+   * @param force Whether to skip the cache lookup and always call the API.
+   */
+  public createDM(force = false): Promise<DMChannel> {
+    return this.client.users.createDM(this.id, { force });
   }
 
   /**
@@ -181,10 +203,17 @@ export class User extends BaseUser {
   }
 
   /**
-   * Whether this user has the same data as another one.
+   * Whether this user has the same data as another one, like discord.js's `User#equals`: the same ID, username,
+   * discriminator, global name, avatar, flags, banner, accent color, avatar decoration, nameplate, and primary guild.
+   *
    * @param user The user to compare with.
    */
-  public equals(user: User): boolean {
+  public equals(user: User | null | undefined): boolean {
+    if (!user) return false;
+    const nameplate = this.collectibles?.nameplate;
+    const otherNameplate = user.collectibles?.nameplate;
+    const primaryGuild = this.primaryGuild;
+    const otherPrimaryGuild = user.primaryGuild;
     return (
       this.id === user.id &&
       this.username === user.username &&
@@ -194,7 +223,16 @@ export class User extends BaseUser {
       this.flags.bitField === user.flags.bitField &&
       this.banner === user.banner &&
       this.accentColor === user.accentColor &&
-      this.avatarDecorationData?.asset === user.avatarDecorationData?.asset
+      this.avatarDecorationData?.asset === user.avatarDecorationData?.asset &&
+      this.avatarDecorationData?.skuId === user.avatarDecorationData?.skuId &&
+      nameplate?.skuId === otherNameplate?.skuId &&
+      nameplate?.asset === otherNameplate?.asset &&
+      nameplate?.label === otherNameplate?.label &&
+      nameplate?.palette === otherNameplate?.palette &&
+      primaryGuild?.identityGuildId === otherPrimaryGuild?.identityGuildId &&
+      primaryGuild?.identityEnabled === otherPrimaryGuild?.identityEnabled &&
+      primaryGuild?.tag === otherPrimaryGuild?.tag &&
+      primaryGuild?.badge === otherPrimaryGuild?.badge
     );
   }
 

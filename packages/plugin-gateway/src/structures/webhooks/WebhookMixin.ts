@@ -8,6 +8,7 @@ import {
   type WebhookThreadOptions,
 } from "../messages/MessagePayload.js";
 import { snowflakeTimestamp } from "../Structure.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * What {@link WebhookMixin} needs from the class it is mixed into.
@@ -112,7 +113,7 @@ export class WebhookMixin {
    */
   public requireToken(): string {
     const { token } = this;
-    if (!token) throw new Error(`Webhook ${this.id} has no token to post with`);
+    if (!token) throw new GatewayError("WebhookTokenUnavailable", this.id);
     return token;
   }
 }

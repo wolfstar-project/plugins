@@ -2,6 +2,10 @@ import { container } from "@wolfstar/http-framework";
 import {
   createInMemoryCache,
   createRedisCache,
+  MemoryEntityCache,
+  type Awaitable,
+  type CacheFactory,
+  type EntityCache,
   memberKey,
   messageKey,
   roleKey,
@@ -30,7 +34,7 @@ const user: APIUser = {
   avatar: null,
 };
 
-function createClient({ cache }: { cache?: Cache } = { cache: createInMemoryCache() }) {
+function createClient({ cache }: { cache: Cache | null } = { cache: createInMemoryCache() }) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
@@ -58,6 +62,12 @@ function message(extra: Partial<APIMessage> = {}): APIMessage {
     type: MessageType.Default,
     ...extra,
   };
+}
+
+// Unwraps what a synchronous cache answers with, which is never a promise.
+function sync<Value>(value: Awaitable<Value>): Value {
+  expect(value).not.toBeInstanceOf(Promise);
+  return value as Value;
 }
 
 afterEach(() => {
@@ -118,21 +128,22 @@ describe("CachedManager#_add", () => {
       discordToken: "test-token",
       clientId: "266624760782258186",
       intents: 0,
+      cache: null,
     });
 
     await expect(client.users._add(user)).resolves.toBeInstanceOf(User);
   });
 });
 
-describe("CachedManager#resolve", () => {
+describe("DataManager#resolve", () => {
   test("GIVEN a structure, a cached key, or an unknown key THEN it resolves accordingly", async () => {
     const client = createClient();
     const structure = new User(user);
     await client.cache!.users.set(user.id, user);
 
-    await expect(client.users.resolve(structure)).resolves.toBe(structure);
+    expect(await client.users.resolve(structure)).toBe(structure);
     expect((await client.users.resolve(user.id))?.username).toBe("wolf");
-    await expect(client.users.resolve("1")).resolves.toBeNull();
+    expect(await client.users.resolve("1")).toBeNull();
   });
 });
 
@@ -168,12 +179,14 @@ describe("relations", () => {
     expect(await client.cache!.messages.get(messageKey(channelId, sent.id))).toBeDefined();
   });
 
-  test("GIVEN a cached message THEN get resolves its author from the users cache", async () => {
+  test("GIVEN a cached message THEN cache.get resolves its author from the users cache", async () => {
     const client = createClient();
     await client.cache!.messages.set(messageKey(channelId, "1200000000000000000"), message());
     await client.cache!.users.set(user.id, { ...user, username: "renamed" });
 
-    const cached = await client.messages.get(channelId, "1200000000000000000");
+    const cached = await client.messages.cache.get(
+      client.messages.resolveKey(channelId, "1200000000000000000"),
+    );
 
     expect(cached?.author.username).toBe("renamed");
   });
@@ -215,9 +228,11 @@ describe("guild relations", () => {
       message({ guild_id: guildId }),
     );
 
-    const channel = await client.channels.get(channelId);
-    const role = await client.roles.get(guildId, "5");
-    const cached = await client.messages.get(channelId, "1200000000000000000");
+    const channel = await client.channels.cache.get(channelId);
+    const role = await client.roles.cache.get(client.roles.resolveKey(guildId, "5"));
+    const cached = await client.messages.cache.get(
+      client.messages.resolveKey(channelId, "1200000000000000000"),
+    );
 
     expect((channel as TextChannel).guild).toBeInstanceOf(Guild);
     expect(role?.guild?.name).toBe("Pack");
@@ -248,7 +263,7 @@ describe("guild relations", () => {
       guild_id: guildId,
     } as never);
 
-    const role = await client.roles.get(guildId, "5");
+    const role = await client.roles.cache.get(client.roles.resolveKey(guildId, "5"));
 
     expect(role![kClone]({ name: "Beta" }).guild?.id).toBe(guildId);
   });
@@ -277,11 +292,11 @@ describe("guild relations of guild assets", () => {
   });
 });
 
-describe("CachedManager#cached", () => {
+describe("CachedManager#cache", () => {
   const guild = { id: guildId, name: "Pack", icon: null, owner_id: user.id, features: [] } as never;
   const member = { user, roles: [], joined_at: "2026-01-01T00:00:00.000Z", guild_id: guildId };
 
-  test("GIVEN an in-memory cache THEN it returns the structure get resolves to, relations included", async () => {
+  test("GIVEN an in-memory cache THEN cache.get answers synchronously, relations included", async () => {
     const client = createClient();
     await client.cache!.guilds.set(guildId, guild);
     await client.cache!.channels.set(channelId, {
@@ -299,17 +314,19 @@ describe("CachedManager#cached", () => {
       }),
     );
 
-    const cached = client.messages.cached(channelId, "1200000000000000000");
+    const key = client.messages.resolveKey(channelId, "1200000000000000000");
+    const cached = sync(client.messages.cache.get(key));
 
+    expect(client.messages.cache.synchronous).toBe(true);
     expect(cached).toBeInstanceOf(Message);
-    expect(cached).toEqual(await client.messages.get(channelId, "1200000000000000000"));
+    expect(cached).toEqual(await client.messages.cache.get(key));
     expect(cached?.author.username).toBe("renamed");
     expect(cached?.member?.nickname).toBe("Alpha");
     expect(cached?.guild?.name).toBe("Pack");
     expect(cached?.channel).toBeInstanceOf(TextChannel);
   });
 
-  test("GIVEN several IDs THEN it reads the entity they identify", async () => {
+  test("GIVEN several IDs THEN resolveKey builds the key of the entity they identify", async () => {
     const client = createClient();
     await client.cache!.users.set(user.id, { ...user, banner: "banner" });
     await client.cache!.members.set(memberKey(guildId, user.id), member);
@@ -319,9 +336,12 @@ describe("CachedManager#cached", () => {
       guild_id: guildId,
     } as never);
 
-    expect(client.members.cached(guildId, user.id)?.user?.banner).toBe("banner");
-    expect(client.roles.cached(guildId, "5")?.name).toBe("Alpha");
-    expect(client.members.cached(guildId, "1")).toBeUndefined();
+    const { members, roles } = client;
+    expect(sync(members.cache.get(members.resolveKey(guildId, user.id)))?.user?.banner).toBe(
+      "banner",
+    );
+    expect(sync(roles.cache.get(roles.resolveKey(guildId, "5")))?.name).toBe("Alpha");
+    expect(sync(members.cache.get(members.resolveKey(guildId, "1")))).toBeUndefined();
   });
 
   test("GIVEN a thread ID THEN channels falls back to the thread cache", async () => {
@@ -335,34 +355,161 @@ describe("CachedManager#cached", () => {
       parent_id: channelId,
     } as never);
 
-    expect(client.channels.cached(threadId)?.id).toBe(threadId);
-    expect(client.channels.cached("1")).toBeUndefined();
+    expect(sync(client.channels.cache.get(threadId))?.id).toBe(threadId);
+    expect(sync(client.channels.cache.has(threadId))).toBe(true);
+    expect(sync(client.channels.cache.get("1"))).toBeUndefined();
   });
 
-  test("GIVEN a client without cache THEN it returns undefined, like get", async () => {
-    const client = createClient({});
+  test("GIVEN a client without cache THEN cache.get answers undefined", () => {
+    const client = createClient({ cache: null });
 
-    expect(client.users.cached(user.id)).toBeUndefined();
-    await expect(client.users.get(user.id)).resolves.toBeUndefined();
+    expect(client.users.cache.get(user.id)).toBeUndefined();
   });
 
-  test("GIVEN a Redis cache THEN it throws rather than reporting a miss", async () => {
+  test("GIVEN a Redis cache THEN cache.get answers with a promise", async () => {
     const client = createClient({ cache: createRedisCache({ redis: new FakeRedis() }) });
-    await client.cache!.users.set(user.id, user);
+    await client.cache!.users!.set(user.id, user);
 
-    expect(client.users.cache?.synchronous).toBe(false);
-    expect(() => client.users.cached(user.id)).toThrow(TypeError);
-    expect((await client.users.get(user.id))?.username).toBe("wolf");
+    expect(client.users.cache.synchronous).toBe(false);
+    const cached = client.users.cache.get(user.id);
+    expect(cached).toBeInstanceOf(Promise);
+    expect((await cached)?.username).toBe("wolf");
+  });
+});
+
+function failingStore(error: Error): EntityCache<any> {
+  const fail = () => {
+    throw error;
+  };
+  return {
+    synchronous: true,
+    get: fail,
+    set: fail,
+    upsert: fail,
+    has: fail,
+    delete: fail,
+    clear: fail,
+    getSize: fail,
+  };
+}
+
+function baseStore(): EntityCache<any> {
+  const inner = new MemoryEntityCache<any>();
+  return {
+    synchronous: true,
+    get: (key) => inner.get(key),
+    set: (key, value, options) => inner.set(key, value, options),
+    upsert: (key, data, options) => inner.upsert(key, data, options),
+    has: (key) => inner.has(key),
+    delete: (key) => inner.delete(key),
+    clear: () => inner.clear(),
+    getSize: () => inner.getSize(),
+  };
+}
+
+function clientWith(makeCache: CacheFactory, cacheErrors?: "miss" | "throw") {
+  return new GatewayClient({
+    discordPublicKey: "0".repeat(64),
+    discordToken: "test-token",
+    clientId: "266624760782258186",
+    intents: 0,
+    makeCache,
+    cacheErrors,
+  });
+}
+
+describe("RFC manager pattern", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
-  test("GIVEN a relation in an asynchronous entity cache THEN it throws", async () => {
-    const redis = createRedisCache({ redis: new FakeRedis() });
-    const client = createClient({ cache: { ...createInMemoryCache(), users: redis.users } });
-    await client.cache!.users.set(user.id, user);
-    await client.cache!.members.set(memberKey(guildId, user.id), member);
+  test("GIVEN a failing store THEN fetch falls back to the API and emits cacheError", async () => {
+    const error = new Error("down");
+    const client = clientWith((entity) => (entity === "users" ? failingStore(error) : null));
+    const cacheErrors: unknown[][] = [];
+    client.on("cacheError", (...args) => cacheErrors.push(args));
+    vi.spyOn(container.rest, "get").mockResolvedValue(user);
 
-    expect(client.members.cache?.synchronous).toBe(true);
-    expect(() => client.members.cached(guildId, user.id)).toThrow(TypeError);
-    expect((await client.members.get(guildId, user.id))?.user?.username).toBe("wolf");
+    const fetched = await client.users.fetch(user.id);
+
+    expect(fetched.id).toBe(user.id);
+    // The read of `fetch`, then the write of `_add`.
+    expect(cacheErrors).toEqual([
+      [error, { entity: "users", key: user.id, operation: "get" }],
+      [error, { entity: "users", key: user.id, operation: "upsert" }],
+    ]);
+  });
+
+  test("GIVEN cacheErrors throw THEN fetch rejects with the cache error", async () => {
+    const error = new Error("down");
+    const client = clientWith(
+      (entity) => (entity === "users" ? failingStore(error) : null),
+      "throw",
+    );
+    const cacheErrors = vi.fn();
+    client.on("cacheError", cacheErrors);
+
+    await expect(client.users.fetch(user.id)).rejects.toBe(error);
+    expect(cacheErrors).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN a failing synchronous store THEN cache.get reports a miss", () => {
+    const client = clientWith((entity) =>
+      entity === "users" ? failingStore(new Error("down")) : null,
+    );
+    const cacheErrors = vi.fn();
+    client.on("cacheError", cacheErrors);
+
+    expect(client.users.cache.get(user.id)).toBeUndefined();
+    expect(cacheErrors).toHaveBeenCalledOnce();
+  });
+
+  test("GIVEN a store THEN _add writes through a single upsert", async () => {
+    const store = new MemoryEntityCache<any>();
+    const client = clientWith((entity) => (entity === "users" ? store : null));
+    const upsert = vi.spyOn(store, "upsert");
+    const set = vi.spyOn(store, "set");
+    const get = vi.spyOn(store, "get");
+
+    const added = await client.users._add(user);
+
+    expect(added.username).toBe(user.username);
+    expect(upsert).toHaveBeenCalledExactlyOnceWith(user.id, user, { overwrite: false });
+    expect(get).not.toHaveBeenCalled();
+    expect(set).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN a store and a key the data does not tell THEN _add reads the entry and writes it back", async () => {
+    const store = new MemoryEntityCache<any>();
+    const client = clientWith((entity) => (entity === "users" ? store : null));
+    const upsert = vi.spyOn(store, "upsert");
+    const set = vi.spyOn(store, "set");
+
+    const added = await client.users._add(user, true, { id: "alias" });
+
+    expect(added.username).toBe(user.username);
+    expect(upsert).not.toHaveBeenCalled();
+    expect(set).toHaveBeenCalledExactlyOnceWith("alias", user);
+  });
+
+  test("GIVEN listCached THEN it needs a store able to enumerate", async () => {
+    const withoutStore = clientWith(() => null);
+    const nonIterable = clientWith((entity) =>
+      entity === "presences" || entity === "emojis" ? baseStore() : null,
+    );
+
+    await expect(withoutStore.presences.listCached(guildId)).resolves.toEqual([]);
+    await expect(withoutStore.guilds.emojis(guildId).listCached()).resolves.toEqual([]);
+    await expect(nonIterable.presences.listCached(guildId)).rejects.toThrow(TypeError);
+    await expect(nonIterable.guilds.emojis(guildId).listCached()).rejects.toThrow(TypeError);
+  });
+
+  test("GIVEN a manager THEN cache.construct builds structures bound to its client", () => {
+    const client = clientWith(() => null);
+
+    const built = client.users.cache.construct(user);
+
+    expect(built).toBeInstanceOf(User);
+    expect(built.client).toBe(client);
   });
 });

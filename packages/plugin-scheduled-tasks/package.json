@@ -1,0 +1,79 @@
+{
+  "name": "@wolfstar/plugin-scheduled-tasks",
+  "version": "0.2.0",
+  "description": "Plugin for @wolfstar/http-framework to schedule one-off and repeated tasks, backed by BullMQ",
+  "keywords": [
+    "bullmq",
+    "discord",
+    "http-framework",
+    "plugin",
+    "redis",
+    "scheduled-tasks",
+    "wolfstar"
+  ],
+  "homepage": "https://github.com/wolfstar-project/plugins/tree/main/packages/plugin-scheduled-tasks",
+  "bugs": {
+    "url": "https://github.com/wolfstar-project/plugins/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wolfstar-project/plugins.git",
+    "directory": "packages/plugin-scheduled-tasks"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/esm/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/esm/index.d.ts",
+        "default": "./dist/esm/index.js"
+      }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/esm/plugin.d.ts",
+        "default": "./dist/esm/plugin.js"
+      }
+    },
+    "./register": {
+      "import": {
+        "types": "./dist/esm/register.d.ts",
+        "default": "./dist/esm/register.js"
+      }
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsdown --config-loader unrun",
+    "lint": "oxlint src --fix",
+    "test": "vitest run",
+    "prepack": "pnpm build"
+  },
+  "dependencies": {
+    "@sapphire/stopwatch": "^1.5.4",
+    "bullmq": "^6.3.11"
+  },
+  "devDependencies": {
+    "@redstardev/unplugin-version-injector": "^0.0.2",
+    "@sapphire/pieces": "^4.4.1",
+    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependencies": {
+    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

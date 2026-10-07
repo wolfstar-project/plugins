@@ -1,6 +1,6 @@
 import { Structure as BaseStructure } from "@discordjs/structures";
 import type { GatewayClient } from "../GatewayClient.js";
-import { getGatewayClient } from "../util/container.js";
+import { existingGatewayClient, getGatewayClient } from "../util/container.js";
 import { Mixin } from "./Mixin.js";
 
 // `@discordjs/structures` keys a structure's data and its patch/clone methods with symbols it does not export. They
@@ -110,6 +110,29 @@ export class StructureMixin<Data extends object, Relations extends object = obje
   }
 
   /**
+   * The ID of this structure, like discord.js's `Base#valueOf`, so that structures compare and sort by ID. Structures
+   * without an ID (a member whose user is unknown, a voice state, ...) are their own value.
+   */
+  public valueOf(): string | this {
+    const { id } = this as { id?: unknown };
+    return typeof id === "string" ? id : this;
+  }
+
+  /**
+   * Resolves a relation like discord.js's getters do: what the manager resolved when it built this structure, else a
+   * synchronous read of the cache. `null` when neither has it, the cache is asynchronous, or no client exists.
+   *
+   * @param name The name of the relation.
+   * @param read Reads the related structure from the client's cache, synchronously.
+   */
+  protected lazyRelation<Result>(
+    name: string,
+    read: (client: GatewayClient) => Result | null | undefined,
+  ): Result | null {
+    return lazyRelation(this, name, read);
+  }
+
+  /**
    * Patches the raw data of this structure in place, with a shallow merge.
    *
    * @param data The updated data.
@@ -180,6 +203,30 @@ export class StructureMixin<Data extends object, Relations extends object = obje
       .map(([name]) => name);
     if (names.length > 0) this.dropRelations(...(names as never[]));
   }
+}
+
+/**
+ * {@link StructureMixin.lazyRelation} for the channel mixins, which are not structures themselves.
+ *
+ * @param structure The structure.
+ * @param name The name of the relation.
+ * @param read Reads the related structure from the cache of the client, synchronously.
+ * @internal
+ */
+export function lazyRelation<Result>(
+  structure: object,
+  name: string,
+  read: (client: GatewayClient) => Result | null | undefined,
+): Result | null {
+  const { [kRelations]: relations, [kClient]: bound } = structure as StructureMixin<object>;
+  const resolved = (relations as Record<string, unknown> | undefined)?.[name] as
+    | Result
+    | null
+    | undefined;
+  if (resolved !== null && resolved !== undefined) return resolved;
+
+  const client = bound ?? existingGatewayClient();
+  return client ? (read(client) ?? null) : null;
 }
 
 /**

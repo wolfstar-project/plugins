@@ -3,6 +3,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { Integration } from "../structures/guilds/Integration.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { GatewayRangeError } from "../errors/GatewayError.js";
 
 /**
  * Manages the integrations of one guild.
@@ -23,7 +24,7 @@ export class GuildIntegrationManager extends CachedManager<
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["integrations"]): Integration {
+  protected createStructure(data: CacheEntityTypes["integrations"]): Integration {
     return new Integration(data);
   }
 
@@ -54,7 +55,9 @@ export class GuildIntegrationManager extends CachedManager<
       [
         data.user ? this.client.users._resolveData(data.user) : null,
         this.cachedGuild(data.guild_id),
-        data.role_id ? this.client.roles._get(data.guild_id, data.role_id) : undefined,
+        data.role_id
+          ? this.client.roles.cache.get(this.client.roles.resolveKey(data.guild_id, data.role_id))
+          : undefined,
       ],
       ([user, guild, role]) => new Integration(data, { user, guild, role: role ?? null }),
     );
@@ -76,13 +79,13 @@ export class GuildIntegrationManager extends CachedManager<
    */
   public async delete(integrationId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteIntegration(this.guildId, integrationId, { reason });
-    await this.cache?.delete(this.resolveKey(integrationId));
+    await this.cache.delete(this.resolveKey(integrationId));
   }
 
   protected async fetchRaw(integrationId: string) {
     const integration = (await this.list()).find(({ id }) => id === integrationId);
     if (!integration) {
-      throw new RangeError(`The guild ${this.guildId} has no integration ${integrationId}`);
+      throw new GatewayRangeError("GuildIntegrationNotFound", this.guildId, integrationId);
     }
 
     return integration;

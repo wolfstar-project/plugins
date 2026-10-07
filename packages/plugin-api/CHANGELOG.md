@@ -1,5 +1,37 @@
 # @wolfstar/plugin-api
 
+## 2.1.0
+
+### Minor Changes
+
+- [#194](https://github.com/wolfstar-project/plugins/pull/194) [`0199279`](https://github.com/wolfstar-project/plugins/commit/01992796d7379c891b435f28b9d4788ad7cfe95e) - Add `@wolfstar/plugin-api/module` and `@wolfstar/plugin-api/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
+## 2.0.1
+
+### Patch Changes
+
+- [#180](https://github.com/wolfstar-project/plugins/pull/180) [`040a747`](https://github.com/wolfstar-project/plugins/commit/040a747998949fb863bf21a6b417a279f8d1e84e) - fix(deps): update dependency cookie-es to v3 Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#176](https://github.com/wolfstar-project/plugins/pull/176) [`c989f83`](https://github.com/wolfstar-project/plugins/commit/c989f8396af21be2038ffbb513e38eb1189ccbde) - Accept `@wolfstar/http-framework` v6 in the peer range (`|| ^6.0.0`).
+
+## 2.0.0
+
+### Major Changes
+
+- [#161](https://github.com/wolfstar-project/plugins/pull/161) [`32fb7ea`](https://github.com/wolfstar-project/plugins/commit/32fb7ea598e58a2fc7e5096be1edeac714c0dc80) - Align with `@sapphire/plugin-api` 8.3.1 (everything except auth). Breaking changes:
+
+  - Renames: `ApiServer` → `Server`, `ApiServerEvent` → `ServerEvent`, `ApiServerOptions` → `ServerOptions`, `ApiServerEvents` → `ServerEvents`, `ApiPlugin` → `Api`, `HttpMethod` → `MethodName`.
+  - A route declared with no methods no longer defaults to `GET`; it matches nothing (its path answers `404`).
+  - `ApiResponse#json(data)` no longer takes a status code (use `status(code).json(data)`); response helpers return `void`.
+  - `ApiRequest#readBodyJson` is not generic and returns `unknown`, the `limit` parameter is gone (use `maximumBodyLength`), and `request.query` is a plain record.
+  - `OPTIONS` answers `200` with an empty body, and `404`/`405` from the `headers` middleware have empty bodies.
+  - Listener piece names are PascalCase, and `ServerEvent.Error` carries an optional request/response.
+  - Requires Node.js `>=20.18.1` and `@wolfstar/http-framework` `^3.6.0 || ^5.0.0`.
+
+  Added: `CookieStore` and the `cookies` middleware, body readers (`readBody*`, `readValidatedBody*`, `asWeb`), the full `ApiResponse` helper set, `ServerOptions.prefix`, per-route `maximumBodyLength`, the `MiddlewareSuccess`/`MiddlewareFailure` events, full router (`RouterBranch`/`RouterNode`) parity, `HttpCodes`, and a `version` export.
+
+  Fixed relative to upstream: router path/removal/`supportedMethods` bugs, `Server#connect()` rejecting instead of throwing uncaught when the port is in use, and cookie parsing that crashed on malformed `Cookie` headers.
+
 ## 1.1.7
 
 ### Patch Changes

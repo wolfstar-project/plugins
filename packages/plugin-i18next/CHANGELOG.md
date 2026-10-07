@@ -1,5 +1,17 @@
 # @wolfstar/plugin-i18next
 
+## 2.2.0
+
+### Minor Changes
+
+- [#188](https://github.com/wolfstar-project/plugins/pull/188) [`523e0e7`](https://github.com/wolfstar-project/plugins/commit/523e0e7f2504400b31f200f9a4a00953b47bf3a9) - Add `@wolfstar/plugin-i18next/module` and `@wolfstar/plugin-i18next/plugin`: list the module in `modules` in `stars.config`, or pass the `definePlugin` factory to `plugins`. Both need framework 6.1 (and `@wolfstar/kit` for the module); `./register` is unchanged and still supports framework v3, v5 and v6.
+
+## 2.1.2
+
+### Patch Changes
+
+- [#176](https://github.com/wolfstar-project/plugins/pull/176) [`c989f83`](https://github.com/wolfstar-project/plugins/commit/c989f8396af21be2038ffbb513e38eb1189ccbde) - Accept `@wolfstar/http-framework` v6 in the peer range (`|| ^6.0.0`).
+
 ## 2.1.1
 
 ### Patch Changes

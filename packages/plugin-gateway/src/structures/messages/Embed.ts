@@ -1,17 +1,24 @@
 import { Embed as BaseEmbed, Structure as BaseStructure } from "@discordjs/structures";
-import type {
-  APIEmbed,
-  APIEmbedAuthor,
-  APIEmbedField,
-  APIEmbedFooter,
-  APIEmbedImage,
-  APIEmbedProvider,
-  APIEmbedThumbnail,
-  APIEmbedVideo,
-} from "discord-api-types/v10";
+import type { APIEmbed, APIEmbedField, APIEmbedProvider } from "discord-api-types/v10";
 import { isDeepEqual } from "../../util/equal.js";
+import {
+  transformAPIEmbedAsset,
+  transformAPIEmbedAuthor,
+  transformAPIEmbedFooter,
+  type EmbedAssetData,
+  type EmbedAuthorData,
+  type EmbedFooterData,
+} from "../../util/Transformers.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, StructureMixin } from "../Structure.js";
+
+function embedTimestamp(embed: APIEmbed): number | null {
+  return embed.timestamp ? Date.parse(embed.timestamp) : null;
+}
+
+function embedFields(embed: APIEmbed): APIEmbedField[] {
+  return (embed.fields ?? []).map((field) => ({ ...field, inline: field.inline ?? false }));
+}
 
 export interface Embed extends StructureMixin<APIEmbed> {}
 
@@ -47,28 +54,48 @@ export class Embed extends BaseEmbed<""> {
     return this[kData].fields ?? [];
   }
 
-  public get thumbnail(): APIEmbedThumbnail | null {
-    return this[kData].thumbnail ?? null;
+  /**
+   * The thumbnail, camel-cased like discord.js's `Embed#thumbnail`.
+   */
+  public get thumbnail(): EmbedAssetData | null {
+    const { thumbnail } = this[kData];
+    return thumbnail ? transformAPIEmbedAsset(thumbnail) : null;
   }
 
-  public get image(): APIEmbedImage | null {
-    return this[kData].image ?? null;
+  /**
+   * The image, camel-cased like discord.js's `Embed#image`.
+   */
+  public get image(): EmbedAssetData | null {
+    const { image } = this[kData];
+    return image ? transformAPIEmbedAsset(image) : null;
   }
 
-  public get video(): APIEmbedVideo | null {
-    return this[kData].video ?? null;
+  /**
+   * The video, camel-cased like discord.js's `Embed#video`.
+   */
+  public get video(): EmbedAssetData | null {
+    const { video } = this[kData];
+    return video ? transformAPIEmbedAsset(video) : null;
   }
 
-  public get author(): APIEmbedAuthor | null {
-    return this[kData].author ?? null;
+  /**
+   * The author, camel-cased like discord.js's `Embed#author`.
+   */
+  public get author(): EmbedAuthorData | null {
+    const { author } = this[kData];
+    return author ? transformAPIEmbedAuthor(author) : null;
   }
 
   public get provider(): APIEmbedProvider | null {
     return this[kData].provider ?? null;
   }
 
-  public get footer(): APIEmbedFooter | null {
-    return this[kData].footer ?? null;
+  /**
+   * The footer, camel-cased like discord.js's `Embed#footer`.
+   */
+  public get footer(): EmbedFooterData | null {
+    const { footer } = this[kData];
+    return footer ? transformAPIEmbedFooter(footer) : null;
   }
 
   /**
@@ -85,11 +112,34 @@ export class Embed extends BaseEmbed<""> {
   }
 
   /**
-   * Whether this embed has the same data as another one.
-   * @param embed The embed, or raw embed data, to compare with.
+   * Whether this embed has the same data as another one, like discord.js's `Embed#equals`. Against an embed, the raw
+   * data is compared in depth; against a raw embed, the author, color, description, footer, image, thumbnail,
+   * timestamp, title, URL, video, fields (a missing `inline` is `false`), and provider.
+   *
+   * @param other The embed, or raw embed data, to compare with.
    */
-  public equals(embed: Embed | APIEmbed): boolean {
-    return isDeepEqual(this.toJSON(), embed instanceof Embed ? embed.toJSON() : embed);
+  public equals(other: Embed | APIEmbed | null | undefined): boolean {
+    if (!other) return false;
+    if (other instanceof Embed) return isDeepEqual(this.toJSON(), other.toJSON());
+
+    const data = this[kData];
+    return (
+      data.author?.icon_url === other.author?.icon_url &&
+      data.author?.name === other.author?.name &&
+      data.author?.url === other.author?.url &&
+      (data.color ?? null) === (other.color ?? null) &&
+      (data.description ?? null) === (other.description ?? null) &&
+      data.footer?.icon_url === other.footer?.icon_url &&
+      data.footer?.text === other.footer?.text &&
+      data.image?.url === other.image?.url &&
+      data.thumbnail?.url === other.thumbnail?.url &&
+      embedTimestamp(data) === embedTimestamp(other) &&
+      (data.title ?? null) === (other.title ?? null) &&
+      (data.url ?? null) === (other.url ?? null) &&
+      data.video?.url === other.video?.url &&
+      isDeepEqual(embedFields(data), embedFields(other)) &&
+      isDeepEqual(data.provider ?? null, other.provider ?? null)
+    );
   }
 
   public override toJSON(): APIEmbed {

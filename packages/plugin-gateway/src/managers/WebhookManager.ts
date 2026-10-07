@@ -17,6 +17,8 @@ import {
   type WebhookMessageEditOptions,
   type WebhookThreadOptions,
 } from "../util/messages.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
+import { BaseManager } from "./BaseManager.js";
 
 export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThreadOptions };
 
@@ -26,9 +28,9 @@ export type { WebhookMessageCreateOptions, WebhookMessageEditOptions, WebhookThr
 export interface WebhookCreateOptions {
   name: string;
   /**
-   * The avatar, as a data URI.
+   * The avatar: a data URI, or anything `resolveImage` reads.
    */
-  avatar?: string | null;
+  avatar?: ImageResolvable | null;
   reason?: string;
 }
 
@@ -38,9 +40,9 @@ export interface WebhookCreateOptions {
 export interface WebhookEditOptions {
   name?: string;
   /**
-   * The avatar, as a data URI, `null` to remove it.
+   * The avatar: a data URI, or anything `resolveImage` reads. `null` removes it.
    */
-  avatar?: string | null;
+  avatar?: ImageResolvable | null;
   /**
    * The channel to move the webhook to. Needs the bot's authorization, not the webhook's token.
    */
@@ -55,11 +57,9 @@ export interface WebhookEditOptions {
  * Methods taking a webhook's token call the API with it rather than with the bot's authorization, so they work for
  * webhooks of other applications too.
  */
-export class WebhookManager {
-  public readonly client: GatewayClient;
-
+export class WebhookManager extends BaseManager {
   public constructor(client: GatewayClient) {
-    this.client = client;
+    super(client);
   }
 
   /**
@@ -100,7 +100,10 @@ export class WebhookManager {
    * @param options The webhook's name and avatar, and the reason for the audit log.
    */
   public async create(channelId: string, options: WebhookCreateOptions): Promise<Webhook> {
-    const body: RESTPostAPIChannelWebhookJSONBody = { name: options.name, avatar: options.avatar };
+    const body: RESTPostAPIChannelWebhookJSONBody = {
+      name: options.name,
+      avatar: await resolveImageOption(options.avatar),
+    };
     const webhook = await this.client.api.channels.createWebhook(channelId, body, {
       reason: options.reason,
     });
@@ -121,7 +124,7 @@ export class WebhookManager {
   ): Promise<Webhook> {
     const body: RESTPatchAPIWebhookJSONBody = {
       name: options.name,
-      avatar: options.avatar,
+      avatar: await resolveImageOption(options.avatar),
       channel_id: options.channel === undefined ? undefined : resolveId(options.channel),
     };
     const webhook = await this.client.api.webhooks.edit(webhookId, body, {
@@ -240,11 +243,11 @@ export class WebhookManager {
    */
   public async hydrate(data: APIWebhook): Promise<Webhook> {
     const [guild, channel, sourceGuild, sourceChannel, owner] = await Promise.all([
-      data.guild_id ? this.client.guilds.get(data.guild_id) : undefined,
-      data.channel_id ? this.client.channels.get(data.channel_id) : undefined,
-      data.source_guild ? this.client.guilds.get(data.source_guild.id) : undefined,
-      data.source_channel ? this.client.channels.get(data.source_channel.id) : undefined,
-      data.user ? this.client.users.resolveData(data.user) : undefined,
+      data.guild_id ? this.client.guilds.cache.get(data.guild_id) : undefined,
+      data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
+      data.source_guild ? this.client.guilds.cache.get(data.source_guild.id) : undefined,
+      data.source_channel ? this.client.channels.cache.get(data.source_channel.id) : undefined,
+      data.user ? this.client.users._resolveData(data.user) : undefined,
     ]);
     return bindClient(
       new Webhook(data, {

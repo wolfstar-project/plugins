@@ -2,7 +2,8 @@ import { voiceStateKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/
 import type { GatewayClient } from "../GatewayClient.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
 import { whenAll } from "../util/cache.js";
-import { CachedManager } from "./CachedManager.js";
+import { CachedManager, fillGuildId, withGuildId, type GuildArgs } from "./CachedManager.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * Manages the voice states of the members connected to voice channels.
@@ -10,22 +11,39 @@ import { CachedManager } from "./CachedManager.js";
  * @remarks
  * The cache holds them when the bot has the `GuildVoiceStates` intent. `fetch` falls back to the API, which only
  * knows the voice states of connected members.
+ *
+ * `guild.voiceStates` (or `client.guilds.voiceStates(guildId)`) is this manager built for one guild, like
+ * discord.js's: `cache` takes the user's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class VoiceStateManager extends CachedManager<
+export class VoiceStateManager<InGuild extends boolean = false> extends CachedManager<
   "voiceStates",
   VoiceState,
-  [guildId: string, userId: string]
+  [guildId: string, userId: string],
+  GuildArgs<InGuild, [userId: string]>
 > {
-  public constructor(client: GatewayClient) {
-    super(client, "voiceStates");
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.voiceStates`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "voiceStates", guildId);
+    this.guildId = guildId as this["guildId"];
   }
 
-  public createStructure(data: CacheEntityTypes["voiceStates"]): VoiceState {
+  protected createStructure(data: CacheEntityTypes["voiceStates"]): VoiceState {
     return new VoiceState(data);
   }
 
   public keyOf(data: CacheEntityTypes["voiceStates"]): string {
-    if (!data.guild_id) throw new TypeError("Cannot key a voice state outside of a guild");
+    if (!data.guild_id)
+      throw new GatewayTypeError("CacheKeyUnresolvable", "voice state", "outside of a guild");
     return this.resolveKey(data.guild_id, data.user_id);
   }
 
@@ -40,10 +58,10 @@ export class VoiceStateManager extends CachedManager<
         member?.user && guildId
           ? this.client.members._resolveData({ ...member, guild_id: guildId })
           : guildId
-            ? this.client.members._get(guildId, userId)
+            ? this.client.members.cache.get(this.client.members.resolveKey(guildId, userId))
             : null,
         this.cachedGuild(guildId),
-        data.channel_id ? this.client.channels._get(data.channel_id) : undefined,
+        data.channel_id ? this.client.channels.cache.get(data.channel_id) : undefined,
       ],
       ([resolvedMember, guild, channel]) =>
         new VoiceState(data, { member: resolvedMember ?? null, guild, channel: channel ?? null }),
@@ -54,12 +72,16 @@ export class VoiceStateManager extends CachedManager<
    * Lists the cached voice states of a guild.
    *
    * @param guildId The ID of the guild.
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
-  public async listCached(guildId: string): Promise<VoiceState[]> {
+  public async listCached(...args: GuildArgs<InGuild, []>): Promise<VoiceState[]> {
+    const [guildId] = withGuildId<[]>(args);
     const prefix = `${guildId}:`;
-    const entries = (await this.cache?.entries()) ?? [];
+    const cache = this.iterableCache();
+    const entries = cache ? await this.guard("entries", null, () => cache.entries(), []) : [];
     return Promise.all(
-      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this.hydrate(raw)),
+      entries.filter(([key]) => key.startsWith(prefix)).map(([, raw]) => this._build(raw)),
     );
   }
 
@@ -74,3 +96,5 @@ export class VoiceStateManager extends CachedManager<
     return { ...state, guild_id: guildId };
   }
 }
+
+fillGuildId(VoiceStateManager, (client) => client.voiceStates, ["fetch", "refresh", "listCached"]);

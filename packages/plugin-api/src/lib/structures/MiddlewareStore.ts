@@ -1,6 +1,6 @@
 import { Store } from "@sapphire/pieces";
-import type { ApiRequest } from "../http/ApiRequest";
-import type { ApiResponse } from "../http/ApiResponse";
+import type { ApiRequest } from "./api/ApiRequest";
+import type { ApiResponse } from "./api/ApiResponse";
 import { Middleware } from "./Middleware";
 
 export class MiddlewareStore extends Store<Middleware, "middlewares"> {

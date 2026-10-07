@@ -83,7 +83,7 @@ describe("bans", () => {
     expect(ban).toBeInstanceOf(GuildBan);
     expect(ban!.reason).toBe("spam");
     expect(ban!.user.username).toBe("wolf");
-    expect((await bans.get(userId))?.reason).toBe("spam");
+    expect((await bans.cache.get(bans.resolveKey(userId)))?.reason).toBe("spam");
 
     await ban!.remove("appeal");
 
@@ -187,7 +187,7 @@ describe("auto moderation", () => {
       },
       reason: undefined,
     });
-    expect(await rules.get(rule().id)).toBeDefined();
+    expect(await rules.cache.get(rules.resolveKey(rule().id))).toBeDefined();
   });
 
   test("GIVEN setKeywordFilter THEN the rest of the trigger is kept", async () => {
@@ -197,7 +197,7 @@ describe("auto moderation", () => {
       .mockResolvedValue(
         rule({ trigger_metadata: { keyword_filter: ["howl"], allow_list: ["wolf"] } }),
       );
-    const cached = await client.guilds.autoModerationRules(guildId).hydrate(rule());
+    const cached = await client.guilds.autoModerationRules(guildId)._build(rule());
 
     await cached.setKeywordFilter(["howl"]);
 
@@ -205,7 +205,7 @@ describe("auto moderation", () => {
       body: { trigger_metadata: { keyword_filter: ["howl"], allow_list: ["wolf"] } },
       reason: undefined,
     });
-    expect(cached.triggerMetadata.keyword_filter).toEqual(["howl"]);
+    expect(cached.triggerMetadata.keywordFilter).toEqual(["howl"]);
   });
 
   test("GIVEN rule and execution dispatches THEN their events are emitted", async () => {

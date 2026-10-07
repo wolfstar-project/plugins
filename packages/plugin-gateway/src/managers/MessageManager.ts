@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { messageKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
 import {
   MessageFlags,
@@ -9,7 +10,11 @@ import {
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
-import { Message } from "../structures/messages/Message.js";
+import { Message, type PartialMessage } from "../structures/messages/Message.js";
+import { bindClient } from "../structures/Structure.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
+import type { MessageResolvable } from "../types.js";
+import { Partials } from "../util/Partials.js";
 import {
   ReactionEmoji,
   type EmojiIdentifierResolvable,
@@ -27,6 +32,8 @@ import {
   type MessageEditOptions,
   type MessagePayloadResolvable,
 } from "../util/messages.js";
+import { withOwnReaction } from "../util/reactions.js";
+import { transformResolved } from "../util/Util.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
 import type { AnyThreadChannel } from "./ThreadManager.js";
 
@@ -80,7 +87,7 @@ export class MessageManager extends CachedManager<
     super(client, "messages");
   }
 
-  public createStructure(data: CacheEntityTypes["messages"]): Message {
+  protected createStructure(data: CacheEntityTypes["messages"]): Message {
     return new Message(data);
   }
 
@@ -114,16 +121,16 @@ export class MessageManager extends CachedManager<
       [
         // A webhook is not a user: its author only holds for this message.
         data.webhook_id
-          ? this.client.users.createStructure(author)
+          ? this.client.users.cache.construct(author)
           : this.client.users._resolveData(author),
         member && guildId
           ? this.client.members._resolveData({ ...member, user: author, guild_id: guildId })
           : null,
         this.cachedGuild(guildId),
-        this.client.channels._get(data.channel_id),
+        this.client.channels.cache.get(data.channel_id),
         (data as { thread?: unknown }).thread !== undefined ||
         ((data.flags ?? 0) & MessageFlags.HasThread) !== 0
-          ? this.client.threads._get(data.id)
+          ? this.client.threads.cache.get(data.id)
           : undefined,
         this.resolveMentions(data),
         guildId ? this.resolveEmojis(guildId, data) : undefined,
@@ -143,7 +150,6 @@ export class MessageManager extends CachedManager<
 
   // The cached copies of the users, members, roles, and channels a message mentions, like discord.js's mentions.
   private resolveMentions(data: CacheEntityTypes["messages"]): Awaitable<MessageMentionsRelations> {
-    const { client } = this;
     const { guild_id: guildId, content = "" } = data;
     const users = [
       ...data.mentions.map((user) => user.id),
@@ -151,23 +157,14 @@ export class MessageManager extends CachedManager<
       ...(data.referenced_message ? [data.referenced_message.author.id] : []),
     ];
     const members = data.mentions.filter((user) => "member" in user).map((user) => user.id);
-    return whenAll(
-      [
-        whenCachedMap(users, (id) => client.users._get(id)),
-        guildId ? whenCachedMap(members, (id) => client.members._get(guildId, id)) : undefined,
-        guildId
-          ? whenCachedMap(data.mention_roles, (id) => client.roles._get(guildId, id))
-          : undefined,
-        whenCachedMap(MessageMentions.parseIds(content, MessageMentions.ChannelsPattern), (id) =>
-          client.channels._get(id),
-        ),
-      ],
-      ([resolvedUsers, resolvedMembers, roles, channels]) => ({
-        users: resolvedUsers,
-        members: resolvedMembers,
-        roles,
-        channels,
-      }),
+    return transformResolved(
+      { client: this.client, guildId },
+      {
+        users,
+        members,
+        roles: data.mention_roles,
+        channels: MessageMentions.parseIds(content, MessageMentions.ChannelsPattern),
+      },
     );
   }
 
@@ -181,7 +178,7 @@ export class MessageManager extends CachedManager<
       ...(data.poll?.answers ?? []).map((answer) => answer.poll_media.emoji?.id),
     ].filter((id): id is string => Boolean(id));
     const emojis = this.client.guilds.emojis(guildId);
-    return whenCachedMap(ids, (id) => emojis._get(id));
+    return whenCachedMap(ids, (id) => emojis.cache.get(emojis.resolveKey(id)));
   }
 
   public resolveKey(channelId: string, messageId: string): string {
@@ -266,41 +263,87 @@ export class MessageManager extends CachedManager<
    */
   public async delete(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.deleteMessage(channelId, messageId, { reason });
-    await this.cache?.delete(this.resolveKey(channelId, messageId));
+    await this.cache.delete(this.resolveKey(channelId, messageId));
   }
 
   /**
-   * Deletes up to 100 messages at once, skipping the ones older than 14 days that Discord refuses.
+   * Deletes up to 100 messages at once, like discord.js's `TextBasedChannel#bulkDelete`.
    *
    * @param channelId The ID of the channel.
-   * @param messages The IDs of the messages, or how many of the latest ones to delete.
+   * @param messages The messages, their IDs, or how many of the latest ones to delete.
    * @param filterOld Whether to drop the messages older than 14 days instead of letting the request fail.
-   * @returns The IDs of the deleted messages.
+   * @returns The deleted messages by ID: the cached one, else a partial one with `Partials.Message`, else `undefined`.
+   * @throws {@link GatewayTypeError} When `messages` is neither a `Collection`, an array, nor a number.
    */
   public async bulkDelete(
     channelId: string,
-    messages: readonly string[] | number,
+    messages: Collection<string, Message> | readonly MessageResolvable[] | number,
     filterOld = false,
-  ): Promise<string[]> {
-    let ids =
-      typeof messages === "number"
-        ? (await this.list(channelId, { limit: messages })).map((message) => message.id)
-        : [...messages];
+  ): Promise<Collection<string, Message | PartialMessage | undefined>> {
+    if (typeof messages === "number" && !Number.isNaN(messages)) {
+      return this.bulkDelete(
+        channelId,
+        new Collection((await this.list(channelId, { limit: messages })).map((m) => [m.id, m])),
+        filterOld,
+      );
+    }
+
+    let ids: string[];
+    if (messages instanceof Collection) ids = [...messages.keys()];
+    else if (Array.isArray(messages)) {
+      ids = (messages as readonly MessageResolvable[]).map((message) =>
+        typeof message === "string" ? message : message.id,
+      );
+    } else throw new GatewayTypeError("MessageBulkDeleteType");
 
     if (filterOld) {
       const oldest = Date.now() - BulkDeleteMaxAge;
       ids = ids.filter((id) => Number((BigInt(id) >> 22n) + 1_420_070_400_000n) > oldest);
     }
 
-    if (ids.length === 0) return [];
+    const deleted = new Collection<string, Message | PartialMessage | undefined>();
+    if (ids.length === 0) return deleted;
+
+    // The cache entries go with the request: read them first.
+    const guildId = await this.guildIdOf(channelId);
+    for (const id of ids) {
+      deleted.set(
+        id,
+        (await this.cache.get(this.resolveKey(channelId, id))) ??
+          this._partial(channelId, id, guildId) ??
+          undefined,
+      );
+    }
+
     if (ids.length === 1) {
       await this.delete(channelId, ids[0]!);
     } else {
       await this.client.api.channels.bulkDeleteMessages(channelId, ids);
-      await Promise.all(ids.map((id) => this.cache?.delete(this.resolveKey(channelId, id))));
+      await Promise.all(ids.map((id) => this.cache.delete(this.resolveKey(channelId, id))));
     }
 
-    return ids;
+    return deleted;
+  }
+
+  /**
+   * Builds the partial message of an ID alone, when `Partials.Message` is enabled. It is never cached.
+   *
+   * @internal
+   */
+  public _partial(channelId: string, messageId: string, guildId?: string): PartialMessage | null {
+    if (!this.client.partials.includes(Partials.Message)) return null;
+    return bindClient(
+      new Message({ id: messageId, channel_id: channelId, guild_id: guildId } as never),
+      this.client,
+    ) as unknown as PartialMessage;
+  }
+
+  private async guildIdOf(channelId: string): Promise<string | undefined> {
+    if (!this.client.partials.includes(Partials.Message)) return undefined;
+    const channel = (await this.client.channels.cache.get(channelId)) as
+      | { guildId?: string | null }
+      | undefined;
+    return channel?.guildId ?? undefined;
   }
 
   /**
@@ -338,7 +381,7 @@ export class MessageManager extends CachedManager<
    */
   public async pin(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.pinMessage(channelId, messageId, { reason });
-    await this.patchCached(channelId, messageId, { pinned: true });
+    await this._patchCached(this.resolveKey(channelId, messageId), { pinned: true });
   }
 
   /**
@@ -350,7 +393,7 @@ export class MessageManager extends CachedManager<
    */
   public async unpin(channelId: string, messageId: string, reason?: string): Promise<void> {
     await this.client.api.channels.unpinMessage(channelId, messageId, { reason });
-    await this.patchCached(channelId, messageId, { pinned: false });
+    await this._patchCached(this.resolveKey(channelId, messageId), { pinned: false });
   }
 
   /**
@@ -365,7 +408,7 @@ export class MessageManager extends CachedManager<
   }
 
   /**
-   * Reacts to a message as the bot.
+   * Reacts to a message as the bot, and counts the reaction on the cached message.
    *
    * @param channelId The ID of the channel.
    * @param messageId The ID of the message.
@@ -381,6 +424,11 @@ export class MessageManager extends CachedManager<
       messageId,
       ReactionEmoji.resolveIdentifier(emoji),
     );
+    await this._patchCached(this.resolveKey(channelId, messageId), (cached) => {
+      const { reactions } = cached.toJSON();
+      const updated = withOwnReaction(reactions, emoji);
+      return updated === reactions ? undefined : { reactions: updated };
+    });
   }
 
   /**
@@ -410,7 +458,7 @@ export class MessageManager extends CachedManager<
    */
   public async removeAllReactions(channelId: string, messageId: string): Promise<void> {
     await this.client.api.channels.deleteAllMessageReactions(channelId, messageId);
-    await this.patchCached(channelId, messageId, { reactions: [] });
+    await this._patchCached(this.resolveKey(channelId, messageId), { reactions: [] });
   }
 
   /**
@@ -476,15 +524,5 @@ export class MessageManager extends CachedManager<
 
   private store(message: APIMessage): Promise<Message> {
     return this._add(message);
-  }
-
-  private async patchCached(
-    channelId: string,
-    messageId: string,
-    patch: Partial<CacheEntityTypes["messages"]>,
-  ): Promise<void> {
-    const key = this.resolveKey(channelId, messageId);
-    const cached = await this.cache?.get(key);
-    if (cached) await this.cache!.set(key, { ...cached, ...patch });
   }
 }

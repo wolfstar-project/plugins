@@ -1,11 +1,13 @@
+import { cachedChannel, cachedGuild, cachedMember } from "../../util/cache.js";
 import { VoiceState as BaseVoiceState } from "@discordjs/structures";
 import type { CacheEntityTypes } from "@wolfstar/plugin-cache";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
 import type { GuildMember } from "../guilds/GuildMember.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
+import { initStructure, kData, kPatch, StructureMixin } from "../Structure.js";
 import type { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The options to edit a voice state with, only applicable in stage channels.
@@ -107,26 +109,27 @@ export class VoiceState extends BaseVoiceState {
   }
 
   /**
-   * The member, from the payload or the cache. `null` when neither has it, or when the voice state was not built by a
-   * manager.
+   * The member, from the payload or the cache. `null` when neither has it, or when the cache is asynchronous.
    */
   public get member(): GuildMember | null {
-    return this[kRelations].member ?? null;
+    return this.lazyRelation("member", (client) =>
+      cachedMember(client, this[kData].guild_id, this[kData].user_id),
+    );
   }
 
   /**
    * The guild, from the cache.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
    * The channel the member is connected to, from the cache, like discord.js's `VoiceState#channel`. `null` when they
-   * are disconnected, when the channel is not cached, or when the voice state was not built by a manager.
+   * are disconnected, when the channel is not cached, or when the cache is asynchronous.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   public fetchMember(): Promise<GuildMember> {
@@ -191,7 +194,7 @@ export class VoiceState extends BaseVoiceState {
   public async edit(options: VoiceStateEditOptions): Promise<this> {
     const target = this.resolveTarget();
     if (target !== "@me" && options.requestToSpeak !== undefined) {
-      throw new Error("Only the bot's own voice state can request to speak");
+      throw new GatewayError("VoiceStateNotOwn");
     }
 
     const requestToSpeakTimestamp = options.requestToSpeak
@@ -234,7 +237,7 @@ export class VoiceState extends BaseVoiceState {
 
   private requireGuildId(): string {
     const { guildId } = this;
-    if (!guildId) throw new Error("This voice state does not belong to a guild");
+    if (!guildId) throw new GatewayError("VoiceStateGuildUnknown");
     return guildId;
   }
 

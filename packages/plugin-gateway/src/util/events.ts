@@ -1,3 +1,4 @@
+import type { Collection } from "@discordjs/collection";
 import type {
   GatewayChannelPinsUpdateDispatchData,
   GatewayDispatchPayload,
@@ -21,6 +22,7 @@ import type {
   GatewayVoiceServerUpdateDispatchData,
   GatewayWebhooksUpdateDispatchData,
 } from "discord-api-types/v10";
+import type { CacheEntityName } from "@wolfstar/plugin-cache";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { AnyThreadChannel } from "../managers/ThreadManager.js";
@@ -35,7 +37,7 @@ import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.
 import type { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { GuildInvite } from "../structures/invites/GuildInvite.js";
-import type { GuildMember } from "../structures/guilds/GuildMember.js";
+import type { GuildMember, PartialGuildMember } from "../structures/guilds/GuildMember.js";
 import type { Message } from "../structures/messages/Message.js";
 import type { MessageReaction } from "../structures/messages/MessageReaction.js";
 import type { PollAnswer } from "../structures/polls/PollAnswer.js";
@@ -45,7 +47,37 @@ import type { Sticker } from "../structures/stickers/Sticker.js";
 import type { ThreadMember } from "../structures/channels/ThreadMember.js";
 import type { Typing } from "../structures/channels/Typing.js";
 import type { User } from "../structures/users/User.js";
+import type { VoiceChannel } from "../structures/channels/VoiceChannel.js";
 import type { VoiceState } from "../structures/voice/VoiceState.js";
+import type { SweepableEntityName } from "./Sweepers.js";
+
+/**
+ * Where a cache failure reported by the `cacheError` event happened.
+ */
+export interface CacheErrorContext {
+  /**
+   * The entity cache that failed.
+   */
+  entity: CacheEntityName;
+  /**
+   * The key of the entry, `null` for operations spanning the whole cache.
+   */
+  key: string | null;
+  /**
+   * The operation that failed.
+   */
+  operation:
+    | "get"
+    | "set"
+    | "upsert"
+    | "delete"
+    | "has"
+    | "clear"
+    | "getSize"
+    | "keys"
+    | "entries"
+    | "sweep";
+}
 
 /**
  * What a reaction event says besides the reaction and the user.
@@ -79,6 +111,19 @@ export interface GatewayEventMap {
    */
   raw: [payload: GatewayDispatchPayload, shardId: number];
   /**
+   * Emitted for every gateway dispatch once it has been written to the cache (right away without one), before the
+   * matching event, with the raw payload. Unlike `raw`, a listener reading the cache sees the dispatch applied, which
+   * is what forwarding it to other processes sharing the cache needs.
+   *
+   * @remarks
+   * Not emitted for `INTERACTION_CREATE`, served by the HTTP endpoint, nor for a dispatch dropped because its cache
+   * write failed with {@link GatewayClientOptions.cacheFailure} set to `"skip"`.
+   *
+   * `state` is what the dispatch's handler read before the cache write, e.g. the cached message a `MESSAGE_UPDATE`
+   * replaces, or `undefined`. It is what {@link GatewayClient.serializeDispatchState} serializes for other processes.
+   */
+  dispatch: [payload: GatewayDispatchPayload, shardId: number, state: unknown];
+  /**
    * Emitted when a shard receives `READY`.
    */
   shardReady: [shardId: number, user: User];
@@ -100,6 +145,15 @@ export interface GatewayEventMap {
    * Emitted when a shard runs into an error.
    */
   shardError: [error: Error, shardId: number];
+  /**
+   * Emitted when a manager's cache read or write fails, e.g. while Redis is unreachable. With the default
+   * `cacheErrors: "miss"`, the manager then carries on as if the entry was not cached.
+   */
+  cacheError: [error: unknown, context: CacheErrorContext];
+  /**
+   * Emitted when a sweep of an entity's cache ran, with the amount of entries it evicted, see `Sweepers`.
+   */
+  cacheSweep: [entity: SweepableEntityName, swept: number];
 
   guildCreate: [guild: Guild];
   guildUpdate: [oldGuild: Guild | null, newGuild: Guild];
@@ -170,11 +224,11 @@ export interface GatewayEventMap {
     details: MessageReactionEventDetails,
   ];
   /**
-   * Emitted when every reaction is removed from a message, with the reactions the cache held.
+   * Emitted when every reaction is removed from a message, with the reactions the cache held, by emoji.
    */
   messageReactionRemoveAll: [
     message: Message | null,
-    reactions: MessageReaction[],
+    reactions: Collection<string, MessageReaction>,
     data: GatewayMessageReactionRemoveAllDispatchData,
   ];
   /**
@@ -188,8 +242,17 @@ export interface GatewayEventMap {
   messagePollVoteRemove: [answer: PollAnswer, userId: string];
 
   guildMemberAdd: [member: GuildMember];
-  guildMemberUpdate: [oldMember: GuildMember | null, newMember: GuildMember];
-  guildMemberRemove: [member: GuildMember | null, data: GatewayGuildMemberRemoveDispatchData];
+  /**
+   * `oldMember` is partial with `Partials.GuildMember` when the member was not cached.
+   */
+  guildMemberUpdate: [oldMember: GuildMember | PartialGuildMember | null, newMember: GuildMember];
+  /**
+   * `member` is partial with `Partials.GuildMember` when the member was not cached.
+   */
+  guildMemberRemove: [
+    member: GuildMember | PartialGuildMember | null,
+    data: GatewayGuildMemberRemoveDispatchData,
+  ];
   /**
    * Emitted for each chunk of members Discord sends in answer to `client.members.request`, once it is cached.
    * `data` has the chunk's index and count, its nonce, and the requested IDs that are not members (`not_found`).
@@ -207,13 +270,22 @@ export interface GatewayEventMap {
   userUpdate: [oldUser: User | null, newUser: User];
 
   /**
-   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without a cache, the emoji events
-   * are not emitted: listen to `raw` instead.
+   * Emitted for every `GUILD_EMOJIS_UPDATE`, with every emoji the guild now has. Always emitted, cache or not: the
+   * granular `emojiCreate`, `emojiUpdate`, and `emojiDelete` need the previous emojis, so the emojis cache.
+   */
+  guildEmojisUpdate: [guildId: string, emojis: GuildEmoji[]];
+  /**
+   * Emitted for each emoji a `GUILD_EMOJIS_UPDATE` adds, compared with the cache. Without an emojis cache (able to
+   * enumerate its entries), the emoji events are not emitted: listen to `guildEmojisUpdate` instead.
    */
   emojiCreate: [emoji: GuildEmoji];
   emojiUpdate: [oldEmoji: GuildEmoji, newEmoji: GuildEmoji];
   emojiDelete: [emoji: GuildEmoji];
 
+  /**
+   * Emitted for every `GUILD_STICKERS_UPDATE`, with every sticker the guild now has, like `guildEmojisUpdate`.
+   */
+  guildStickersUpdate: [guildId: string, stickers: Sticker[]];
   /**
    * Emitted for each sticker a `GUILD_STICKERS_UPDATE` adds, compared with the cache, like the emoji events.
    */
@@ -301,6 +373,21 @@ export interface GatewayEventMap {
    */
   voiceStateUpdate: [oldState: VoiceState | null, newState: VoiceState];
   /**
+   * Emitted when the status of a cached voice channel changes. Not emitted for a channel that is not cached, which
+   * leaves nothing to compare the new status with.
+   */
+  voiceChannelStatusUpdate: [oldChannel: VoiceChannel, newChannel: VoiceChannel];
+  /**
+   * Emitted when the start time of the voice session of a cached voice channel changes. Not emitted for a channel
+   * that is not cached.
+   */
+  voiceChannelStartTimeUpdate: [oldChannel: VoiceChannel, newChannel: VoiceChannel];
+  /**
+   * Emitted with the cached voice channels of a guild whose info Discord sent, in answer to
+   * `client.channels.requestInfo`.
+   */
+  channelInfo: [channels: VoiceChannel[], guild: Guild | null];
+  /**
    * Emitted when a member's status or activities change. Needs the `GuildPresences` intent.
    */
   presenceUpdate: [oldPresence: Presence | null, newPresence: Presence];
@@ -326,11 +413,14 @@ export type GatewayEventName = keyof GatewayEventMap;
  */
 export enum GatewayEvents {
   Raw = "raw",
+  Dispatch = "dispatch",
   ShardReady = "shardReady",
   ClientReady = "clientReady",
   ShardResume = "shardResume",
   ShardClose = "shardClose",
   ShardError = "shardError",
+  CacheError = "cacheError",
+  CacheSweep = "cacheSweep",
   GuildCreate = "guildCreate",
   GuildUpdate = "guildUpdate",
   GuildDelete = "guildDelete",
@@ -363,9 +453,11 @@ export enum GatewayEvents {
   GuildRoleUpdate = "guildRoleUpdate",
   GuildRoleDelete = "guildRoleDelete",
   UserUpdate = "userUpdate",
+  GuildEmojisUpdate = "guildEmojisUpdate",
   EmojiCreate = "emojiCreate",
   EmojiUpdate = "emojiUpdate",
   EmojiDelete = "emojiDelete",
+  GuildStickersUpdate = "guildStickersUpdate",
   StickerCreate = "stickerCreate",
   StickerUpdate = "stickerUpdate",
   StickerDelete = "stickerDelete",
@@ -398,6 +490,9 @@ export enum GatewayEvents {
   IntegrationUpdate = "integrationUpdate",
   IntegrationDelete = "integrationDelete",
   VoiceStateUpdate = "voiceStateUpdate",
+  VoiceChannelStatusUpdate = "voiceChannelStatusUpdate",
+  VoiceChannelStartTimeUpdate = "voiceChannelStartTimeUpdate",
+  ChannelInfo = "channelInfo",
   PresenceUpdate = "presenceUpdate",
 }
 

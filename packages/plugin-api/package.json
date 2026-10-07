@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-api",
-  "version": "1.1.7",
+  "version": "2.1.0",
   "description": "Plugin for @wolfstar/http-framework exposing a standalone REST API server (routes, middlewares, router)",
   "keywords": [
     "api",
@@ -38,6 +38,18 @@
         "types": "./dist/esm/register.d.ts",
         "default": "./dist/esm/register.js"
       }
+    },
+    "./plugin": {
+      "import": {
+        "types": "./dist/esm/plugin.d.ts",
+        "default": "./dist/esm/plugin.js"
+      }
+    },
+    "./module": {
+      "import": {
+        "types": "./dist/esm/module.d.ts",
+        "default": "./dist/esm/module.js"
+      }
     }
   },
   "publishConfig": {
@@ -51,16 +63,28 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
+    "@sapphire/iana-mime-types": "^1.32.0",
     "@sapphire/pieces": "^4.4.1",
-    "@vladfrangu/async_event_emitter": "^2.4.7"
+    "@vladfrangu/async_event_emitter": "^2.4.7",
+    "cookie-es": "^3.1.1",
+    "tldts": "^7.4.16",
+    "undici": "^8.11.2"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^5.1.0"
+    "@redstardev/unplugin-version-injector": "^0.0.2",
+    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/kit": "^0.1.0"
   },
   "peerDependencies": {
-    "@wolfstar/http-framework": "^3.0.0 || ^5.0.0"
+    "@wolfstar/http-framework": "^3.6.0 || ^5.0.0 || ^6.0.0",
+    "@wolfstar/kit": "^0.1.0"
+  },
+  "peerDependenciesMeta": {
+    "@wolfstar/kit": {
+      "optional": true
+    }
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=20.18.1"
   }
 }

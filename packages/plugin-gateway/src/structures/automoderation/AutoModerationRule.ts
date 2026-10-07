@@ -1,16 +1,25 @@
+import { cachedGuild } from "../../util/cache.js";
 import { AutoModerationRule as BaseAutoModerationRule } from "@discordjs/structures";
 import type {
   APIAutoModerationAction,
   APIAutoModerationRule,
-  APIAutoModerationRuleTriggerMetadata,
   AutoModerationRuleEventType,
   AutoModerationRuleKeywordPresetType,
 } from "discord-api-types/v10";
 import type { AutoModerationRuleEditOptions } from "../../managers/AutoModerationRuleManager.js";
 import type { IdResolvable } from "../../util/channels.js";
+import {
+  transformAPIAutoModerationAction,
+  transformAPIAutoModerationRuleTriggerMetadata,
+  transformAutoModerationRuleTriggerMetadata,
+  type AutoModerationAction,
+  type AutoModerationActionOptions,
+  type AutoModerationTriggerMetadata,
+  type AutoModerationTriggerMetadataOptions,
+} from "../../util/Transformers.js";
 import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
-import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
+import { initStructure, kData, kPatch, StructureMixin } from "../Structure.js";
 
 /**
  * The relations of an {@link AutoModerationRule}, resolved from the cache by the guild's rule manager.
@@ -38,12 +47,18 @@ export class AutoModerationRule extends BaseAutoModerationRule {
     initStructure(this, data, relations);
   }
 
-  public get triggerMetadata(): Readonly<APIAutoModerationRuleTriggerMetadata> {
-    return this[kData].trigger_metadata;
+  /**
+   * The settings of the rule's trigger, camel-cased like discord.js's `AutoModerationRule#triggerMetadata`.
+   */
+  public get triggerMetadata(): AutoModerationTriggerMetadata {
+    return transformAPIAutoModerationRuleTriggerMetadata(this[kData].trigger_metadata);
   }
 
-  public get actions(): readonly APIAutoModerationAction[] {
-    return this[kData].actions;
+  /**
+   * The actions of the rule, camel-cased like discord.js's `AutoModerationRule#actions`.
+   */
+  public get actions(): AutoModerationAction[] {
+    return this[kData].actions.map(transformAPIAutoModerationAction);
   }
 
   public get exemptRoles(): readonly string[] {
@@ -55,7 +70,7 @@ export class AutoModerationRule extends BaseAutoModerationRule {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -80,7 +95,10 @@ export class AutoModerationRule extends BaseAutoModerationRule {
     return this.edit({ enabled, reason });
   }
 
-  public setActions(actions: readonly APIAutoModerationAction[], reason?: string): Promise<this> {
+  public setActions(
+    actions: readonly (AutoModerationActionOptions | APIAutoModerationAction)[],
+    reason?: string,
+  ): Promise<this> {
     return this.edit({ actions, reason });
   }
 
@@ -96,14 +114,14 @@ export class AutoModerationRule extends BaseAutoModerationRule {
    * Sets the keywords of a keyword rule, keeping the rest of its trigger.
    */
   public setKeywordFilter(keywordFilter: readonly string[], reason?: string): Promise<this> {
-    return this.editTrigger({ keyword_filter: [...keywordFilter] }, reason);
+    return this.editTrigger({ keywordFilter: [...keywordFilter] }, reason);
   }
 
   /**
    * Sets the regular expressions of a keyword rule, keeping the rest of its trigger.
    */
   public setRegexPatterns(regexPatterns: readonly string[], reason?: string): Promise<this> {
-    return this.editTrigger({ regex_patterns: [...regexPatterns] }, reason);
+    return this.editTrigger({ regexPatterns: [...regexPatterns] }, reason);
   }
 
   /**
@@ -120,21 +138,21 @@ export class AutoModerationRule extends BaseAutoModerationRule {
    * Sets the keywords exempt from the rule, keeping the rest of its trigger.
    */
   public setAllowList(allowList: readonly string[], reason?: string): Promise<this> {
-    return this.editTrigger({ allow_list: [...allowList] }, reason);
+    return this.editTrigger({ allowList: [...allowList] }, reason);
   }
 
   /**
    * Sets how many mentions a message may have, for a mention spam rule.
    */
   public setMentionTotalLimit(mentionTotalLimit: number, reason?: string): Promise<this> {
-    return this.editTrigger({ mention_total_limit: mentionTotalLimit }, reason);
+    return this.editTrigger({ mentionTotalLimit }, reason);
   }
 
   /**
    * Sets whether a mention spam rule detects mention raids.
    */
   public setMentionRaidProtectionEnabled(enabled = true, reason?: string): Promise<this> {
-    return this.editTrigger({ mention_raid_protection_enabled: enabled }, reason);
+    return this.editTrigger({ mentionRaidProtectionEnabled: enabled }, reason);
   }
 
   /**
@@ -148,8 +166,13 @@ export class AutoModerationRule extends BaseAutoModerationRule {
   }
 
   // Discord replaces the whole trigger metadata, so the setters merge their field into the current one.
-  private editTrigger(patch: APIAutoModerationRuleTriggerMetadata, reason?: string): Promise<this> {
-    return this.edit({ triggerMetadata: { ...this.triggerMetadata, ...patch }, reason });
+  private editTrigger(patch: AutoModerationTriggerMetadataOptions, reason?: string): Promise<this> {
+    // Merged raw: the camel-cased getter fills in the fields the rule's trigger type does not have.
+    const triggerMetadata = {
+      ...this[kData].trigger_metadata,
+      ...transformAutoModerationRuleTriggerMetadata(patch),
+    };
+    return this.edit({ triggerMetadata, reason });
   }
 }
 

@@ -9,6 +9,7 @@ export {
   createInMemoryCache,
   MemoryEntityCache,
   type InMemoryCache,
+  type MemoryEntityCacheOptions,
   type InMemoryCacheOptions,
 } from "./lib/memory.js";
 export {
@@ -19,6 +20,7 @@ export {
   mergeValues,
   type CacheOperation,
   type CacheOperationContext,
+  type CacheOperationResult,
 } from "./lib/operations.js";
 export {
   CacheValueError,
@@ -40,11 +42,20 @@ export {
   type GatewaySessionStore,
   type RedisSessionStoreOptions,
 } from "./lib/sessions.js";
-export type {
-  Awaitable,
-  Cache,
-  CacheEntities,
-  CacheEntityName,
-  CacheEntityTypes,
-  EntityCache,
+export { createCache, withPolicy, type CreateCacheOptions } from "./lib/policy.js";
+export {
+  isIterableCache,
+  type Awaitable,
+  type Cache,
+  type CacheEntities,
+  type CacheEntityName,
+  type CacheEntityTypes,
+  type CacheFactory,
+  type CachePolicies,
+  type CachePolicy,
+  type CacheSetOptions,
+  type CacheUpsertOptions,
+  type CacheUpsertResult,
+  type EntityCache,
+  type IterableEntityCache,
 } from "./lib/types.js";

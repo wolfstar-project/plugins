@@ -1,7 +1,8 @@
+import { cachedChannel, cachedGuild } from "../../util/cache.js";
 import type { GatewayTypingStartDispatchData } from "discord-api-types/v10";
 import type { AnyChannel } from "../../managers/ChannelManager.js";
 import type { Guild } from "../guilds/Guild.js";
-import { GuildMember } from "../guilds/GuildMember.js";
+import { GuildMember, type PartialGuildMember } from "../guilds/GuildMember.js";
 import { kData, kRelations, Structure } from "../Structure.js";
 import { User } from "../users/User.js";
 
@@ -12,7 +13,7 @@ export interface TypingRelations {
   channel?: AnyChannel | null;
   user?: User | null;
   guild?: Guild | null;
-  member?: GuildMember | null;
+  member?: GuildMember | PartialGuildMember | null;
 }
 
 /**
@@ -55,7 +56,7 @@ export class Typing extends Structure<GatewayTypingStartDispatchData> {
    * The channel the user typed in, from the cache, like discord.js's `Typing#channel`: `null` when it is not cached.
    */
   public get channel(): AnyChannel | null {
-    return this[kRelations].channel ?? null;
+    return this.lazyRelation("channel", (client) => cachedChannel(client, this[kData].channel_id));
   }
 
   /**
@@ -73,13 +74,14 @@ export class Typing extends Structure<GatewayTypingStartDispatchData> {
    * The guild of the channel, from the cache: `null` outside of guilds or when it is not cached.
    */
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
-   * The typing member, when the channel is in a guild: the cached member, else the one of the payload.
+   * The typing member, when the channel is in a guild: the cached member, else the one of the payload, else a partial
+   * one with `Partials.GuildMember`.
    */
-  public get member(): GuildMember | null {
+  public get member(): GuildMember | PartialGuildMember | null {
     const resolved = this[kRelations].member;
     if (resolved) return resolved;
     const { member, guild_id: guildId } = this[kData];

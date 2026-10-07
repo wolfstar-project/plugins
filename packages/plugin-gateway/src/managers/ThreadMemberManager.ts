@@ -4,6 +4,7 @@ import type { GatewayClient } from "../GatewayClient.js";
 import { ThreadMember } from "../structures/channels/ThreadMember.js";
 import { whenAll } from "../util/cache.js";
 import { CachedManager, type AddOptions } from "./CachedManager.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 
 /**
  * The options to list the members of a thread with.
@@ -32,13 +33,13 @@ export class ThreadMemberManager extends CachedManager<
     super(client, "threadMembers");
   }
 
-  public createStructure(data: CacheEntityTypes["threadMembers"]): ThreadMember {
+  protected createStructure(data: CacheEntityTypes["threadMembers"]): ThreadMember {
     return new ThreadMember(data);
   }
 
   public keyOf(data: CacheEntityTypes["threadMembers"]): string {
     if (!data.id || !data.user_id) {
-      throw new TypeError("Cannot key a thread member without its IDs");
+      throw new GatewayTypeError("CacheKeyUnresolvable", "thread member", "without its IDs");
     }
 
     return this.resolveKey(data.id, data.user_id);
@@ -73,10 +74,10 @@ export class ThreadMemberManager extends CachedManager<
         member?.user && guildId
           ? this.client.members._resolveData({ ...member, guild_id: guildId })
           : guildId && userId
-            ? this.client.members._get(guildId, userId)
+            ? this.client.members.cache.get(this.client.members.resolveKey(guildId, userId))
             : null,
-        data.id ? this.client.threads._get(data.id) : undefined,
-        userId ? this.client.users._get(userId) : undefined,
+        data.id ? this.client.threads.cache.get(data.id) : undefined,
+        userId ? this.client.users.cache.get(userId) : undefined,
       ],
       ([guildMember, thread, user]) =>
         new ThreadMember(data, {
@@ -154,7 +155,7 @@ export class ThreadMemberManager extends CachedManager<
     if (userId === "@me") await this.client.api.threads.leave(threadId);
     else await this.client.api.threads.removeMember(threadId, userId);
     const cachedId = userId === "@me" ? (this.client.user?.id ?? this.client.id) : userId;
-    await this.cache?.delete(this.resolveKey(threadId, cachedId));
+    await this.cache.delete(this.resolveKey(threadId, cachedId));
   }
 
   protected async fetchRaw(threadId: string, userId: string) {
@@ -172,7 +173,7 @@ export class ThreadMemberManager extends CachedManager<
   }
 
   private async guildIdOf(threadId: string): Promise<string | undefined> {
-    const thread = await this.client.threads.get(threadId);
+    const thread = await this.client.threads.cache.get(threadId);
     return (thread?.toJSON() as { guild_id?: string } | undefined)?.guild_id;
   }
 }

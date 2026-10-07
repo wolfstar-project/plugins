@@ -48,7 +48,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
     this.guildId = guildId;
   }
 
-  public createStructure(data: CacheEntityTypes["stickers"]): Sticker {
+  protected createStructure(data: CacheEntityTypes["stickers"]): Sticker {
     return new Sticker(data);
   }
 
@@ -137,7 +137,7 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    */
   public async delete(stickerId: string, reason?: string): Promise<void> {
     await this.client.api.guilds.deleteSticker(this.guildId, stickerId, { reason });
-    await this.cache?.delete(this.resolveKey(stickerId));
+    await this.cache.delete(this.resolveKey(stickerId));
   }
 
   /**
@@ -156,16 +156,23 @@ export class GuildStickerManager extends CachedManager<"stickers", Sticker, [sti
    * @remarks
    * It enumerates the whole entity cache, which a Redis store answers from its index: prefer `fetchAll` when the
    * cache may be incomplete.
+   *
+   * @returns The cached entries, `[]` when this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(): Promise<Sticker[]> {
-    const cache = this.cache;
+    const cache = this.iterableCache();
     if (!cache) return [];
 
     const prefix = `${this.guildId}:`;
-    const keys = (await cache.keys()).filter((key) => key.startsWith(prefix));
-    const values = await Promise.all(keys.map((key) => cache.get(key)));
+    const keys = await this.guard("keys", null, () => cache.keys(), []);
+    const values = await Promise.all(
+      keys
+        .filter((key) => key.startsWith(prefix))
+        .map((key) => this.guard("get", key, () => cache.get(key), undefined)),
+    );
     return Promise.all(
-      values.filter((value) => value !== undefined).map((value) => this.hydrate(value)),
+      values.filter((value) => value !== undefined).map((value) => this._build(value)),
     );
   }
 

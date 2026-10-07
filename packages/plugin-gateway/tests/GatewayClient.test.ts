@@ -36,7 +36,7 @@ function createClient(cache: Cache | null = createInMemoryCache()) {
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
   });
 }
 
@@ -161,8 +161,10 @@ describe("GatewayClient", () => {
     expect(emitted.member).toBeInstanceOf(GuildMember);
     expect(emitted.url).toBe("https://discord.com/channels/10/20/30");
 
-    expect((await client.messages.get("20", "30"))?.content).toBe("hello");
-    expect((await client.users.get(user.id))?.username).toBe("wolf");
+    expect((await client.messages.cache.get(client.messages.resolveKey("20", "30")))?.content).toBe(
+      "hello",
+    );
+    expect((await client.users.cache.get(user.id))?.username).toBe("wolf");
   });
 
   test("GIVEN MESSAGE_UPDATE THEN the previous state comes from the cache", async () => {
@@ -187,7 +189,7 @@ describe("GatewayClient", () => {
     const [[deleted, data]] = calls;
     expect(deleted?.content).toBe("bye");
     expect(data).toEqual({ id: "30", channel_id: "20" });
-    expect(await client.messages.get("20", "30")).toBeUndefined();
+    expect(await client.messages.cache.get(client.messages.resolveKey("20", "30"))).toBeUndefined();
   });
 
   test("GIVEN GUILD_CREATE THEN the guild and its collections are reachable through the managers", async () => {
@@ -200,8 +202,10 @@ describe("GatewayClient", () => {
     expect(created).toBeInstanceOf(Guild);
     expect(created.name).toBe("Pack");
     expect(created.toJSON()).not.toHaveProperty("channels");
-    expect(await client.channels.get("20")).toBeInstanceOf(Channel);
-    expect((await client.members.get("10", user.id))?.user?.id).toBe(user.id);
+    expect(await client.channels.cache.get("20")).toBeInstanceOf(Channel);
+    expect(
+      (await client.members.cache.get(client.members.resolveKey("10", user.id)))?.user?.id,
+    ).toBe(user.id);
   });
 
   test("GIVEN GUILD_MEMBER_UPDATE THEN the new member is merged with the cached one", async () => {
@@ -223,14 +227,32 @@ describe("GatewayClient", () => {
     expect(current.joinedTimestamp).toBe(Date.parse("2024-01-01T00:00:00.000Z"));
   });
 
+  test("GIVEN a dispatch THEN dispatch is emitted once the cache holds it, before the matching event", async () => {
+    const client = createClient();
+    const order: string[] = [];
+    let cached: unknown;
+    client.on("dispatch", (payload) => {
+      order.push(`dispatch:${payload.t}`);
+      cached = client.cache!.users.get(user.id);
+    });
+    client.on("userUpdate", () => order.push("userUpdate"));
+
+    await dispatch(client, GatewayDispatchEvents.UserUpdate, user);
+
+    expect(order).toEqual([`dispatch:${GatewayDispatchEvents.UserUpdate}`, "userUpdate"]);
+    expect(await cached).toMatchObject({ id: user.id });
+  });
+
   test("GIVEN INTERACTION_CREATE THEN only raw is emitted", async () => {
     const client = createClient();
     const raw = record(client, "raw");
+    const dispatched = record(client, "dispatch");
     const emit = vi.spyOn(client, "emit");
 
     await dispatch(client, GatewayDispatchEvents.InteractionCreate, { id: "1" });
 
     expect(raw).toHaveLength(1);
+    expect(dispatched).toHaveLength(0);
     expect(emit).toHaveBeenCalledTimes(1);
   });
 
@@ -244,12 +266,12 @@ describe("GatewayClient", () => {
     const [[previous, current]] = calls;
     expect(previous).toBeNull();
     expect(current.content).toBe("after");
-    expect(await client.messages.get("20", "30")).toBeUndefined();
+    expect(await client.messages.cache.get(client.messages.resolveKey("20", "30"))).toBeUndefined();
   });
 
   test("GIVEN a failing cache THEN the error is emitted and later dispatches still run", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockImplementationOnce(() => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementationOnce(() => {
       throw new Error("boom");
     });
     const client = createClient(cache);
@@ -265,7 +287,7 @@ describe("GatewayClient", () => {
 
   test("GIVEN a failing cache and no error listener THEN the error is logged and the shard keeps going", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockImplementationOnce(() => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementationOnce(() => {
       throw new Error("boom");
     });
     const client = createClient(cache);
@@ -281,12 +303,12 @@ describe("GatewayClient", () => {
 
   test("GIVEN an asynchronous cache THEN dispatches of a shard are processed in order", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
+    const upsert = cache.messages!.upsert.bind(cache.messages);
     let delay = 20;
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       // The first write is the slowest one: without the queue it would complete last.
       await new Promise((resolve) => setTimeout(resolve, (delay -= 10)));
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache);
     const calls = record(client, "messageCreate");
@@ -352,8 +374,8 @@ describe("ChannelManager", () => {
     });
 
     expect(calls[0]![0]).toBeInstanceOf(PublicThreadChannel);
-    expect(await client.threads.get("40")).toBeInstanceOf(PublicThreadChannel);
-    expect(await client.channels.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.threads.cache.get("40")).toBeInstanceOf(PublicThreadChannel);
+    expect(await client.channels.cache.get("40")).toBeInstanceOf(PublicThreadChannel);
     expect(await client.cache!.channels.has("40")).toBe(false);
   });
 

@@ -1,5 +1,10 @@
 import { randomBytes } from "node:crypto";
-import { memberKey, type Awaitable, type CacheEntityTypes } from "@wolfstar/plugin-cache";
+import {
+  memberKey,
+  type Awaitable,
+  type CacheEntityTypes,
+  type EntityCache,
+} from "@wolfstar/plugin-cache";
 import {
   GatewayOpcodes,
   type APIGuildMember,
@@ -17,10 +22,20 @@ import { GuildMember, type GuildMemberRelations } from "../structures/guilds/Gui
 import { Presence } from "../structures/presences/Presence.js";
 import { bindClient } from "../structures/Structure.js";
 import { VoiceState } from "../structures/voice/VoiceState.js";
-import { whenAll } from "../util/cache.js";
+import { whenAll, type CacheRead } from "../util/cache.js";
+import { shardIdOf } from "../util/shards.js";
 import { GuildMembersRateLimitError, GuildMembersTimeoutError } from "../util/errors.js";
 import { GuildMemberFlagsBitField, type GuildMemberFlagsResolvable } from "../util/flags.js";
-import { CachedManager, type AddOptions } from "./CachedManager.js";
+import {
+  CachedManager,
+  fillGuildId,
+  withGuildId,
+  type AddOptions,
+  type GuildArgs,
+} from "./CachedManager.js";
+import { GatewayError, GatewayTypeError, GatewayRangeError } from "../errors/GatewayError.js";
+import { resolveImageOption, type ImageResolvable } from "../util/DataResolver.js";
+import { resolveRoleIds, type RoleResolvables } from "../util/roles.js";
 
 /**
  * The options to edit a member with.
@@ -31,9 +46,9 @@ export interface GuildMemberEditOptions {
    */
   nick?: string | null;
   /**
-   * The IDs of the roles the member ends up with.
+   * The roles the member ends up with: an array of roles or IDs, or a `Collection` of roles.
    */
-  roles?: readonly string[];
+  roles?: RoleResolvables;
   mute?: boolean;
   deaf?: boolean;
   /**
@@ -52,12 +67,13 @@ export interface GuildMemberEditOptions {
 }
 
 /**
- * The options to edit the bot's own member with. Images are data URIs, `null` removes them.
+ * The options to edit the bot's own member with. Images are data URIs or anything `resolveImage` reads, `null`
+ * removes them.
  */
 export interface GuildMemberEditMeOptions {
   nick?: string | null;
-  avatar?: string | null;
-  banner?: string | null;
+  avatar?: ImageResolvable | null;
+  banner?: ImageResolvable | null;
   bio?: string | null;
   reason?: string;
 }
@@ -68,7 +84,10 @@ export interface GuildMemberEditMeOptions {
 export interface GuildMemberAddOptions {
   accessToken: string;
   nick?: string;
-  roles?: readonly string[];
+  /**
+   * The roles the member starts with: an array of roles or IDs, or a `Collection` of roles.
+   */
+  roles?: RoleResolvables;
   mute?: boolean;
   deaf?: boolean;
 }
@@ -167,25 +186,47 @@ interface MembersRequest {
 
 /**
  * Manages the {@link GuildMember}s known to the client.
+ *
+ * `guild.members` (or `client.guilds.members(guildId)`) is this manager built for one guild, like discord.js's:
+ * `cache` takes the user's ID alone, and the methods lose their `guildId` argument.
+ *
+ * @typeParam InGuild Whether the manager was built for one guild.
  */
-export class GuildMemberManager extends CachedManager<
+export class GuildMemberManager<InGuild extends boolean = false> extends CachedManager<
   "members",
   GuildMember,
-  [guildId: string, userId: string]
+  [guildId: string, userId: string],
+  GuildArgs<InGuild, [userId: string]>
 > {
   // The pending `request`s, by nonce.
   readonly #requests = new Map<string, MembersRequest>();
 
-  public constructor(client: GatewayClient) {
-    super(client, "members");
+  /**
+   * The ID of the guild this manager was built for, `undefined` on `client.members`.
+   */
+  public readonly guildId: InGuild extends true ? string : undefined;
+
+  /**
+   * @param client The client.
+   * @param guildId The guild to build the manager for.
+   */
+  public constructor(client: GatewayClient, guildId?: string) {
+    super(client, "members", guildId);
+    this.guildId = guildId as this["guildId"];
+    if (guildId === undefined) {
+      this.me = ((id: string) => this.cachedMe(id)) as this["me"];
+    } else {
+      Reflect.defineProperty(this, "me", { get: () => client.members.me(guildId) });
+    }
   }
 
-  public createStructure(data: CacheEntityTypes["members"]): GuildMember {
+  protected createStructure(data: CacheEntityTypes["members"]): GuildMember {
     return new GuildMember(data);
   }
 
   public keyOf(data: CacheEntityTypes["members"]): string {
-    if (!data.user) throw new TypeError("Cannot key a member without its user");
+    if (!data.user)
+      throw new GatewayTypeError("CacheKeyUnresolvable", "member", "without its user");
     return this.resolveKey(data.guild_id, data.user.id);
   }
 
@@ -219,22 +260,25 @@ export class GuildMemberManager extends CachedManager<
       [
         data.user ? client.users._resolveData(data.user) : undefined,
         this.cachedGuild(data.guild_id),
-        key ? client.cache?.voiceStates.get(key) : undefined,
-        key ? client.cache?.presences.get(key) : undefined,
+        key ? this.readRelation("voiceStates", key) : undefined,
+        key ? this.readRelation("presences", key) : undefined,
       ],
       ([user, guild, voiceData, presenceData]) => {
         const relations: GuildMemberRelations = { user, guild };
         const member = bindClient(new GuildMember(data, relations), client);
         return whenAll(
-          [voiceData?.channel_id ? client.channels._get(voiceData.channel_id) : undefined],
+          [voiceData?.channel_id ? client.channels.cache.get(voiceData.channel_id) : undefined],
           ([channel]) => {
-            if (key && client.cache) {
+            // Only a cached relation is known to be absent, otherwise it stays unknown (`undefined`).
+            if (key && client.cache?.voiceStates) {
               relations.voice = voiceData
                 ? bindClient(
                     new VoiceState(voiceData, { member, guild, channel: channel ?? null }),
                     client,
                   )
                 : null;
+            }
+            if (key && client.cache?.presences) {
               relations.presence = presenceData
                 ? bindClient(
                     new Presence(presenceData, { user: user ?? null, member, guild }),
@@ -250,17 +294,45 @@ export class GuildMemberManager extends CachedManager<
     );
   }
 
+  // Reads the raw voice state or presence of a member: a failing store is reported, and counts as a miss.
+  private readRelation<Name extends "voiceStates" | "presences">(
+    name: Name,
+    key: string,
+  ): Awaitable<CacheEntityTypes[Name] | undefined> {
+    const store = this.client.cache?.[name] as EntityCache<CacheEntityTypes[Name]> | undefined;
+    return this.client.guardCache(name, "get", key, () => store?.get(key), undefined);
+  }
+
   public resolveKey(guildId: string, userId: string): string {
     return memberKey(guildId, userId);
   }
 
   /**
-   * Fetches the bot's own member in a guild.
+   * The bot's own member in a guild, from the cache: `null` when it is not cached. Use
+   * {@link GuildMemberManager.fetchMe} to fall back to the API.
+   *
+   * @remarks
+   * On the manager of a guild it is a getter, like discord.js's `guild.members.me`: the member itself, or a promise
+   * of it with an asynchronous cache (see `GatewayCacheConfig`). On `client.members` it is a function taking the
+   * guild's ID, synchronous when the member cache is.
+   */
+  declare public readonly me: InGuild extends true
+    ? CacheRead<GuildMember | null>
+    : (guildId: string) => Awaitable<GuildMember | null>;
+
+  private cachedMe(guildId: string): Awaitable<GuildMember | null> {
+    const key = this.resolveKey(guildId, this.client.user?.id ?? this.client.id);
+    return whenAll([this.cache.get(key)], ([member]) => member ?? null);
+  }
+
+  /**
+   * Fetches the bot's own member in a guild, cache first.
    *
    * @param guildId The ID of the guild.
    */
-  public fetchMe(guildId: string): Promise<GuildMember> {
-    return this.fetch(guildId, this.client.user?.id ?? this.client.id);
+  public fetchMe(...args: GuildArgs<InGuild, []>): Promise<GuildMember> {
+    const [guildId] = withGuildId<[]>(args);
+    return this.client.members.fetch(guildId, this.client.user?.id ?? this.client.id);
   }
 
   /**
@@ -270,9 +342,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options How many members to list (up to 1000), and after which user ID.
    */
   public async list(
-    guildId: string,
-    options: { limit?: number; after?: string } = {},
+    ...args: GuildArgs<InGuild, [options?: { limit?: number; after?: string }]>
   ): Promise<GuildMember[]> {
+    const [guildId, options = {}] =
+      withGuildId<[options?: { limit?: number; after?: string }]>(args);
     const members = await this.client.api.guilds.getMembers(guildId, {
       limit: options.limit ?? 1,
       after: options.after,
@@ -287,9 +360,9 @@ export class GuildMemberManager extends CachedManager<
    * @param options The query, and how many members to return (up to 1000).
    */
   public async search(
-    guildId: string,
-    options: { query: string; limit?: number },
+    ...args: GuildArgs<InGuild, [options: { query: string; limit?: number }]>
   ): Promise<GuildMember[]> {
+    const [guildId, options] = withGuildId<[options: { query: string; limit?: number }]>(args);
     const members = await this.client.api.guilds.searchForMembers(guildId, {
       query: options.query,
       limit: options.limit ?? 1,
@@ -311,32 +384,31 @@ export class GuildMemberManager extends CachedManager<
    * @returns The members, once the last chunk is cached.
    */
   public async request(
-    guildId: string,
-    options: GuildMembersRequestOptions = {},
+    ...args: GuildArgs<InGuild, [options?: GuildMembersRequestOptions]>
   ): Promise<GuildMember[]> {
+    const [guildId, options = {}] = withGuildId<[options?: GuildMembersRequestOptions]>(args);
     const { query, limit = 0, presences, time = 120_000 } = options;
     // An empty list of IDs (e.g. built dynamically) requests nothing, so it falls back to the default like no list at all.
     const userIds = options.userIds?.length ? options.userIds : undefined;
     const nonce = options.nonce ?? randomBytes(16).toString("hex");
     if (query !== undefined && userIds !== undefined) {
-      throw new TypeError("Cannot request members by both query and userIds");
+      throw new GatewayTypeError("GuildMembersQueryConflict");
     }
     if (userIds && userIds.length > 100) {
-      throw new RangeError("Cannot request more than 100 members by their IDs");
+      throw new GatewayRangeError("GuildMembersUserIdsLimit");
     }
     if (Buffer.byteLength(nonce) > 32) {
-      throw new RangeError("The nonce of a members request cannot exceed 32 bytes");
+      throw new GatewayRangeError("MemberFetchNonceLength");
     }
 
     const d: GatewayRequestGuildMembersData = userIds
       ? { guild_id: guildId, user_ids: [...userIds], presences, nonce }
       : { guild_id: guildId, query: query ?? "", limit, presences, nonce };
-    const shardCount = BigInt(await this.client.gateway.getShardCount());
-    const shardId = Number((BigInt(guildId) >> 22n) % shardCount);
+    const shardId = await shardIdOf(this.client, guildId);
 
     // The nonce is the only link between the request and its chunks, so it must be unique while pending.
     if (this.#requests.has(nonce)) {
-      throw new Error(`A members request with the nonce "${nonce}" is pending already`);
+      throw new GatewayError("GuildMembersNoncePending", nonce);
     }
     let request!: MembersRequest;
     const promise = new Promise<GuildMember[]>((resolve, reject) => {
@@ -406,20 +478,20 @@ export class GuildMemberManager extends CachedManager<
    * @param options The access token and the member's initial state.
    */
   public async add(
-    guildId: string,
-    userId: string,
-    options: GuildMemberAddOptions,
+    ...args: GuildArgs<InGuild, [userId: string, options: GuildMemberAddOptions]>
   ): Promise<GuildMember> {
+    const [guildId, userId, options] =
+      withGuildId<[userId: string, options: GuildMemberAddOptions]>(args);
     const body: RESTPutAPIGuildMemberJSONBody = {
       access_token: options.accessToken,
       nick: options.nick,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
       mute: options.mute,
       deaf: options.deaf,
     };
     // The API answers 204 without a body when the user already is a member.
     const member = await this.client.api.guilds.addMember(guildId, userId, body);
-    return member ? this.store(guildId, member) : this.fetch(guildId, userId);
+    return member ? this.store(guildId, member) : this.client.members.fetch(guildId, userId);
   }
 
   /**
@@ -430,14 +502,14 @@ export class GuildMemberManager extends CachedManager<
    * @param options The fields to edit.
    */
   public async edit(
-    guildId: string,
-    userId: string,
-    options: GuildMemberEditOptions,
+    ...args: GuildArgs<InGuild, [userId: string, options: GuildMemberEditOptions]>
   ): Promise<GuildMember> {
+    const [guildId, userId, options] =
+      withGuildId<[userId: string, options: GuildMemberEditOptions]>(args);
     const until = options.communicationDisabledUntil;
     const body: RESTPatchAPIGuildMemberJSONBody = {
       nick: options.nick,
-      roles: options.roles ? [...options.roles] : undefined,
+      roles: options.roles ? resolveRoleIds(options.roles) : undefined,
       mute: options.mute,
       deaf: options.deaf,
       channel_id: options.channel,
@@ -460,13 +532,17 @@ export class GuildMemberManager extends CachedManager<
    * @param guildId The ID of the guild.
    * @param options The fields to edit.
    */
-  public async editMe(guildId: string, options: GuildMemberEditMeOptions): Promise<GuildMember> {
-    const { reason, ...body } = options;
-    const member = await this.client.api.users.editCurrentGuildMember(
-      guildId,
-      body satisfies RESTPatchAPICurrentGuildMemberJSONBody,
-      { reason },
-    );
+  public async editMe(
+    ...args: GuildArgs<InGuild, [options: GuildMemberEditMeOptions]>
+  ): Promise<GuildMember> {
+    const [guildId, options] = withGuildId<[options: GuildMemberEditMeOptions]>(args);
+    const { reason, avatar, banner, ...rest } = options;
+    const body: RESTPatchAPICurrentGuildMemberJSONBody = {
+      ...rest,
+      avatar: await resolveImageOption(avatar),
+      banner: await resolveImageOption(banner),
+    };
+    const member = await this.client.api.users.editCurrentGuildMember(guildId, body, { reason });
     return this.store(guildId, member);
   }
 
@@ -477,9 +553,10 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the member's user.
    * @param reason The reason for the audit log.
    */
-  public async kick(guildId: string, userId: string, reason?: string): Promise<void> {
+  public async kick(...args: GuildArgs<InGuild, [userId: string, reason?: string]>): Promise<void> {
+    const [guildId, userId, reason] = withGuildId<[userId: string, reason?: string]>(args);
     await this.client.api.guilds.removeMember(guildId, userId, { reason });
-    await this.cache?.delete(this.resolveKey(guildId, userId));
+    await this.cache.delete(this.resolveKey(guildId, userId));
   }
 
   /**
@@ -489,12 +566,16 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the user.
    * @param options How many seconds of messages to delete, and the reason for the audit log.
    */
-  public async ban(guildId: string, userId: string, options: BanOptions = {}): Promise<void> {
+  public async ban(
+    ...args: GuildArgs<InGuild, [userId: string, options?: BanOptions]>
+  ): Promise<void> {
+    const [guildId, userId, options = {}] =
+      withGuildId<[userId: string, options?: BanOptions]>(args);
     const body: RESTPutAPIGuildBanJSONBody = {
       delete_message_seconds: options.deleteMessageSeconds,
     };
     await this.client.api.guilds.banUser(guildId, userId, body, { reason: options.reason });
-    await this.cache?.delete(this.resolveKey(guildId, userId));
+    await this.cache.delete(this.resolveKey(guildId, userId));
   }
 
   /**
@@ -504,7 +585,10 @@ export class GuildMemberManager extends CachedManager<
    * @param userId The ID of the user.
    * @param reason The reason for the audit log.
    */
-  public async unban(guildId: string, userId: string, reason?: string): Promise<void> {
+  public async unban(
+    ...args: GuildArgs<InGuild, [userId: string, reason?: string]>
+  ): Promise<void> {
+    const [guildId, userId, reason] = withGuildId<[userId: string, reason?: string]>(args);
     await this.client.api.guilds.unbanUser(guildId, userId, { reason });
   }
 
@@ -517,10 +601,10 @@ export class GuildMemberManager extends CachedManager<
    * @returns The users that were banned, and the ones that could not be.
    */
   public async bulkBan(
-    guildId: string,
-    userIds: readonly string[],
-    options: BanOptions = {},
+    ...args: GuildArgs<InGuild, [userIds: readonly string[], options?: BanOptions]>
   ): Promise<{ bannedUsers: string[]; failedUsers: string[] }> {
+    const [guildId, userIds, options = {}] =
+      withGuildId<[userIds: readonly string[], options?: BanOptions]>(args);
     const body: RESTPostAPIGuildBulkBanJSONBody = {
       user_ids: [...userIds],
       delete_message_seconds: options.deleteMessageSeconds,
@@ -529,7 +613,7 @@ export class GuildMemberManager extends CachedManager<
       reason: options.reason,
     });
     await Promise.all(
-      result.banned_users.map((userId) => this.cache?.delete(this.resolveKey(guildId, userId))),
+      result.banned_users.map((userId) => this.cache.delete(this.resolveKey(guildId, userId))),
     );
     return { bannedUsers: result.banned_users, failedUsers: result.failed_users };
   }
@@ -541,7 +625,10 @@ export class GuildMemberManager extends CachedManager<
    * @param options The inactivity threshold and the roles to include.
    * @returns How many members were (or would be) pruned, `null` when `count` is `false`.
    */
-  public async prune(guildId: string, options: GuildPruneOptions = {}): Promise<number | null> {
+  public async prune(
+    ...args: GuildArgs<InGuild, [options?: GuildPruneOptions]>
+  ): Promise<number | null> {
+    const [guildId, options = {}] = withGuildId<[options?: GuildPruneOptions]>(args);
     const days = options.days ?? 7;
     if (options.dry) {
       const result = await this.client.api.guilds.getPruneCount(guildId, {
@@ -572,11 +659,10 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async addRole(
-    guildId: string,
-    userId: string,
-    roleId: string,
-    reason?: string,
+    ...args: GuildArgs<InGuild, [userId: string, roleId: string, reason?: string]>
   ): Promise<void> {
+    const [guildId, userId, roleId, reason] =
+      withGuildId<[userId: string, roleId: string, reason?: string]>(args);
     await this.client.api.guilds.addRoleToMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => [...new Set([...roles, roleId])]);
   }
@@ -590,11 +676,10 @@ export class GuildMemberManager extends CachedManager<
    * @param reason The reason for the audit log.
    */
   public async removeRole(
-    guildId: string,
-    userId: string,
-    roleId: string,
-    reason?: string,
+    ...args: GuildArgs<InGuild, [userId: string, roleId: string, reason?: string]>
   ): Promise<void> {
+    const [guildId, userId, roleId, reason] =
+      withGuildId<[userId: string, roleId: string, reason?: string]>(args);
     await this.client.api.guilds.removeRoleFromMember(guildId, userId, roleId, { reason });
     await this.updateCachedRoles(guildId, userId, (roles) => roles.filter((id) => id !== roleId));
   }
@@ -605,9 +690,9 @@ export class GuildMemberManager extends CachedManager<
   }
 
   // Members without their user cannot be keyed, so they are built without being cached.
-  private store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
+  private async store(guildId: string, member: APIGuildMember): Promise<GuildMember> {
     const raw = { ...member, guild_id: guildId };
-    return raw.user ? this._add(raw) : this.hydrate(raw);
+    return raw.user ? this._add(raw) : this._build(raw);
   }
 
   // Drops a request that resolved, was rejected, or timed out.
@@ -622,8 +707,27 @@ export class GuildMemberManager extends CachedManager<
     userId: string,
     update: (roles: readonly string[]) => string[],
   ): Promise<void> {
-    const key = this.resolveKey(guildId, userId);
-    const cached = await this.cache?.get(key);
-    if (cached) await this.cache!.set(key, { ...cached, roles: update(cached.roles) });
+    await this._patchCached(this.resolveKey(guildId, userId), (cached) => ({
+      roles: update(cached.roleIds),
+    }));
   }
 }
+
+fillGuildId(GuildMemberManager, (client) => client.members, [
+  "fetch",
+  "refresh",
+  "fetchMe",
+  "list",
+  "search",
+  "request",
+  "add",
+  "edit",
+  "editMe",
+  "kick",
+  "ban",
+  "unban",
+  "bulkBan",
+  "prune",
+  "addRole",
+  "removeRole",
+]);

@@ -1,6 +1,6 @@
 import { WebSocketShardEvents } from "@discordjs/ws";
 import { container } from "@wolfstar/http-framework";
-import { createInMemoryCache, type Cache } from "@wolfstar/plugin-cache";
+import { createInMemoryCache, type Cache, type MemoryEntityCache } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
   GatewayDispatchEvents,
@@ -33,7 +33,7 @@ function createClient(cache: Cache | null, options: Partial<GatewayClientOptions
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
-    cache: cache ?? undefined,
+    cache,
     ...options,
   });
 }
@@ -197,10 +197,10 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN a slow guild THEN another guild's events are not held back, and each guild stays ordered", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    const upsert = cache.messages!.upsert.bind(cache.messages);
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       if (key.startsWith("slow")) await delay(40);
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache);
     const created = record(client, "messageCreate");
@@ -220,10 +220,10 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN a dispatch slower than dispatchTimeout THEN a DispatchTimeoutError is reported and the event still emitted", async () => {
     const cache = createInMemoryCache();
-    const set = cache.messages.set.bind(cache.messages);
-    vi.spyOn(cache.messages, "set").mockImplementation(async (key, value) => {
+    const upsert = cache.messages!.upsert.bind(cache.messages);
+    vi.spyOn(cache.messages!, "upsert").mockImplementation(async (key, value, options) => {
       await delay(60);
-      set(key, value);
+      return upsert(key, value, options);
     });
     const client = createClient(cache, { dispatchTimeout: 10 });
     const errors = record(client, "error");
@@ -241,22 +241,24 @@ describe("GatewayClient dispatch hardening", () => {
 
   test("GIVEN cacheFailure skip THEN a failing cache drops the event", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.messages, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.messages!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache);
     const errors = record(client, "error");
     const created = record(client, "messageCreate");
+    const dispatched = record(client, "dispatch");
 
     send(client, GatewayDispatchEvents.MessageCreate, message("1", "20", "10", "lost"));
     await client.idle();
 
     expect(errors).toHaveLength(1);
     expect(created).toHaveLength(0);
+    expect(dispatched).toHaveLength(0);
   });
 
   test("GIVEN cacheFailure emitUncached THEN the event is still emitted, built from the payload", async () => {
     const cache = createInMemoryCache();
-    vi.spyOn(cache.guilds, "get").mockRejectedValue(new Error("down"));
-    vi.spyOn(cache.guilds, "set").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.guilds!, "get").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.guilds!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache, { cacheFailure: "emitUncached" });
     const errors = record(client, "error");
     const updated = record(client, "guildUpdate");
@@ -280,14 +282,14 @@ describe("CachedManager fetch options", () => {
 
   test("GIVEN force THEN the API is hit even on a cache hit, and the cache is refreshed", async () => {
     const client = createClient(createInMemoryCache());
-    await client.cache!.users.set(user.id, user);
+    await client.cache!.users!.set(user.id, user);
     const get = vi.spyOn(container.rest, "get").mockResolvedValue({ ...user, username: "renamed" });
 
     const fetched = await client.users.fetch(user.id, { force: true });
 
     expect(get).toHaveBeenCalledOnce();
     expect(fetched.username).toBe("renamed");
-    expect((await client.users.get(user.id))?.username).toBe("renamed");
+    expect((await client.users.cache.get(user.id))?.username).toBe("renamed");
   });
 
   test("GIVEN cache false THEN the fetched entity is not stored", async () => {
@@ -296,7 +298,7 @@ describe("CachedManager fetch options", () => {
 
     await client.users.fetch(user.id, { cache: false });
 
-    expect(await client.users.get(user.id)).toBeUndefined();
+    expect(await client.users.cache.get(user.id)).toBeUndefined();
   });
 
   test("GIVEN a two-key manager THEN options still come after both keys", async () => {
@@ -336,17 +338,19 @@ describe("READY reconciliation", () => {
     expect(deleted).toHaveLength(1);
     expect(deleted[0]![0]?.name).toBe("Guild 11");
     expect(deleted[0]![1]).toEqual({ id: "11" });
-    expect(await client.guilds.get("11")).toBeUndefined();
-    expect(await client.guilds.get("10")).toBeDefined();
+    expect(await client.guilds.cache.get("11")).toBeUndefined();
+    expect(await client.guilds.cache.get("10")).toBeDefined();
     // Another shard's guild is never touched by this shard's READY.
-    expect(await client.guilds.get(otherShardGuild)).toBeDefined();
+    expect(await client.guilds.cache.get(otherShardGuild)).toBeDefined();
   });
 
   test("GIVEN an unreachable cache THEN READY is still emitted under the default skip policy", async () => {
     const cache = createInMemoryCache();
-    await cache.guilds.set("11", guild("11") as never);
-    vi.spyOn(cache.guilds, "keys").mockRejectedValue(new Error("down"));
-    vi.spyOn(cache.users, "set").mockRejectedValue(new Error("down"));
+    // `createInMemoryCache` builds MemoryEntityCaches, which can enumerate their entries.
+    const guilds = cache.guilds as MemoryEntityCache<unknown>;
+    await guilds.set("11", guild("11"));
+    vi.spyOn(guilds, "keys").mockRejectedValue(new Error("down"));
+    vi.spyOn(cache.users!, "upsert").mockRejectedValue(new Error("down"));
     const client = createClient(cache, { shardCount: 1 });
     const errors = record(client, "error");
     const ready = record(client, "shardReady");
@@ -373,6 +377,6 @@ describe("READY reconciliation", () => {
     expect(ready).toHaveLength(1);
     expect(client.user?.id).toBe(user.id);
     expect(errors).toHaveLength(1);
-    expect(await client.guilds.get("11")).toBeDefined();
+    expect(await client.guilds.cache.get("11")).toBeDefined();
   });
 });

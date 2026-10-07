@@ -1,3 +1,4 @@
+import { cachedGuild } from "../../util/cache.js";
 import { SoundboardSound as BaseSoundboardSound } from "@discordjs/structures";
 import type { APISoundboardSound } from "discord-api-types/v10";
 import type { SoundboardSoundEditOptions } from "../../managers/GuildSoundboardSoundManager.js";
@@ -8,6 +9,7 @@ import type { Guild } from "../guilds/Guild.js";
 import { Mixin } from "../Mixin.js";
 import { initStructure, kData, kPatch, kRelations, StructureMixin } from "../Structure.js";
 import { User } from "../users/User.js";
+import { GatewayError } from "../../errors/GatewayError.js";
 
 /**
  * The relations of a {@link SoundboardSound}, resolved from the cache by the guild's soundboard manager.
@@ -66,7 +68,7 @@ export class SoundboardSound extends BaseSoundboardSound {
   }
 
   public get guild(): Guild | null {
-    return this[kRelations].guild ?? null;
+    return this.lazyRelation("guild", (client) => cachedGuild(client, this[kData].guild_id));
   }
 
   /**
@@ -111,9 +113,35 @@ export class SoundboardSound extends BaseSoundboardSound {
     });
   }
 
+  /**
+   * Whether this sound has the same data as another one, like discord.js's `SoundboardSound#equals`. `false` for
+   * anything that is neither a sound nor a raw one.
+   *
+   * @param other The sound, or raw sound, to compare with.
+   */
+  public equals(other: unknown): boolean {
+    const sound =
+      other instanceof SoundboardSound
+        ? other
+        : typeof other === "object" && other !== null && "sound_id" in other
+          ? new SoundboardSound(other as APISoundboardSound)
+          : null;
+    if (!sound) return false;
+    return (
+      this.soundId === sound.soundId &&
+      this.name === sound.name &&
+      this.volume === sound.volume &&
+      this.emojiId === sound.emojiId &&
+      this.emojiName === sound.emojiName &&
+      this.guildId === sound.guildId &&
+      this.available === sound.available &&
+      this[kData].user?.id === sound[kData].user?.id
+    );
+  }
+
   private withGuild(action: (guildId: string) => Promise<this>): Promise<this> {
     const { guildId } = this;
-    if (!guildId) return Promise.reject(new Error("Default soundboard sounds cannot be changed"));
+    if (!guildId) return Promise.reject(new GatewayError("NotGuildSoundboardSound"));
     return action(guildId);
   }
 }

@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import { container } from "@wolfstar/http-framework";
 import { createInMemoryCache, messageKey } from "@wolfstar/plugin-cache";
 import {
@@ -17,7 +18,11 @@ import {
   GatewayClient,
   Message,
   MessageMentions,
+  MessageReaction,
+  Partials,
   ReactionEmoji,
+  snowflakeTimestamp,
+  Sticker,
   type GatewayClientOptions,
   type TextChannel,
 } from "../src/index.js";
@@ -113,14 +118,77 @@ describe("Message", () => {
     } as never);
 
     expect(msg.flags.has(MessageFlags.SuppressEmbeds)).toBe(true);
-    expect(msg.attachments[0]).toBeInstanceOf(Attachment);
+    expect(msg.attachments.first()).toBeInstanceOf(Attachment);
     expect(msg.embeds[0]).toBeInstanceOf(Embed);
     expect(msg.embeds[0]!.hexColor).toBe("#ff0000");
-    expect(msg.reactions.cache).toHaveLength(1);
+    expect(msg.reactions.cache.size).toBe(1);
     expect(msg.reactions.resolve("🐺")?.count).toBe(2);
     expect(msg.poll?.answers[0]?.voteCount).toBe(3);
     expect(msg.system).toBe(false);
     expect(msg.url).toBe(`https://discord.com/channels/${guildId}/${channelId}/${msg.id}`);
+  });
+
+  test("GIVEN attachments, stickers and snapshots THEN they are Collections keyed by ID", () => {
+    createClient();
+    const msg = new Message(
+      message({
+        attachments: [
+          {
+            id: "1",
+            filename: "wolf.png",
+            size: 10,
+            url: "https://cdn.discordapp.com/wolf.png",
+            proxy_url: "https://media.discordapp.net/wolf.png",
+          },
+        ],
+        sticker_items: [{ id: "5", name: "howl", format_type: 1 }],
+        message_reference: {
+          type: MessageReferenceType.Forward,
+          channel_id: "200000000000000201",
+          message_id: "700000000000000702",
+        },
+        message_snapshots: [{ message: { content: "awoo" } as never }],
+      }) as never,
+    );
+
+    expect(msg.attachments).toBeInstanceOf(Collection);
+    expect(msg.attachments.get("1")).toBeInstanceOf(Attachment);
+    expect(msg.stickers).toBeInstanceOf(Collection);
+    expect(msg.stickers.get("5")).toBeInstanceOf(Sticker);
+    expect(msg.stickers.get("5")?.name).toBe("howl");
+    expect(msg.stickers.get("5")?.format).toBe(1);
+    expect(() => JSON.stringify(msg.stickers.get("5"))).not.toThrow();
+    expect(msg.messageSnapshots).toBeInstanceOf(Collection);
+    expect(msg.messageSnapshots.get("700000000000000702")?.content).toBe("awoo");
+  });
+
+  test("GIVEN no attachments or stickers THEN the Collections are empty", () => {
+    const msg = new Message({ id: "3", channel_id: channelId } as never);
+
+    expect(msg.attachments.size).toBe(0);
+    expect(msg.stickers.size).toBe(0);
+    expect(msg.messageSnapshots.size).toBe(0);
+  });
+
+  test("GIVEN a unicode and a custom reaction with the same name THEN reactions.cache keys them apart", () => {
+    const counts = {
+      count: 1,
+      count_details: { normal: 1, burst: 0 },
+      me: false,
+      me_burst: false,
+      burst_colors: [],
+    };
+    const msg = new Message(
+      message({
+        reactions: [
+          { ...counts, emoji: { id: null, name: "wolf" } },
+          { ...counts, emoji: { id: "123456789012345678", name: "wolf" } },
+        ],
+      }),
+    );
+
+    expect(msg.reactions.cache).toBeInstanceOf(Collection);
+    expect([...msg.reactions.cache.keys()]).toEqual(["wolf", "123456789012345678"]);
   });
 
   test("GIVEN mentions THEN MessageMentions resolves users, members, and channels", () => {
@@ -195,16 +263,107 @@ describe("Message", () => {
     expect((await client.cache!.messages.get(key))?.pinned).toBe(true);
   });
 
-  test("GIVEN react with a custom emoji THEN it targets the own reaction route", async () => {
+  test("GIVEN react with a custom emoji THEN it targets the own reaction route and returns the reaction", async () => {
     createClient();
     const put = vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(message());
 
-    await new Message(message()).react("<:howl:123456789012345678>");
+    const reaction = await msg.react("<:howl:123456789012345678>");
 
     expect(put).toHaveBeenCalledWith(
       Routes.channelMessageOwnReaction(channelId, "1200000000000000000", "howl:123456789012345678"),
       { signal: undefined },
     );
+    expect(reaction).toBeInstanceOf(MessageReaction);
+    expect(reaction.count).toBe(1);
+    expect(reaction.me).toBe(true);
+    expect(reaction.emoji.id).toBe("123456789012345678");
+    expect(reaction.message).toBe(msg);
+    expect(msg.reactions.cache.size).toBe(1);
+  });
+
+  test("GIVEN react with an emoji the bot already used THEN the count is unchanged", async () => {
+    createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(message());
+
+    await msg.react("🐺");
+    const reaction = await msg.react("🐺");
+
+    expect(reaction.count).toBe(1);
+    expect(msg.reactions.cache.size).toBe(1);
+  });
+
+  test.each([
+    ["its bare ID", "123456789012345678"],
+    ["an object with its ID", { id: "123456789012345678" }],
+    ["a mention under its new name", "<:renamed:123456789012345678>"],
+    ["a non-animated identifier", "howl:123456789012345678"],
+  ])(
+    "GIVEN react with a custom emoji others used, given as %s THEN the counted reaction is returned",
+    async (_, emoji) => {
+      createClient();
+      vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+      const msg = new Message(
+        message({
+          reactions: [
+            {
+              count: 2,
+              count_details: { normal: 2, burst: 0 },
+              me: false,
+              me_burst: false,
+              burst_colors: [],
+              emoji: { id: "123456789012345678", name: "howl", animated: true },
+            },
+          ],
+        }),
+      );
+
+      const reaction = await msg.react(emoji);
+
+      expect(reaction).toBeInstanceOf(MessageReaction);
+      expect(reaction.count).toBe(3);
+      expect(msg.reactions.cache.size).toBe(1);
+    },
+  );
+
+  test("GIVEN react on a cached message THEN the cached reactions follow", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const key = messageKey(channelId, "1200000000000000000");
+    await client.cache!.messages.set(key, message());
+    const msg = await client.messages.fetch(channelId, "1200000000000000000");
+
+    await msg.react("🐺");
+
+    expect((await client.cache!.messages.get(key))?.reactions).toMatchObject([
+      { count: 1, me: true, emoji: { name: "🐺" } },
+    ]);
+  });
+
+  test("GIVEN MessageReaction#react THEN it returns itself with the bot counted", async () => {
+    createClient();
+    vi.spyOn(container.rest, "put").mockResolvedValue(undefined);
+    const msg = new Message(
+      message({
+        reactions: [
+          {
+            count: 2,
+            count_details: { normal: 2, burst: 0 },
+            me: false,
+            me_burst: false,
+            burst_colors: [],
+            emoji: { id: null, name: "🐺" },
+          },
+        ],
+      }),
+    );
+    const reaction = msg.reactions.resolve("🐺")!;
+
+    expect(await reaction.react()).toBe(reaction);
+    expect(reaction.count).toBe(3);
+    expect(reaction.me).toBe(true);
+    expect(msg.reactions.resolve("🐺")?.count).toBe(3);
   });
 
   test("GIVEN suppressEmbeds THEN it edits the flags", async () => {
@@ -221,10 +380,53 @@ describe("Message", () => {
     expect(msg.flags.has(MessageFlags.SuppressEmbeds)).toBe(true);
   });
 
-  test("GIVEN equals THEN it compares content and embeds", () => {
+  test("GIVEN equals THEN it compares like discord.js", () => {
+    const msg = new Message(message({ embeds: [{ title: "a" }], nonce: "n" }));
+    expect(msg.equals(message({ embeds: [{ title: "a" }], nonce: "n" }))).toBe(true);
+    expect(msg.equals(new Message(message({ embeds: [{ title: "a" }], nonce: "n" })))).toBe(true);
+    expect(msg.equals(message({ embeds: [], nonce: "n" }))).toBe(false);
+    expect(msg.equals(message({ embeds: [{ title: "a" }], nonce: "n", content: "bye" }))).toBe(
+      false,
+    );
+    expect(msg.equals(message({ embeds: [{ title: "a" }] }))).toBe(false);
+    expect(msg.equals(null)).toBe(false);
+  });
+
+  test("GIVEN equals THEN a pin is not a difference, a changed embed or attachment is", () => {
+    const attachment = (id: string) => ({
+      id,
+      filename: "a.png",
+      size: 1,
+      url: "u",
+      proxy_url: "p",
+    });
+    const msg = new Message(message({ embeds: [{ title: "a" }], attachments: [attachment("1")] }));
+    const same = { embeds: [{ title: "a" }], attachments: [attachment("1")] };
+    expect(msg.equals(message({ ...same, pinned: true }))).toBe(true);
+    expect(msg.equals(message({ ...same, embeds: [{ title: "b" }] }))).toBe(false);
+    expect(msg.equals(new Message(message({ ...same, embeds: [{ title: "b" }] })))).toBe(false);
+    expect(msg.equals(message({ ...same, attachments: [attachment("2")] }))).toBe(false);
+  });
+
+  test("GIVEN a raw embed update THEN equals compares the ID and the embed count", () => {
     const msg = new Message(message({ embeds: [{ title: "a" }] }));
-    expect(msg.equals(message({ embeds: [{ title: "a" }] }))).toBe(true);
-    expect(msg.equals(message({ embeds: [{ title: "b" }] }))).toBe(false);
+    const update = { id: msg.id, channel_id: channelId, embeds: [{ title: "b" }] };
+    expect(msg.equals(update as never)).toBe(true);
+    expect(msg.equals({ ...update, embeds: [] } as never)).toBe(false);
+    expect(msg.equals({ ...update, id: "1" } as never)).toBe(false);
+  });
+
+  test("GIVEN equals with rawData THEN mentions and timestamps are compared too", () => {
+    const raw = message({
+      timestamp: new Date(snowflakeTimestamp(message().id)).toISOString(),
+      edited_timestamp: "2026-01-02T00:00:00.000Z",
+    });
+    const msg = new Message(raw);
+    expect(msg.equals(raw, raw)).toBe(true);
+    expect(msg.equals(message({ mention_everyone: true }), raw)).toBe(false);
+    expect(msg.equals(raw, { ...raw, timestamp: "2026-01-03T00:00:00.000Z" })).toBe(false);
+    expect(msg.equals(raw, { ...raw, edited_timestamp: null })).toBe(false);
+    expect(msg.equals(raw)).toBe(true);
   });
 });
 
@@ -240,19 +442,167 @@ describe("ReactionEmoji", () => {
 });
 
 describe("MessageManager", () => {
+  // A snowflake from 2015, and two from now.
+  const old = "1";
+  const fresh = String((BigInt(Date.now() - 1_420_070_400_000) << 22n) + 1n);
+  const fresher = String((BigInt(Date.now() - 1_420_070_400_000) << 22n) + 2n);
+
   test("GIVEN bulkDelete with filterOld THEN old messages are dropped", async () => {
     const client = createClient();
     const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
-    // A snowflake from 2015, and two from now.
-    const fresh = String((BigInt(Date.now() - 1_420_070_400_000) << 22n) + 1n);
-    const fresher = String((BigInt(Date.now() - 1_420_070_400_000) << 22n) + 2n);
 
-    const deleted = await client.messages.bulkDelete(channelId, ["1", fresh, fresher], true);
+    const deleted = await client.messages.bulkDelete(channelId, [old, fresh, fresher], true);
 
-    expect(deleted).toEqual([fresh, fresher]);
+    expect([...deleted.keys()]).toEqual([fresh, fresher]);
     expect(post).toHaveBeenCalledWith(Routes.channelBulkDelete(channelId), {
       body: { messages: [fresh, fresher] },
     });
+  });
+
+  test("GIVEN bulkDelete THEN it resolves to the cached messages, undefined for the others", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+    const cached = await client.messages._add(message({ id: fresh }));
+
+    const deleted = await client.messages.bulkDelete(channelId, [fresh, fresher]);
+
+    expect(deleted).toBeInstanceOf(Collection);
+    expect(deleted.get(fresh)).toBeInstanceOf(Message);
+    expect(deleted.get(fresh)!.id).toBe(cached.id);
+    expect(deleted.has(fresher)).toBe(true);
+    expect(deleted.get(fresher)).toBeUndefined();
+    expect(await client.cache!.messages.get(messageKey(channelId, fresh))).toBeUndefined();
+  });
+
+  test("GIVEN bulkDelete with Partials.Message THEN the uncached messages are partial", async () => {
+    const client = createClient({ partials: [Partials.Message] });
+    vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+
+    const deleted = await client.messages.bulkDelete(channelId, [fresh, fresher]);
+
+    const partial = deleted.get(fresher)!;
+    expect(partial).toBeInstanceOf(Message);
+    expect(partial.partial).toBe(true);
+    expect(partial.id).toBe(fresher);
+    expect(partial.channelId).toBe(channelId);
+  });
+
+  test("GIVEN bulkDelete in a cached guild channel THEN the partial messages carry its guild", async () => {
+    const client = createClient({ partials: [Partials.Message] });
+    vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+    await client.channels._add({
+      id: channelId,
+      type: ChannelType.GuildText,
+      name: "general",
+      guild_id: guildId,
+    } as never);
+
+    const deleted = await client.messages.bulkDelete(channelId, [fresh, fresher]);
+
+    expect(deleted.get(fresher)!.guildId).toBe(guildId);
+  });
+
+  test("GIVEN bulkDelete with messages and a Collection THEN it resolves their IDs", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+    const first = new Message(message({ id: fresh }));
+    const second = new Message(message({ id: fresher }));
+
+    await client.messages.bulkDelete(channelId, [first, second.id]);
+    await client.messages.bulkDelete(
+      channelId,
+      new Collection([
+        [first.id, first],
+        [second.id, second],
+      ]),
+    );
+
+    expect(post).toHaveBeenCalledTimes(2);
+    for (const call of post.mock.calls) {
+      expect(call[1]).toEqual({ body: { messages: [fresh, fresher] } });
+    }
+  });
+
+  test("GIVEN bulkDelete of a single message THEN it deletes it alone", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+    const del = vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
+
+    const deleted = await client.messages.bulkDelete(channelId, [fresh]);
+
+    expect(post).not.toHaveBeenCalled();
+    expect(del).toHaveBeenCalledWith(Routes.channelMessage(channelId, fresh), expect.anything());
+    expect([...deleted.keys()]).toEqual([fresh]);
+  });
+
+  test("GIVEN bulkDelete of nothing THEN it resolves to an empty Collection", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+
+    const deleted = await client.messages.bulkDelete(channelId, [old], true);
+
+    expect(deleted).toBeInstanceOf(Collection);
+    expect(deleted.size).toBe(0);
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN bulkDelete of a count THEN it deletes the latest messages", async () => {
+    const client = createClient();
+    vi.spyOn(container.rest, "get").mockResolvedValue([
+      message({ id: fresher }),
+      message({ id: fresh }),
+    ]);
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(undefined);
+
+    const deleted = await client.messages.bulkDelete(channelId, 2);
+
+    expect([...deleted.keys()]).toEqual([fresher, fresh]);
+    expect(deleted.get(fresh)).toBeInstanceOf(Message);
+    expect(post).toHaveBeenCalledWith(Routes.channelBulkDelete(channelId), {
+      body: { messages: [fresher, fresh] },
+    });
+  });
+
+  test.each([["abc"], [Number.NaN], [undefined], [{}]])(
+    "GIVEN bulkDelete of %s THEN it throws a TypeError",
+    async (messages) => {
+      const client = createClient();
+
+      const error = await client.messages.bulkDelete(channelId, messages as never).catch((e) => e);
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.code).toBe("MessageBulkDeleteType");
+      expect(error.message).toBe("The messages must be an Array, Collection, or number.");
+    },
+  );
+
+  test("GIVEN guild text-based channels THEN only they can bulk delete", () => {
+    createClient();
+    const guildChannel = (type: ChannelType) =>
+      createChannel({ id: channelId, type, name: "x", guild_id: guildId } as never);
+
+    for (const type of [
+      ChannelType.GuildText,
+      ChannelType.GuildAnnouncement,
+      ChannelType.GuildVoice,
+      ChannelType.GuildStageVoice,
+      ChannelType.PublicThread,
+      ChannelType.PrivateThread,
+      ChannelType.AnnouncementThread,
+    ]) {
+      expect(typeof (guildChannel(type) as TextChannel).bulkDelete).toBe("function");
+    }
+
+    const dm = createChannel({ id: channelId, type: ChannelType.DM, recipients: [] } as never);
+    const groupDm = createChannel({
+      id: channelId,
+      type: ChannelType.GroupDM,
+      recipients: [],
+    } as never);
+    expect("bulkDelete" in dm).toBe(false);
+    expect("bulkDelete" in groupDm).toBe(false);
+    // They keep the rest of the text-based channel.
+    expect(typeof (dm as unknown as TextChannel).send).toBe("function");
   });
 
   test("GIVEN fetchPins THEN it caches the messages with their pin time", async () => {
@@ -290,6 +640,99 @@ describe("MessageManager", () => {
     });
     expect(post).toHaveBeenCalledWith(Routes.channelTyping(channelId), { signal: undefined });
     expect(channel.messages.channelId).toBe(channelId);
+  });
+});
+
+describe("Message discord.js parity", () => {
+  test("GIVEN fetch(false) THEN the cache answers, while fetch() forces the API", async () => {
+    const client = createClient();
+    await client.cache!.messages.set(
+      messageKey(channelId, "1200000000000000000"),
+      message({ content: "cached" }),
+    );
+    const get = vi.spyOn(container.rest, "get").mockResolvedValue(message({ content: "fresh" }));
+    const msg = new Message(message({ content: "stale" }));
+
+    await msg.fetch(false);
+    expect(get).not.toHaveBeenCalled();
+    expect(msg.content).toBe("cached");
+
+    await msg.fetch();
+    expect(get).toHaveBeenCalledOnce();
+    expect(msg.content).toBe("fresh");
+  });
+
+  test("GIVEN forward with a channel or its ID THEN both post the same forward", async () => {
+    createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(message({ id: "2" }));
+    const target = createChannel({
+      id: "300000000000000030",
+      type: ChannelType.GuildText,
+      name: "other",
+      guild_id: guildId,
+    } as never) as TextChannel;
+    const msg = new Message(message());
+
+    await msg.forward(target);
+    await msg.forward("300000000000000030");
+
+    expect(post).toHaveBeenCalledTimes(2);
+    expect(post.mock.calls[0]).toEqual(post.mock.calls[1]);
+    expect(post.mock.calls[0]![0]).toBe(Routes.channelMessages("300000000000000030"));
+  });
+
+  test("GIVEN a shared client theme THEN it is camel-cased, and null without one", () => {
+    createClient();
+    const themed = new Message(
+      message({
+        shared_client_theme: {
+          colors: ["5865F2"],
+          gradient_angle: 45,
+          base_mix: 60,
+          base_theme: 1,
+        },
+      } as never),
+    );
+
+    expect(themed.sharedClientTheme).toEqual({
+      colors: ["5865F2"],
+      gradientAngle: 45,
+      baseMix: 60,
+      baseTheme: 1,
+    });
+    expect(new Message(message()).sharedClientTheme).toBeNull();
+  });
+
+  test("GIVEN resolveComponent THEN it finds a component by custom ID, else null", () => {
+    createClient();
+    const msg = new Message(
+      message({
+        components: [
+          { type: 1, components: [{ type: 2, style: 1, custom_id: "go", label: "Go" }] },
+        ],
+      } as never),
+    );
+
+    expect(msg.resolveComponent("go")).toMatchObject({ customId: "go" });
+    expect(msg.resolveComponent("missing")).toBeNull();
+  });
+
+  test("GIVEN fetchWebhook THEN it rejects for non-webhook and application messages", async () => {
+    const client = createClient();
+    const fetchWebhook = vi.spyOn(client, "fetchWebhook").mockResolvedValue({} as never);
+
+    await expect(new Message(message()).fetchWebhook()).rejects.toMatchObject({
+      code: "WebhookMessage",
+    });
+    await expect(
+      new Message(
+        message({ webhook_id: "800000000000000800", application_id: "800000000000000800" }),
+      ).fetchWebhook(),
+    ).rejects.toMatchObject({ code: "WebhookApplication" });
+    expect(fetchWebhook).not.toHaveBeenCalled();
+
+    await new Message(message({ webhook_id: "800000000000000800" })).fetchWebhook();
+    expect(fetchWebhook).toHaveBeenCalledWith("800000000000000800");
   });
 });
 

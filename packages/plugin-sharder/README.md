@@ -1,8 +1,6 @@
 <div align="center">
 
-<img src="https://cdn.wolfstar.rocks/wolfstar-assets/wolfstar.png" alt="WolfStar" width="100" />
-
-# @wolfstar/plugin-sharder
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-sharder.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-sharder</h1>
 
 **Multi-process and multi-machine sharding for `@wolfstar/plugin-gateway`, or any bot.**
 
@@ -303,6 +301,20 @@ IPC), without transformers or the network.
 ShardClient.registerMessageTransformer("aes", () => new AesTransformer(process.env.SHARDER_KEY!));
 const manager = new ShardManager({ messageHandler: "v8", transformers: ["gzip", "aes"] });
 ```
+
+## Stars module
+
+On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
+`@wolfstar/kit` peer) to add the package to the auto imports:
+
+```ts
+// stars.config.ts
+export default defineConfig({
+  modules: ["@wolfstar/plugin-sharder/module"],
+});
+```
+
+The module registers no plugin and takes no options: you still construct the `ShardManager` yourself.
 
 ## RFC alignment
 

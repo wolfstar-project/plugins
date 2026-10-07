@@ -26,11 +26,15 @@
           {
             "allow": [
               "_add",
-              "_get",
+              "_build",
+              "_construct",
+              "_findDM",
               "_getInGuild",
               "_getShallow",
               "_hydrate",
               "_hydrateInGuild",
+              "_partial",
+              "_patchCached",
               "_resolveData"
             ],
             "allowAfterThis": true

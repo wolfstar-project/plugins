@@ -12,6 +12,7 @@ import { ChannelSlowmodeMixin } from "./mixins/ChannelSlowmodeMixin.js";
 import { ChannelTopicMixin } from "./mixins/ChannelTopicMixin.js";
 import { GuildChannelMixin } from "./mixins/GuildChannelMixin.js";
 import { TextChannelMixin } from "./mixins/TextChannelMixin.js";
+import { TextGuildChannelMixin } from "./mixins/TextGuildChannelMixin.js";
 
 export interface TextChannel
   extends
@@ -21,6 +22,7 @@ export interface TextChannel
       [
         BaseChannelMixin<ChannelType.GuildText>,
         TextChannelMixin<ChannelType.GuildText>,
+        TextGuildChannelMixin<ChannelType.GuildText>,
         GuildChannelMixin<ChannelType.GuildText>,
         ChannelParentMixin<ChannelType.GuildText>,
         ChannelPermissionMixin<ChannelType.GuildText>,
@@ -52,6 +54,7 @@ Mixin(TextChannel, [
   StructureMixin,
   BaseChannelMixin,
   TextChannelMixin,
+  TextGuildChannelMixin,
   GuildChannelMixin,
   ChannelParentMixin,
   ChannelPermissionMixin,

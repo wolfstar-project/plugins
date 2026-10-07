@@ -19,6 +19,10 @@ function isSameEmoji(a: APIPartialEmoji, b: APIPartialEmoji): boolean {
 /**
  * Adds a `MESSAGE_REACTION_ADD` to a cached message's reactions.
  *
+ * @remarks
+ * The bot's own reaction is not counted again when the cached reaction already has it (`me`, or `me_burst` for a
+ * super reaction): the message was fetched, or patched by the reacting client, after the bot reacted.
+ *
  * @param message The cached message.
  * @param data The dispatch data.
  * @param clientUserId The bot's user ID, to set `me` when the bot reacted.
@@ -32,6 +36,7 @@ export function addReaction(
   const kind = data.burst ? "burst" : "normal";
   const reactions = message.reactions ?? [];
   const existing = reactions.find((reaction) => isSameEmoji(reaction.emoji, data.emoji));
+  if (existing && me && (data.burst ? existing.me_burst : existing.me)) return message;
 
   if (!existing) {
     const reaction: APIReaction = {

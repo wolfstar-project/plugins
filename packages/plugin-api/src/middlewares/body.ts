@@ -1,11 +1,11 @@
-import { container, HttpCodes } from "@wolfstar/http-framework";
-import type { ApiRequest } from "../lib/http/ApiRequest";
-import type { ApiResponse } from "../lib/http/ApiResponse";
+import type { ApiRequest } from "../lib/structures/api/ApiRequest";
+import type { ApiResponse } from "../lib/structures/api/ApiResponse";
+import { HttpCodes } from "../lib/structures/http/HttpCodes";
 import { Middleware } from "../lib/structures/Middleware";
 
 /**
- * Rejects requests whose declared `Content-Length` exceeds {@link ApiServerOptions.maximumBodyLength}.
- * Runs second (position 20), after CORS headers have been set.
+ * Rejects requests whose declared `content-length` exceeds the matched route's `maximumBodyLength`.
+ * Chunked bodies without a `content-length` are not length-limited.
  */
 export class BodyMiddleware extends Middleware {
   public constructor(context: Middleware.LoaderContext) {
@@ -13,11 +13,17 @@ export class BodyMiddleware extends Middleware {
   }
 
   public override run(request: ApiRequest, response: ApiResponse): void {
-    const limit = container.server.options.maximumBodyLength ?? 1024 * 1024 * 50;
-    const contentLength = Number(request.headers["content-length"] ?? 0);
+    if (!request.route) return;
 
-    if (contentLength > limit) {
-      response.json({ error: "Payload Too Large" }, HttpCodes.PayloadTooLarge);
+    const contentLength = request.headers["content-length"];
+    if (typeof request.headers["content-type"] !== "string" || typeof contentLength !== "string") {
+      return;
+    }
+
+    if (Number(contentLength) > request.route.maximumBodyLength) {
+      response
+        .status(HttpCodes.PayloadTooLarge)
+        .json({ error: "Exceeded maximum content length." });
     }
   }
 }

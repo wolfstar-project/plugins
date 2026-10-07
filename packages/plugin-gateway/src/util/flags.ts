@@ -7,6 +7,7 @@ import {
   type BitFieldResolvable,
 } from "@discordjs/structures";
 import {
+  ApplicationFlags,
   GatewayIntentBits,
   GuildMemberFlags,
   GuildSystemChannelFlags,
@@ -141,4 +142,14 @@ export type UserFlagsResolvable = BitFieldResolvable<UserFlagsString>;
  */
 export class UserFlagsBitField extends NumberFlagsBitField<UserFlagsString> {
   public static override readonly Flags = UserFlags;
+}
+
+export type ApplicationFlagsString = keyof typeof ApplicationFlags;
+export type ApplicationFlagsResolvable = BitFieldResolvable<ApplicationFlagsString>;
+
+/**
+ * The flags of an application.
+ */
+export class ApplicationFlagsBitField extends NumberFlagsBitField<ApplicationFlagsString> {
+  public static override readonly Flags = ApplicationFlags;
 }
