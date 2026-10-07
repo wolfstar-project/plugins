@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-broker",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Plugin for @wolfstar/http-framework distributing gateway events across processes over Redis Streams, with at-least-once delivery",
   "keywords": [
     "broker",

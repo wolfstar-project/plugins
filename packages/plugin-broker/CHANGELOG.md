@@ -1,5 +1,12 @@
 # @wolfstar/plugin-broker
 
+## 0.5.1
+
+### Patch Changes
+
+- Updated dependencies [[`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc)]:
+  - @wolfstar/plugin-cache@0.7.0
+
 ## 0.5.0
 
 ### Minor Changes

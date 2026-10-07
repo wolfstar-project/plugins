@@ -1,5 +1,33 @@
 # @wolfstar/plugin-gateway
 
+## 0.12.0
+
+### Minor Changes
+
+- [#222](https://github.com/wolfstar-project/plugins/pull/222) [`ff72647`](https://github.com/wolfstar-project/plugins/commit/ff72647f1f5935d64988276084fc30037e854e13) - Add `category.children` and `answer.voters` to `@wolfstar/plugin-gateway`, after discord.js. `category.children` is a `CategoryChannelChildManager`: its `cache` lists the cached channels of the category (a promise with an asynchronous cache), `create()` makes a channel inside it, and `resolve()`/`resolveId()` look one up. `answer.voters` is a `PollAnswerVoterManager` whose `fetch()` lists the users who voted for the answer; `fetchVoters()` now goes through it.
+
+  Unlike discord.js, `children.cache` is read from the channel store on each access, so a store that cannot enumerate its entries throws `CacheNotIterable`, and `create()` rejects a category as the channel type. `answer.voters` has no `cache`.
+
+- [#226](https://github.com/wolfstar-project/plugins/pull/226) [`9eff0b0`](https://github.com/wolfstar-project/plugins/commit/9eff0b0cf7a53c0da115fabfa219b1edad2a1d15) - Add `GuildManager#fetchSoundboardSounds(guildIds, options?)` to `@wolfstar/plugin-gateway`, which requests the soundboard sounds of several guilds over the gateway (opcode 31) like discord.js, caches them, and resolves with a `Collection` of each guild's sounds. It sends one request per shard and waits for the `SOUNDBOARD_SOUNDS` reply of every guild, rejecting with the new `GuildSoundboardSoundsTimeoutError` (listing the guilds still missing) when they take longer than `time` (10 seconds by default, restarted by each reply).
+
+  The replies carry no nonce, so only the process that sent the request resolves it, and a reply arriving after the timeout is only cached.
+
+- [#221](https://github.com/wolfstar-project/plugins/pull/221) [`3a209a4`](https://github.com/wolfstar-project/plugins/commit/3a209a4f63a1886831d7e20d2aba800f26ffa90d) - Add small manager methods of discord.js to `@wolfstar/plugin-gateway`: `DataManager#valueOf()` (the manager's cache), `GuildEmojiManager#resolveIdentifier()`, `GuildManager#widgetImageURL(guild, style?)` and `GuildChannelManager#channelCountWithoutThreads`.
+
+  Unlike discord.js, `resolveIdentifier` throws for a value it cannot resolve instead of returning `null` (an uncached emoji ID still answers `null`), and `channelCountWithoutThreads` throws `CacheNotIterable` when the channel store cannot enumerate its entries.
+
+- [#223](https://github.com/wolfstar-project/plugins/pull/223) [`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc) - Add the status and start time of voice channels to `@wolfstar/plugin-gateway`, after discord.js. `VoiceChannel` gets `status`, `voiceStartTimestamp` and `voiceStartAt` (all `null` until Discord sends them) and `setStatus()`. The new `voiceChannelStatusUpdate` and `voiceChannelStartTimeUpdate` events carry the channel before and after, and `client.channels.requestInfo()` (also `guild.requestChannelInfo()`) asks a guild's shard for the info over the gateway, resolving once the `channelInfo` reply is cached or rejecting with a `GuildChannelInfoTimeoutError`.
+
+  Requests for one guild run one after the other, because Discord's reply has no nonce, and only the process that sent a request resolves it. A `GUILD_CREATE` resets both fields to `null`.
+
+- [#219](https://github.com/wolfstar-project/plugins/pull/219) [`3954f0f`](https://github.com/wolfstar-project/plugins/commit/3954f0f5b527b1a6aab2b33a6bc95b2ce3aa9ab1) - Add the managers of a guild, whose cache is keyed by the entity's ID alone, like discord.js: `guild.members`, `guild.roles`, `guild.voiceStates` and `guild.presences`, also reachable as `client.guilds.members(guildId)`, `roles(guildId)`, `voiceStates(guildId)` and `presences(guildId)`. `guild.members.cache.get(userId)` replaces `client.members.cache.get(client.members.resolveKey(guildId, userId))`, which keeps working. Each manager has the methods of the client's one with the guild's ID filled in (`guild.members.kick(userId)`, `guild.roles.create(options)`, ...), and `channel.messages` and `thread.members` gain the same `cache`. `guild.members.me` is a getter, like discord.js's. They are the client's managers themselves, built with a guild's ID as an optional second argument and typed `GuildMemberManager<true>`, `RoleManager<true>`, `VoiceStateManager<true>` and `PresenceManager<true>`: the classes gain an `InGuild` type parameter (`false` by default, so existing code is unaffected) and a `guildId` property. On the client's manager `me` is now a property holding the function rather than a prototype method, called the same way (`client.members.me(guildId)`).
+
+### Patch Changes
+
+- [#225](https://github.com/wolfstar-project/plugins/pull/225) [`cd3dcda`](https://github.com/wolfstar-project/plugins/commit/cd3dcda2fff021d63091faeb3ada2545585bfae4) - Fix `GatewayClient` never becoming ready when its shards resume a stored session (`sessionStore`). A shard that resumes gets `RESUMED` and no `READY`, so `clientReady` was never emitted, `isClientReady()` stayed `false` and `client.user` stayed `null`. The client now restores `client.user` from the cache, or from `GET /users/@me` when the cache does not hold it, and emits `clientReady` once every shard is ready, whether it got there through `READY` or `RESUMED`. A failed restore is reported through `error` and does not hold `clientReady` back.
+- Updated dependencies [[`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc)]:
+  - @wolfstar/plugin-cache@0.7.0
+
 ## 0.11.0
 
 ### Minor Changes
