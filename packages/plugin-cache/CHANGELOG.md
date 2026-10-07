@@ -1,5 +1,11 @@
 # @wolfstar/plugin-cache
 
+## 0.7.0
+
+### Minor Changes
+
+- [#223](https://github.com/wolfstar-project/plugins/pull/223) [`4748f09`](https://github.com/wolfstar-project/plugins/commit/4748f09609e664fad9eede140da141d9f5efa1cc) - Cache the status and start time of voice channels: `VOICE_CHANNEL_STATUS_UPDATE`, `VOICE_CHANNEL_START_TIME_UPDATE` and `CHANNEL_INFO` patch the `status` and `voice_start_time` of a cached channel, and leave an uncached one uncached.
+
 ## 0.6.0
 
 ### Minor Changes
