@@ -94,6 +94,30 @@ export class GuildChannelInfoTimeoutError extends GatewayError<"GuildChannelInfo
 }
 
 /**
+ * Thrown by `GuildManager#fetchSoundboardSounds` when Discord does not answer with the sounds of every requested guild.
+ *
+ * @remarks
+ * The request is dropped: replies arriving later still update the cache and emit `soundboardSounds`.
+ */
+export class GuildSoundboardSoundsTimeoutError extends GatewayError<"GuildSoundboardSoundsTimeout"> {
+  /**
+   * The IDs of the guilds whose sounds did not arrive.
+   */
+  public readonly guildIds: readonly string[];
+
+  /**
+   * The timeout that was exceeded, in milliseconds.
+   */
+  public readonly timeout: number;
+
+  public constructor(guildIds: readonly string[], timeout: number) {
+    super("GuildSoundboardSoundsTimeout", guildIds, timeout);
+    this.guildIds = guildIds;
+    this.timeout = timeout;
+  }
+}
+
+/**
  * Thrown by `GuildMemberManager#request` when Discord answers with `RATE_LIMITED` instead of the members' chunks.
  */
 export class GuildMembersRateLimitError extends GatewayError<"GuildMembersRateLimited"> {

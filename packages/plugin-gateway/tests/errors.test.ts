@@ -8,6 +8,7 @@ import {
   GatewayTypeError,
   GuildChannelInfoTimeoutError,
   GuildMembersTimeoutError,
+  GuildSoundboardSoundsTimeoutError,
   getGatewayClient,
 } from "../src/index.js";
 
@@ -60,6 +61,16 @@ describe("GatewayError", () => {
     expect(info).toBeInstanceOf(GatewayError);
     expect(info.name).toBe("GuildChannelInfoTimeoutError [GuildChannelInfoTimeout]");
     expect(info.message).toBe("Requesting the channel info of guild 1 took longer than 1000ms");
+
+    const sounds = new GuildSoundboardSoundsTimeoutError(["1", "2"], 1000);
+    expect(sounds).toBeInstanceOf(GatewayError);
+    expect(sounds.name).toBe("GuildSoundboardSoundsTimeoutError [GuildSoundboardSoundsTimeout]");
+    expect(sounds.code).toBe(GatewayErrorCodes.GuildSoundboardSoundsTimeout);
+    expect(sounds.message).toBe(
+      "Requesting the soundboard sounds of guilds 1, 2 took longer than 1000ms",
+    );
+    expect(sounds.guildIds).toEqual(["1", "2"]);
+    expect(sounds.timeout).toBe(1000);
   });
 
   test("GIVEN a thrown error of the package THEN it carries its code", () => {

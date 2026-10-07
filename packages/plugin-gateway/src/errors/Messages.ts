@@ -80,6 +80,8 @@ export const GatewayErrorMessages = {
   ChannelInfoFieldsEmpty: "Cannot request the info of the channels without any field",
   GuildChannelInfoTimeout: (guildId: string, timeout: number) =>
     `Requesting the channel info of guild ${guildId} took longer than ${timeout}ms`,
+  GuildSoundboardSoundsTimeout: (guildIds: readonly string[], timeout: number) =>
+    `Requesting the soundboard sounds of guilds ${guildIds.join(", ")} took longer than ${timeout}ms`,
   PresenceNotFetchable: (guildId: string, userId: string) =>
     `Presences cannot be fetched from the API, they are only received from the gateway (user ${userId} of guild ${guildId} is not cached); enable the presences cache to read them later`,
   InviteGuildUnknown: (code: string) => `Invite ${code} has no known guild`,
