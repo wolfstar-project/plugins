@@ -1049,6 +1049,16 @@ DM (`OmitPartialGroupDMChannel`), `fetch(force)` answers from the cache when `fo
 channel or its ID, and `messageSnapshots` hold `MessageSnapshot`s. `sharedClientTheme`, `resolveComponent(customId)`,
 and `fetchWebhook()` are discord.js's.
 
+Files to send are `AttachmentBuilder`s, as in discord.js: `new AttachmentBuilder(file, { name, description })` takes
+a buffer, a path, a URL, a stream, or a blob, and `setFile`, `setName`, `setDescription`, `setSpoiler` (which adds or removes
+the `SPOILER_` prefix), `setTitle`, `setDuration`, and `setWaveform` (for voice messages) chain. Pass them in the `files` of a
+message, and copy a builder, a payload, or a received `Attachment` (whose `attachment` is its URL) with `AttachmentBuilder.from`.
+
+```ts
+const file = new AttachmentBuilder("./howl.ogg").setDescription("A howl").setSpoiler();
+await channel.send({ content: "Awoo", files: [file] });
+```
+
 As in discord.js, `attachments`, `stickers`, `messageSnapshots`, and `reactions.cache` are
 `Collection`s keyed by ID (reactions by the ID of a custom emoji, the name of a Unicode one), while
 `embeds` and `components` are arrays. `react()` resolves to the `MessageReaction`, counting the bot.

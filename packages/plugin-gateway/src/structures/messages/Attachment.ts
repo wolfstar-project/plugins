@@ -20,6 +20,14 @@ export class Attachment extends BaseAttachment {
   }
 
   /**
+   * The URL of the file, like discord.js's `Attachment#attachment`, so that an attachment can be resent with
+   * `AttachmentBuilder.from`.
+   */
+  public get attachment() {
+    return this.url;
+  }
+
+  /**
    * The name of the file.
    */
   public get name() {
