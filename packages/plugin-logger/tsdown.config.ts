@@ -10,6 +10,7 @@ export default defineConfig(
       "./module",
       "./consola",
       "./evlog",
+      "./evlog/plugin",
       "./winston",
     ],
     entry: [
@@ -19,6 +20,7 @@ export default defineConfig(
       "src/module.ts",
       "src/consola.ts",
       "src/evlog.ts",
+      "src/evlog-plugin.ts",
       "src/winston.ts",
     ],
   }),

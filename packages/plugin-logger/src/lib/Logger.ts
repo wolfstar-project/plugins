@@ -1,6 +1,7 @@
 import { LogLevel, type ClientLoggerOptions, type ILogger } from "@wolfstar/http-framework";
 import { ConsoleTransport } from "./transports/ConsoleTransport.js";
-import type { LogPayload, Transport } from "./types.js";
+import { createLogPayload } from "./payload.js";
+import type { Transport } from "./types.js";
 
 /**
  * The {@link ILogger} implementation this plugin installs as `container.logger`.
@@ -63,7 +64,7 @@ export class Logger implements ILogger {
   public write(level: LogLevel, ...values: readonly unknown[]): void {
     if (!this.has(level)) return;
 
-    const payload: LogPayload = { level, values, timestamp: new Date() };
+    const payload = createLogPayload(level, values);
 
     for (const transport of this.transports) {
       if (level < (transport.level ?? this.level)) continue;
