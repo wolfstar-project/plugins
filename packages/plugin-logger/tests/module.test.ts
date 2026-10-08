@@ -1,4 +1,5 @@
 import type { ModuleContext } from "@wolfstar/kit";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, test, vi } from "vitest";
 import loggerModule from "../src/module";
@@ -22,6 +23,15 @@ describe("loggerModule", () => {
       options,
     });
     expect(ctx.addImports).not.toHaveBeenCalled();
+  });
+
+  // `evlog` is an optional peer: a type imported from it (or from the evlog plugin, which imports it)
+  // ends up in `module.d.ts`, and fails to resolve for a consumer without evlog when `skipLibCheck`
+  // is off.
+  test("GIVEN the module source THEN it imports nothing from evlog nor from the evlog plugin", () => {
+    const source = readFileSync(new URL("../src/module.ts", import.meta.url), "utf8");
+
+    expect(source).not.toMatch(/from\s+["'](?:evlog|\.\/evlog)/);
   });
 
   describe("evlog", () => {

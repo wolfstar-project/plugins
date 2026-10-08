@@ -116,14 +116,10 @@ failed, `durationMs`, and `guildId`, `channelId`, `userId` and `locale`. It goes
 drain, sampling, redaction and plugins as every other evlog event.
 
 ```ts
-evlog: {
-  interactions: {
-    autocomplete: true;
-  }
-} // commands and handlers are on by default
-evlog: {
-  interactions: false;
-} // only the container.logger entries
+// Commands and handlers are on by default; add autocomplete:
+const options = { evlog: { interactions: { autocomplete: true } } };
+// Or turn the wide events off and keep only the `container.logger` entries:
+const quiet = { evlog: { interactions: false } };
 ```
 
 Autocomplete is off by default, since Discord sends a request for every keystroke.

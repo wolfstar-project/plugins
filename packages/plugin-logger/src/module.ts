@@ -1,7 +1,6 @@
 import { resolve } from "node:path";
 import { defineModule } from "@wolfstar/kit";
-import type { ClientLoggerOptions } from "@wolfstar/http-framework";
-import type { EvlogInlineOptions } from "./evlog-plugin";
+import type { ClientLoggerOptions, LogLevel } from "@wolfstar/http-framework";
 
 /**
  * The options of the module: the logger's own, plus `evlog` to run evlog's `initLogger` and route
@@ -16,8 +15,83 @@ export interface LoggerModuleOptions extends ClientLoggerOptions {
    * `drain`: a file default-exporting `defineEvlogDrain(...)`, since a drain is a function and
    * cannot be written here.
    */
-  evlog?: boolean | (EvlogInlineOptions & { drain?: EvlogSource });
+  evlog?: boolean | EvlogModuleOptions;
 }
+
+/**
+ * The `evlog` options of the module: the JSON-serialisable part of evlog's `initLogger` options, plus
+ * `tag`, `level`, `pipeline`, `interactions` and `drain`.
+ *
+ * Declared structurally, without evlog's own types: `evlog` is an optional peer, and a type imported
+ * from it would leave `module.d.ts` unresolvable for a consumer who does not have it installed.
+ * `assertions.ts` checks that this stays assignable to what the evlog plugin accepts.
+ */
+export interface EvlogModuleOptions {
+  enabled?: boolean;
+  env?: {
+    service?: string;
+    environment?: string;
+    version?: string;
+    commitHash?: string;
+    region?: string;
+  };
+  pretty?: boolean;
+  silent?: boolean;
+  stringify?: boolean;
+  minLevel?: EvlogLevel;
+  sampling?: {
+    /** Percentages from 0 to 100 per level. */
+    rates?: Partial<Record<Exclude<EvlogLevel, "fatal">, number>>;
+    keep?: { status?: number; duration?: number; path?: string }[];
+  };
+  redact?:
+    | boolean
+    | {
+        paths?: string[];
+        builtins?:
+          | false
+          | ("creditCard" | "email" | "ipv4" | "phone" | "jwt" | "bearer" | "iban")[];
+      };
+
+  /**
+   * Wraps the drain in evlog's drain pipeline: `true` for its defaults, or its options.
+   */
+  pipeline?:
+    | boolean
+    | {
+        batch?: { size?: number; intervalMs?: number };
+        retry?: {
+          maxAttempts?: number;
+          backoff?: "exponential" | "linear" | "fixed";
+          initialDelayMs?: number;
+          maxDelayMs?: number;
+        };
+        maxBufferSize?: number;
+      };
+
+  /**
+   * The tag every entry is written under.
+   */
+  tag?: string;
+
+  /**
+   * The lowest level the `EvlogTransport` accepts.
+   */
+  level?: LogLevel;
+
+  /**
+   * Which interactions are logged as wide events. `true` takes the defaults, `false` turns it off.
+   */
+  interactions?: boolean | { commands?: boolean; autocomplete?: boolean; handlers?: boolean };
+
+  /**
+   * The file default-exporting `defineEvlogDrain(...)`, since a drain is a function and cannot be
+   * written here.
+   */
+  drain?: EvlogSource;
+}
+
+type EvlogLevel = "trace" | "debug" | "info" | "warn" | "error" | "fatal";
 
 /**
  * A path starting with `.` is resolved against the project root; an absolute path, a `file:` URL or
