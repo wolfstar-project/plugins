@@ -14,6 +14,10 @@
     "packages/*": {
       "project": ["src/**/*.ts"]
     },
+    "packages/plugin-logger": {
+      "entry": ["src/assertions.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "packages/plugin-broker": {
       "entry": ["src/index.ts", "tests/types/*.ts"],
       "project": ["src/**/*.ts", "tests/types/*.ts"],
