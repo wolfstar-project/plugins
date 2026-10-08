@@ -1,4 +1,8 @@
-import { Command as FrameworkCommand, container } from "@wolfstar/http-framework";
+import {
+  Command as FrameworkCommand,
+  container,
+  type CommandOptionsRegistry,
+} from "@wolfstar/http-framework";
 import { deferSubcommand } from "../utils/functions.js";
 import { RegisterSubcommandsHooks } from "../utils/hooks.js";
 import type { SubcommandCommandOptions } from "../utils/types.js";
@@ -60,6 +64,7 @@ export class Command<
 
 export namespace Command {
   export type Options = AdvancedCommandOptions;
+  export type OptionsOf<K extends keyof CommandOptionsRegistry> = FrameworkCommand.OptionsOf<K>;
   export type JSON = FrameworkCommand.JSON;
   /** @deprecated Use {@linkcode LoaderContext} instead. */
   export type Context = LoaderContext;
@@ -100,6 +105,7 @@ export class Subcommand<
 
 export namespace Subcommand {
   export type Options = FrameworkCommand.Options;
+  export type OptionsOf<K extends keyof CommandOptionsRegistry> = FrameworkCommand.OptionsOf<K>;
   export type JSON = FrameworkCommand.JSON;
   /** @deprecated Use {@linkcode LoaderContext} instead. */
   export type Context = LoaderContext;
