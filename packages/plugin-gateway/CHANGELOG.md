@@ -1,5 +1,11 @@
 # @wolfstar/plugin-gateway
 
+## 0.13.0
+
+### Minor Changes
+
+- [#230](https://github.com/wolfstar-project/plugins/pull/230) [`5d22131`](https://github.com/wolfstar-project/plugins/commit/5d2213114d1142bbd345d12b85de7c0df1ee20c4) - Add `AttachmentBuilder` to `@wolfstar/plugin-gateway`, like discord.js: `new AttachmentBuilder(file, { name, description })` with the chainable `setFile`, `setName`, `setDescription`, `setSpoiler`, `setTitle`, `setDuration` and `setWaveform`, the `spoiler` getter, `toJSON()`, and `AttachmentBuilder.from(other)` to copy a builder, a payload or a received `Attachment`. Pass it in the `files` of a message. `Attachment#attachment` now returns the URL of a received attachment, as in discord.js.
+
 ## 0.12.0
 
 ### Minor Changes
