@@ -71,7 +71,7 @@
     "discord-api-types": "^0.38.33"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/http-framework": "^6.2.0",
     "@wolfstar/http-framework-test-utils": "^4.0.2",
     "@wolfstar/kit": "^0.1.0"
   },
