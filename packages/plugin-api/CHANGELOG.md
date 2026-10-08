@@ -1,5 +1,11 @@
 # @wolfstar/plugin-api
 
+## 2.1.1
+
+### Patch Changes
+
+- [#181](https://github.com/wolfstar-project/plugins/pull/181) [`12f284c`](https://github.com/wolfstar-project/plugins/commit/12f284c739321908bfecfcaa702afcae0be0d0eb) - fix(deps): update dependency undici to v8 Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 2.1.0
 
 ### Minor Changes
