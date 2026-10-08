@@ -2,6 +2,7 @@ import type { Transport } from "./lib/types.js";
 
 export * from "./lib/transports/ConsoleTransport.js";
 export * from "./lib/transports/SentryTransport.js";
+export * from "./lib/payload.js";
 export * from "./lib/types.js";
 export * from "./lib/Logger.js";
 

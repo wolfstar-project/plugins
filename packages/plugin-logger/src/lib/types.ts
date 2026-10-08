@@ -19,6 +19,25 @@ export interface LogPayload {
    * The moment the entry was created, captured before any transport runs.
    */
   readonly timestamp: Date;
+
+  /**
+   * The human-readable message: every value that is neither an `Error` nor a plain object, joined
+   * by spaces. Falls back to the error's own message when nothing else was passed.
+   *
+   * Derived from {@link LogPayload.values} on first read, so transports share one interpretation of
+   * what the caller meant instead of each guessing on their own.
+   */
+  readonly message: string;
+
+  /**
+   * The first `Error` among the values, if any.
+   */
+  readonly error: Error | undefined;
+
+  /**
+   * The plain objects among the values, shallow-merged in order (the last one wins), if any.
+   */
+  readonly context: Record<string, unknown> | undefined;
 }
 
 /**

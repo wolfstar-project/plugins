@@ -41,6 +41,8 @@ export class WinstonTransport implements Transport {
    */
   private readonly instance: WinstonLogger;
 
+  private closing: Promise<void> | undefined;
+
   /**
    * @param options The transport options.
    */
@@ -50,19 +52,31 @@ export class WinstonTransport implements Transport {
   }
 
   public log(payload: LogPayload): void {
-    const [message, ...rest] = payload.values;
+    const { error } = payload;
 
+    // winston has no `fatal` in its default levels, so the entry is flagged instead of silently
+    // becoming a plain `error`. The error is serialised by hand: JSON turns an `Error` into `{}`.
     this.instance.log({
+      ...payload.context,
       level: levels.get(payload.level) ?? "info",
-      message: typeof message === "string" ? message : String(message),
-      ...(rest.length > 0 ? { values: rest } : {}),
+      message: payload.message,
+      ...(payload.level === LogLevel.Fatal && { fatal: true }),
+      ...(error && { error: { name: error.name, message: error.message, stack: error.stack } }),
     });
   }
 
-  public async close(): Promise<void> {
-    await new Promise<void>((resolve) => {
-      this.instance.end(() => resolve());
+  /**
+   * Ends the winston logger, which flushes it. The wait is shared by every call: a second one must
+   * not wait for a `finish` event that was already emitted, as it would never resolve (winston's
+   * streams do not expose `writableFinished` to tell).
+   */
+  public close(): Promise<void> {
+    this.closing ??= new Promise<void>((resolve) => {
+      this.instance.once("finish", () => resolve());
+      this.instance.end();
     });
+
+    return this.closing;
   }
 }
 

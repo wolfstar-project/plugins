@@ -66,6 +66,12 @@
         "default": "./dist/esm/evlog.js"
       }
     },
+    "./evlog/plugin": {
+      "import": {
+        "types": "./dist/esm/evlog-plugin.d.ts",
+        "default": "./dist/esm/evlog-plugin.js"
+      }
+    },
     "./winston": {
       "import": {
         "types": "./dist/esm/winston.d.ts",
@@ -91,17 +97,13 @@
     "winston": "^3.19.0"
   },
   "peerDependencies": {
-    "@sentry/node": "^8.0.0 || ^9.0.0 || ^10.0.0",
     "@wolfstar/http-framework": "^3.4.0 || ^5.0.0 || ^6.0.0",
     "@wolfstar/kit": "^0.1.0",
     "consola": "^3.0.0",
-    "evlog": "^2.0.0",
+    "evlog": "^2.30.0",
     "winston": "^3.0.0"
   },
   "peerDependenciesMeta": {
-    "@sentry/node": {
-      "optional": true
-    },
     "@wolfstar/kit": {
       "optional": true
     },
