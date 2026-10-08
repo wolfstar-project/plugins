@@ -210,7 +210,7 @@ export class AttachmentBuilder implements JSONEncodable<AttachmentPayload> {
     if (other.title != null) builder.title = other.title;
     if (other.duration != null) builder.duration = other.duration;
     if (other.waveform != null) builder.waveform = other.waveform;
-    if (builder.name === undefined && other.spoiler) builder.pendingSpoiler = true;
+    if (other.spoiler) builder.setSpoiler();
     return builder;
   }
 }

@@ -1,4 +1,5 @@
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
+import { AttachmentFlags } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   Attachment,
@@ -111,6 +112,28 @@ describe("AttachmentBuilder", () => {
     expect(fromReceived.name).toBe("SPOILER_pack.png");
     expect(fromReceived.description).toBe("The pack");
     expect(fromReceived.spoiler).toBe(true);
+  });
+
+  test("GIVEN from a spoiler THEN the copy is a spoiler, named or not", () => {
+    const named = AttachmentBuilder.from({ attachment: "./a.png", name: "a.png", spoiler: true });
+    expect(named.name).toBe("SPOILER_a.png");
+    expect(named.spoiler).toBe(true);
+
+    const unnamed = AttachmentBuilder.from({ attachment: "./a.png", spoiler: true });
+    expect(unnamed.name).toBeUndefined();
+    expect(unnamed.toJSON()).toMatchObject({ spoiler: true });
+
+    const flagged = new Attachment({
+      id: "1",
+      filename: "pack.png",
+      size: 10,
+      url: "https://cdn.discordapp.com/attachments/1/1/pack.png",
+      proxy_url: "https://media.discordapp.net/attachments/1/1/pack.png",
+      flags: AttachmentFlags.IsSpoiler,
+    });
+    expect(AttachmentBuilder.from(flagged).name).toBe("SPOILER_pack.png");
+
+    expect(AttachmentBuilder.from({ attachment: "./a.png", name: "a.png" }).spoiler).toBe(false);
   });
 
   test("GIVEN a builder in files THEN the message sends and describes it", async () => {
