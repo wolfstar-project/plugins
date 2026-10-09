@@ -465,8 +465,8 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    *
    * @remarks
    * It reads {@link GuildMemberRoleManager.highest}, which skips the roles missing from the cache: a higher role that
-   * is not cached makes the member look lower. Use {@link GuildMember.fetchManageable} for an answer that is right on
-   * a cache miss, or `await member.roles.fetch()` and `await me.roles.fetch()` before reading this.
+   * is not cached makes the member look lower. Call `await member.roles.fetch()` and `await me.roles.fetch()` before
+   * reading this, or compare {@link GuildMemberRoleManager.fetchHighest} of both.
    *
    * @throws A `GatewayError`: `GuildUncached` or `GuildUncachedMe` when the guild or the bot's member is
    * not cached.
@@ -491,9 +491,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
    * Fetches whether the bot ranks above the member: {@link GuildMember.manageable} with the guild, the bot's member,
    * and the roles fetched from the API when they are not cached, whatever the cache.
    *
-   * @remarks
-   * The call for a hierarchy check that must be right on a cache miss: {@link GuildMember.manageable} compares the
-   * highest roles the cache holds.
+   * @deprecated Use {@link GuildMember.manageable}. When the guild, the bot's member or some roles may be missing from
+   * the cache (a filtered cache, a `plugin-broker` worker), fetch them first (`client.guilds.fetch(guildId)`,
+   * `client.members.fetchMe(guildId)`, `member.roles.fetch()`), then read the getter.
    */
   public async fetchManageable(): Promise<boolean> {
     const client = this.client;
@@ -508,8 +508,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can kick the member, like discord.js's `GuildMember#kickable`: it outranks them and has
-   * `KickMembers`. It throws, and skips uncached roles, like {@link GuildMember.manageable}: see
-   * {@link GuildMember.fetchKickable} for the call that is right on a cache miss.
+   * `KickMembers`. It throws, and skips uncached roles, like {@link GuildMember.manageable}.
    */
   public get kickable(): CacheRead<boolean> {
     return cacheRead(this.managedWithCached("KickMembers"));
@@ -517,8 +516,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can ban the member, like discord.js's `GuildMember#bannable`: it outranks them and has
-   * `BanMembers`. It throws, and skips uncached roles, like {@link GuildMember.manageable}: see
-   * {@link GuildMember.fetchBannable} for the call that is right on a cache miss.
+   * `BanMembers`. It throws, and skips uncached roles, like {@link GuildMember.manageable}.
    */
   public get bannable(): CacheRead<boolean> {
     return cacheRead(this.managedWithCached("BanMembers"));
@@ -527,8 +525,7 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   /**
    * Whether the bot can time the member out, like discord.js's `GuildMember#moderatable`: it outranks them, has
    * `ModerateMembers`, and they are no administrator. It throws, and skips uncached roles, like
-   * {@link GuildMember.manageable}: see {@link GuildMember.fetchModeratable} for the call that is right on a cache
-   * miss.
+   * {@link GuildMember.manageable}.
    */
   public get moderatable(): CacheRead<boolean> {
     return cacheRead(
@@ -541,16 +538,18 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
   }
 
   /**
-   * Whether the bot can kick the member: it outranks them and has `KickMembers`. Right on a cache miss, like
-   * {@link GuildMember.fetchManageable}.
+   * Whether the bot can kick the member: it outranks them and has `KickMembers`.
+   *
+   * @deprecated Use {@link GuildMember.kickable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchKickable(): Promise<boolean> {
     return this.managedWith("KickMembers");
   }
 
   /**
-   * Whether the bot can ban the member: it outranks them and has `BanMembers`. Right on a cache miss, like
-   * {@link GuildMember.fetchManageable}.
+   * Whether the bot can ban the member: it outranks them and has `BanMembers`.
+   *
+   * @deprecated Use {@link GuildMember.bannable}. See {@link GuildMember.fetchManageable} for the cache-miss fallback.
    */
   public fetchBannable(): Promise<boolean> {
     return this.managedWith("BanMembers");
@@ -558,7 +557,9 @@ export class GuildMember extends Structure<CacheEntityTypes["members"]> {
 
   /**
    * Whether the bot can time the member out: it outranks them, has `ModerateMembers`, and they are no administrator.
-   * Right on a cache miss, like {@link GuildMember.fetchManageable}.
+   *
+   * @deprecated Use {@link GuildMember.moderatable}. See {@link GuildMember.fetchManageable} for the cache-miss
+   * fallback.
    */
   public async fetchModeratable(): Promise<boolean> {
     if (!(await this.managedWith("ModerateMembers"))) return false;

@@ -810,10 +810,10 @@ in discord.js. They will be removed in a later release.
 
 The getters skip a role that is not in the cache, without an error: `member.roles.highest` answers
 the highest role the cache holds and `member.permissions` the permissions of the roles it holds, so
-a role-hierarchy or permission check can under-report. These twins are not deprecated, because they
-are the single call that stays right on a cache miss: `member.roles.fetchHighest()`,
-`member.fetchPermissions()`, `member.fetchPermissionsIn(channel)`, `member.fetchManageable()`,
-`member.fetchKickable()`, `member.fetchBannable()` and `member.fetchModeratable()`.
+a role-hierarchy or permission check can under-report. These three twins are not deprecated, because
+they are the single call that stays right on a cache miss: `member.roles.fetchHighest()`,
+`member.fetchPermissions()` and `member.fetchPermissionsIn(channel)`. For `manageable`, `kickable`,
+`bannable` and `moderatable`, `await member.roles.fetch()` (and the bot's) before reading the getter.
 
 ```ts
 // Right even when a role of the author is not cached:

@@ -267,7 +267,7 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
     }
   });
 
-  test("GIVEN a role missing from the cache THEN the getters under-report and the fetch calls stay right", async () => {
+  test("GIVEN a role missing from the cache THEN the getters under-report and fetchHighest, fetchPermissions and fetchPermissionsIn stay right", async () => {
     const client = createClient(options());
     await seed(client);
     const [top, bot] = await Promise.all([topId, botId].map((id) => memberOf(client, id)));
@@ -289,10 +289,8 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
     expect((await top.roles.fetchHighest())?.id).toBe(topRoleId);
     expect((await top.fetchPermissions()).has("ManageRoles")).toBe(true);
     expect((await top.fetchPermissionsIn(channelId)).has("ManageRoles")).toBe(true);
-    expect(await top.fetchManageable()).toBe(false);
-    expect(await top.fetchKickable()).toBe(false);
-    expect(await top.fetchBannable()).toBe(false);
-    expect(await top.fetchModeratable()).toBe(false);
+    await top.roles.fetch();
+    expect(top.manageable).toBe(false);
     expect((await bot.roles.fetchHighest())?.id).toBe(modRoleId);
     get.mockRestore();
   });
