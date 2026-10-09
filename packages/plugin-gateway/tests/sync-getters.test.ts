@@ -267,6 +267,36 @@ describe.each(synchronousModes)("member getters with %s", (_, options) => {
     }
   });
 
+  test("GIVEN a role missing from the cache THEN the getters under-report and the fetch calls stay right", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const [top, bot] = await Promise.all([topId, botId].map((id) => memberOf(client, id)));
+    await client.cache!.roles.delete(roleKey(guildId, topRoleId));
+    const get = vi
+      .spyOn(container.rest, "get")
+      .mockResolvedValue([
+        role(guildId, 0, flags.ViewChannel),
+        role(modRoleId, 2, flags.KickMembers | flags.BanMembers | flags.ModerateMembers),
+        role(topRoleId, 3, flags.ManageRoles),
+      ]);
+
+    // The cache lacks the member's only role: the getters fall back to @everyone.
+    expect((await top.roles.highest)?.id).toBe(guildId);
+    expect(top.permissions.has("ManageRoles")).toBe(false);
+    expect(top.manageable).toBe(true);
+    expect(get).not.toHaveBeenCalled();
+
+    expect((await top.roles.fetchHighest())?.id).toBe(topRoleId);
+    expect((await top.fetchPermissions()).has("ManageRoles")).toBe(true);
+    expect((await top.fetchPermissionsIn(channelId)).has("ManageRoles")).toBe(true);
+    expect(await top.fetchManageable()).toBe(false);
+    expect(await top.fetchKickable()).toBe(false);
+    expect(await top.fetchBannable()).toBe(false);
+    expect(await top.fetchModeratable()).toBe(false);
+    expect((await bot.roles.fetchHighest())?.id).toBe(modRoleId);
+    get.mockRestore();
+  });
+
   test("GIVEN the bot owns the guild THEN everyone else is manageable", async () => {
     const client = createClient(options());
     await seed(client, { guildOwner: botId });

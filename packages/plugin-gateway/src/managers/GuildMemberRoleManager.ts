@@ -41,7 +41,10 @@ function highestFirst(roles: Iterable<Role>): Role[] {
  * (`highest`, `hoist`, `color`, ...) are `Awaitable`, like `manager.cache.get`. They are synchronous with the default
  * in-memory cache and a promise with a remote store, so `await` works with both.
  *
- * They only know the roles the cache holds. The `fetch*` methods fall back to the API when a role is not cached.
+ * They only know the roles the cache holds, and skip the ones it lacks without an error. With a filtered cache or a
+ * `plugin-broker` worker that makes `highest` answer a lower role than the member's real one. Call
+ * {@link GuildMemberRoleManager.fetch} first, or {@link GuildMemberRoleManager.fetchHighest}, where a hierarchy check
+ * must not under-report. The other `fetch*` methods fall back to the API when a role is not cached.
  */
 export class GuildMemberRoleManager extends BaseManager {
   /**
@@ -94,8 +97,8 @@ export class GuildMemberRoleManager extends BaseManager {
   }
 
   /**
-   * The member's roles held in the cache, by ID, `@everyone` included. Roles that are not cached are skipped: use
-   * {@link GuildMemberRoleManager.fetch} to get them all.
+   * The member's roles held in the cache, by ID, `@everyone` included. Roles that are not cached are skipped, without
+   * an error: use {@link GuildMemberRoleManager.fetch} to get them all.
    */
   public get cache(): Awaitable<Collection<Snowflake, Role>> {
     return cachedRoles(this.client, this.guildId, [...this.ids, this.guildId]);
@@ -103,6 +106,11 @@ export class GuildMemberRoleManager extends BaseManager {
 
   /**
    * The member's highest cached role. `null` when none of their roles is cached, `@everyone` included.
+   *
+   * @remarks
+   * Roles missing from the cache are skipped, not an error: the answer is the highest role the cache holds, so a
+   * hierarchy check can compare a higher-ranked member as a lower one. Use {@link GuildMemberRoleManager.fetchHighest}
+   * for an answer that is right on a cache miss, or `await member.roles.fetch()` before reading this.
    */
   public get highest(): Awaitable<Role | null> {
     return this.fromCache(pick.highest);
@@ -163,9 +171,10 @@ export class GuildMemberRoleManager extends BaseManager {
   /**
    * Fetches the member's highest role, `@everyone` when they have no other.
    *
-   * @deprecated Use {@link GuildMemberRoleManager.highest}. When some of the member's roles may be missing from the
-   * cache (a filtered cache, a `plugin-broker` worker), call {@link GuildMemberRoleManager.fetch} first, then read the
-   * getter.
+   * @remarks
+   * The call for a role-hierarchy check that must be right on a cache miss: unlike
+   * {@link GuildMemberRoleManager.highest}, it asks the API for the roles the cache lacks, so it never answers a lower
+   * role than the member's real one. With a complete cache it makes no request.
    */
   public async fetchHighest(): Promise<Role | null> {
     return pick.highest(await this.fetch());
