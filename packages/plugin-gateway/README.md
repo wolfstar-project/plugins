@@ -804,7 +804,7 @@ discord.js's derived getters are there too: `member.permissions`, `permissionsIn
 With an entity they need missing from the cache they throw `GuildUncached`, `GuildUncachedMe`,
 `ChannelUncached`, or `GuildMemberUncached`, as discord.js throws `GuildUncachedMe`.
 
-Each of them also has a `fetch*` twin (`fetchPermissions()`, `fetchKickable()`, `fetchDeletable()`,
+Each of them also has a `fetch*` twin (`fetchKickable()`, `fetchDeletable()`, `fetchEditable()`,
 ...) that asks the API for what is not cached. Most twins are deprecated: the getter is the API, as
 in discord.js. They will be removed in a later release.
 
