@@ -9,6 +9,7 @@ import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
 import { ChannelType, FormattingPatterns, type Snowflake } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
+import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
 import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { Role } from "../structures/guilds/Role.js";
@@ -413,6 +414,25 @@ export function findName(thing: unknown): string {
   if (typeof thing === "string") return basename(thing);
   if (isObject(thing) && typeof thing.path === "string") return basename(thing.path);
   return "file.jpg";
+}
+
+/**
+ * Finds a custom emoji by its ID in the cache of every guild, like discord.js's `resolveGuildEmoji`.
+ *
+ * @remarks
+ * Emojis are cached per guild, so it enumerates the whole emoji cache: it needs a store able to list its entries, and
+ * never calls the API.
+ *
+ * @param client The client whose cache to search.
+ * @param emojiId The ID of the emoji.
+ * @returns The emoji, `null` when no cached guild has it.
+ * @throws {TypeError} When the emoji cache cannot enumerate its entries.
+ */
+export function resolveGuildEmoji(
+  client: GatewayClient,
+  emojiId: Snowflake,
+): Promise<GuildEmoji | null> {
+  return client.guilds.emojis("").findCachedInAnyGuild(emojiId);
 }
 
 /**

@@ -193,14 +193,39 @@ export class GuildEmojiManager extends CachedManager<"emojis", GuildEmoji, [emoj
    * @throws {TypeError} When the store cannot enumerate its entries.
    */
   public async listCached(): Promise<GuildEmoji[]> {
+    return this.collectCached((key) => key.startsWith(`${this.guildId}:`));
+  }
+
+  /**
+   * Finds a custom emoji by its ID across every guild held in the cache, without calling the API.
+   *
+   * @remarks
+   * Emojis are keyed by guild and ID, so it enumerates the whole entity cache like {@link GuildEmojiManager.listCached}.
+   * The manager's own guild plays no part in the lookup.
+   *
+   * @param emojiId The ID of the emoji.
+   * @returns The cached emoji, `null` when no guild has it or this entity is not cached.
+   * @throws {TypeError} When the store cannot enumerate its entries.
+   * @internal
+   */
+  public async findCachedInAnyGuild(emojiId: string): Promise<GuildEmoji | null> {
+    const suffix = `:${emojiId}`;
+    const [emoji] = await this.collectCached((key) => key.endsWith(suffix), 1);
+    return emoji ?? null;
+  }
+
+  private async collectCached(
+    matches: (key: string) => boolean,
+    limit = Infinity,
+  ): Promise<GuildEmoji[]> {
     const cache = this.iterableCache();
     if (!cache) return [];
 
-    const prefix = `${this.guildId}:`;
     const keys = await this.guard("keys", null, () => cache.keys(), []);
     const values = await Promise.all(
       keys
-        .filter((key) => key.startsWith(prefix))
+        .filter(matches)
+        .slice(0, limit)
         .map((key) => this.guard("get", key, () => cache.get(key), undefined)),
     );
     return Promise.all(

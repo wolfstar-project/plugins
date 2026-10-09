@@ -204,6 +204,20 @@ describe("MessagePayload", () => {
 });
 
 describe("Webhook relations", () => {
+  test("GIVEN file URLs and paths THEN their names drop the query string and fragment", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("wolf"));
+
+    const names = await Promise.all(
+      [
+        "https://cdn.example/wolf.png?size=64",
+        "https://cdn.example/wolf.gif#frag",
+        "https://cdn.example/",
+      ].map(async (url) => (await MessagePayload.resolveFile(url)).name),
+    );
+
+    expect(names).toEqual(["wolf.png", "wolf.gif", "file.jpg"]);
+  });
+
   test("GIVEN a fetched webhook THEN its guild and channel come from the cache", async () => {
     const client = createClient();
     await client.cache!.guilds.set(guildId, { id: guildId, name: "Pack" } as never);
