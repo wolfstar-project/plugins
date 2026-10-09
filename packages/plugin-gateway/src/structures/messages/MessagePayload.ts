@@ -1,4 +1,3 @@
-import { basename } from "node:path";
 import type { RawFile } from "@discordjs/rest";
 import {
   MessageReferenceType,
@@ -16,7 +15,7 @@ import {
 import type { GatewayClient } from "../../GatewayClient.js";
 import { resolveFile } from "../../util/DataResolver.js";
 import { MessageFlagsBitField, type MessageFlagsResolvable } from "../../util/flags.js";
-import { resolvePartialEmoji } from "../../util/Util.js";
+import { basename, resolvePartialEmoji } from "../../util/Util.js";
 import { GatewayTypeError, GatewayRangeError } from "../../errors/GatewayError.js";
 
 /**

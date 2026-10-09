@@ -33,6 +33,7 @@ import {
   flatten,
   ForumChannel,
   GatewayClient,
+  GuildEmoji,
   GatewayError,
   GatewayTypeError,
   getSortableGroupTypes,
@@ -48,6 +49,7 @@ import {
   resolveGuildTemplateCode,
   resolveImage,
   resolveInviteCode,
+  resolveGuildEmoji,
   resolveSKUId,
   Role,
   snakeCase,
@@ -626,6 +628,30 @@ describe("Util", () => {
       ),
     ).toEqual(["2", "3"]);
     expect(getSortableGroupTypes(ChannelType.GuildStageVoice)).toContain(ChannelType.GuildVoice);
+  });
+
+  test("GIVEN emojis in several guilds THEN resolveGuildEmoji finds one by ID in any of them", async () => {
+    const client = createClient();
+    const emoji = (id: string, guild: string) => ({
+      id,
+      name: "wolf",
+      animated: false,
+      guild_id: guild,
+    });
+    await client.guilds
+      .emojis("100000000000000011")
+      ._add(emoji("500000000000000001", "100000000000000011"));
+    await client.guilds
+      .emojis("100000000000000012")
+      ._add(emoji("500000000000000002", "100000000000000012"));
+
+    const found = await resolveGuildEmoji(client, "500000000000000002");
+
+    expect(found).toBeInstanceOf(GuildEmoji);
+    expect(found?.id).toBe("500000000000000002");
+    expect(found?.guildId).toBe("100000000000000012");
+    expect(await resolveGuildEmoji(client, "500000000000000003")).toBeNull();
+    expect(await resolveGuildEmoji(client, "000000000000000001")).toBeNull();
   });
 
   test("GIVEN the remaining helpers THEN they behave like discord.js's", () => {

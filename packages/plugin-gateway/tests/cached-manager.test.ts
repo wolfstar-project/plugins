@@ -18,6 +18,7 @@ import {
   Guild,
   kClone,
   Message,
+  resolveGuildEmoji,
   StageChannel,
   TextChannel,
   User,
@@ -500,8 +501,10 @@ describe("RFC manager pattern", () => {
 
     await expect(withoutStore.presences.listCached(guildId)).resolves.toEqual([]);
     await expect(withoutStore.guilds.emojis(guildId).listCached()).resolves.toEqual([]);
+    await expect(resolveGuildEmoji(withoutStore, "500000000000000001")).resolves.toBeNull();
     await expect(nonIterable.presences.listCached(guildId)).rejects.toThrow(TypeError);
     await expect(nonIterable.guilds.emojis(guildId).listCached()).rejects.toThrow(TypeError);
+    await expect(resolveGuildEmoji(nonIterable, "500000000000000001")).rejects.toThrow(TypeError);
   });
 
   test("GIVEN a manager THEN cache.construct builds structures bound to its client", () => {
