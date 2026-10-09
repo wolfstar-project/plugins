@@ -1,5 +1,17 @@
 # @wolfstar/plugin-gateway
 
+## 0.14.0
+
+### Minor Changes
+
+- [#238](https://github.com/wolfstar-project/plugins/pull/238) [`74ef5dd`](https://github.com/wolfstar-project/plugins/commit/74ef5dd8bac91d23e9dd8f880dadb96053c5137d) - Add `client.application` to `@wolfstar/plugin-gateway`, a `ClientApplication` like discord.js's, with the `Application`, `Team` and `TeamMember` structures. It exists from the construction of the client with only the client ID known (`partial`), unlike discord.js where it is `null` until `READY`; `READY` patches the same instance with the application's flags, and `fetch()` (`GET /applications/@me`) with the rest. It also has `edit()`, `fetchRoleConnectionMetadataRecords()` and `editRoleConnectionMetadataRecords()`, and exposes the install params, integration types config, `owner` (a `Team` or a `User`), the event webhooks and the guild and user install counts.
+
+- [#236](https://github.com/wolfstar-project/plugins/pull/236) [`252038d`](https://github.com/wolfstar-project/plugins/commit/252038da190dbbb4087eca450b0d37127f5078a7) - Add `resolveGuildEmoji(client, emojiId)`, which finds a custom emoji by ID across every cached guild like discord.js's `resolveGuildEmoji`. `MessagePayload` now names URL and path files with the shared `basename` helper.
+
+### Patch Changes
+
+- [#235](https://github.com/wolfstar-project/plugins/pull/235) [`4c38a31`](https://github.com/wolfstar-project/plugins/commit/4c38a319a2531d205f55ef8f5782915c4ee1896d) - Keep the single-call checks that stay right on a cache miss: `GuildMemberRoleManager#fetchHighest`, `GuildMember#fetchPermissions` and `GuildMember#fetchPermissionsIn` are no longer `@deprecated`, reversing part of the deprecation of the `fetch*` twins. The getters they mirror (`roles.highest`, `permissions`, `permissionsIn`, `manageable`, `kickable`, `bannable`, `moderatable`) skip a role the cache lacks without an error, so a hierarchy or permission check can under-report with a filtered cache or a `plugin-broker` worker. Their docs and the README now say so and point at the `fetch*` call or `roles.fetch()`.
+
 ## 0.13.0
 
 ### Minor Changes
