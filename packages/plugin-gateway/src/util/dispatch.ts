@@ -154,6 +154,8 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: (client, data, _state, shardId) => {
       const user = new ClientUser(data.user);
       client.user = user;
+      // Patched in place, so that the references user code holds to `client.application` stay valid.
+      client.application[kPatch](data.application);
       return [shardId, user];
     },
   },
