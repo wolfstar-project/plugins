@@ -221,7 +221,8 @@ without touching the cache again.
 - `client.replayDispatch({ t, d, s? }, shardId, state?)` emits `raw` and the matching event, with the same Structures
   and `old` arguments the connected client emitted. It never reads or writes the cache, and never emits `dispatch`.
   Dispatches of a guild replay in order, like on a connected client. `client.replayDispatchTypes` lists the types it
-  handles: `READY` and `INTERACTION_CREATE` are not replayed, so `client.user` stays `null` until something sets it,
+  handles: `READY` and `INTERACTION_CREATE` are not replayed, so `client.user` stays `null` until something sets it (and
+  `client.application` partial until `fetch()`),
   and shard lifecycle events never fire. The promise rejects when a listener or the handler throws, which lets the
   caller retry the dispatch; async listeners are awaited.
 
@@ -684,7 +685,7 @@ already ships (`User`, `Message`, `Attachment`, `Embed`, `Reaction`, `Poll`, `Em
 cache, CDN URLs, and actions through the client. The ones it has no counterpart for yet (`Guild`,
 `GuildMember`, `Role`, `ThreadMember`, `GuildScheduledEvent`, ...) extend its base `Structure`.
 They live in one folder per domain, each with an `index.ts`, mirroring `@discordjs/structures`:
-`automoderation/`, `channels/` (and `channels/mixins/`), `emojis/`, `guilds/`, `invites/`,
+`applications/`, `automoderation/`, `channels/` (and `channels/mixins/`), `emojis/`, `guilds/`, `invites/`,
 `messages/`, `polls/`, `presences/`, `soundboards/`, `stageInstances/`, `stickers/`, `users/`,
 `voice/`, and `webhooks/`.
 
@@ -1028,6 +1029,29 @@ await webhook.editMessage(message.id, "Awoo!");
 
 const fetched = await client.fetchWebhook(webhookId, token); // no bot authorization needed
 ```
+
+### Application
+
+`client.application` is a `ClientApplication`, the entry point for what the application owns rather than a guild.
+Unlike discord.js, where it is `null` until `READY`, it is never `null`: the client builds it from `clientId`, so it
+exists before `READY` and without a gateway connection (a client replaying another process's dispatches never sees
+`READY`, and keeps it that way). Until then it is `partial`: only `id` is known, `READY` patches the very same
+instance with the `flags`, and `fetch()` with everything else. It lives on the client, not in the cache.
+
+```ts
+client.application.partial; // true until fetch() or edit() resolves
+await client.application.fetch(); // GET /applications/@me
+client.application.name; // "Wolf"
+client.application.owner; // a Team, a User, or null
+client.application.iconURL();
+
+await client.application.edit({ description: "Awoo", tags: ["wolf"] });
+await client.application.editRoleConnectionMetadataRecords(records);
+```
+
+`owner` is the `Team` (with its `members`, each a `TeamMember`) when a team owns the application, the owner `User`
+otherwise. `application.commands`, `application.emojis` and the entitlements will be added to `ClientApplication`
+by their own features, there are no placeholders for them.
 
 ### Messages
 

@@ -1,3 +1,4 @@
+export * from "./applications/index.js";
 export * from "./automoderation/index.js";
 export * from "./channels/index.js";
 export * from "./components/index.js";

@@ -48,6 +48,7 @@ import { ThreadManager } from "./managers/ThreadManager.js";
 import { ThreadMemberManager } from "./managers/ThreadMemberManager.js";
 import { UserManager } from "./managers/UserManager.js";
 import type { BaseInvite } from "./structures/invites/BaseInvite.js";
+import { ClientApplication } from "./structures/applications/ClientApplication.js";
 import { ClientUser } from "./structures/users/ClientUser.js";
 import { createInvite } from "./structures/invites/GroupDMInvite.js";
 import { bindClient, type StructureMixin } from "./structures/Structure.js";
@@ -391,6 +392,18 @@ export class GatewayClient extends Client {
    */
   public user: ClientUser | null = null;
 
+  /**
+   * The application of the bot, like discord.js's `Client#application`.
+   *
+   * @remarks
+   * Unlike discord.js, it is never `null`: it is built from {@link GatewayClientOptions.clientId} when the client is,
+   * so it exists before `READY` and without any gateway connection. It is then partial, see
+   * {@link ClientApplication.partial}: `READY` patches the same instance with the application's flags, and
+   * {@link ClientApplication.fetch} with the rest. It is kept on the client, not in the cache: it is a single small
+   * object, and every process gets the same `READY`.
+   */
+  public readonly application: ClientApplication;
+
   public readonly users: UserManager;
   public readonly guilds: GuildManager;
   public readonly channels: ChannelManager;
@@ -525,6 +538,7 @@ export class GatewayClient extends Client {
     this.#intents = Number(options.intents);
     // The base client validated it already, and scrubs it from `this.options`.
     this.#token = (options.discordToken ?? process.env.DISCORD_TOKEN)!;
+    this.application = bindClient(new ClientApplication({ id: this.id }), this);
     this.users = new UserManager(this);
     this.guilds = new GuildManager(this);
     this.channels = new ChannelManager(this);
