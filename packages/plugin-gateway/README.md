@@ -805,9 +805,22 @@ discord.js's derived getters are there too: `member.permissions`, `permissionsIn
 With an entity they need missing from the cache they throw `GuildUncached`, `GuildUncachedMe`,
 `ChannelUncached`, or `GuildMemberUncached`, as discord.js throws `GuildUncachedMe`.
 
-Each of them also has a `fetch*` twin (`fetchPermissions()`, `fetchKickable()`, `fetchDeletable()`,
-...) that asks the API for what is not cached. The twins are deprecated: the getter is the API, as
+Each of them also has a `fetch*` twin (`fetchKickable()`, `fetchDeletable()`, `fetchEditable()`,
+...) that asks the API for what is not cached. Most twins are deprecated: the getter is the API, as
 in discord.js. They will be removed in a later release.
+
+The getters skip a role that is not in the cache, without an error: `member.roles.highest` answers
+the highest role the cache holds and `member.permissions` the permissions of the roles it holds, so
+a role-hierarchy or permission check can under-report. These three twins are not deprecated, because
+they are the single call that stays right on a cache miss: `member.roles.fetchHighest()`,
+`member.fetchPermissions()` and `member.fetchPermissionsIn(channel)`. For `manageable`, `kickable`,
+`bannable` and `moderatable`, `await member.roles.fetch()` (and the bot's) before reading the getter.
+
+```ts
+// Right even when a role of the author is not cached:
+const [mine, theirs] = await Promise.all([me.roles.fetchHighest(), author.roles.fetchHighest()]);
+const canManageRoles = (await me.fetchPermissions()).has("ManageRoles");
+```
 
 When the cache may lack an entity (a size-limited or filtered cache, or a `plugin-broker` worker
 that only receives some dispatches), fetch what is missing yourself, then read the getter:
