@@ -188,10 +188,11 @@ export class ClientApplication extends Application {
       if (team) {
         value = new Team(team);
       } else if (owner) {
-        const user = new User(owner);
-        const client = this[kClient];
-        value = client ? bindClient(user, client) : user;
+        value = new User(owner);
       }
+      // Bound to this client, so that the team's members and their users are as well.
+      const client = this[kClient];
+      if (value && client) bindClient(value, client);
       this.#owner = { team, user: owner, value };
     }
     return this.#owner.value;

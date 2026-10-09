@@ -2,7 +2,7 @@ import { Collection } from "@discordjs/collection";
 import type { BaseImageURLOptions } from "@discordjs/rest";
 import type { APITeam } from "discord-api-types/v10";
 import { cdn } from "../../util/cdn.js";
-import { kData, snowflakeTimestamp, Structure } from "../Structure.js";
+import { bindClient, kClient, kData, snowflakeTimestamp, Structure } from "../Structure.js";
 import { TeamMember } from "./TeamMember.js";
 
 /**
@@ -41,8 +41,10 @@ export class Team extends Structure<APITeam> {
     const source = this[kData].members;
     if (this.#members?.source !== source) {
       const value = new Collection<string, TeamMember>();
+      const client = this[kClient];
       for (const data of source) {
         const member = new TeamMember(data, { team: this });
+        if (client) bindClient(member, client);
         value.set(member.id, member);
       }
       this.#members = { source, value };

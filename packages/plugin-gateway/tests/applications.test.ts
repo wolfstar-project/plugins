@@ -224,6 +224,9 @@ describe("client.application", () => {
     expect(pack.owner?.toString()).toBe(`<@${ownerId}>`);
     expect(pack.owner?.user).toBeInstanceOf(User);
     expect(pack.owner?.user.id).toBe(ownerId);
+    expect(pack.client).toBe(client);
+    expect(pack.owner?.client).toBe(client);
+    expect(pack.owner?.user.client).toBe(client);
   });
 
   test("GIVEN a user-owned application THEN the owner is a User bound to the client", async () => {
