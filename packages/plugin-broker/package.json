@@ -73,8 +73,8 @@
   },
   "devDependencies": {
     "@sapphire/pieces": "^4.4.1",
-    "@wolfstar/http-framework": "^6.1.0",
-    "@wolfstar/kit": "^0.1.0",
+    "@wolfstar/http-framework": "^6.2.2",
+    "@wolfstar/kit": "^0.2.0",
     "@wolfstar/plugin-gateway": "workspace:^",
     "ioredis": "^6.0.0"
   },

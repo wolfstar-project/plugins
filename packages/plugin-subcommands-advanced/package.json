@@ -73,7 +73,7 @@
   "devDependencies": {
     "@wolfstar/http-framework": "^6.2.0",
     "@wolfstar/http-framework-test-utils": "^4.0.2",
-    "@wolfstar/kit": "^0.1.0"
+    "@wolfstar/kit": "^0.2.0"
   },
   "peerDependencies": {
     "@wolfstar/http-framework": "^3.1.0 || ^5.0.0 || ^6.0.0",
