@@ -206,6 +206,36 @@ describe("guild-only paths of the messages of a direct message", () => {
     expect(message.guildId).toBe(guildId);
   });
 
+  test("GIVEN a message structure THEN crosspost publishes it like its ID", async () => {
+    createClient();
+    const post = vi
+      .spyOn(container.rest, "post")
+      .mockResolvedValue(dmMessage({ channel_id: guildChannelId, guild_id: guildId }));
+    const message = await guildChannel().messages.crosspost(messageId);
+
+    await guildChannel().messages.crosspost(message);
+
+    expect(post).toHaveBeenNthCalledWith(
+      2,
+      Routes.channelMessageCrosspost(guildChannelId, messageId),
+      expect.anything(),
+    );
+  });
+
+  test("GIVEN a channel or its ID THEN createMessage sends the message to it", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(dmMessage());
+
+    const byId = await client.channels.createMessage(dmId, "hi");
+    await client.channels.createMessage(dmChannel(), { content: "hi" });
+
+    expect(byId.channelId).toBe(dmId);
+    expect(post.mock.calls.map(([route]) => route)).toEqual([
+      Routes.channelMessages(dmId),
+      Routes.channelMessages(dmId),
+    ]);
+  });
+
   test("GIVEN a guild channel THEN bulkDelete and startThread are not refused", async () => {
     createClient();
     vi.spyOn(container.rest, "post").mockResolvedValue({});

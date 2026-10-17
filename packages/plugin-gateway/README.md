@@ -1233,9 +1233,9 @@ with `Partials.Message`, else `undefined`. Narrow a `Message | PartialMessage` w
 `GuildMessageManager`, `DMMessageManager`, and `PartialGroupDMMessageManager`. Its guild-only methods
 (`crosspost`, `bulkDelete`, `startThread`) throw `ChannelMessagesGuildOnly` before any request in a direct
 message or group direct message; the rest (`fetch`, `send`, `edit`, `delete`, `pin`, `react`, ...) is the
-same everywhere. `crosspost` takes a message ID, not a `MessageResolvable`, like the other methods of the
-manager. discord.js's `client.channels.createMessage(channel, options)` is `client.messages.send(channelId,
-options)` (or `channel.send(options)`) here.
+same everywhere. `crosspost` takes a message or its ID, and `client.channels.createMessage(channel, options)` sends
+a message to a channel or its ID, like discord.js (`client.messages.send(channelId, options)` and
+`channel.send(options)` do the same).
 
 `Message` is generic like discord.js's: `Message<true>` has a `guildId` string and guild-text-based `channel`s, and
 `inGuild()` narrows to it. `reply`, `edit`, and the other actions resolve to messages whose `channel` is never a group

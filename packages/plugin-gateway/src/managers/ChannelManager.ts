@@ -30,6 +30,7 @@ import { StageChannel } from "../structures/channels/StageChannel.js";
 import { TextChannel } from "../structures/channels/TextChannel.js";
 import { VoiceChannel } from "../structures/channels/VoiceChannel.js";
 import type { Guild } from "../structures/guilds/Guild.js";
+import type { Message } from "../structures/messages/Message.js";
 import { StageInstance } from "../structures/stageInstances/StageInstance.js";
 import { bindClient } from "../structures/Structure.js";
 import { whenAll, type Cache } from "../util/cache.js";
@@ -38,6 +39,8 @@ import { CachedManager, type AddOptions } from "./CachedManager.js";
 import { PermissionOverwriteManager } from "./PermissionOverwriteManager.js";
 import { GatewayRangeError, GatewayTypeError } from "../errors/GatewayError.js";
 import { GuildChannelInfoTimeoutError } from "../util/errors.js";
+import type { MessageCreateOptions, MessagePayloadResolvable } from "../util/messages.js";
+import type { TextBasedChannelResolvable } from "../types.js";
 import { shardIdOf } from "../util/shards.js";
 
 /**
@@ -564,6 +567,21 @@ export class ChannelManager extends CachedManager<"channels", AnyChannel, [chann
         : GatewayDispatchEvents.ChannelDelete,
       d: channel,
     } as GatewayDispatchPayload);
+  }
+
+  /**
+   * Sends a message to a channel, like discord.js's `ChannelManager#createMessage`. The same as `client.messages.send`
+   * and `channel.send`.
+   *
+   * @param channel The channel, or its ID.
+   * @param options The message, or its content.
+   * @throws {@link GatewayTypeError} `IdUnresolvable` when `channel` holds no ID.
+   */
+  public createMessage(
+    channel: TextBasedChannelResolvable,
+    options: MessagePayloadResolvable<MessageCreateOptions>,
+  ): Promise<Message> {
+    return this.client.messages.send(resolveId(channel), options);
   }
 
   /**

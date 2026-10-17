@@ -19,6 +19,7 @@ import type {
 } from "../util/messages.js";
 import { GatewayError } from "../errors/GatewayError.js";
 import { scopeCache, type ScopedCache } from "../util/cache.js";
+import { resolveId } from "../util/channels.js";
 import { BaseManager } from "./BaseManager.js";
 
 /**
@@ -119,12 +120,13 @@ export class ChannelMessageManager extends BaseManager {
    * Publishes a message of an announcement channel to the channels following it, like discord.js's
    * `GuildMessageManager#crosspost`.
    *
-   * @param messageId The ID of the message.
+   * @param message The message, or its ID.
    * @throws {@link GatewayError} `ChannelMessagesGuildOnly` in a direct message.
+   * @throws {@link GatewayTypeError} `IdUnresolvable` when `message` holds no ID.
    */
-  public async crosspost(messageId: string): Promise<Message> {
+  public async crosspost(message: MessageResolvable): Promise<Message> {
     this.assertGuild("crosspost");
-    return this.client.messages.crosspost(this.channelId, messageId);
+    return this.client.messages.crosspost(this.channelId, resolveId(message));
   }
 
   /**

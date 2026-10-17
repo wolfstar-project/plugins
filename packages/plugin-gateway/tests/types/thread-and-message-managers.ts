@@ -61,15 +61,27 @@ if (options.message === undefined) {
   void type;
 }
 
-// `crosspost` takes the message's ID and resolves to the published message, like `GuildMessageManager#crosspost`
-// (which takes a `MessageResolvable`).
+// `crosspost` takes a message or its ID and resolves to the published message, like `GuildMessageManager#crosspost`.
 declare const messages: ChannelMessageManager;
+declare const message: Message;
 export const published: Promise<Message> = messages.crosspost("1");
+export const publishedByStructure: Promise<Message> = messages.crosspost(message);
 export const publishedByClient: Promise<Message> = client.messages.crosspost("1", "2");
-// @ts-expect-error the ID is a string
+// @ts-expect-error a number is not a message
 void messages.crosspost(1);
 
-// `client.messages.send` stands in for `ChannelManager#createMessage`: a string, options, or a payload.
+// `ChannelManager#createMessage` takes a channel or its ID, and a string, options, or a payload.
+export const created: Promise<Message> = client.channels.createMessage("1", "hi");
+export const createdByStructure: Promise<Message> = client.channels.createMessage(text, {
+  content: "hi",
+});
+export const createdPayload: Promise<Message> = client.channels.createMessage("1", payload);
+// @ts-expect-error a number is not a message
+void client.channels.createMessage("1", 1);
+// @ts-expect-error a number is not a channel
+void client.channels.createMessage(1, "hi");
+
+// `client.messages.send` does the same with an ID.
 export const sent: Promise<Message> = client.messages.send("1", "hi");
 export const sentOptions: Promise<Message> = client.messages.send("1", { content: "hi" });
 export const sentPayload: Promise<Message> = client.messages.send("1", payload);
