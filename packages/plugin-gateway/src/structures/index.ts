@@ -6,6 +6,7 @@ export * from "./emojis/index.js";
 export * from "./guilds/index.js";
 export * from "./invites/index.js";
 export * from "./messages/index.js";
+export * from "./monetization/index.js";
 export * from "./polls/index.js";
 export * from "./presences/index.js";
 export * from "./soundboards/index.js";

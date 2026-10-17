@@ -163,6 +163,8 @@ client.on(GatewayEvents.MessageCreate, (message) => console.log(message.content)
 | `integrationCreate`                                        | `integration`                                           |
 | `integrationUpdate`                                        | `oldIntegration \| null`, `newIntegration`              |
 | `integrationDelete`                                        | `integration \| null`, `data`                           |
+| `entitlementCreate` / `entitlementDelete`                  | `entitlement`                                           |
+| `entitlementUpdate`                                        | `oldEntitlement \| null`, `newEntitlement`              |
 
 The previous state of update events and the entity of delete events come from the cache, and are
 `null` when it was not cached (or when the client has no cache). `data` is the raw dispatch data,
@@ -1097,8 +1099,37 @@ await client.application.editRoleConnectionMetadataRecords(records);
 ```
 
 `owner` is the `Team` (with its `members`, each a `TeamMember`) when a team owns the application, the owner `User`
-otherwise. `application.commands`, `application.emojis` and the entitlements will be added to `ClientApplication`
-by their own features, there are no placeholders for them.
+otherwise. `application.commands` and `application.emojis` will be added to `ClientApplication` by their own
+features, there are no placeholders for them.
+
+### Monetization
+
+`client.application.entitlements` is an `EntitlementManager`, a cached manager like the others: `ENTITLEMENT_CREATE`,
+`ENTITLEMENT_UPDATE` and `ENTITLEMENT_DELETE` keep `entitlements.cache` up to date (and emit `entitlementCreate`,
+`entitlementUpdate` and `entitlementDelete`), so processes using the same store share it. Its `fetch` takes an
+entitlement or its ID, cache first, or filters to list them, like discord.js:
+
+```ts
+const { entitlements } = client.application;
+
+await entitlements.fetch(entitlementId); // one, from the cache or the API
+await entitlements.fetch(entitlementId, { force: true });
+await entitlements.fetch({ user, skus: [sku], excludeEnded: true, limit: 50 }); // a Collection, from the API
+
+await entitlements.createTest({ sku, user }); // or { sku, guild }
+await entitlements.deleteTest(entitlement);
+await entitlements.consume(entitlement); // one-time purchase consumables, also entitlement.consume()
+
+entitlement.isActive(); // not deleted, and not ended
+entitlement.isTest();
+entitlement.isGuildSubscription(); // or isUserSubscription()
+```
+
+`application.fetchSKUs()` resolves to a `Collection` of `SKU`s, each with `sku.flags` (a `SKUFlagsBitField`) and
+`sku.subscriptions`, a `SubscriptionManager` of that SKU (`application.subscriptions(skuOrId)` is the same when only
+the ID of the SKU is known). Subscriptions are fetch-only: `subscriptions.fetch(subscriptionId)`, or
+`subscriptions.fetch({ user, limit, before, after })` for a `Collection`. Nothing keeps a cached subscription up to
+date for the bot, so they are never cached by the managers.
 
 ### Messages
 

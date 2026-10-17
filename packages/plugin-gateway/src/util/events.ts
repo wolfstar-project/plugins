@@ -32,6 +32,7 @@ import type { Guild } from "../structures/guilds/Guild.js";
 import type { GuildAuditLogsEntry } from "../structures/guilds/GuildAuditLogsEntry.js";
 import type { GuildBan } from "../structures/guilds/GuildBan.js";
 import type { GuildScheduledEvent } from "../structures/guilds/GuildScheduledEvent.js";
+import type { Entitlement } from "../structures/monetization/Entitlement.js";
 import type { Integration } from "../structures/guilds/Integration.js";
 import type { SoundboardSound } from "../structures/soundboards/SoundboardSound.js";
 import type { StageInstance } from "../structures/stageInstances/StageInstance.js";
@@ -372,6 +373,19 @@ export interface GatewayEventMap {
   integrationUpdate: [oldIntegration: Integration | null, newIntegration: Integration];
   integrationDelete: [integration: Integration | null, data: GatewayIntegrationDeleteDispatchData];
   /**
+   * Emitted when a user or a guild is granted a SKU of the application, by a purchase or a test entitlement.
+   */
+  entitlementCreate: [entitlement: Entitlement];
+  /**
+   * Emitted when an entitlement changes, e.g. a subscription renews. `oldEntitlement` is `null` when it was not
+   * cached.
+   */
+  entitlementUpdate: [oldEntitlement: Entitlement | null, newEntitlement: Entitlement];
+  /**
+   * Emitted when an entitlement is deleted, which Discord only does for test entitlements and refunds.
+   */
+  entitlementDelete: [entitlement: Entitlement];
+  /**
    * Emitted when a member joins, leaves, or moves between voice channels, or changes their voice settings.
    */
   voiceStateUpdate: [oldState: VoiceState | null, newState: VoiceState];
@@ -525,6 +539,9 @@ export enum GatewayEvents {
   IntegrationCreate = "integrationCreate",
   IntegrationUpdate = "integrationUpdate",
   IntegrationDelete = "integrationDelete",
+  EntitlementCreate = "entitlementCreate",
+  EntitlementUpdate = "entitlementUpdate",
+  EntitlementDelete = "entitlementDelete",
   VoiceStateUpdate = "voiceStateUpdate",
   VoiceChannelStatusUpdate = "voiceChannelStatusUpdate",
   VoiceChannelStartTimeUpdate = "voiceChannelStartTimeUpdate",

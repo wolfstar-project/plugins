@@ -329,6 +329,18 @@ const sticker = (extra: object = {}) => ({
   ...extra,
 });
 
+const entitlement = (extra: object = {}) => ({
+  id: "500000000000000050",
+  sku_id: "510000000000000051",
+  application_id: "266624760782258186",
+  user_id: author.id,
+  type: 8,
+  deleted: false,
+  starts_at: "2026-01-01T00:00:00.000000+00:00",
+  ends_at: "2026-02-01T00:00:00.000000+00:00",
+  ...extra,
+});
+
 const botUser: APIUser = { ...author, id: "266624760782258186", username: "bot" };
 
 const cases: Case[] = [
@@ -545,6 +557,14 @@ const cases: Case[] = [
       [GatewayDispatchEvents.GuildStickersUpdate, { guild_id: guildId, stickers: [sticker()] }],
     ],
     update: [GatewayDispatchEvents.GuildStickersUpdate, { guild_id: guildId, stickers: [] }],
+  },
+  {
+    name: "single, application manager (entitlement update)",
+    seed: [[GatewayDispatchEvents.EntitlementCreate, entitlement()]],
+    update: [
+      GatewayDispatchEvents.EntitlementUpdate,
+      entitlement({ ends_at: "2026-03-01T00:00:00.000000+00:00" }),
+    ],
   },
 ];
 

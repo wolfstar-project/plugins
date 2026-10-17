@@ -196,8 +196,8 @@ describe("GatewayClient cache resolution", () => {
   });
 
   test("GIVEN cacheOptions for an entity without a manager THEN its raw store is bounded", async () => {
-    const client = createClient({ cacheOptions: { entitlements: { maxSize: 1 } } });
-    const store = client.cache!.entitlements!;
+    const client = createClient({ cacheOptions: { subscriptions: { maxSize: 1 } } });
+    const store = client.cache!.subscriptions!;
 
     await store.set("1", { id: "1" } as never);
     await store.set("2", { id: "2" } as never);
