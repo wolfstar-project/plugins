@@ -489,8 +489,9 @@ export class GatewayClient extends Client {
   readonly #token: string;
 
   // The guilds `READY` listed as initially unavailable, whose `GUILD_CREATE` or `GUILD_DELETE` the client waits for
-  // before emitting `clientReady`, like discord.js's `Client#expectedGuilds`.
-  readonly #expectedGuilds = new Set<string>();
+  // before emitting `clientReady`, like discord.js's `Client#expectedGuilds`, by shard: a shard's new `READY` replaces
+  // its own, so a guild the bot left between two of them is not waited for until `waitGuildTimeout`.
+  readonly #expectedGuilds = new Map<number, Set<string>>();
 
   // The fallback timer emitting `clientReady` even with guilds still unavailable, like discord.js's own
   // `readyTimeout`. Cleared and rescheduled every time `#checkClientReady` runs short of triggering it.
@@ -1046,8 +1047,13 @@ export class GatewayClient extends Client {
     const isReady = payload.t === GatewayDispatchEvents.Ready;
     if (isReady) {
       await this.reconcileGuilds(payload.d, shardId);
-      // The guilds this shard's `READY` listed as initially unavailable, awaited by `clientReady`.
-      for (const guild of payload.d.guilds) this.#expectedGuilds.add(guild.id);
+      // The guilds this shard's `READY` listed as initially unavailable, awaited by `clientReady`. Once it fired,
+      // nothing waits for them any more.
+      if (this.clientReadyTimestamp === null) {
+        const expected = new Set(payload.d.guilds.map((guild) => guild.id));
+        if (expected.size > 0) this.#expectedGuilds.set(shardId, expected);
+        else this.#expectedGuilds.delete(shardId);
+      }
     }
 
     let state: unknown;
@@ -1071,11 +1077,19 @@ export class GatewayClient extends Client {
       } else if (
         (payload.t === GatewayDispatchEvents.GuildCreate ||
           payload.t === GatewayDispatchEvents.GuildDelete) &&
-        this.#expectedGuilds.delete(payload.d.id)
+        this.#forgetExpectedGuild(shardId, payload.d.id)
       ) {
         await this.#checkClientReady();
       }
     }
+  }
+
+  // Stops waiting for a guild of a shard, returning whether it was waited for.
+  #forgetExpectedGuild(shardId: number, guildId: string): boolean {
+    const expected = this.#expectedGuilds.get(shardId);
+    if (!expected?.delete(guildId)) return false;
+    if (expected.size === 0) this.#expectedGuilds.delete(shardId);
+    return true;
   }
 
   // A shard resuming a stored session gets no `READY`, which is what sets `client.user` and runs the ready check. It has
