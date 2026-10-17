@@ -981,6 +981,16 @@ const post = await forum.threads.create({
 });
 ```
 
+discord.js has a manager per kind of channel (`GuildTextThreadManager`, `GuildForumThreadManager`); here
+`threads` is one `ChannelThreadManager`, and `create` takes either the options of a thread (`type`,
+`invitable`) or those of a forum or media post (`message`, `appliedTags`), told apart by `message`. Mixing
+them is a compile error, and throws a `GatewayTypeError` before any request: `ThreadOptionsPostOnly`
+(`appliedTags` without `message`, or `message` in a text or announcement channel),
+`ThreadOptionsThreadOnly` (`type` or `invitable` with `message`), and `ThreadPostMessageRequired` (a
+forum or media channel without `message`). `autoArchiveDuration` and `rateLimitPerUser` apply to both. Unlike
+discord.js, a thread started from a message is `message.startThread()`, not an option, and an explicit `type`
+is not overridden in an announcement channel.
+
 ### Voice states and presences
 
 `client.voiceStates` and `client.presences` read the voice states and presences the gateway sends
@@ -1199,6 +1209,14 @@ get `messages`, `send`, and `sendTyping`. Guild text-based channels (not direct 
 discord.js) also get `bulkDelete`, which takes messages, their IDs, a `Collection`, or a count, and
 resolves to a `Collection` of the deleted messages by ID: the cached `Message`, else a partial one
 with `Partials.Message`, else `undefined`. Narrow a `Message | PartialMessage` with `partial`.
+
+`channel.messages` is one `ChannelMessageManager` for every kind of channel, where discord.js has
+`GuildMessageManager`, `DMMessageManager`, and `PartialGroupDMMessageManager`. Its guild-only methods
+(`crosspost`, `bulkDelete`, `startThread`) throw `ChannelMessagesGuildOnly` before any request in a direct
+message or group direct message; the rest (`fetch`, `send`, `edit`, `delete`, `pin`, `react`, ...) is the
+same everywhere. `crosspost` takes a message ID, not a `MessageResolvable`, like the other methods of the
+manager. discord.js's `client.channels.createMessage(channel, options)` is `client.messages.send(channelId,
+options)` (or `channel.send(options)`) here.
 
 `Message` is generic like discord.js's: `Message<true>` has a `guildId` string and guild-text-based `channel`s, and
 `inGuild()` narrows to it. `reply`, `edit`, and the other actions resolve to messages whose `channel` is never a group

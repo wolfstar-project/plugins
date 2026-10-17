@@ -58,7 +58,7 @@ export class TextChannelMixin<Type extends ChannelType = ChannelType> {
    * The messages of the channel.
    */
   public get messages(): ChannelMessageManager {
-    return new ChannelMessageManager(this.client, this.id);
+    return new ChannelMessageManager(this.client, this.id, this.type);
   }
 
   /**
