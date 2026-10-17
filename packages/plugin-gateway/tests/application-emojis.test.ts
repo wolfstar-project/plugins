@@ -14,6 +14,7 @@ import {
   GatewayClient,
   GuildEmoji,
   User,
+  kPatch,
 } from "../src/index.js";
 
 const clientId = "266624760782258186";
@@ -197,7 +198,7 @@ describe("ApplicationEmoji", () => {
     const resolved = existing.author;
 
     expect(existing.author).toBe(resolved);
-    existing[Symbol.for("djs.structures.patch") as never]({
+    existing[kPatch]({
       user: { ...uploader, id: "100000000000000011" },
     } as never);
     expect(existing.author.id).toBe("100000000000000011");

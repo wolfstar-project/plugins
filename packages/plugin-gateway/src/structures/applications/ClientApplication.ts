@@ -12,6 +12,7 @@ import type {
 } from "discord-api-types/v10";
 import { GatewayTypeError } from "../../errors/GatewayError.js";
 import { ApplicationCommandManager } from "../../managers/ApplicationCommandManager.js";
+import { ApplicationEmojiManager } from "../../managers/ApplicationEmojiManager.js";
 import { EntitlementManager } from "../../managers/EntitlementManager.js";
 import { SubscriptionManager } from "../../managers/SubscriptionManager.js";
 import type { SKUResolvable } from "../../types.js";
@@ -19,7 +20,6 @@ import { resolveImageOption, type ImageResolvable } from "../../util/DataResolve
 import { cachedGuild } from "../../util/cache.js";
 import { ApplicationFlagsBitField, type ApplicationFlagsResolvable } from "../../util/flags.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
-import { ApplicationEmojiManager } from "../../managers/ApplicationEmojiManager.js";
 import { resolveSKUId } from "../../util/Util.js";
 import type { Guild } from "../guilds/Guild.js";
 import { SKU } from "../monetization/SKU.js";
