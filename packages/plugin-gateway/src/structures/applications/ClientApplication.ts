@@ -11,6 +11,7 @@ import type {
   RESTPatchCurrentApplicationJSONBody,
 } from "discord-api-types/v10";
 import { GatewayTypeError } from "../../errors/GatewayError.js";
+import { ApplicationCommandManager } from "../../managers/ApplicationCommandManager.js";
 import { EntitlementManager } from "../../managers/EntitlementManager.js";
 import { SubscriptionManager } from "../../managers/SubscriptionManager.js";
 import type { SKUResolvable } from "../../types.js";
@@ -129,6 +130,8 @@ function toInstallParams(
  * before relying on the other fields.
  */
 export class ClientApplication extends Application {
+  #commands: ApplicationCommandManager | null = null;
+
   // The owner is built once per payload, so that it stays the same object between reads.
   #owner: { team: unknown; user: unknown; value: Team | User | null } | null = null;
 
@@ -140,6 +143,14 @@ export class ClientApplication extends Application {
    */
   public get partial(): boolean {
     return this[kData].name === undefined;
+  }
+
+  /**
+   * The global application commands, and the commands of any guild through their `guildId` option. Fetch-only: see
+   * {@link ApplicationCommandManager}.
+   */
+  public get commands(): ApplicationCommandManager {
+    return (this.#commands ??= new ApplicationCommandManager(this.client));
   }
 
   /**

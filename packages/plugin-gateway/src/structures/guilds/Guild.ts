@@ -41,6 +41,7 @@ import type { GuildInviteManager } from "../../managers/GuildInviteManager.js";
 import type { PresenceManager } from "../../managers/PresenceManager.js";
 import type { RoleManager } from "../../managers/RoleManager.js";
 import type { VoiceStateManager } from "../../managers/VoiceStateManager.js";
+import type { GuildApplicationCommandManager } from "../../managers/GuildApplicationCommandManager.js";
 import type { GuildStickerManager } from "../../managers/GuildStickerManager.js";
 import { isPromiseLike } from "../../util/cache.js";
 import { cdn } from "../../util/cdn.js";
@@ -420,6 +421,13 @@ export class Guild extends AnonymousGuild<CacheEntityTypes["guilds"]> {
    */
   public get emojis(): GuildEmojiManager {
     return this.client.guilds.emojis(this.id);
+  }
+
+  /**
+   * The application commands of the guild. Fetch-only: see `ApplicationCommandManager`.
+   */
+  public get commands(): GuildApplicationCommandManager {
+    return this.client.guilds.commands(this.id);
   }
 
   /**
