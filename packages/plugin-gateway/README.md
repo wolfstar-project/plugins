@@ -283,6 +283,39 @@ export class LogMessagesListener extends EventGatewayListener<"messageCreate"> {
 
 With `once: true`, the listener unloads itself after its first run.
 
+With [`@wolfstar/plugin-broker`](https://www.npmjs.com/package/@wolfstar/plugin-broker), a
+dispatch is handled by the gateway process and, replayed, by every worker, so pieces loaded on both
+would run twice. `RegisterAsDispatchListener` takes the same arguments and runs the listener on
+one process only: the workers while the gateway client forwards its dispatches
+(`forwardGatewayDispatches` marks it as `client.forwardsDispatches`), the gateway client itself
+otherwise, so it also works on a bot that does not use the broker:
+
+```ts
+import {
+  EventGatewayListener,
+  RegisterAsDispatchListener,
+  type Message,
+} from "@wolfstar/plugin-gateway";
+
+@RegisterAsDispatchListener("messageCreate")
+export class LogMessagesListener extends EventGatewayListener<"messageCreate"> {
+  public override run(message: Message) {
+    console.log(`${message.author.username}: ${message.content}`);
+  }
+}
+```
+
+The events only the gateway client emits (`clientReady`, `shardReady`, `shardResume`,
+`shardClose`, `shardError`, `dispatch`, `cacheError`, `cacheSweep`) never reach a worker: the
+types reject them and the decorator throws, so keep `RegisterAsGatewayListener` for those. The
+decision is made on every emit, so the order forwarding starts and the pieces load in does not
+matter. Two limits come with it: a `guildDelete` that `READY` emits for the guilds the client no
+longer lists is not forwarded
+([#243](https://github.com/wolfstar-project/plugins/issues/243)), so a listener on the workers
+misses it, and with `events` set on `forwardGatewayDispatches`, a listener of an event built from
+a dispatch left out runs nowhere. Workers receive dispatches at least once, so keep the listener
+idempotent.
+
 Any piece (listener, command, interaction handler) reaches the client through
 `this.container.gatewayClient`, typed as `GatewayClient`, so its managers need no cast:
 

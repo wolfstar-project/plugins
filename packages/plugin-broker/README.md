@@ -232,6 +232,23 @@ entries and run them concurrently, so two events of the same guild can be replay
 across workers, and the relations a listener resolves from the cache can differ from the gateway
 process's. The previous state shipped with each entry is a snapshot, so `old` stays right.
 
+A bot that loads the same pieces on the gateway process and on the workers would handle each dispatch
+twice. `forwardGatewayDispatches` marks a `GatewayClient` as forwarding (`forwardsDispatches`) until
+its stop function is called, and `RegisterAsDispatchListener` from
+[`@wolfstar/plugin-gateway`](https://www.npmjs.com/package/@wolfstar/plugin-gateway) uses it to run
+a listener on the workers only, and on the gateway client when nothing is forwarded, with no
+environment variable to read:
+
+```ts
+@RegisterAsDispatchListener("messageCreate")
+export class ModerationListener extends EventGatewayListener<"messageCreate"> {}
+```
+
+It rejects the events a worker never receives (`clientReady`, `shardReady`, …), and a `guildDelete`
+emitted by `READY` is not forwarded
+([#243](https://github.com/wolfstar-project/plugins/issues/243)), so such a listener on the workers
+misses it.
+
 ### `BrokerListener` piece
 
 Like `EventGatewayListener` in `@wolfstar/plugin-gateway`, a `BrokerListener` piece typed by event

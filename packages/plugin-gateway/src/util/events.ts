@@ -399,6 +399,39 @@ export interface GatewayEventMap {
 export type GatewayEventName = keyof GatewayEventMap;
 
 /**
+ * The events only the process that connects to Discord emits: a worker replaying forwarded dispatches never sees
+ * them. Every other event comes from a dispatch, `raw` included, which {@link GatewayClient.replayDispatch} emits too.
+ */
+export type GatewayOnlyEventName =
+  | "dispatch"
+  | "shardReady"
+  | "clientReady"
+  | "shardResume"
+  | "shardClose"
+  | "shardError"
+  | "cacheError"
+  | "cacheSweep";
+
+/**
+ * The name of any event that comes from a dispatch, and so reaches a worker replaying the forwarded ones.
+ */
+export type DispatchEventName = Exclude<GatewayEventName, GatewayOnlyEventName>;
+
+/**
+ * The {@link GatewayOnlyEventName} events, for telling them from {@link DispatchEventName} ones at runtime.
+ */
+export const gatewayOnlyEvents: ReadonlySet<string> = new Set<GatewayOnlyEventName>([
+  "dispatch",
+  "shardReady",
+  "clientReady",
+  "shardResume",
+  "shardClose",
+  "shardError",
+  "cacheError",
+  "cacheSweep",
+]);
+
+/**
  * The name of every event a {@link GatewayClient} emits, mirroring the keys of {@link GatewayEventMap}, like
  * `@wolfstar/http-framework`'s own `Events`.
  *

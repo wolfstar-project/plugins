@@ -86,6 +86,19 @@ describe("forwardGatewayDispatches", () => {
     expect(client.listenerCount("dispatch")).toBe(0);
   });
 
+  test("GIVEN an emitter that can be marked THEN it is marked until forwarding stops", () => {
+    const unmark = vi.fn();
+    const markDispatchesForwarded = vi.fn(() => unmark);
+    const client = Object.assign(gateway(), { markDispatchesForwarded });
+
+    const stop = forwardGatewayDispatches(client, { publish: vi.fn() });
+    expect(markDispatchesForwarded).toHaveBeenCalledOnce();
+    expect(unmark).not.toHaveBeenCalled();
+
+    stop();
+    expect(unmark).toHaveBeenCalledOnce();
+  });
+
   test("GIVEN an emitter that serializes state THEN the serialized state is published with the dispatch", () => {
     const publish = vi.fn<Broker["publish"]>().mockResolvedValue("1-0");
     const serializeDispatchState = vi.fn((_type: string, state: unknown) => ({ raw: state }));
