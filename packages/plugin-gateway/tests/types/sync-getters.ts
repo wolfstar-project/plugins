@@ -31,6 +31,7 @@ export const messageChecks: boolean[] = [
   message.deletable,
   message.pinnable,
   message.crosspostable,
+  message.threadable,
   message.bulkDeletable,
 ];
 export const roleEditable: boolean = role.editable;

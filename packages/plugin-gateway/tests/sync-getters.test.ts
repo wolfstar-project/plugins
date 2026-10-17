@@ -1,6 +1,7 @@
 import { createInMemoryCache, memberKey, roleKey } from "@wolfstar/plugin-cache";
 import {
   ChannelType,
+  MessageFlags,
   MessageType,
   OverwriteType,
   PermissionFlagsBits,
@@ -28,6 +29,9 @@ const channelId = "200000000000000020";
 const threadId = "200000000000000021";
 const moderatedChannelId = "200000000000000022";
 const newsChannelId = "200000000000000023";
+const threadsChannelId = "200000000000000024";
+const threadsNewsChannelId = "200000000000000025";
+const voiceChannelId = "200000000000000026";
 const modRoleId = "700000000000000072";
 const lowRoleId = "700000000000000071";
 const adminRoleId = "700000000000000073";
@@ -154,6 +158,28 @@ async function seed(
     guild_id: guildId,
     permission_overwrites: moderated,
   } as never);
+  // Where the bot may start threads, including a channel of a type that cannot hold them.
+  const threadable = [
+    {
+      id: modRoleId,
+      type: OverwriteType.Role,
+      allow: String(flags.CreatePublicThreads),
+      deny: "0",
+    },
+  ];
+  for (const [id, type, name] of [
+    [threadsChannelId, ChannelType.GuildText, "threads"],
+    [threadsNewsChannelId, ChannelType.GuildAnnouncement, "threads-news"],
+    [voiceChannelId, ChannelType.GuildVoice, "voice"],
+  ] as const) {
+    await cache.channels.set(id, {
+      id,
+      type,
+      name,
+      guild_id: guildId,
+      permission_overwrites: threadable,
+    } as never);
+  }
   await cache.threads.set(threadId, {
     id: threadId,
     type: ChannelType.PublicThread,
@@ -485,6 +511,53 @@ describe.each(synchronousModes)("message, role and emoji getters with %s", (_, o
     expect(dm.deletable).toBe(false);
     expect(dm.pinnable).toBe(true);
     expect(dm.crosspostable).toBe(false);
+    expect(dm.threadable).toBe(false);
+  });
+
+  test("GIVEN a channel THEN threadable follows its type, the existing thread and CreatePublicThreads", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const build = (channel: string, extra: Partial<APIMessage> = {}) =>
+      client.messages._build(message(targetId, channel, extra));
+    const [text, news, voice, denied, deniedNews, started, uncached] = await Promise.all([
+      build(threadsChannelId),
+      build(threadsNewsChannelId),
+      build(voiceChannelId),
+      build(moderatedChannelId),
+      build(newsChannelId),
+      build(threadsChannelId, { flags: MessageFlags.HasThread }),
+      build("200000000000000099"),
+    ]);
+
+    expect([text.threadable, news.threadable]).toEqual([true, true]);
+    expect(voice.threadable).toBe(false);
+    expect([denied.threadable, deniedNews.threadable]).toEqual([false, false]);
+    expect(started.threadable).toBe(false);
+    expect(() => uncached.threadable).toThrow(expect.objectContaining({ code: "ChannelUncached" }));
+  });
+
+  test("GIVEN a thread channel THEN its messages are not threadable", async () => {
+    const client = createClient(options());
+    await seed(client);
+    const inThread = await client.messages._build(message(targetId, threadId));
+
+    expect(inThread.threadable).toBe(false);
+  });
+
+  test("GIVEN an administrator bot THEN threadable is true, unlike discord.js's checkAdmin = false", async () => {
+    const client = createClient(options());
+    await seed(client, { botRoles: [adminRoleId] });
+    const plain = await client.messages._build(message(targetId, channelId));
+
+    expect(plain.threadable).toBe(true);
+  });
+
+  test("GIVEN a bot missing from the cache THEN threadable throws GuildUncachedMe", async () => {
+    const client = createClient(options());
+    await seed(client, { withBot: false });
+    const text = await client.messages._build(message(targetId, threadsChannelId));
+
+    expect(() => text.threadable).toThrow(expect.objectContaining({ code: "GuildUncachedMe" }));
   });
 
   test("GIVEN an announcement channel THEN crosspostable follows the channel type and permissions", async () => {
@@ -567,6 +640,30 @@ describe("message getters with an asynchronous cache", () => {
     // The author check needs no cache.
     expect(own.editable).toBe(true);
     expect(await own.deletable).toBe(true);
+  });
+
+  test("GIVEN an asynchronous cache THEN threadable is a promise resolving like the synchronous caches", async () => {
+    const client = createClient({ cache: createAsyncCache() });
+    await seed(client);
+    const build = (channel: string, extra: Partial<APIMessage> = {}) =>
+      client.messages._build(message(targetId, channel, extra));
+    const [text, news, voice, denied, started, uncached] = await Promise.all([
+      build(threadsChannelId),
+      build(threadsNewsChannelId),
+      build(voiceChannelId),
+      build(moderatedChannelId),
+      build(threadsChannelId, { flags: MessageFlags.HasThread }),
+      build("200000000000000099"),
+    ]);
+
+    expect(text.threadable).toBeInstanceOf(Promise);
+    expect(await text.threadable).toBe(true);
+    expect(await news.threadable).toBe(true);
+    expect(await voice.threadable).toBe(false);
+    expect(await denied.threadable).toBe(false);
+    // Answered from the flags, without the cache.
+    expect(started.threadable).toBe(false);
+    await expect(uncached.threadable).rejects.toMatchObject({ code: "ChannelUncached" });
   });
 });
 

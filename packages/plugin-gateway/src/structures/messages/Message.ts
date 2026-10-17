@@ -597,6 +597,35 @@ export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> 
   }
 
   /**
+   * Whether the bot can start a thread from the message, like discord.js's `Message#threadable`: it is in a text or
+   * announcement channel, has no thread yet, and the bot has `ViewChannel` and `CreatePublicThreads` there. It throws
+   * like {@link Message.deletable}.
+   *
+   * Unlike discord.js, which ignores the `Administrator` permission (`checkAdmin = false`), an administrator can
+   * start a thread, as the API allows it. This only checks the permissions and the channel type: a locked or archived
+   * parent, the limit of active threads, and an announcement message that has to be published first are not checked.
+   */
+  public get threadable(): CacheRead<boolean> {
+    if (this.hasThread || !this.inGuild()) return cacheRead(false);
+
+    // Not the `channel` getter, which is `null` with an asynchronous cache.
+    const cached =
+      this[kRelations].channel ?? peekCache(this.client.channels.cache, this.channelId);
+    return cacheRead(
+      whenAll([cached], ([channel]) => {
+        if (!channel) throw new GatewayError("ChannelUncached", this.channelId);
+        if (
+          channel.type !== ChannelType.GuildText &&
+          channel.type !== ChannelType.GuildAnnouncement
+        ) {
+          return false;
+        }
+        return this.hasCachedPermission("ViewChannel", "CreatePublicThreads");
+      }),
+    );
+  }
+
+  /**
    * Whether the bot can delete the message: it is the author, or it has `ManageMessages` in the guild.
    *
    * @deprecated Use {@link Message.deletable}. When the guild, the channel or the bot's member may be missing from the
@@ -856,12 +885,12 @@ export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> 
     return this.content;
   }
 
-  // `hasPermission` from the cache alone.
-  private hasCachedPermission(permission: PermissionsString): Awaitable<boolean> {
+  // `hasPermission` from the cache alone, true when the bot has every one of the permissions.
+  private hasCachedPermission(...permissions: PermissionsString[]): Awaitable<boolean> {
     const { guildId } = this;
     if (!guildId) return false;
     return whenAll([requireMe(this.client, guildId)], ([me]) =>
-      whenAll([me.permissionsIn(this.channelId)], ([permissions]) => permissions.has(permission)),
+      whenAll([me.permissionsIn(this.channelId)], ([granted]) => granted.has(permissions)),
     );
   }
 
