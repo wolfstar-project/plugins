@@ -166,6 +166,22 @@ describe("message mentions", () => {
     );
   });
 
+  test("GIVEN uncached mentioned users THEN parsedUsers has the payload's, without caching them", async () => {
+    const client = createClient();
+    const unlisted = "700000000000000701";
+    const built = await client.messages._build(
+      message({
+        content: `<@${mentioned.id}> <@${unlisted}>`,
+        mentions: [mentioned],
+      }),
+    );
+
+    expect([...built.mentions.parsedUsers.keys()]).toEqual([mentioned.id]);
+    expect(built.mentions.parsedUsers.get(mentioned.id)?.username).toBe("stale");
+    expect(built.cleanContent).toBe(`@stale <@${unlisted}>`);
+    expect(await client.cache!.users.get(mentioned.id)).toBeUndefined();
+  });
+
   test("GIVEN a content patch THEN the resolved mentions are dropped", async () => {
     const client = createClient();
     await seed(client);

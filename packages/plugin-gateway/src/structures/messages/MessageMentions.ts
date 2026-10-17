@@ -13,7 +13,8 @@ import { transformAPIChannelMention, type CrosspostedChannel } from "../../util/
  */
 export interface MessageMentionsRelations {
   /**
-   * The mentioned users and the ones parsed from the content, and the author of the replied message.
+   * The mentioned users and the ones parsed from the content, and the author of the replied message. The users the
+   * payload mentions are there even when they are not cached.
    */
   users?: ReadonlyMap<string, User>;
   members?: ReadonlyMap<string, GuildMember>;
@@ -125,8 +126,13 @@ export class MessageMentions<InGuild extends boolean = boolean> {
   }
 
   /**
-   * The cached users the content mentions, by ID, like discord.js's `MessageMentions#parsedUsers`, which also
-   * counts the users the message does not ping.
+   * The users the content mentions, by ID, like discord.js's `MessageMentions#parsedUsers`, which also counts the
+   * users the message does not ping.
+   *
+   * @remarks
+   * Like discord.js, it reads the cache: a user the content mentions without the payload listing it is skipped when
+   * it is not cached. The users the payload does list are included even when uncached, as discord.js adds them to its
+   * cache first; here nothing is written to it.
    */
   public get parsedUsers(): Map<string, User> {
     return pick(this.parsedUserIds, this.#relations.users);

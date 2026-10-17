@@ -212,10 +212,11 @@ describe("Webhook relations", () => {
         "https://cdn.example/wolf.png?size=64",
         "https://cdn.example/wolf.gif#frag",
         "https://cdn.example/",
+        "https://cdn.example/wolf.webp?next=/a/b",
       ].map(async (url) => (await MessagePayload.resolveFile(url)).name),
     );
 
-    expect(names).toEqual(["wolf.png", "wolf.gif", "file.jpg"]);
+    expect(names).toEqual(["wolf.png", "wolf.gif", "file.jpg", "wolf.webp"]);
   });
 
   test("GIVEN a fetched webhook THEN its guild and channel come from the cache", async () => {

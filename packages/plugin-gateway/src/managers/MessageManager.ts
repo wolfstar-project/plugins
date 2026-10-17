@@ -148,11 +148,13 @@ export class MessageManager extends CachedManager<
     );
   }
 
-  // The cached copies of the users, members, roles, and channels a message mentions, like discord.js's mentions.
+  // The users, members, roles, and channels a message mentions, like discord.js's mentions: the cached copies, and for
+  // the mentioned users the payload's own when they are not cached, as discord.js adds them to its cache, so that
+  // `parsedUsers` finds them. Nothing is written to the cache.
   private resolveMentions(data: CacheEntityTypes["messages"]): Awaitable<MessageMentionsRelations> {
     const { guild_id: guildId, content = "" } = data;
     const users = [
-      ...data.mentions.map((user) => user.id),
+      ...data.mentions.map(({ member: _member, ...user }) => user),
       ...MessageMentions.parseIds(content, MessageMentions.UsersPattern),
       ...(data.referenced_message ? [data.referenced_message.author.id] : []),
     ];
