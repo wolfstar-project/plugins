@@ -1169,11 +1169,16 @@ export class GatewayClient extends Client {
   }
 
   /**
-   * Drops the cached guilds of a shard its `READY` no longer lists, and emits `guildDelete` for each of them.
+   * Drops the cached guilds of a shard its `READY` no longer lists, and emits `dispatch` and `guildDelete` for each of
+   * them.
    *
    * @remarks
    * They are the guilds the bot left while it was disconnected, or while the process was down with a persistent
    * cache. Discord does not replay those removals on a new session, so the cache would otherwise keep them forever.
+   *
+   * Each drop is handled as a `GUILD_DELETE` (with `s: 0`) Discord would have sent, `raw` aside: `dispatch` fires once
+   * the guild is gone from the cache, with the cached guild as its state, so forwarding `dispatch` to other processes
+   * (`@wolfstar/plugin-broker`'s `forwardGatewayDispatches`) carries these deletions too.
    *
    * It needs a guilds cache able to enumerate its entries, and is skipped without one.
    *
@@ -1204,17 +1209,23 @@ export class GatewayClient extends Client {
     const count = data.shard?.[1] ?? this.#shardCount ?? (await this.gateway.getShardCount());
     const listed = new Set(data.guilds.map((guild) => guild.id));
     const shardCount = BigInt(count);
+    const action = this.actions.get(GatewayDispatchEvents.GuildDelete);
     for (const id of cached) {
       if (listed.has(id) || Number((BigInt(id) >> 22n) % shardCount) !== shardId) continue;
 
-      const guild = (await this.guilds.cache.get(id)) ?? null;
-      await applyGatewayDispatch(cache, {
+      // Taken through the steps `handleDispatch` takes for a `GUILD_DELETE` Discord sends, `raw` aside (Discord did
+      // not send this one): `dispatch` is what forwards it to the processes sharing the cache, such as a broker's
+      // workers, which would otherwise never see this guild go.
+      const payload: GatewayDispatchPayload = {
         op: GatewayOpcodes.Dispatch,
         s: 0,
         t: GatewayDispatchEvents.GuildDelete,
         d: { id },
-      });
-      this.emit("guildDelete", guild, { id });
+      };
+      const state = await action?.before(payload.d);
+      await applyGatewayDispatch(cache, payload);
+      this.emit("dispatch", payload, shardId, state);
+      await action?.handle(payload.d, state, shardId);
     }
   }
 

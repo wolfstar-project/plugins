@@ -160,7 +160,8 @@ destroy a `GatewayClient`), exiting is left to your handler.
 receives, under its type (e.g. `MESSAGE_CREATE`) with its data as payload. It forwards them on the
 client's `dispatch` event, once they are written to the client's cache, so workers sharing a
 [`@wolfstar/plugin-cache`](https://www.npmjs.com/package/@wolfstar/plugin-cache) Redis cache see the
-state each dispatch left when they receive it:
+state each dispatch left when they receive it. That includes the `GUILD_DELETE` the client emits on `dispatch`
+for a cached guild a `READY` no longer lists (one the bot left while offline), so workers clean those up too:
 
 ```ts
 import { createBroker, forwardGatewayDispatches } from "@wolfstar/plugin-broker";

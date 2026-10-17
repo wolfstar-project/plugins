@@ -107,6 +107,43 @@ describe("replayGatewayDispatches", () => {
     expect(dispatchedOnWorker).not.toHaveBeenCalled();
   });
 
+  test("GIVEN a READY that no longer lists a cached guild THEN the worker's guildDelete gets the dropped guild", async () => {
+    const { broker, consumer, producer, worker } = setup();
+    forwardGatewayDispatches(producer, broker);
+    replayGatewayDispatches(consumer, worker);
+
+    const deleted: unknown[][] = [];
+    worker.on("guildDelete", (...args) => void deleted.push(args));
+
+    await consumer.start();
+    await feed(producer, "GUILD_CREATE", {
+      id: guildId,
+      name: "Wolf Den",
+      roles: [],
+      emojis: [],
+      stickers: [],
+      features: [],
+      channels: [],
+      threads: [],
+      members: [],
+    });
+    await feed(producer, "READY", {
+      v: 10,
+      user: author,
+      guilds: [],
+      session_id: "s",
+      resume_gateway_url: "wss://gateway.discord.gg",
+      shard: [0, 1],
+      application: { id: "266624760782258186", flags: 0 },
+    });
+
+    await vi.waitFor(() => expect(deleted).toHaveLength(1));
+    const [guild, data] = deleted[0] as [{ id: string; name: string } | null, { id: string }];
+    expect(guild?.id).toBe(guildId);
+    expect(guild?.name).toBe("Wolf Den");
+    expect(data).toEqual({ id: guildId });
+  });
+
   test("GIVEN events THEN only those dispatch types are replayed", async () => {
     const { broker, consumer, producer, worker } = setup();
     forwardGatewayDispatches(producer, broker);
