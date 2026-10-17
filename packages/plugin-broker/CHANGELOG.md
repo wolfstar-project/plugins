@@ -1,5 +1,15 @@
 # @wolfstar/plugin-broker
 
+## 0.6.0
+
+### Minor Changes
+
+- [#245](https://github.com/wolfstar-project/plugins/pull/245) [`7257223`](https://github.com/wolfstar-project/plugins/commit/7257223baea1785c72737e103243ab381f6f29f7) - `forwardGatewayDispatches` marks a `GatewayClient` as forwarding (`forwardsDispatches`) until its stop function is called, through the new optional `GatewayDispatchEmitterLike#markDispatchesForwarded`, so listeners registered with `RegisterAsDispatchListener` from `@wolfstar/plugin-gateway` run on the workers only. Emitters without it forward as before.
+
+### Patch Changes
+
+- [#247](https://github.com/wolfstar-project/plugins/pull/247) [`6012bd9`](https://github.com/wolfstar-project/plugins/commit/6012bd9d16cc73abd5e0c866a6ab2d407e3c3b79) - Forward the `guildDelete` of a guild a `READY` drops: when a `READY` no longer lists a cached guild (the bot left it while offline), `GatewayClient` now emits `dispatch` for the `GUILD_DELETE` it applies, after the cache write and with the cached guild as its state, before `guildDelete`. `forwardGatewayDispatches` publishes it like any other dispatch, so a `plugin-broker` worker's `guildDelete` listeners clean these guilds up too. The made-up dispatch carries `s: 0` and is not emitted as `raw`.
+
 ## 0.5.1
 
 ### Patch Changes
