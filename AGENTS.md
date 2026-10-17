@@ -26,6 +26,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 - **Tests:** `vitest` (single root `vitest.config.ts`).
 - **Lint:** `oxlint`.
 - **Format:** `oxfmt`.
+- **Unused code/dependency check:** `knip` (config in root `knip.json`, with per-workspace `entry`/`project`/`ignoreDependencies` overrides, e.g. `packages/plugin-logger` adds `src/assertions.ts` as an entry point). Not wired to a root `package.json` script; run it directly as `pnpm exec knip` (same as CI's `🧹 Unused code check` job).
 - **Docs:** `typedoc` through `scripts/generate-docs.mjs` (see Commands); CI publishes the output to `wolfstar-project/docs`.
 - **Release:** [Changesets](https://github.com/changesets/changesets) v3 (`@changesets/cli` + `changesets/action` in CI, see `.github/workflows/release.yml`). Packages version independently, not in lockstep (`.changeset/config.json` has `fixed: []`, `linked: []`); `updateInternalDependencies: patch` bumps workspace dependents; `format: "oxfmt"` makes generated changelogs satisfy `oxfmt --check`. Publishes authenticate via npm [trusted publishing](https://docs.npmjs.com/trusted-publishers/) (OIDC, no long-lived token), which attaches npm provenance/Sigstore attestation; local `changeset publish` can't mint attestations. See `.changeset/README.md`.
 
@@ -35,6 +36,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 2. `pnpm build`
 3. `pnpm typecheck`
 4. `pnpm test`
+5. `pnpm exec knip` (unused code/dependency check; not a root script, matches CI's `🧹 Unused code check` job)
 
 ## Commands
 
@@ -51,6 +53,7 @@ pnpm --filter @wolfstar/plugin-api build  # build one package (tsdown)
 pnpm --filter @wolfstar/plugin-api test   # one package's tests
 pnpm run docs                             # typedoc into api/ (gitignored); the explicit `run` is required
 pnpm changeset                            # add a changeset (`pnpm changeset --empty` when no release is needed)
+pnpm exec knip                            # unused code/dependency check (CI's 🧹 Unused code check job; no root script wraps this)
 ```
 
 - `pnpm typecheck` runs `golar typecheck`, then `golar tsc --noEmit -p packages/<name>/tsconfig.consumption.json` for each package that has a type-level consumption test (currently `plugin-i18next`, `plugin-cache`, `plugin-gateway`, `plugin-broker`, `plugin-scheduled-tasks`; it replaced `turbo run typecheck` / per-package `tsc --noEmit` scripts). `golar typecheck` glob-checks `packages/*/src/**/*.ts` directly and does **not** read `tsconfig.json`/`project` options, so it can't resolve those consumption tests (e.g. `plugin-i18next`'s imports `node:url`) — that's why each is checked separately via `golar tsc`, a real TypeScript-CLI passthrough, against its `tsconfig.consumption.json`. A new package with a `tsconfig.consumption.json` must be appended to the root `typecheck` script.
@@ -79,6 +82,7 @@ pnpm changeset                            # add a changeset (`pnpm changeset --e
 - CI runs on GitHub-hosted runners (`ubuntu-24.04-arm` for `ci.yml` and `pkg-pr-new.yml`, `ubuntu-latest` for `release.yml`) — not Blacksmith, despite some now-superseded PR history.
 - Adding a new package: add a matching `packages:<name>` entry to **both** `.github/labels.yml` (label sync) and `.github/labeler.yml` (path-based auto-labeling on PRs) — these can drift independently (e.g. `plugin-subcommands-advanced` currently has no `labeler.yml` path mapping, and its `labels.yml` entry is misspelled `packages:plugins-subcommands-advanced`, so it's never auto-applied) — add its name to the `scopes` list of `semantic-pull-requests.yml`, and append its `tsconfig.consumption.json` (if any) to the root `typecheck` script.
 - `tests/http-framework-peer-range.test.ts` (part of `pnpm test`, so the CI `unit` job) fails when any non-private package's `peerDependencies["@wolfstar/http-framework"]` excludes the framework version the workspace installs (its devDependency, kept on the latest release by Renovate), when a package declaring that peer doesn't also devDepend on it, or when the packages' peer ranges accept different majors (a package whose range starts at a later major, like `plugin-scheduled-tasks`' `^6.1.0`, only has to match from that major up). When Renovate bumps the framework to a new major, widen **every** plugin's peer range (`^x || ^<new>.0.0`) in the same PR **and** add a patch changeset per package — a peer-range change on `main` isn't published without one (that is how `plugin-api`/`plugin-logger`/`plugin-subcommands-advanced` shipped `^3`-only peers to npm after the v5 bump, #121).
+- Non-trivial structural work (cross-package parity ports, manager/API redesigns, new plugin scaffolding) gets a design doc under `docs/superpowers/` before implementation: a plan at `docs/superpowers/plans/<date>-<slug>.md` and, for anything with real design decisions, a matching spec at `docs/superpowers/specs/<date>-<slug>-design.md` (e.g. `docs/superpowers/specs/2026-10-05-message-types-parity-design.md`). PR descriptions for such changes link the spec/plan instead of re-explaining the design. Check this directory for prior art before redesigning an area that already has one.
 - Activation has two paths. `plugin-scheduled-tasks` is module-only (its `./register` is a no-op). The older plugins ship `./module` (default export: `defineModule` from `@wolfstar/kit`, optional peer) and, for those with runtime hooks, `./plugin` (default export: a `definePlugin` factory); `./register` stays the legacy class + `Client.plugins.register*Hook` path for framework v3/v5/v6. Both call the same functions in `src/hooks.ts`, so change behaviour there. The `stars` CLI never imports `<pkg>/register` itself; it only preloads the sources registered through `ctx.addPlugin`, so a user's own `import "<pkg>/register"` (or passing the `./plugin` factory to `plugins` while also importing `/register`) still double-installs the hooks. `tests/module-entries.test.ts` checks that every `src/module.ts` (except `plugin-scheduled-tasks`, excluded on purpose) is exported, built and has kit as an optional peer.
 
 ## Notes for agents
@@ -92,7 +96,7 @@ pnpm changeset                            # add a changeset (`pnpm changeset --e
 
 - **Secrets:** never commit them. `.env` and `.env.*` are gitignored (`.env.example` is exempted for templates, though none exists yet). CI secrets (`WOLFSTAR_TOKEN`, `CODECOV_TOKEN`, AI provider keys for the review workflows) live in GitHub Actions secrets. npm publishing uses OIDC trusted publishing, so no npm token exists anywhere.
 - **Ask before:** publishing to npm or running `pnpm run publish`/`publish:snapshot` locally, dispatching the `Release` workflow, force-pushing or rewriting history on shared branches, and deleting branches, tags, or releases.
-- **Done** means: the four quality gates above pass locally; a changeset exists for every user-facing package change (CI's `🦋 Verify changesets` runs `changeset status --since=origin/<base>` and fails without one); tests are added or updated for behaviour changes; and this file is updated when commands, packages, CI, or release flow change.
+- **Done** means: the quality gates above pass locally; a changeset exists for every user-facing package change (CI's `🦋 Verify changesets` runs `changeset status --since=origin/<base>` and fails without one); tests are added or updated for behaviour changes; and this file is updated when commands, packages, CI, or release flow change.
 
 ## Cloud VM notes
 
