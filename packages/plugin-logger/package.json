@@ -90,10 +90,10 @@
     "prepack": "pnpm build"
   },
   "devDependencies": {
-    "@wolfstar/http-framework": "^6.1.0",
-    "@wolfstar/kit": "^0.1.0",
+    "@wolfstar/http-framework": "^6.2.2",
+    "@wolfstar/kit": "^0.2.0",
     "consola": "^3.4.2",
-    "evlog": "^2.29.0",
+    "evlog": "^2.30.1",
     "winston": "^3.19.0"
   },
   "peerDependencies": {
