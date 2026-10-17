@@ -12,6 +12,7 @@ import type {
 } from "discord-api-types/v10";
 import { GatewayTypeError } from "../../errors/GatewayError.js";
 import { ApplicationCommandManager } from "../../managers/ApplicationCommandManager.js";
+import { ApplicationEmojiManager } from "../../managers/ApplicationEmojiManager.js";
 import { EntitlementManager } from "../../managers/EntitlementManager.js";
 import { SubscriptionManager } from "../../managers/SubscriptionManager.js";
 import type { SKUResolvable } from "../../types.js";
@@ -134,6 +135,7 @@ export class ClientApplication extends Application {
 
   // The owner is built once per payload, so that it stays the same object between reads.
   #owner: { team: unknown; user: unknown; value: Team | User | null } | null = null;
+  #emojis: ApplicationEmojiManager | null = null;
 
   // Built on first use: it needs the client, which binds the application after constructing it.
   #entitlements: EntitlementManager | null = null;
@@ -295,6 +297,13 @@ export class ClientApplication extends Application {
   public get eventWebhooksTypes(): ApplicationWebhookEventType[] | null {
     const types = this[kData].event_webhooks_types;
     return types ? [...types] : null;
+  }
+
+  /**
+   * The emojis of the application, fetched from the API: they are not cached.
+   */
+  public get emojis(): ApplicationEmojiManager {
+    return (this.#emojis ??= new ApplicationEmojiManager(this.client));
   }
 
   /**
