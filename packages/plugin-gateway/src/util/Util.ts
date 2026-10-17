@@ -6,13 +6,20 @@
 
 import { parse } from "node:path";
 import type { Awaitable, CacheEntityTypes } from "@wolfstar/plugin-cache";
-import { ChannelType, FormattingPatterns, type Snowflake } from "discord-api-types/v10";
+import {
+  ChannelType,
+  FormattingPatterns,
+  type APIAttachment,
+  type Snowflake,
+} from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
 import type { AnyChannel } from "../managers/ChannelManager.js";
 import type { GuildEmoji } from "../structures/emojis/GuildEmoji.js";
 import type { EmojiIdentifierResolvable } from "../structures/emojis/ReactionEmoji.js";
 import type { GuildMember } from "../structures/guilds/GuildMember.js";
 import type { Role } from "../structures/guilds/Role.js";
+import { Attachment } from "../structures/messages/Attachment.js";
+import type { Message } from "../structures/messages/Message.js";
 import type { User } from "../structures/users/User.js";
 import type { ColorResolvable, SKUResolvable } from "../types.js";
 import { whenAll, whenCachedMap } from "./cache.js";
@@ -484,6 +491,17 @@ export interface ResolvableData {
    */
   roles?: Iterable<Snowflake | Omit<CacheEntityTypes["roles"], "guild_id">>;
   channels?: Iterable<Snowflake | CacheEntityTypes["channels"]>;
+  /**
+   * The messages, e.g. an interaction's `resolved.messages`: IDs are read from the cache of
+   * {@link SupportingResolvedData.channelId}, raw data (which carries its own `channel_id`) is resolved to the cached
+   * message or built from the data.
+   */
+  messages?: Iterable<Snowflake | CacheEntityTypes["messages"]>;
+  /**
+   * The raw attachments, e.g. an interaction's `resolved.attachments`. Nothing caches attachments, so they are always
+   * built.
+   */
+  attachments?: Iterable<APIAttachment>;
 }
 
 /**
@@ -495,6 +513,10 @@ export interface SupportingResolvedData {
    * The guild of the members and roles: without it, they are not resolved.
    */
   guildId?: Snowflake | null;
+  /**
+   * The channel the message IDs belong to: without it, only the messages given as raw data are resolved.
+   */
+  channelId?: Snowflake | null;
 }
 
 /**
@@ -505,22 +527,24 @@ export interface TransformedResolvedData {
   members?: Map<Snowflake, GuildMember>;
   roles?: Map<Snowflake, Role>;
   channels?: Map<Snowflake, AnyChannel>;
+  messages?: Map<Snowflake, Message>;
+  attachments?: Map<Snowflake, Attachment>;
 }
 
 /**
- * Resolves the users, members, roles, and channels some data refers to into structures, like discord.js's
- * `transformResolved`. `client.messages` builds the relations of a message's `MessageMentions` with it.
+ * Resolves the users, members, roles, channels, messages, and attachments some data refers to into structures, like
+ * discord.js's `transformResolved`. `client.messages` builds the relations of a message's `MessageMentions` with it.
  *
  * @remarks
  * Nothing is written to the cache. Synchronous when every cache it reads is.
  *
- * @param supportingData The client, and the guild of the members and roles.
+ * @param supportingData The client, the guild of the members and roles, and the channel of the message IDs.
  * @param data The IDs or raw data to resolve.
  * @returns A map for each kind of data given, keyed by ID, without duplicates nor the IDs that are not cached.
  */
 export function transformResolved(
-  { client, guildId }: SupportingResolvedData,
-  { users, members, roles, channels }: ResolvableData,
+  { client, guildId, channelId }: SupportingResolvedData,
+  { users, members, roles, channels, messages, attachments }: ResolvableData,
 ): Awaitable<TransformedResolvedData> {
   return whenAll(
     [
@@ -551,13 +575,26 @@ export function transformResolved(
           (id) => client.channels.cache.get(id),
           (raw) => client.channels._resolveData(raw),
         ),
+      messages &&
+        resolveEach(
+          messages,
+          (id) =>
+            channelId ? client.messages.cache.get(client.messages.resolveKey(channelId, id)) : null,
+          (raw) => client.messages._resolveData(raw),
+        ),
     ],
-    ([resolvedUsers, resolvedMembers, resolvedRoles, resolvedChannels]) => {
+    ([resolvedUsers, resolvedMembers, resolvedRoles, resolvedChannels, resolvedMessages]) => {
       const result: TransformedResolvedData = {};
       if (resolvedUsers) result.users = resolvedUsers;
       if (resolvedMembers) result.members = resolvedMembers;
       if (resolvedRoles) result.roles = resolvedRoles;
       if (resolvedChannels) result.channels = resolvedChannels;
+      if (resolvedMessages) result.messages = resolvedMessages;
+      if (attachments) {
+        result.attachments = new Map(
+          [...attachments].map((attachment) => [attachment.id, new Attachment(attachment)]),
+        );
+      }
       return result;
     },
   );

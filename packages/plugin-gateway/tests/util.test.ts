@@ -1,7 +1,8 @@
-import { createInMemoryCache, memberKey, roleKey } from "@wolfstar/plugin-cache";
-import { ApplicationFlags, ChannelType } from "discord-api-types/v10";
+import { createInMemoryCache, memberKey, messageKey, roleKey } from "@wolfstar/plugin-cache";
+import { ApplicationFlags, ChannelType, MessageType } from "discord-api-types/v10";
 import { describe, expect, test } from "vitest";
 import { GatewayClient } from "../src/GatewayClient.js";
+import { Attachment } from "../src/structures/messages/Attachment.js";
 import { ApplicationFlagsBitField } from "../src/util/flags.js";
 import { Colors } from "../src/util/Colors.js";
 import {
@@ -249,6 +250,77 @@ describe("transformResolved", () => {
     expect(resolved.members!.get(other.id)?.guildId).toBe(guildId);
     expect(resolved.channels!.get("200000000000000020")?.id).toBe("200000000000000020");
     expect(await client.cache!.users.get(other.id)).toBeUndefined();
+  });
+
+  describe("messages and attachments", () => {
+    const channelId = "200000000000000020";
+    const rawMessage = {
+      id: "1200000000000000000",
+      channel_id: channelId,
+      author: user,
+      content: "raw",
+      timestamp: "2026-01-01T00:00:00.000Z",
+      edited_timestamp: null,
+      tts: false,
+      mention_everyone: false,
+      mentions: [],
+      mention_roles: [],
+      attachments: [],
+      embeds: [],
+      pinned: false,
+      type: MessageType.Default,
+    };
+    const rawAttachment = {
+      id: "1300000000000000000",
+      filename: "wolf.png",
+      size: 4,
+      url: "https://cdn.example/wolf.png",
+      proxy_url: "https://media.example/wolf.png",
+    };
+
+    test("GIVEN raw messages THEN the cached one wins and the others are built, without writing the cache", async () => {
+      const client = await createClient();
+      await client.cache!.messages.set(messageKey(channelId, rawMessage.id), {
+        ...rawMessage,
+        content: "cached",
+      } as never);
+      const other = { ...rawMessage, id: "1200000000000000001" };
+
+      const resolved = await transformResolved(
+        { client, guildId },
+        { messages: [rawMessage as never, other as never] },
+      );
+
+      expect(resolved.messages!.get(rawMessage.id)?.content).toBe("cached");
+      expect(resolved.messages!.get(other.id)?.content).toBe("raw");
+      expect(resolved.messages!.get(other.id)?.channelId).toBe(channelId);
+      expect(await client.cache!.messages.get(messageKey(channelId, other.id))).toBeUndefined();
+    });
+
+    test("GIVEN message IDs THEN they are read from the cache of the channel", async () => {
+      const client = await createClient();
+      await client.cache!.messages.set(messageKey(channelId, rawMessage.id), rawMessage as never);
+
+      const withChannel = await transformResolved(
+        { client, channelId },
+        { messages: [rawMessage.id, "1200000000000000002"] },
+      );
+      const withoutChannel = await transformResolved({ client }, { messages: [rawMessage.id] });
+
+      expect([...withChannel.messages!.keys()]).toEqual([rawMessage.id]);
+      expect(withoutChannel.messages!.size).toBe(0);
+    });
+
+    test("GIVEN raw attachments THEN they are built by ID", async () => {
+      const client = await createClient();
+
+      const resolved = await transformResolved({ client }, { attachments: [rawAttachment] });
+
+      const attachment = resolved.attachments!.get(rawAttachment.id);
+      expect(attachment).toBeInstanceOf(Attachment);
+      expect(attachment?.name).toBe("wolf.png");
+      expect((await transformResolved({ client }, {})).attachments).toBeUndefined();
+    });
   });
 
   test("GIVEN no guild THEN members and roles are not resolved", async () => {

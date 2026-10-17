@@ -684,6 +684,9 @@ function isBufferResolvable(file: AttachmentResolvable): file is BufferResolvabl
   );
 }
 
+// The name of a file given as a path or URL. Unlike `findName`, which follows discord.js and takes the last segment of
+// the whole string, a URL is read as one: the query string (even one holding a `/`) and the fragment are dropped, and a
+// URL without a file name falls back to `file.jpg` instead of naming the file after its host.
 function nameOf(path: string): string {
   if (/^https?:\/\//.test(path)) {
     const name = basename(new URL(path).pathname);
