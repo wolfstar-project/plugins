@@ -11,6 +11,7 @@ import {
   type ThreadAutoArchiveDuration,
 } from "discord-api-types/v10";
 import type { GatewayClient } from "../GatewayClient.js";
+import { GatewayTypeError } from "../errors/GatewayError.js";
 import type { AnnouncementThreadChannel } from "../structures/channels/AnnouncementThreadChannel.js";
 import type { PrivateThreadChannel } from "../structures/channels/PrivateThreadChannel.js";
 import type { PublicThreadChannel } from "../structures/channels/PublicThreadChannel.js";
@@ -33,15 +34,25 @@ export type AnyThreadChannel =
   | PublicThreadChannel;
 
 /**
- * The options to create a thread with.
+ * The options both kinds of threads are created with.
  */
-export interface ThreadCreateOptions {
+export interface ThreadCreateBaseOptions {
   name: string;
   autoArchiveDuration?: ThreadAutoArchiveDuration;
-  rateLimitPerUser?: number;
   /**
-   * The type of a thread without a message: public (the default; an announcement thread in announcement channels) or
-   * private.
+   * The slowmode of the thread, in seconds. Both threads and forum or media posts take it.
+   */
+  rateLimitPerUser?: number;
+  reason?: string;
+}
+
+/**
+ * The options to create a thread of a text or announcement channel with, like discord.js's
+ * `GuildTextThreadCreateOptions`. To start a thread from a message, use `message.startThread()`.
+ */
+export interface TextThreadCreateOptions extends ThreadCreateBaseOptions {
+  /**
+   * The type of the thread: public (the default; an announcement thread in announcement channels) or private.
    */
   type?: ChannelType.PublicThread | ChannelType.PrivateThread | ChannelType.AnnouncementThread;
   /**
@@ -49,15 +60,43 @@ export interface ThreadCreateOptions {
    */
   invitable?: boolean;
   /**
-   * The first message of a forum or media post.
+   * A thread has no first message: use {@link ForumThreadCreateOptions} to create a forum or media post.
    */
-  message?: MessagePayloadResolvable<MessageCreateOptions>;
+  message?: undefined;
   /**
-   * The tags of a forum or media post.
+   * Only forum and media posts have tags.
+   */
+  appliedTags?: undefined;
+}
+
+/**
+ * The options to create a post of a forum or media channel with, like discord.js's `GuildForumThreadCreateOptions`.
+ */
+export interface ForumThreadCreateOptions extends ThreadCreateBaseOptions {
+  /**
+   * The first message of the post.
+   */
+  message: MessagePayloadResolvable<MessageCreateOptions>;
+  /**
+   * The tags of the post.
    */
   appliedTags?: readonly string[];
-  reason?: string;
+  /**
+   * A post is always a public thread.
+   */
+  type?: undefined;
+  /**
+   * A post is always a public thread.
+   */
+  invitable?: undefined;
 }
+
+/**
+ * The options to create a thread with: those of a thread in a text or announcement channel, or with `message`, those
+ * of a post in a forum or media channel. Mixing the two is a compile error, and throws {@link GatewayTypeError}
+ * `ThreadOptionsPostOnly` or `ThreadOptionsThreadOnly` at runtime.
+ */
+export type ThreadCreateOptions = TextThreadCreateOptions | ForumThreadCreateOptions;
 
 /**
  * The options to fetch archived threads with.
@@ -122,8 +161,24 @@ export class ThreadManager extends CachedManager<"threads", AnyThreadChannel, [t
    *
    * @param channelId The ID of the parent channel.
    * @param options The thread's name and settings, and the first message of a post.
+   * @throws {@link GatewayTypeError} `ThreadOptionsPostOnly` when `appliedTags` is set without `message`, and
+   * `ThreadOptionsThreadOnly` when `type` or `invitable` is set with it.
    */
   public async create(channelId: string, options: ThreadCreateOptions): Promise<AnyThreadChannel> {
+    // The types forbid these mixes, but a cast or untyped code still reaches Discord, which ignores the options.
+    if (options.message === undefined) {
+      if (options.appliedTags !== undefined) {
+        throw new GatewayTypeError("ThreadOptionsPostOnly", "appliedTags");
+      }
+    } else {
+      const inapplicable = (["type", "invitable"] as const).filter(
+        (option) => options[option] !== undefined,
+      );
+      if (inapplicable.length > 0) {
+        throw new GatewayTypeError("ThreadOptionsThreadOnly", inapplicable.join(", "));
+      }
+    }
+
     const common = {
       name: options.name,
       auto_archive_duration: options.autoArchiveDuration,

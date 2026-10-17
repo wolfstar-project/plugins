@@ -60,6 +60,11 @@ export const GatewayErrorMessages = {
   GuildResolve: "Cannot resolve the value to a guild ID",
   GuildRoleUnknown: (guildId: string, roleId: string) =>
     `Role ${roleId} is not a role of guild ${guildId}`,
+  ThreadPostMessageRequired: "A forum or media post needs a first message: pass message",
+  ThreadOptionsPostOnly: (options: string) => `Only a forum or media post takes ${options}`,
+  ThreadOptionsThreadOnly: (options: string) => `Only a thread without a message takes ${options}`,
+  ChannelMessagesGuildOnly: (channelId: string, action: string) =>
+    `${action} is only available in guild channels, and channel ${channelId} is a direct message`,
   ThreadParentUnknown: (threadId: string) => `Thread ${threadId} has no known parent`,
   ThreadOwnerUnknown: (threadId: string) => `Thread ${threadId} has no known owner`,
   ThreadMemberIdsMissing: (action: string) =>

@@ -17,6 +17,11 @@ export class ChannelThreadsMixin<Type extends ChannelType = ChannelType> {
    * The threads of the channel.
    */
   public get threads(): ChannelThreadManager {
-    return new ChannelThreadManager(this.client, this.id, (this[kData] as Data).guild_id ?? null);
+    return new ChannelThreadManager(
+      this.client,
+      this.id,
+      (this[kData] as Data).guild_id ?? null,
+      this.type,
+    );
   }
 }

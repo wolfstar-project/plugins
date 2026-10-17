@@ -11,12 +11,14 @@ import {
 } from "discord-api-types/v10";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  ChannelThreadManager,
   GatewayClient,
   ThreadMember,
   type ForumChannel,
   type GatewayClientOptions,
   type GatewayEventMap,
   type GatewayEventName,
+  type MediaChannel,
   type PublicThreadChannel,
   type TextChannel,
 } from "../src/index.js";
@@ -158,6 +160,103 @@ describe("thread creation", () => {
       body: { name: "hunt", message: { content: "Awoo" }, applied_tags: ["5"] },
     });
     expect(await client.cache!.messages.get(messageKey(threadId, threadId))).toBeDefined();
+  });
+});
+
+describe("thread creation options", () => {
+  test("GIVEN a forum or media channel without a message THEN it throws before any request", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+
+    for (const type of [ChannelType.GuildForum, ChannelType.GuildMedia]) {
+      const forum = (await cacheParent(client, type)) as ForumChannel | MediaChannel;
+      const error = await forum.threads.create({ name: "hunt" } as never).catch((e) => e);
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.code).toBe("ThreadPostMessageRequired");
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN a text or announcement channel with a message THEN it throws before any request", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+
+    for (const type of [ChannelType.GuildText, ChannelType.GuildAnnouncement]) {
+      const channel = (await cacheParent(client, type)) as TextChannel;
+      const error = await channel.threads
+        .create({ name: "hunt", message: "Awoo" } as never)
+        .catch((e) => e);
+
+      expect(error).toBeInstanceOf(TypeError);
+      expect(error.code).toBe("ThreadOptionsPostOnly");
+      expect(error.message).toBe("Only a forum or media post takes message");
+    }
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN appliedTags without a message THEN it throws instead of dropping the tags", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+    const channel = (await cacheParent(client)) as TextChannel;
+
+    const viaChannel = await channel.threads
+      .create({ name: "hunt", appliedTags: ["5"] } as never)
+      .catch((e) => e);
+    const viaClient = await client.threads
+      .create(channelId, { name: "hunt", appliedTags: ["5"] } as never)
+      .catch((e) => e);
+
+    expect(viaChannel.code).toBe("ThreadOptionsPostOnly");
+    expect(viaChannel.message).toContain("appliedTags");
+    expect(viaClient.code).toBe("ThreadOptionsPostOnly");
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN a message with type or invitable THEN it throws instead of dropping them", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+    const forum = (await cacheParent(client, ChannelType.GuildForum)) as ForumChannel;
+
+    const type = await forum.threads
+      .create({ name: "hunt", message: "Awoo", type: ChannelType.PrivateThread } as never)
+      .catch((e) => e);
+    const both = await client.threads
+      .create(channelId, { name: "hunt", message: "Awoo", type: 11, invitable: true } as never)
+      .catch((e) => e);
+
+    expect(type).toBeInstanceOf(TypeError);
+    expect(type.code).toBe("ThreadOptionsThreadOnly");
+    expect(type.message).toContain("takes type");
+    expect(both.code).toBe("ThreadOptionsThreadOnly");
+    expect(both.message).toContain("type, invitable");
+    expect(post).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN rateLimitPerUser THEN both a thread and a post take it, like discord.js", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+    const text = (await cacheParent(client)) as TextChannel;
+    await text.threads.create({ name: "hunt", rateLimitPerUser: 30 });
+    const forum = (await cacheParent(client, ChannelType.GuildForum)) as ForumChannel;
+    await forum.threads.create({ name: "hunt", message: "Awoo", rateLimitPerUser: 60 });
+
+    const limits = post.mock.calls.map(
+      ([, options]) =>
+        (options as { body: { rate_limit_per_user: number } }).body.rate_limit_per_user,
+    );
+    expect(limits).toEqual([30, 60]);
+  });
+
+  test("GIVEN a manager built without the channel type THEN only the shape of the options is checked", async () => {
+    const client = createClient();
+    const post = vi.spyOn(container.rest, "post").mockResolvedValue(thread());
+    const manager = new ChannelThreadManager(client, channelId, guildId);
+
+    await manager.create({ name: "hunt", type: ChannelType.PublicThread });
+    await manager.create({ name: "hunt", message: "Awoo" });
+
+    expect(post).toHaveBeenCalledTimes(2);
   });
 });
 
