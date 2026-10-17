@@ -7,6 +7,7 @@ import {
 import {
   clearDeferredSubcommands,
   resolveDeferredSubcommands,
+  sortedRegistryEntries,
   subCommandsGroupRegistry,
   subCommandsRegistry,
 } from "./functions.js";
@@ -67,7 +68,7 @@ export function wireParentSubcommands(parent: Command): void {
 
   const direct = subCommandsRegistry.get(parentName);
   if (direct) {
-    for (const entry of direct.values()) {
+    for (const [, entry] of sortedRegistryEntries(direct)) {
       installDelegate(ctor, parentName, entry);
       resolver.addSubcommand(entry.slashCommand, entry.methodName);
     }
@@ -75,8 +76,8 @@ export function wireParentSubcommands(parent: Command): void {
 
   const groups = subCommandsGroupRegistry.get(parentName);
   if (groups) {
-    for (const [groupName, commands] of groups) {
-      for (const entry of commands.values()) {
+    for (const [groupName, commands] of sortedRegistryEntries(groups)) {
+      for (const [, entry] of sortedRegistryEntries(commands)) {
         installDelegate(ctor, parentName, entry);
         resolver.addSubcommand(entry.slashCommand, entry.methodName, groupName);
       }

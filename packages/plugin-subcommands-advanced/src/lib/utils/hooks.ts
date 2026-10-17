@@ -1,6 +1,10 @@
 import type { SlashCommandBuilder } from "@discordjs/builders";
 import type { Command } from "@wolfstar/http-framework";
-import { subCommandsGroupRegistry, subCommandsRegistry } from "./functions.js";
+import {
+  sortedRegistryEntries,
+  subCommandsGroupRegistry,
+  subCommandsRegistry,
+} from "./functions.js";
 
 /**
  * Optional hooks for parent commands that register chat-input commands imperatively
@@ -23,7 +27,7 @@ export const RegisterSubcommandsHooks = {
 
     if (!context) return;
 
-    for (const { slashCommand } of subcommands.values()) {
+    for (const [, { slashCommand }] of sortedRegistryEntries(subcommands)) {
       context.addSubcommand(slashCommand);
     }
   },
@@ -42,7 +46,7 @@ export const RegisterSubcommandsHooks = {
 
     if (!context) return;
 
-    for (const [groupName, commands] of groups) {
+    for (const [groupName, commands] of sortedRegistryEntries(groups)) {
       const group = context.options.find((option) => {
         const data =
           "toJSON" in option && typeof option.toJSON === "function" ? option.toJSON() : null;
@@ -51,7 +55,7 @@ export const RegisterSubcommandsHooks = {
 
       if (!group?.addSubcommand) continue;
 
-      for (const { slashCommand } of commands.values()) {
+      for (const [, { slashCommand }] of sortedRegistryEntries(commands)) {
         group.addSubcommand(slashCommand);
       }
     }
