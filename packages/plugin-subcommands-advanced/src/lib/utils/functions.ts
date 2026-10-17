@@ -19,6 +19,22 @@ export const subCommandsGroupRegistry: Collection<
   Collection<string, Collection<string, SubcommandMappingCollection>>
 > = new Collection();
 
+/**
+ * Entries of a registry sorted by key, without mutating it.
+ *
+ * Registries fill in the order the stores load the pieces, which is not stable between
+ * starts, while Discord keeps option order and `http-framework` compares it by position.
+ * Keys are compared by code unit rather than with `localeCompare`, so the result does not
+ * depend on the machine's locale either.
+ *
+ * @internal
+ */
+export function sortedRegistryEntries<Value>(
+  registry: ReadonlyMap<string, Value>,
+): [string, Value][] {
+  return [...registry].toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+}
+
 interface DeferredSubcommand {
   parentCommandName: string;
   groupName?: string;
