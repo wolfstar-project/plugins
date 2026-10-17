@@ -1099,8 +1099,7 @@ await client.application.editRoleConnectionMetadataRecords(records);
 ```
 
 `owner` is the `Team` (with its `members`, each a `TeamMember`) when a team owns the application, the owner `User`
-otherwise. `application.emojis` will be added to `ClientApplication` by its own feature, there is no
-placeholder for it.
+otherwise.
 
 ### Application commands
 
@@ -1155,6 +1154,26 @@ await guild.commands.permissions.add({
   token: userToken,
   permissions: [{ id: roleId, type: ApplicationCommandPermissionType.Role, permission: false }],
 });
+```
+
+#### Application emojis
+
+`client.application.emojis` is an `ApplicationEmojiManager` for the emojis the application owns, usable by the bot in
+any guild. Discord sends no event for them, so they are never cached: every call goes to the API, and `fetch()` without
+an ID lists them all, in a `Collection`. Unlike `GuildEmoji`, an `ApplicationEmoji` has no `roles`, `managed`,
+`available` nor `requiresColons`, the API does not send them, and so `equals()` compares only the ID, name, and
+`animated`.
+
+```ts
+const emojis = await client.application.emojis.fetch(); // Collection<string, ApplicationEmoji>
+const emoji = await client.application.emojis.create({
+  attachment: "data:image/png;base64,...",
+  name: "howl",
+});
+
+await emoji.setName("awoo");
+const author = await emoji.fetchAuthor();
+await emoji.delete();
 ```
 
 ### Monetization

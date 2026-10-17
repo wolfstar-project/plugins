@@ -1,5 +1,6 @@
 export * from "./ApplicationCommandManager.js";
 export * from "./ApplicationCommandPermissionsManager.js";
+export * from "./ApplicationEmojiManager.js";
 export * from "./AutoModerationRuleManager.js";
 export * from "./BaseManager.js";
 export * from "./CachedManager.js";

@@ -19,6 +19,7 @@ import { resolveImageOption, type ImageResolvable } from "../../util/DataResolve
 import { cachedGuild } from "../../util/cache.js";
 import { ApplicationFlagsBitField, type ApplicationFlagsResolvable } from "../../util/flags.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
+import { ApplicationEmojiManager } from "../../managers/ApplicationEmojiManager.js";
 import { resolveSKUId } from "../../util/Util.js";
 import type { Guild } from "../guilds/Guild.js";
 import { SKU } from "../monetization/SKU.js";
@@ -134,6 +135,7 @@ export class ClientApplication extends Application {
 
   // The owner is built once per payload, so that it stays the same object between reads.
   #owner: { team: unknown; user: unknown; value: Team | User | null } | null = null;
+  #emojis: ApplicationEmojiManager | null = null;
 
   // Built on first use: it needs the client, which binds the application after constructing it.
   #entitlements: EntitlementManager | null = null;
@@ -295,6 +297,13 @@ export class ClientApplication extends Application {
   public get eventWebhooksTypes(): ApplicationWebhookEventType[] | null {
     const types = this[kData].event_webhooks_types;
     return types ? [...types] : null;
+  }
+
+  /**
+   * The emojis of the application, fetched from the API: they are not cached.
+   */
+  public get emojis(): ApplicationEmojiManager {
+    return (this.#emojis ??= new ApplicationEmojiManager(this.client));
   }
 
   /**
