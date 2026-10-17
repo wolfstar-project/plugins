@@ -458,6 +458,9 @@ export class GatewayClient extends Client {
   // guilds proceed concurrently.
   readonly #queue = new DispatchQueue();
 
+  // How many forwarders of this client's dispatches are running, see `markDispatchesForwarded`.
+  #dispatchForwarders = 0;
+
   // One cache per entity, shared by every manager of that entity.
   readonly #caches = new Map<CacheEntityName, Cache<any>>();
 
@@ -938,6 +941,31 @@ export class GatewayClient extends Client {
    */
   public emitAndWait(event: string, args: readonly unknown[]): Promise<void> {
     return emitAndWait(this, event, args);
+  }
+
+  /**
+   * Whether the dispatches of this client are forwarded to workers, which replay them on their own listeners, see
+   * `forwardGatewayDispatches` from `@wolfstar/plugin-broker`. Listeners registered with
+   * {@link RegisterAsDispatchListener} stay idle on a client that does.
+   */
+  public get forwardsDispatches(): boolean {
+    return this.#dispatchForwarders > 0;
+  }
+
+  /**
+   * Marks this client as forwarding its dispatches, until the returned function is called. Called by
+   * `forwardGatewayDispatches`, it counts, so the client keeps forwarding while any forwarder is left.
+   *
+   * @returns A function to undo the mark, which does nothing when called again.
+   */
+  public markDispatchesForwarded(): () => void {
+    this.#dispatchForwarders++;
+    let marked = true;
+    return () => {
+      if (!marked) return;
+      marked = false;
+      this.#dispatchForwarders--;
+    };
   }
 
   /**

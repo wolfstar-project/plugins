@@ -10,7 +10,10 @@ import { afterEach, describe, expect, test } from "vitest";
 import {
   EventGatewayListener,
   GatewayClient,
+  RegisterAsDispatchListener,
   RegisterAsGatewayListener,
+  gatewayOnlyEvents,
+  GatewayEvents,
   type User,
 } from "../src/index.js";
 
@@ -121,5 +124,102 @@ describe("EventGatewayListener", () => {
 
     expect(received).toEqual(["first"]);
     expect(store.has("once")).toBe(false);
+  });
+});
+
+describe("RegisterAsDispatchListener", () => {
+  afterEach(async () => {
+    await container.stores.get("listeners").unloadAll();
+  });
+
+  function decorated(received: string[], options: { once?: boolean } = {}) {
+    @RegisterAsDispatchListener("userUpdate", options)
+    class UserUpdateListener extends EventGatewayListener<"userUpdate"> {
+      public override run(_previous: User | null, current: User) {
+        received.push(current.username);
+      }
+    }
+    return new UserUpdateListener(context("dispatch"), {} as never);
+  }
+
+  test("GIVEN a client that does not forward THEN the listener runs", async () => {
+    const client = createClient();
+    const received: string[] = [];
+    const listener = decorated(received);
+
+    expect(listener.emitter).toBe(client);
+    expect(listener.event).toBe("userUpdate");
+
+    await container.stores.get("listeners").insert(listener);
+    await sendUserUpdate(client, "standalone");
+
+    expect(received).toEqual(["standalone"]);
+  });
+
+  test("GIVEN a client that forwards THEN the listener stays idle until forwarding stops", async () => {
+    const client = createClient();
+    const received: string[] = [];
+    await container.stores.get("listeners").insert(decorated(received));
+
+    const unmark = client.markDispatchesForwarded();
+    expect(client.forwardsDispatches).toBe(true);
+    await sendUserUpdate(client, "forwarded");
+    expect(received).toEqual([]);
+
+    unmark();
+    expect(client.forwardsDispatches).toBe(false);
+    await sendUserUpdate(client, "again");
+    expect(received).toEqual(["again"]);
+  });
+
+  test("GIVEN forwarding that starts before the listener loads THEN the listener stays idle", async () => {
+    const client = createClient();
+    const received: string[] = [];
+    client.markDispatchesForwarded();
+
+    await container.stores.get("listeners").insert(decorated(received));
+    await sendUserUpdate(client, "forwarded");
+
+    expect(received).toEqual([]);
+  });
+
+  test("GIVEN several forwarders THEN the client forwards until the last stops", () => {
+    const client = createClient();
+    const first = client.markDispatchesForwarded();
+    const second = client.markDispatchesForwarded();
+
+    first();
+    first();
+    expect(client.forwardsDispatches).toBe(true);
+    second();
+    expect(client.forwardsDispatches).toBe(false);
+  });
+
+  test("GIVEN once THEN an idle listener is not spent", async () => {
+    const client = createClient();
+    const received: string[] = [];
+    const store = container.stores.get("listeners");
+    await store.insert(decorated(received, { once: true }));
+
+    const unmark = client.markDispatchesForwarded();
+    await sendUserUpdate(client, "idle");
+    expect(store.has("dispatch")).toBe(true);
+
+    unmark();
+    await sendUserUpdate(client, "first");
+    await sendUserUpdate(client, "second");
+
+    expect(received).toEqual(["first"]);
+    expect(store.has("dispatch")).toBe(false);
+  });
+
+  test.each([...gatewayOnlyEvents])("GIVEN the gateway-only %s event THEN it throws", (event) => {
+    expect(() => RegisterAsDispatchListener(event as never)).toThrow(TypeError);
+  });
+
+  test("GIVEN the gateway-only events THEN they are events of the client, and raw is not one", () => {
+    const events = new Set<string>(Object.values(GatewayEvents));
+    for (const event of gatewayOnlyEvents) expect(events.has(event)).toBe(true);
+    expect(gatewayOnlyEvents.has("raw")).toBe(false);
   });
 });

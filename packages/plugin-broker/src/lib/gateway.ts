@@ -37,6 +37,12 @@ export interface GatewayDispatchEmitterLike {
    * {@link GatewayReplayTargetLike.reviveDispatchState}. An emitter without it forwards dispatches without state.
    */
   serializeDispatchState?(type: string, state: unknown): unknown;
+  /**
+   * Marks the emitter as forwarding its dispatches, until the returned function is called, so that listeners meant to
+   * run on one process only (`RegisterAsDispatchListener`) stay idle on it. An emitter without it forwards without
+   * telling.
+   */
+  markDispatchesForwarded?(): () => void;
   on(event: "dispatch", listener: GatewayDispatchListener): unknown;
   off(event: "dispatch", listener: GatewayDispatchListener): unknown;
 }
@@ -63,7 +69,8 @@ export interface ForwardGatewayDispatchesOptions {
  * sharing that cache (a `@wolfstar/plugin-cache` Redis cache) see the state the dispatch left when they receive it.
  * Publishing does not hold up the gateway, and the entries are added in the order the dispatches were processed.
  * For a `GatewayClient` the entry also carries the dispatch's previous state and shard, which
- * `replayGatewayDispatches` uses on workers.
+ * `replayGatewayDispatches` uses on workers, and the client is marked as forwarding until forwarding stops, so the
+ * listeners registered with `RegisterAsDispatchListener` leave the dispatches to the workers.
  *
  * @example
  * ```typescript
@@ -125,7 +132,11 @@ export function forwardGatewayDispatches(
   };
 
   client.on("dispatch", listener);
-  return () => void client.off("dispatch", listener);
+  const unmark = client.markDispatchesForwarded?.();
+  return () => {
+    client.off("dispatch", listener);
+    unmark?.();
+  };
 }
 
 /**

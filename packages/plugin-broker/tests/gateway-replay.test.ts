@@ -1,5 +1,11 @@
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
-import { GatewayClient } from "@wolfstar/plugin-gateway";
+import { container } from "@wolfstar/http-framework";
+import {
+  EventGatewayListener,
+  GatewayClient,
+  RegisterAsDispatchListener,
+  type Message,
+} from "@wolfstar/plugin-gateway";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
   BrokerConsumer,
@@ -298,5 +304,47 @@ describe("replayGatewayDispatches", () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
 
     expect(replayDispatch).not.toHaveBeenCalled();
+  });
+
+  test("GIVEN a gateway process and a worker loading the same dispatch listener THEN only the worker runs it", async () => {
+    const { broker, consumer } = setup();
+    const received: string[] = [];
+
+    @RegisterAsDispatchListener("messageCreate")
+    class LogMessagesListener extends EventGatewayListener<"messageCreate"> {
+      public override run(_message: Message) {
+        received.push(this.name);
+      }
+    }
+    const store = container.stores.get("listeners");
+    const context = (name: string): EventGatewayListener.LoaderContext => ({
+      name,
+      path: `/virtual/${name}.js`,
+      root: "/virtual",
+      store,
+    });
+
+    const { producer, worker } = clients();
+    try {
+      // A listener binds to `container.client`, so point it at each client in turn.
+      container.client = producer;
+      await store.insert(new LogMessagesListener(context("gateway"), {} as never));
+      container.client = worker;
+      await store.insert(new LogMessagesListener(context("worker"), {} as never));
+
+      const stopForwarding = forwardGatewayDispatches(producer, broker);
+      replayGatewayDispatches(consumer, worker);
+      await consumer.start();
+
+      await feed(producer, "MESSAGE_CREATE", message());
+      await vi.waitFor(() => expect(received).toEqual(["worker"]));
+
+      // Once forwarding stops, the gateway process handles its dispatches itself again.
+      stopForwarding();
+      await feed(producer, "MESSAGE_CREATE", message({ id: "1200000000000000001" }));
+      expect(received).toEqual(["worker", "gateway"]);
+    } finally {
+      await store.unloadAll();
+    }
   });
 });
