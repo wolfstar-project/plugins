@@ -1,3 +1,4 @@
+import { Collection } from "@discordjs/collection";
 import type {
   APIApplication,
   APIApplicationRoleConnectionMetadata,
@@ -9,11 +10,17 @@ import type {
   OAuth2Scopes,
   RESTPatchCurrentApplicationJSONBody,
 } from "discord-api-types/v10";
+import { GatewayTypeError } from "../../errors/GatewayError.js";
+import { EntitlementManager } from "../../managers/EntitlementManager.js";
+import { SubscriptionManager } from "../../managers/SubscriptionManager.js";
+import type { SKUResolvable } from "../../types.js";
 import { resolveImageOption, type ImageResolvable } from "../../util/DataResolver.js";
 import { cachedGuild } from "../../util/cache.js";
 import { ApplicationFlagsBitField, type ApplicationFlagsResolvable } from "../../util/flags.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
+import { resolveSKUId } from "../../util/Util.js";
 import type { Guild } from "../guilds/Guild.js";
+import { SKU } from "../monetization/SKU.js";
 import { bindClient, kClient, kData, kPatch } from "../Structure.js";
 import { User } from "../users/User.js";
 import { Application } from "./Application.js";
@@ -124,6 +131,9 @@ function toInstallParams(
 export class ClientApplication extends Application {
   // The owner is built once per payload, so that it stays the same object between reads.
   #owner: { team: unknown; user: unknown; value: Team | User | null } | null = null;
+
+  // Built on first use: it needs the client, which binds the application after constructing it.
+  #entitlements: EntitlementManager | null = null;
 
   /**
    * Whether only the ID and flags of the application are known: it has neither been fetched nor edited yet.
@@ -274,6 +284,36 @@ export class ClientApplication extends Application {
   public get eventWebhooksTypes(): ApplicationWebhookEventType[] | null {
     const types = this[kData].event_webhooks_types;
     return types ? [...types] : null;
+  }
+
+  /**
+   * The entitlements of the application: the access users and guilds were granted to its SKUs. Cached from the
+   * gateway, like discord.js's `ClientApplication#entitlements`.
+   */
+  public get entitlements(): EntitlementManager {
+    return (this.#entitlements ??= new EntitlementManager(this.client));
+  }
+
+  /**
+   * Gets the manager of the subscriptions to a SKU, which never caches them. The same as `sku.subscriptions`, for when
+   * only the ID of the SKU is known.
+   *
+   * @param sku The SKU, or its ID.
+   * @throws {GatewayTypeError} `InvalidType` when the value does not resolve.
+   */
+  public subscriptions(sku: SKUResolvable): SubscriptionManager {
+    const skuId = resolveSKUId(sku);
+    if (!skuId) throw new GatewayTypeError("InvalidType", "sku", "SKUResolvable");
+    return new SubscriptionManager(this.client, skuId);
+  }
+
+  /**
+   * Fetches the SKUs of the application, by ID.
+   */
+  public async fetchSKUs(): Promise<Collection<string, SKU>> {
+    const skus = await this.client.api.monetization.getSKUs(this.id);
+    const client = this.client;
+    return new Collection(skus.map((data) => [data.id, bindClient(new SKU(data), client)]));
   }
 
   /**

@@ -38,6 +38,9 @@ import type { GuildInvite } from "./structures/invites/GuildInvite.js";
 import type { Message } from "./structures/messages/Message.js";
 import type { JSONEncodable } from "./structures/messages/MessagePayload.js";
 import type { MessageReaction } from "./structures/messages/MessageReaction.js";
+import type { Entitlement } from "./structures/monetization/Entitlement.js";
+import type { SKU } from "./structures/monetization/SKU.js";
+import type { Subscription } from "./structures/monetization/Subscription.js";
 import type { Activity } from "./structures/presences/Activity.js";
 import type { Presence } from "./structures/presences/Presence.js";
 import type { SoundboardSound } from "./structures/soundboards/SoundboardSound.js";
@@ -384,17 +387,17 @@ export type CommandOptionDataTypeResolvable = ApplicationCommandOptionType;
 /**
  * An entitlement, or its ID.
  */
-export type EntitlementResolvable = APIEntitlement | Snowflake;
+export type EntitlementResolvable = Entitlement | APIEntitlement | Snowflake;
 
 /**
  * A SKU, or its ID.
  */
-export type SKUResolvable = APISKU | Snowflake;
+export type SKUResolvable = SKU | APISKU | Snowflake;
 
 /**
  * A subscription, or its ID.
  */
-export type SubscriptionResolvable = APISubscription | Snowflake;
+export type SubscriptionResolvable = Subscription | APISubscription | Snowflake;
 
 // ---------------------------------------------------------------------------------------------------------------------
 // Colors and dates

@@ -116,5 +116,8 @@ export const GatewayErrorMessages = {
   VoiceStateNotOwn: "Only the bot's own voice state can request to speak",
   VoiceStateGuildUnknown: "This voice state does not belong to a guild",
 
+  EntitlementCreateInvalidOwner:
+    "You must provide either a guild or a user to create an entitlement, but not both",
+
   WebhookTokenUnavailable: (webhookId: string) => `Webhook ${webhookId} has no token to post with`,
 } as const satisfies Record<string, string | ((...args: never[]) => string)>;

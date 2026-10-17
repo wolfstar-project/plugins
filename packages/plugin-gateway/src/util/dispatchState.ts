@@ -153,6 +153,7 @@ export const DispatchStateCodecs: { [Type in GatewayDispatchEvents]?: DispatchSt
     client.guilds.integrations(data.guild_id),
   ),
   [GatewayDispatchEvents.UserUpdate]: single((client) => client.users),
+  [GatewayDispatchEvents.EntitlementUpdate]: single((client) => client.application.entitlements),
   [GatewayDispatchEvents.GuildEmojisUpdate]: list(
     (client, data) => client.guilds.emojis(data.guild_id),
     (data) => ({ guild_id: data.guild_id }),

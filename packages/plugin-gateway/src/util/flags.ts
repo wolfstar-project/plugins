@@ -12,6 +12,7 @@ import {
   GuildMemberFlags,
   GuildSystemChannelFlags,
   RoleFlags,
+  SKUFlags,
   UserFlags,
   type ActivityFlags,
   type AttachmentFlags,
@@ -152,4 +153,14 @@ export type ApplicationFlagsResolvable = BitFieldResolvable<ApplicationFlagsStri
  */
 export class ApplicationFlagsBitField extends NumberFlagsBitField<ApplicationFlagsString> {
   public static override readonly Flags = ApplicationFlags;
+}
+
+export type SKUFlagsString = keyof typeof SKUFlags;
+export type SKUFlagsResolvable = BitFieldResolvable<SKUFlagsString>;
+
+/**
+ * The flags of a SKU.
+ */
+export class SKUFlagsBitField extends NumberFlagsBitField<SKUFlagsString> {
+  public static override readonly Flags = SKUFlags;
 }

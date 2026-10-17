@@ -639,6 +639,23 @@ export const DispatchHandlers: { [Type in GatewayDispatchEvents]?: AnyDispatchHa
     build: (_client, data, previous) => [previous ?? null, data],
   },
 
+  [GatewayDispatchEvents.EntitlementCreate]: {
+    event: GatewayEvents.EntitlementCreate,
+    build: async (client, data) => [await client.application.entitlements._build(data)],
+  },
+  [GatewayDispatchEvents.EntitlementUpdate]: {
+    event: GatewayEvents.EntitlementUpdate,
+    before: (client, data) => previousOf(client.application.entitlements, data.id),
+    build: async (client, data, previous) => [
+      previous ?? null,
+      await client.application.entitlements._build(data),
+    ],
+  },
+  [GatewayDispatchEvents.EntitlementDelete]: {
+    event: GatewayEvents.EntitlementDelete,
+    build: async (client, data) => [await client.application.entitlements._build(data)],
+  },
+
   [GatewayDispatchEvents.AutoModerationActionExecution]: {
     event: GatewayEvents.AutoModerationActionExecution,
     build: async (client, data) => {
