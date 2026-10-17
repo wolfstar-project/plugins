@@ -42,6 +42,10 @@ import type { Entitlement } from "./structures/monetization/Entitlement.js";
 import type { SKU } from "./structures/monetization/SKU.js";
 import type { Subscription } from "./structures/monetization/Subscription.js";
 import type { Activity } from "./structures/presences/Activity.js";
+import type {
+  ApplicationCommand,
+  ApplicationCommandData,
+} from "./structures/applications/ApplicationCommand.js";
 import type { Presence } from "./structures/presences/Presence.js";
 import type { SoundboardSound } from "./structures/soundboards/SoundboardSound.js";
 import type { StageInstance } from "./structures/stageInstances/StageInstance.js";
@@ -359,14 +363,15 @@ export type MessageActionRowComponentResolvable =
 export type ApplicationResolvable = Activity | APIApplication | Snowflake;
 
 /**
- * An application command, or its ID.
+ * An application command, a raw one, or its ID.
  */
-export type ApplicationCommandResolvable = APIApplicationCommand | Snowflake;
+export type ApplicationCommandResolvable = APIApplicationCommand | ApplicationCommand | Snowflake;
 
 /**
- * The data to create an application command with, raw or serializable (a builder).
+ * The data to create an application command with: camel-cased data, or raw or serializable (a builder).
  */
 export type ApplicationCommandDataResolvable =
+  | ApplicationCommandData
   | JSONEncodable<RESTPostAPIApplicationCommandsJSONBody>
   | RESTPostAPIApplicationCommandsJSONBody;
 

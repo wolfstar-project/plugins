@@ -1,3 +1,5 @@
+export * from "./ApplicationCommandManager.js";
+export * from "./ApplicationCommandPermissionsManager.js";
 export * from "./AutoModerationRuleManager.js";
 export * from "./BaseManager.js";
 export * from "./CachedManager.js";
@@ -7,6 +9,7 @@ export * from "./ChannelMessageManager.js";
 export * from "./ChannelThreadManager.js";
 export * from "./DataManager.js";
 export * from "./EntitlementManager.js";
+export * from "./GuildApplicationCommandManager.js";
 export * from "./GuildBanManager.js";
 export * from "./GuildChannelManager.js";
 export * from "./GuildEmojiManager.js";

@@ -1099,8 +1099,63 @@ await client.application.editRoleConnectionMetadataRecords(records);
 ```
 
 `owner` is the `Team` (with its `members`, each a `TeamMember`) when a team owns the application, the owner `User`
-otherwise. `application.commands` and `application.emojis` will be added to `ClientApplication` by their own
-features, there are no placeholders for them.
+otherwise. `application.emojis` will be added to `ClientApplication` by its own feature, there is no
+placeholder for it.
+
+### Application commands
+
+`client.application.commands` (global commands, and the ones of any guild through a `guildId` option) and
+`guild.commands` (one guild, a new manager on every access, also `client.guilds.commands(guildId)`) manage
+`ApplicationCommand`s through the API. They are **fetch-only**: Discord sends no event when a command changes, so a
+cache could not be kept in sync, and every method calls the API and returns new structures. The only cached piece
+is the permissions, see below.
+
+```ts
+const commands = await client.application.commands.fetch(); // Collection<id, ApplicationCommand>
+const one = await guild.commands.fetch("123456789012345678");
+const localized = await client.application.commands.fetch({
+  locale: "fr",
+  withLocalizations: true,
+});
+
+const created = await guild.commands.create({
+  name: "awoo",
+  description: "Howl",
+  defaultMemberPermissions: ["ManageGuild"], // or a builder: create(builder), anything with toJSON()
+  options: [{ type: ApplicationCommandOptionType.Boolean, name: "loud", description: "Howl loud" }],
+});
+await created.setDescription("Howl at the moon"); // patches `created` in place
+await created.delete();
+
+existing.equals(desired); // compares every field `desired` has, options recursively
+existing.equals(desired, true); // also their order
+```
+
+> [!WARNING]
+> `set(commands)` is the bulk overwrite: it replaces every command of the application (or the guild) with the given
+> ones. `@wolfstar/http-framework` registers the commands of its pieces with the very same call, so `set()` deletes
+> whatever the framework registered. Nothing in this package calls it: use it to manage commands the framework does not,
+> or instead of it.
+
+`ApplicationCommandPermissionsManager` is `application.commands.permissions` (any guild and command: pass `guild` and
+`command`), `guild.commands.permissions` (pass `command`) and `command.permissions`. `fetch` and `has` use the bot's
+authorization and, for one command, the `applicationCommandPermissions` cache (kept up to date by
+`APPLICATION_COMMAND_PERMISSIONS_UPDATE`, and by what these methods fetch and write), unless `fetch` is given
+`force`. Discord
+only accepts writes with an OAuth2 bearer token of a user able to manage the guild, with the
+`applications.commands.permissions.update` scope, so `set`, `add` and `remove` take it as a `token` option and throw
+`ApplicationCommandPermissionsTokenMissing` without one. Getting the token is up to you, there is no OAuth2 flow here.
+Roles and channels are given as IDs or structures, nothing is looked up through the guild.
+
+```ts
+await command.permissions.fetch({ guild: guildId, force: true });
+await guild.commands.permissions.has({ command, permissionId: roleId });
+await guild.commands.permissions.add({
+  command,
+  token: userToken,
+  permissions: [{ id: roleId, type: ApplicationCommandPermissionType.Role, permission: false }],
+});
+```
 
 ### Monetization
 

@@ -69,6 +69,7 @@ import {
 import { SystemChannelFlagsBitField } from "../util/flags.js";
 import { CachedManager } from "./CachedManager.js";
 import { AutoModerationRuleManager } from "./AutoModerationRuleManager.js";
+import { GuildApplicationCommandManager } from "./GuildApplicationCommandManager.js";
 import { GuildBanManager } from "./GuildBanManager.js";
 import { GuildChannelManager } from "./GuildChannelManager.js";
 import { GuildIntegrationManager } from "./GuildIntegrationManager.js";
@@ -756,6 +757,15 @@ export class GuildManager extends CachedManager<"guilds", Guild, [guildId: strin
    */
   public emojis(guildId: string): GuildEmojiManager {
     return new GuildEmojiManager(this.client, guildId);
+  }
+
+  /**
+   * Gets the manager of a guild's application commands.
+   *
+   * @param guildId The ID of the guild.
+   */
+  public commands(guildId: string): GuildApplicationCommandManager {
+    return new GuildApplicationCommandManager(this.client, guildId);
   }
 
   /**

@@ -93,6 +93,11 @@ export const GatewayErrorMessages = {
   NotGuildSoundboardSound: "Default soundboard sounds cannot be changed",
   SoundboardSoundContentType: "Could not infer the content type of the sound, pass contentType",
 
+  ApplicationCommandPermissionsTokenMissing:
+    "Editing the permissions of an application command needs a bearer token (with the applications.commands.permissions.update scope), but none was provided",
+  GlobalCommandPermissions:
+    "The permissions of an application command belong to a guild: provide a guild, or use the permissions manager of a guild",
+
   MessageContentType: "The content of a message must be a string",
   MessageNonceLength: "A message nonce must be at most 25 characters long",
   MessageNonceType: "A message nonce must be an integer",
