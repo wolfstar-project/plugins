@@ -344,6 +344,48 @@ describe("READY reconciliation", () => {
     expect(await client.guilds.cache.get(otherShardGuild)).toBeDefined();
   });
 
+  test("GIVEN a cached guild READY no longer lists THEN dispatch is emitted for it once, after the cache write", async () => {
+    const client = createClient(createInMemoryCache(), { shardCount: 2 });
+    send(client, GatewayDispatchEvents.GuildCreate, guild("10"));
+    send(client, GatewayDispatchEvents.GuildCreate, guild("11"));
+    send(client, GatewayDispatchEvents.GuildCreate, guild(otherShardGuild), 1);
+    await client.idle();
+
+    const deletes: { payload: GatewayDispatchPayload; shardId: number; state: unknown }[] = [];
+    const cachedOnDispatch: unknown[] = [];
+    const raws: GatewayDispatchPayload[] = [];
+    const order: string[] = [];
+    client.on("raw", (payload) => void raws.push(payload));
+    client.on("dispatch", (payload, shardId, state) => {
+      if (payload.t !== GatewayDispatchEvents.GuildDelete) return;
+      order.push("dispatch");
+      deletes.push({ payload, shardId, state });
+      cachedOnDispatch.push(client.cache!.guilds!.get(payload.d.id));
+    });
+    client.on("guildDelete", () => void order.push("guildDelete"));
+
+    send(client, GatewayDispatchEvents.Ready, {
+      user,
+      guilds: [{ id: "10", unavailable: true }],
+      session_id: "s",
+    });
+    await client.idle();
+
+    expect(deletes).toHaveLength(1);
+    expect(deletes[0]!.payload).toEqual({
+      op: GatewayOpcodes.Dispatch,
+      s: 0,
+      t: GatewayDispatchEvents.GuildDelete,
+      d: { id: "11" },
+    });
+    expect(deletes[0]!.shardId).toBe(0);
+    expect((deletes[0]!.state as { name: string } | undefined)?.name).toBe("Guild 11");
+    expect(await cachedOnDispatch[0]).toBeUndefined();
+    expect(order).toEqual(["dispatch", "guildDelete"]);
+    // The made-up GUILD_DELETE is not something Discord sent.
+    expect(raws.map((raw) => raw.t)).toEqual([GatewayDispatchEvents.Ready]);
+  });
+
   test("GIVEN an unreachable cache THEN READY is still emitted under the default skip policy", async () => {
     const cache = createInMemoryCache();
     // `createInMemoryCache` builds MemoryEntityCaches, which can enumerate their entries.

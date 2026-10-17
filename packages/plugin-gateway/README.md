@@ -202,8 +202,9 @@ exception: it is always emitted, since it sets `client.user` from the payload al
 
 On `READY`, the cached guilds of that shard which `READY` no longer lists are dropped and emitted as
 `guildDelete`: the bot left them while disconnected, or while the process was down with a
-persistent cache, and Discord does not replay those removals. This is best effort: a failure (cache unreachable,
-unknown shard count) is reported through `error` and keeps the remaining guilds.
+persistent cache, and Discord does not replay those removals. Each drop also emits `dispatch` as a `GUILD_DELETE`
+(with `s: 0`, and no `raw`), so a process replaying this client's dispatches sees these deletions too. This is best
+effort: a failure (cache unreachable, unknown shard count) is reported through `error` and keeps the remaining guilds.
 
 ### Replaying dispatches on another process
 

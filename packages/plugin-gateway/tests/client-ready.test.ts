@@ -126,6 +126,45 @@ describe("GatewayClient#clientReady", () => {
     expect(calls).toHaveLength(1);
   });
 
+  test("GIVEN a shard's new READY no longer lists a pending guild THEN it stops waiting for it", async () => {
+    const client = createClient({ waitGuildTimeout: 15_000 });
+    const calls: unknown[][] = [];
+    client.on(GatewayEvents.ClientReady, (...args) => calls.push(args));
+
+    await dispatch(client, GatewayDispatchEvents.Ready, ready([{ id: "10", unavailable: true }]));
+    expect(calls).toHaveLength(0);
+
+    // The shard identifies again (its session was invalidated) and the bot left guild 10 in between.
+    await dispatch(client, GatewayDispatchEvents.Ready, ready());
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test("GIVEN a READY on one shard THEN it only replaces the pending guilds of that shard", async () => {
+    const client = createClient({ waitGuildTimeout: 15_000 });
+    const calls: unknown[][] = [];
+    client.on(GatewayEvents.ClientReady, (...args) => calls.push(args));
+
+    await dispatch(
+      client,
+      GatewayDispatchEvents.Ready,
+      ready([{ id: "10", unavailable: true }]),
+      0,
+    );
+    await dispatch(
+      client,
+      GatewayDispatchEvents.Ready,
+      ready([{ id: "11", unavailable: true }]),
+      1,
+    );
+    await dispatch(client, GatewayDispatchEvents.Ready, ready(), 1);
+    // Shard 0 still waits for guild 10.
+    expect(calls).toHaveLength(0);
+
+    await dispatch(client, GatewayDispatchEvents.GuildDelete, { id: "10" }, 0);
+    expect(calls).toHaveLength(1);
+  });
+
   test("GIVEN it already fired THEN a later GUILD_CREATE does not fire it again", async () => {
     const client = createClient();
     const calls: unknown[][] = [];
