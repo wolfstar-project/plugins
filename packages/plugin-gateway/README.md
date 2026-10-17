@@ -1107,8 +1107,8 @@ by their own features, there are no placeholders for them.
 `delete`, `forward`, `pin`, `react`, `crosspost`, `startThread`, `suppressEmbeds`. `message.guild`
 and `message.channel` read the cache, like every relation getter: `null` when the entity is not
 cached or the cache is asynchronous, in which case `fetchChannel`, `fetchGuild`, and
-`fetchReference` get it. `editable`, `deletable`, `bulkDeletable`, `pinnable`, and `crosspostable`
-are discord.js's getters (promises with an asynchronous cache, see above). Text channels
+`fetchReference` get it. `editable`, `deletable`, `bulkDeletable`, `pinnable`, `crosspostable`,
+and `threadable` are discord.js's getters (promises with an asynchronous cache, see above). Text channels
 get `messages`, `send`, and `sendTyping`. Guild text-based channels (not direct messages, like in
 discord.js) also get `bulkDelete`, which takes messages, their IDs, a `Collection`, or a count, and
 resolves to a `Collection` of the deleted messages by ID: the cached `Message`, else a partial one
