@@ -12,6 +12,7 @@ import { GatewayTypeError } from "../errors/GatewayError.js";
 import { ApplicationCommand } from "../structures/applications/ApplicationCommand.js";
 import { bindClient } from "../structures/Structure.js";
 import type { ApplicationCommandDataResolvable, ApplicationCommandResolvable } from "../types.js";
+import { commandGuildId, compact, firstDefined, type Loose } from "../util/applicationCommands.js";
 import { PermissionsBitField } from "../util/PermissionsBitField.js";
 import { ApplicationCommandPermissionsManager } from "./ApplicationCommandPermissionsManager.js";
 import { BaseManager } from "./BaseManager.js";
@@ -37,22 +38,6 @@ export interface FetchApplicationCommandOptions {
    * Whether to include the full localization dictionaries, instead of the localized name and description.
    */
   withLocalizations?: boolean;
-}
-
-// The loose view of the data the transformation reads: camel-cased data, a raw command, or a structure.
-type Loose = Record<string, any>;
-
-// `null` is a value here, it removes localizations: unlike `??`, only `undefined` falls back to the raw key.
-function firstDefined<Value>(
-  camel: Value | undefined,
-  snake: Value | undefined,
-): Value | undefined {
-  return camel === undefined ? snake : camel;
-}
-
-function compact<Value extends Loose>(value: Value): Value {
-  for (const key of Object.keys(value)) if (value[key] === undefined) delete value[key];
-  return value;
 }
 
 /**
@@ -249,7 +234,7 @@ export class ApplicationCommandManager extends BaseManager {
     if (!id) throw new GatewayTypeError("InvalidType", "command", "ApplicationCommandResolvable");
 
     const applicationId = this.client.application.id;
-    const guild = this.guildId ?? guildId ?? (command as { guildId?: string | null }).guildId;
+    const guild = this.guildId ?? guildId ?? commandGuildId(command);
     const body = ApplicationCommandManager.transformCommand(
       data as ApplicationCommandDataResolvable,
     ) as RESTPatchAPIApplicationCommandJSONBody;
@@ -276,7 +261,7 @@ export class ApplicationCommandManager extends BaseManager {
     if (!id) throw new GatewayTypeError("InvalidType", "command", "ApplicationCommandResolvable");
 
     const applicationId = this.client.application.id;
-    const guild = this.guildId ?? guildId ?? (command as { guildId?: string | null }).guildId;
+    const guild = this.guildId ?? guildId ?? commandGuildId(command);
     await (guild
       ? this.client.api.applicationCommands.deleteGuildCommand(applicationId, guild, id)
       : this.client.api.applicationCommands.deleteGlobalCommand(applicationId, id));

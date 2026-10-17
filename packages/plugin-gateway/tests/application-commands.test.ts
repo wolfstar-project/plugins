@@ -640,6 +640,23 @@ describe("ApplicationCommandManager", () => {
     ]);
   });
 
+  test("GIVEN a raw guild command THEN edit and delete route to its guild", async () => {
+    const client = createClient();
+    const patch = vi.spyOn(container.rest, "patch").mockResolvedValue(command());
+    const del = vi.spyOn(container.rest, "delete").mockResolvedValue(undefined);
+    const raw = command({ guild_id: guildId });
+
+    await client.application.commands.edit(raw, { description: "New" });
+    await client.application.commands.delete(raw);
+
+    expect(patch.mock.calls.map(([route]) => route)).toEqual([
+      Routes.applicationGuildCommand(clientId, guildId, commandId),
+    ]);
+    expect(del.mock.calls.map(([route]) => route)).toEqual([
+      Routes.applicationGuildCommand(clientId, guildId, commandId),
+    ]);
+  });
+
   test("GIVEN something without an ID THEN edit and delete throw an InvalidType error", async () => {
     const client = createClient();
     const rest = vi.spyOn(container.rest, "patch");

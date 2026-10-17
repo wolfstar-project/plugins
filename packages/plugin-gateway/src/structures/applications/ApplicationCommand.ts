@@ -12,15 +12,12 @@ import {
 } from "discord-api-types/v10";
 import { ApplicationCommandPermissionsManager } from "../../managers/ApplicationCommandPermissionsManager.js";
 import type { ApplicationCommandManager } from "../../managers/ApplicationCommandManager.js";
+import { compact, firstDefined, type Loose } from "../../util/applicationCommands.js";
 import { cachedGuild } from "../../util/cache.js";
 import { isDeepEqual } from "../../util/equal.js";
 import { PermissionsBitField, type PermissionResolvable } from "../../util/PermissionsBitField.js";
 import type { Guild } from "../guilds/Guild.js";
 import { kData, kPatch, snowflakeTimestamp, Structure } from "../Structure.js";
-
-// The loosely typed objects the comparisons and transformations below read: raw payloads, camel-cased data, structures,
-// or whatever the caller passed.
-type Loose = Record<string, any>;
 
 /**
  * A choice of an application command option, as the API returns it.
@@ -144,19 +141,6 @@ export interface ApplicationCommandData {
    * Whether the app or Discord handles the interaction, for primary entry point commands.
    */
   handler?: EntryPointCommandHandlerType;
-}
-
-function compact<Value extends Loose>(value: Value): Value {
-  for (const key of Object.keys(value)) if (value[key] === undefined) delete value[key];
-  return value;
-}
-
-// `null` is a value here, it removes localizations: unlike `??`, only `undefined` falls back to the raw key.
-function firstDefined<Value>(
-  camel: Value | undefined,
-  snake: Value | undefined,
-): Value | undefined {
-  return camel === undefined ? snake : camel;
 }
 
 function isObject(value: unknown): value is Loose {
