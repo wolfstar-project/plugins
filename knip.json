@@ -12,11 +12,13 @@
       ]
     },
     "packages/*": {
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@wolfstar/schema"]
     },
     "packages/plugin-logger": {
       "entry": ["src/assertions.ts"],
-      "project": ["src/**/*.ts"]
+      "project": ["src/**/*.ts"],
+      "ignoreDependencies": ["@wolfstar/schema"]
     },
     "packages/plugin-broker": {
       "entry": ["src/index.ts", "tests/types/*.ts"],
@@ -25,7 +27,8 @@
     },
     "packages/plugin-cache": {
       "entry": ["src/index.ts", "tests/types/*.ts"],
-      "project": ["src/**/*.ts", "tests/types/*.ts"]
+      "project": ["src/**/*.ts", "tests/types/*.ts"],
+      "ignoreDependencies": ["@wolfstar/schema"]
     },
     "packages/plugin-gateway": {
       "project": ["src/**/*.ts"],
@@ -34,11 +37,11 @@
     "packages/plugin-scheduled-tasks": {
       "entry": ["src/index.ts", "tests/types/*.ts"],
       "project": ["src/**/*.ts", "tests/types/*.ts"],
-      "ignoreDependencies": ["@sapphire/pieces"]
+      "ignoreDependencies": ["@sapphire/pieces", "@wolfstar/schema"]
     },
     "packages/plugin-i18next": {
       "project": ["src/**/*.ts"],
-      "ignoreDependencies": ["@wolfstar/i18next-type-generator"]
+      "ignoreDependencies": ["@wolfstar/i18next-type-generator", "@wolfstar/schema"]
     }
   }
 }
