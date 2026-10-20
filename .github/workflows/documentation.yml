@@ -17,7 +17,7 @@ concurrency:
 jobs:
   docs:
     name: Documentation
-    uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@8f25e7f1f7df3e0611d29384ae43ac8127d83d76 # main
+    uses: wolfstar-project/.github/.github/workflows/reusable-documentation.yml@a0105931cfbee0f77fde9a5f8c3e8f1bb55edb7e # main
     with:
       project-name: plugins
       # See scripts/generate-docs.mjs: typedoc doesn't support this repo's typescript@7.0.2 yet,
