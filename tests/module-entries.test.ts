@@ -48,8 +48,16 @@ describe.each(entries)("$manifest.name module entries", ({ manifest, tsdown, has
   });
 
   test("declares @wolfstar/kit as an optional peer and a devDependency", () => {
-    expect(manifest.peerDependencies?.["@wolfstar/kit"]).toBe("^0.1.0");
+    expect(manifest.peerDependencies?.["@wolfstar/kit"]).toBe("^0.2.0");
     expect(manifest.peerDependenciesMeta?.["@wolfstar/kit"]?.optional).toBe(true);
     expect(manifest.devDependencies?.["@wolfstar/kit"]).toBeDefined();
+  });
+
+  // `module.d.ts` augments `StarsConfig` from `@wolfstar/schema` to type the module's `configKey`, which only
+  // resolves for a consumer when the package can reach `@wolfstar/schema`.
+  test("declares @wolfstar/schema as an optional peer and a devDependency", () => {
+    expect(manifest.peerDependencies?.["@wolfstar/schema"]).toBeDefined();
+    expect(manifest.peerDependenciesMeta?.["@wolfstar/schema"]?.optional).toBe(true);
+    expect(manifest.devDependencies?.["@wolfstar/schema"]).toBeDefined();
   });
 });

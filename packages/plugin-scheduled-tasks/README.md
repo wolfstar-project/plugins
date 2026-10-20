@@ -31,21 +31,23 @@ pnpm add @wolfstar/plugin-scheduled-tasks @wolfstar/kit
 
 ### Registering the plugin
 
-With the `stars` CLI, list the package in `modules`:
+With the `stars` CLI, list the package in `modules` and write its options under the `scheduledTasks`
+key (needs `@wolfstar/kit` 0.2 or later):
 
 ```ts
 // stars.config.ts
 import { defineConfig } from "@wolfstar/http-framework/config";
+import type {} from "@wolfstar/plugin-scheduled-tasks"; // types the `scheduledTasks` key in `defineConfig`
 
 export default defineConfig({
-  modules: [
-    [
-      "@wolfstar/plugin-scheduled-tasks",
-      { queue: "tasks", bull: { connection: { host: "localhost", port: 6379 } } },
-    ],
-  ],
+  modules: ["@wolfstar/plugin-scheduled-tasks"],
+  scheduledTasks: { queue: "tasks", bull: { connection: { host: "localhost", port: 6379 } } },
 });
 ```
+
+The `[specifier, options]` tuple still works:
+`modules: [["@wolfstar/plugin-scheduled-tasks", { queue: "tasks" }]]`. Its options are merged over the
+`scheduledTasks` key, so they win.
 
 Options written in `stars.config` end up in the built entry, so they have to be JSON-serialisable.
 

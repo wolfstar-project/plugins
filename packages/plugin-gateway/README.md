@@ -1318,7 +1318,7 @@ export default defineConfig({
 });
 ```
 
-The module registers no plugin and takes no options: you still construct the `GatewayClient` yourself.
+The module registers no plugin and takes no options: you still construct the `GatewayClient` yourself. It owns the `gateway` key of `stars.config` (reserved for future options), so no other module can claim it.
 
 ## Credits
 

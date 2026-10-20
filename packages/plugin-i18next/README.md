@@ -31,15 +31,22 @@ pnpm add @wolfstar/http-framework @wolfstar/plugin-i18next
 
 ### Stars module
 
-On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
-`@wolfstar/kit` peer):
+On framework 6.1 and later, list the module in `modules` in `stars.config` and write its options
+under the `i18n` key (needs the optional `@wolfstar/kit` peer, 0.2 or later):
 
 ```ts
 // stars.config.ts
+import type {} from "@wolfstar/plugin-i18next/module"; // types the `i18n` key in `defineConfig`
+
 export default defineConfig({
-  modules: [["@wolfstar/plugin-i18next/module", { defaultLanguageDirectory: "./languages" }]],
+  modules: ["@wolfstar/plugin-i18next/module"],
+  i18n: { defaultLanguageDirectory: "./languages" },
 });
 ```
+
+The `[specifier, options]` tuple still works:
+`modules: [["@wolfstar/plugin-i18next/module", { defaultLanguageDirectory: "./languages" }]]`. Its
+options are merged over the `i18n` key, so they win.
 
 The options are written into the built entry, so they must be JSON-serialisable. `fetchLanguage` and
 the functions in `hmr.options` are not: set `fetchLanguage` through `ClientOptions.i18n`, which is

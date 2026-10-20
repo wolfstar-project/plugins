@@ -293,7 +293,8 @@ export default defineConfig({
 ```
 
 The module registers no plugin and takes no options: the cache itself is still constructed by
-`@wolfstar/plugin-gateway`.
+`@wolfstar/plugin-gateway`. It owns the `cache` key of `stars.config` (reserved for future options), so no
+other module can claim it.
 
 ## Credits
 

@@ -51,15 +51,22 @@ await broker.publish("messageCreate", payload);
 
 #### Stars module
 
-On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
-`@wolfstar/kit` peer):
+On framework 6.1 and later, list the module in `modules` in `stars.config` and write its options
+under the `broker` key (needs the optional `@wolfstar/kit` peer, 0.2 or later):
 
 ```ts
 // stars.config.ts
+import type {} from "@wolfstar/plugin-broker/module"; // types the `broker` key in `defineConfig`
+
 export default defineConfig({
-  modules: [["@wolfstar/plugin-broker/module", { stream: "wolfstar:events", group: "workers" }]],
+  modules: ["@wolfstar/plugin-broker/module"],
+  broker: { stream: "wolfstar:events", group: "workers" },
 });
 ```
+
+The `[specifier, options]` tuple still works:
+`modules: [["@wolfstar/plugin-broker/module", { stream: "wolfstar:events" }]]`. Its options are merged
+over the `broker` key, so they win.
 
 The options are written into the built entry, so they must be JSON-serialisable. `redis` is a client
 instance and `consumer` is per-process (for example `worker-${process.pid}`), so neither can live in
