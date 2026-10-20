@@ -101,9 +101,12 @@ export type EvlogSource = string | { from: string; export?: string };
 
 /**
  * The Stars module: listing `@wolfstar/plugin-logger/module` in `modules` in `stars.config` registers the logger
- * plugin with the options written there.
+ * plugin with the options written under its `logger` key.
  *
  * @remarks
+ * The `[specifier, options]` tuple of `modules` still works: its options are merged over the `logger` key, so they
+ * win.
+ *
  * The options are written into the built entry, so they have to be JSON-serialisable (`level`, ...). Transports are
  * objects: set them through `ClientOptions.logger.transports`.
  *
@@ -115,25 +118,22 @@ export type EvlogSource = string | { from: string; export?: string };
  * @example
  * ```ts
  * // stars.config.ts
- * export default defineConfig({ modules: [['@wolfstar/plugin-logger/module', { level: 20 }]] });
+ * export default defineConfig({ modules: ['@wolfstar/plugin-logger/module'], logger: { level: 20 } });
  * ```
  *
  * @example
  * ```ts
  * // stars.config.ts
  * export default defineConfig({
- * 	modules: [
- * 		[
- * 			'@wolfstar/plugin-logger/module',
- * 			{ evlog: { env: { service: 'bot' }, pipeline: true, drain: './src/evlog-drain.ts' } }
- * 		]
- * 	]
+ * 	modules: ['@wolfstar/plugin-logger/module'],
+ * 	logger: { evlog: { env: { service: 'bot' }, pipeline: true, drain: './src/evlog-drain.ts' } }
  * });
  * ```
  */
 export default defineModule<LoggerModuleOptions>({
   meta: {
     name: "@wolfstar/plugin-logger",
+    configKey: "logger",
     compatibility: { framework: ">=6.1.0" },
   },
   setup({ evlog, ...options }, ctx) {
@@ -151,6 +151,12 @@ export default defineModule<LoggerModuleOptions>({
     ctx.addPlugin({ from: "@wolfstar/plugin-logger/plugin", options });
   },
 });
+
+declare module "@wolfstar/schema" {
+  interface StarsConfig {
+    logger?: LoggerModuleOptions;
+  }
+}
 
 function resolveSource(source: EvlogSource, root: string): { from: string; export?: string } {
   const { from, export: exportName } = typeof source === "string" ? { from: source } : source;

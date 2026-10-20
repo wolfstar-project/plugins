@@ -9,6 +9,7 @@ describe("module", () => {
   test("GIVEN the default export THEN it is a module for framework 6.1 and later", () => {
     expect(scheduledTasksModule.meta).toEqual({
       name: "@wolfstar/plugin-scheduled-tasks",
+      configKey: "scheduledTasks",
       compatibility: { framework: ">=6.1.0" },
     });
   });

@@ -44,15 +44,21 @@ its constructor, so it needs no extra dependency.
 
 ### Stars module
 
-On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
-`@wolfstar/kit` peer):
+On framework 6.1 and later, list the module in `modules` in `stars.config` and write its options
+under the `logger` key (needs the optional `@wolfstar/kit` peer, 0.2 or later):
 
 ```ts
 // stars.config.ts
+import type {} from "@wolfstar/plugin-logger/module"; // types the `logger` key in `defineConfig`
+
 export default defineConfig({
-  modules: [["@wolfstar/plugin-logger/module", { level: 20 }]],
+  modules: ["@wolfstar/plugin-logger/module"],
+  logger: { level: 20 },
 });
 ```
+
+The `[specifier, options]` tuple still works: `modules: [["@wolfstar/plugin-logger/module", { level: 20 }]]`.
+Its options are merged over the `logger` key, so they win.
 
 The options are written into the built entry, so they must be JSON-serialisable (`level`, ...).
 Transports are objects: set them through `ClientOptions.logger.transports`.
@@ -65,21 +71,17 @@ options are written inline:
 ```ts
 // stars.config.ts
 export default defineConfig({
-  modules: [
-    [
-      "@wolfstar/plugin-logger/module",
-      {
-        level: 20,
-        evlog: {
-          env: { service: "bot" },
-          sampling: { rates: { debug: 10 } },
-          redact: true,
-          pipeline: { batch: { size: 25 } },
-          drain: "./src/evlog-drain.ts",
-        },
-      },
-    ],
-  ],
+  modules: ["@wolfstar/plugin-logger/module"],
+  logger: {
+    level: 20,
+    evlog: {
+      env: { service: "bot" },
+      sampling: { rates: { debug: 10 } },
+      redact: true,
+      pipeline: { batch: { size: 25 } },
+      drain: "./src/evlog-drain.ts",
+    },
+  },
 });
 ```
 

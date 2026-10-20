@@ -314,7 +314,7 @@ export default defineConfig({
 });
 ```
 
-The module registers no plugin and takes no options: you still construct the `ShardManager` yourself.
+The module registers no plugin and takes no options: you still construct the `ShardManager` yourself. It owns the `sharder` key of `stars.config` (reserved for future options), so no other module can claim it.
 
 ## RFC alignment
 

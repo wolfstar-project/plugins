@@ -3,9 +3,12 @@ import type { BrokerConsumerOptions } from "./BrokerConsumer.js";
 
 /**
  * The Stars module: listing `@wolfstar/plugin-broker/module` in `modules` in `stars.config` registers the broker
- * plugin with the options written there.
+ * plugin with the options written under its `broker` key.
  *
  * @remarks
+ * The `[specifier, options]` tuple of `modules` still works: its options are merged over the `broker` key, so they
+ * win.
+ *
  * The options are written into the built entry, so they have to be JSON-serialisable. `redis` is a client instance
  * and `consumer` is per-process, so neither can be written in `stars.config`: supply both through
  * `ClientOptions.broker`, which is shallow-merged over the module options (the module options are the base values
@@ -17,16 +20,24 @@ import type { BrokerConsumerOptions } from "./BrokerConsumer.js";
  * ```ts
  * // stars.config.ts
  * export default defineConfig({
- *   modules: [['@wolfstar/plugin-broker/module', { stream: 'wolfstar:events', group: 'workers' }]],
+ *   modules: ['@wolfstar/plugin-broker/module'],
+ *   broker: { stream: 'wolfstar:events', group: 'workers' },
  * });
  * ```
  */
 export default defineModule<Partial<BrokerConsumerOptions>>({
   meta: {
     name: "@wolfstar/plugin-broker",
+    configKey: "broker",
     compatibility: { framework: ">=6.1.0" },
   },
   setup(options, ctx) {
     ctx.addPlugin({ from: "@wolfstar/plugin-broker/plugin", options });
   },
 });
+
+declare module "@wolfstar/schema" {
+  interface StarsConfig {
+    broker?: Partial<BrokerConsumerOptions>;
+  }
+}

@@ -33,15 +33,21 @@ Requires Node.js `>=20.18.1`.
 
 ### Stars module
 
-On framework 6.1 and later, list the module in `modules` in `stars.config` (needs the optional
-`@wolfstar/kit` peer):
+On framework 6.1 and later, list the module in `modules` in `stars.config` and write its options
+under the `api` key (needs the optional `@wolfstar/kit` peer, 0.2 or later):
 
 ```ts
 // stars.config.ts
+import type {} from "@wolfstar/plugin-api/module"; // types the `api` key in `defineConfig`
+
 export default defineConfig({
-  modules: [["@wolfstar/plugin-api/module", { prefix: "v1", listenOptions: { port: 4000 } }]],
+  modules: ["@wolfstar/plugin-api/module"],
+  api: { prefix: "v1", listenOptions: { port: 4000 } },
 });
 ```
+
+The `[specifier, options]` tuple still works: `modules: [["@wolfstar/plugin-api/module", { prefix: "v1" }]]`.
+Its options are merged over the `api` key, so they win.
 
 The options are written into the built entry, so they must be JSON-serialisable. Anything that is
 not (for example `server` options holding functions or buffers) goes through `ClientOptions.api`,

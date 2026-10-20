@@ -33,6 +33,8 @@
     "@types/semver": "^7.8.0",
     "@types/ws": "^8.18.2",
     "@vitest/coverage-v8": "^5.0.3",
+    "@wolfstar/kit": "^0.2.0",
+    "@wolfstar/schema": "^0.9.0",
     "cz-conventional-changelog": "^3.3.0",
     "golar": "^0.1.10",
     "husky": "9.1.7",
