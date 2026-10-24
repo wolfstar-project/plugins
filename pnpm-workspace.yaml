@@ -4,6 +4,7 @@ allowBuilds:
   "@swc/core": true
   esbuild: true
   msgpackr-extract: false
+  protobufjs: false
 minimumReleaseAgeExclude:
   - "@wolfstar/http-framework@3.4.0 || 6.1.0 || 6.2.2"
   - "@wolfstar/cli@2.2.0 || 2.6.0"
