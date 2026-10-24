@@ -7,6 +7,7 @@ import cacheModule from "../packages/plugin-cache/src/module";
 import gatewayModule from "../packages/plugin-gateway/src/module";
 import i18nextModule from "../packages/plugin-i18next/src/module";
 import loggerModule from "../packages/plugin-logger/src/module";
+import openTelemetryModule from "../packages/plugin-opentelemetry/src/module";
 import { scheduledTasksModule } from "../packages/plugin-scheduled-tasks/src/module";
 import sharderModule from "../packages/plugin-sharder/src/module";
 import subcommandsModule from "../packages/plugin-subcommands-advanced/src/module";
@@ -20,6 +21,7 @@ const modules: [name: string, key: string, module: StarsModule<any>][] = [
   ["@wolfstar/plugin-gateway", "gateway", gatewayModule],
   ["@wolfstar/plugin-i18next", "i18n", i18nextModule],
   ["@wolfstar/plugin-logger", "logger", loggerModule],
+  ["@wolfstar/plugin-opentelemetry", "opentelemetry", openTelemetryModule],
   ["@wolfstar/plugin-scheduled-tasks", "scheduledTasks", scheduledTasksModule],
   ["@wolfstar/plugin-sharder", "sharder", sharderModule],
   ["@wolfstar/plugin-subcommands-advanced", "subcommandsAdvanced", subcommandsModule],
@@ -88,6 +90,12 @@ describe("module config keys", () => {
       module: loggerModule,
       plugin: "@wolfstar/plugin-logger/plugin",
       options: { level: 20 },
+    },
+    {
+      key: "opentelemetry",
+      module: openTelemetryModule,
+      plugin: "@wolfstar/plugin-opentelemetry/plugin",
+      options: { interactions: { autocomplete: true } },
     },
     {
       key: "scheduledTasks",
