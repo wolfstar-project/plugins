@@ -10,15 +10,15 @@ export const InteractionAttributes = {
   /**
    * What ran: `command`, `autocomplete`, `component` or `modal`.
    */
-  Kind: "wolfstar.interaction.kind",
+  Kind: "interaction.kind",
   /**
    * The name of the command or of the handler.
    */
-  Name: "wolfstar.interaction.name",
+  Name: "interaction.name",
   /**
    * `success` or `error`, set when the run ends.
    */
-  Outcome: "wolfstar.interaction.outcome",
+  Outcome: "interaction.outcome",
   /**
    * The id of the interaction.
    */

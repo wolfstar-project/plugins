@@ -1,6 +1,6 @@
 <div align="center">
 
-<h1>@wolfstar/plugin-opentelemetry</h1>
+<h1><a href="https://wolfstar.rocks"><img src="https://cdn.wolfstar.rocks/logos/plugins/plugin-opentelemetry.svg" width="40" height="40" alt="WolfStar" align="top"></a> @wolfstar/plugin-opentelemetry</h1>
 
 **Trace a `@wolfstar/http-framework` bot with OpenTelemetry.**
 
@@ -116,14 +116,14 @@ Without an SDK running, `@opentelemetry/api` hands out no-op spans and the plugi
 
 A span is named `<kind> <name>` (`command ping`, `component confirm`) and carries:
 
-| Attribute                      | Value                                              |
-| ------------------------------ | -------------------------------------------------- |
-| `wolfstar.interaction.kind`    | `command`, `autocomplete`, `component` or `modal`. |
-| `wolfstar.interaction.name`    | The name of the command or of the handler.         |
-| `wolfstar.interaction.outcome` | `success` or `error`.                              |
-| `discord.interaction.id`       | The id of the interaction.                         |
-| `discord.guild.id`             | The guild, when the interaction came from one.     |
-| `discord.channel.id`           | The channel.                                       |
+| Attribute                | Value                                              |
+| ------------------------ | -------------------------------------------------- |
+| `interaction.kind`       | `command`, `autocomplete`, `component` or `modal`. |
+| `interaction.name`       | The name of the command or of the handler.         |
+| `interaction.outcome`    | `success` or `error`.                              |
+| `discord.interaction.id` | The id of the interaction.                         |
+| `discord.guild.id`       | The guild, when the interaction came from one.     |
+| `discord.channel.id`     | The channel.                                       |
 
 A failing run records the exception and sets the span status to `ERROR`.
 
