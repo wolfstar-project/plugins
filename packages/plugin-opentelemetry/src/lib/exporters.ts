@@ -5,8 +5,21 @@ import { getSentryOtlpEndpoint } from "./dsn.js";
  * Creates the exporter the environment configures: the endpoint, the headers and the protocol are read from the
  * `OTEL_EXPORTER_OTLP_*` variables, and the protocol picks the exporter as the SDK does (`http/protobuf` when none is
  * given, and with a warning when it is not one of the three).
+ *
+ * @remarks
+ * `OTEL_TRACES_EXPORTER` is honoured as far as turning this destination off: `none` on its own, as the SDK reads it,
+ * gives no exporter. This package only exports OTLP, so any other value (`console`, `zipkin`, ...) still gets OTLP.
+ *
+ * @returns The exporter, `undefined` when `OTEL_TRACES_EXPORTER` is `none`.
  */
-export async function createEnvironmentSpanExporter(): Promise<SpanExporter> {
+export async function createEnvironmentSpanExporter(): Promise<SpanExporter | undefined> {
+  const requested = (process.env.OTEL_TRACES_EXPORTER ?? "")
+    .split(",")
+    .map((name) => name.trim())
+    .filter(Boolean);
+  // `none` next to other exporters is ignored, as the SDK does.
+  if (requested.length === 1 && requested[0] === "none") return undefined;
+
   const protocol =
     process.env.OTEL_EXPORTER_OTLP_TRACES_PROTOCOL ||
     process.env.OTEL_EXPORTER_OTLP_PROTOCOL ||

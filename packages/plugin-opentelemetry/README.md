@@ -26,6 +26,8 @@ Two parts, used together or apart:
 pnpm add @wolfstar/plugin-opentelemetry @opentelemetry/api
 ```
 
+Needs Node 22.15 or later, which the OpenTelemetry SDK requires.
+
 `@opentelemetry/api` is a peer dependency because there has to be one copy of it in the process. The SDK, the
 instrumentations and the OTLP exporters are dependencies of this package.
 
@@ -42,13 +44,14 @@ node --import @wolfstar/plugin-opentelemetry/preload dist/main.mjs
 It does nothing unless an OTLP endpoint is set, so the same command runs locally with no tracing. Everything else is
 the standard OpenTelemetry environment:
 
-| Variable                                                             | Effect                                                                                          |
-| -------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Turns the tracing on, and says where the spans go.                                              |
-| `OTEL_EXPORTER_OTLP_PROTOCOL` / `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | `http/protobuf` (the default), `http/json` or `grpc`.                                           |
-| `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_EXPORTER_OTLP_TRACES_HEADERS`   | The headers of that destination, its token included.                                            |
-| `SENTRY_DSN`                                                         | Also sends the spans to the OTLP endpoint of that Sentry project, with the key of the DSN only. |
-| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, ...                 | Read by the SDK as usual.                                                                       |
+| Variable                                                             | Effect                                                                                                                                      |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` / `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | Turns the tracing on, and says where the spans go.                                                                                          |
+| `OTEL_EXPORTER_OTLP_PROTOCOL` / `OTEL_EXPORTER_OTLP_TRACES_PROTOCOL` | `http/protobuf` (the default), `http/json` or `grpc`.                                                                                       |
+| `OTEL_EXPORTER_OTLP_HEADERS` / `OTEL_EXPORTER_OTLP_TRACES_HEADERS`   | The headers of that destination, its token included.                                                                                        |
+| `OTEL_TRACES_EXPORTER`                                               | Only `none` is honoured: it turns this destination off. This package exports OTLP only, so `console`, `zipkin` and the rest still get OTLP. |
+| `SENTRY_DSN`                                                         | Also sends the spans to the OTLP endpoint of that Sentry project, with the key of the DSN only.                                             |
+| `OTEL_SERVICE_NAME`, `OTEL_RESOURCE_ATTRIBUTES`, ...                 | Read by the SDK as usual.                                                                                                                   |
 
 #### What the preload handles
 
@@ -146,8 +149,8 @@ process.once("SIGINT", async () => {
 
 ### Sentry
 
-Sentry 11 does not register a tracer provider by default (`enableOpenTelemetrySetup` is off), which is what lets this
-package own the SDK. Its `openTelemetryIntegration()` puts the errors Sentry captures on the active trace; add it to
+`@sentry/node` 11 does not register a tracer provider by default (`enableOpenTelemetrySetup` defaults to `false`), which is
+what lets this package own the SDK. Its `openTelemetryIntegration()` puts the errors Sentry captures on the active trace; add it to
 `Sentry.init` to link an error to the span of the command that raised it.
 
 ## License

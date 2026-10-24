@@ -128,7 +128,7 @@ describe("createEnvironmentSpanExporter", () => {
       if (tracesProtocol) vi.stubEnv("OTEL_EXPORTER_OTLP_TRACES_PROTOCOL", tracesProtocol);
       vi.spyOn(console, "warn").mockImplementation(() => undefined);
 
-      await exportOneSpan(await createEnvironmentSpanExporter());
+      await exportOneSpan((await createEnvironmentSpanExporter())!);
 
       expect(received).toHaveLength(1);
       expect(received[0].url).toBe("/v1/traces");
@@ -146,12 +146,26 @@ describe("createEnvironmentSpanExporter", () => {
     expect(warn).toHaveBeenCalledWith(expect.stringContaining("carrier-pigeon"));
   });
 
+  test("GIVEN OTEL_TRACES_EXPORTER=none THEN there is no exporter for the environment", async () => {
+    vi.stubEnv("OTEL_TRACES_EXPORTER", "none");
+
+    await expect(createEnvironmentSpanExporter()).resolves.toBeUndefined();
+  });
+
+  test("GIVEN none next to another exporter THEN it is ignored, as the SDK does", async () => {
+    vi.stubEnv("OTEL_TRACES_EXPORTER", "none, otlp");
+
+    await exportOneSpan((await createEnvironmentSpanExporter())!);
+
+    expect(received).toHaveLength(1);
+  });
+
   test("GIVEN grpc THEN the exporter is the one of gRPC", async () => {
     vi.stubEnv("OTEL_EXPORTER_OTLP_PROTOCOL", "grpc");
 
     const exporter = await createEnvironmentSpanExporter();
 
     expect(exporter).toBeInstanceOf(GrpcTraceExporter);
-    await exporter.shutdown();
+    await exporter!.shutdown();
   });
 });

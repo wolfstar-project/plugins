@@ -35,10 +35,11 @@ export async function startTracing(): Promise<NodeSDK> {
 
   const dsn = process.env.SENTRY_DSN;
 
-  // The SDK only builds the exporter of the environment when it is given no span processor, so it is built here.
-  const spanProcessors = [
-    new BatchSpanProcessor({ exporter: await createEnvironmentSpanExporter() }),
-  ];
+  // The SDK only builds the exporter of the environment when it is given no span processor, so it is built here. With
+  // `OTEL_TRACES_EXPORTER=none` there is none, and the SDK registers no tracer provider if Sentry is the only one left.
+  const spanProcessors: InstanceType<typeof BatchSpanProcessor>[] = [];
+  const environment = await createEnvironmentSpanExporter();
+  if (environment) spanProcessors.push(new BatchSpanProcessor({ exporter: environment }));
   const sentry = await createSentrySpanExporter(dsn);
   if (sentry) spanProcessors.push(new BatchSpanProcessor({ exporter: sentry }));
 
