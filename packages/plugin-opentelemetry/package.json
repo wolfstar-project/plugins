@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-opentelemetry",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Plugin for @wolfstar/http-framework that traces the bot with OpenTelemetry: a preload starting the SDK and a plugin opening one span per interaction",
   "keywords": [
     "http-framework",
