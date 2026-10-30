@@ -1,5 +1,13 @@
 # @wolfstar/plugin-i18next
 
+## 2.3.1
+
+### Patch Changes
+
+- [#240](https://github.com/wolfstar-project/plugins/pull/240) [`16d62bd`](https://github.com/wolfstar-project/plugins/commit/16d62bdd9a7850d4451082ab6193f8300b924c0b) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
+- [#267](https://github.com/wolfstar-project/plugins/pull/267) [`a1ad4fb`](https://github.com/wolfstar-project/plugins/commit/a1ad4fbddd9776b283df76d1ebb338997b56e805) - fix(deps): update dependency chokidar to v6 Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 2.3.0
 
 ### Minor Changes
