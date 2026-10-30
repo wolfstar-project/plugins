@@ -1,5 +1,11 @@
 # @wolfstar/plugin-opentelemetry
 
+## 0.2.0
+
+### Minor Changes
+
+- [#264](https://github.com/wolfstar-project/plugins/pull/264) [`37b50c7`](https://github.com/wolfstar-project/plugins/commit/37b50c7a181dfe877965f8a7b6e933b34cf5ac46) - Rename the interaction span attributes `wolfstar.interaction.kind`, `wolfstar.interaction.name` and `wolfstar.interaction.outcome` to `interaction.kind`, `interaction.name` and `interaction.outcome`. Update any dashboard or query that filters on the old names.
+
 ## 0.1.0
 
 ### Minor Changes
