@@ -67,12 +67,12 @@
     "@sapphire/pieces": "^4.4.1",
     "@vladfrangu/async_event_emitter": "^2.4.7",
     "cookie-es": "^3.1.1",
-    "tldts": "^7.4.16",
+    "tldts": "^7.4.18",
     "undici": "^8.11.2"
   },
   "devDependencies": {
     "@redstardev/unplugin-version-injector": "^0.0.2",
-    "@wolfstar/http-framework": "^6.1.0",
+    "@wolfstar/http-framework": "^6.2.2",
     "@wolfstar/kit": "^0.2.0",
     "@wolfstar/schema": "^0.9.0"
   },
