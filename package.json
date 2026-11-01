@@ -24,32 +24,32 @@
     "@changesets/cli": "^3.0.3",
     "@changesets/get-github-info": "^1.0.1",
     "@changesets/types": "^7.0.0",
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "@favware/npm-deprecate": "^2.0.0",
     "@sapphire/ts-config": "^5.0.3",
-    "@swc/core": "^1.16.13",
+    "@swc/core": "^1.16.20",
     "@types/node": "22.15.21",
     "@types/semver": "^7.8.0",
     "@types/ws": "^8.18.2",
-    "@vitest/coverage-v8": "^5.0.3",
-    "@wolfstar/kit": "^0.2.0",
-    "@wolfstar/schema": "^0.9.0",
+    "@vitest/coverage-v8": "^5.0.5",
+    "@wolfstar/kit": "^0.3.1",
+    "@wolfstar/schema": "^0.12.0",
     "cz-conventional-changelog": "^3.3.0",
-    "golar": "^0.1.10",
+    "golar": "^0.1.11",
     "husky": "9.1.7",
-    "knip": "6.40.0",
+    "knip": "6.43.0",
     "nano-staged": "1.0.2",
-    "oxfmt": "0.72.0",
-    "oxlint": "1.87.0",
-    "pkg-pr-new": "^0.0.91",
+    "oxfmt": "0.75.0",
+    "oxlint": "1.90.0",
+    "pkg-pr-new": "^0.0.92",
     "publint": "^0.3.25",
     "semver": "^7.8.5",
-    "tsdown": "^0.23.0",
-    "turbo": "^2.11.7",
+    "tsdown": "^0.23.3",
+    "turbo": "^2.11.10",
     "typescript": "7.0.2",
     "unrun": "0.3.1",
-    "vitest": "^5.0.3"
+    "vitest": "^5.0.5"
   },
   "nano-staged": {
     "*.{ts,mts,cts,tsx,mjs,cjs,js,jsx,json,jsonc,yml,yaml,md}": "oxfmt --no-error-on-unmatched-pattern",
@@ -68,5 +68,5 @@
   "engines": {
     "node": "^22.11 || ^24 || >=26"
   },
-  "packageManager": "pnpm@12.10.1"
+  "packageManager": "pnpm@12.16.1"
 }
