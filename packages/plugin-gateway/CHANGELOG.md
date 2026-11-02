@@ -1,5 +1,15 @@
 # @wolfstar/plugin-gateway
 
+## 0.16.2
+
+### Patch Changes
+
+- [#275](https://github.com/wolfstar-project/plugins/pull/275) [`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b) - Accept `@wolfstar/kit` 0.3 and `@wolfstar/schema` 0.12 as peers, next to the previous ranges.
+
+- [#276](https://github.com/wolfstar-project/plugins/pull/276) [`7097a50`](https://github.com/wolfstar-project/plugins/commit/7097a50f36744c4a08084e14695a310542eaad88) - `Message#webhookId`, `applicationId`, `nonce` and `position` are `null` when the message has none, like discord.js, instead of the `undefined` they inherited from `@discordjs/structures`, so a check such as `message.webhookId !== null` no longer takes every message for the one of a webhook.
+- Updated dependencies [[`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b), [`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b)]:
+  - @wolfstar/plugin-cache@0.9.0
+
 ## 0.16.1
 
 ### Patch Changes

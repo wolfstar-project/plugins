@@ -1,5 +1,11 @@
 # @wolfstar/plugin-opentelemetry
 
+## 0.2.1
+
+### Patch Changes
+
+- [#275](https://github.com/wolfstar-project/plugins/pull/275) [`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b) - Accept `@wolfstar/kit` 0.3 and `@wolfstar/schema` 0.12 as peers, next to the previous ranges.
+
 ## 0.2.0
 
 ### Minor Changes

@@ -1,5 +1,15 @@
 # @wolfstar/plugin-logger
 
+## 0.6.0
+
+### Minor Changes
+
+- [#275](https://github.com/wolfstar-project/plugins/pull/275) [`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b) - Require Node.js 22 or later. Node.js 20 is no longer supported.
+
+### Patch Changes
+
+- [#275](https://github.com/wolfstar-project/plugins/pull/275) [`c0e5db0`](https://github.com/wolfstar-project/plugins/commit/c0e5db0d40719ab9a650460e030fbf92c6a6e58b) - Accept `@wolfstar/kit` 0.3 and `@wolfstar/schema` 0.12 as peers, next to the previous ranges.
+
 ## 0.5.1
 
 ### Patch Changes
