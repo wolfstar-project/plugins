@@ -48,7 +48,7 @@ describe.each(entries)("$manifest.name module entries", ({ manifest, tsdown, has
   });
 
   test("declares @wolfstar/kit as an optional peer and a devDependency", () => {
-    expect(manifest.peerDependencies?.["@wolfstar/kit"]).toBe("^0.2.0");
+    expect(manifest.peerDependencies?.["@wolfstar/kit"]).toBe("^0.2.0 || ^0.3.0");
     expect(manifest.peerDependenciesMeta?.["@wolfstar/kit"]?.optional).toBe(true);
     expect(manifest.devDependencies?.["@wolfstar/kit"]).toBeDefined();
   });
