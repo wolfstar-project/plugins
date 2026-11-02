@@ -27,7 +27,7 @@ claims every path on its port and 404s anything that doesn't match, so this plug
 pnpm add @wolfstar/plugin-api
 ```
 
-Requires Node.js `>=20.18.1`.
+Requires Node.js `>=22.0.0`.
 
 ## Usage
 
@@ -254,7 +254,7 @@ listeners log with `container.logger.fatal(error)` and answer a generic `500`.
   middleware have empty bodies.
 - Listener piece names are PascalCase (`PluginServerRequest`, …), and `ServerEvent.Error` carries an
   optional request/response.
-- `@wolfstar/http-framework` peer range is `^3.6.0 || ^5.0.0`; Node.js `>=20.18.1`.
+- `@wolfstar/http-framework` peer range is `^3.6.0 || ^5.0.0 || ^6.0.0`; Node.js `>=22.0.0`.
 
 ## Scope
 

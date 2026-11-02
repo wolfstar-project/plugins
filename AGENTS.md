@@ -19,7 +19,7 @@ There is **no runnable app, frontend, backend, dev server, or database**. "Runni
 
 ## Stack
 
-- **Language:** TypeScript (`7.0.2` major, bumped from `~5.8.3`), Node `^22.11 || ^24 || >=26` (the range required by Changesets v3, raised from `>=20`; published packages declare `>=22.0.0`, except `plugin-gateway` `>=24.17.0` and `plugin-opentelemetry` `>=22.15.0` (the OpenTelemetry SDK packages)). `mise.toml` pins Node 24 + pnpm 12 (matches CI).
+- **Language:** TypeScript (`7.0.2` major, bumped from `~5.8.3`), Node `^22.11 || ^24 || >=26` (the range required by Changesets v3, raised from `>=20`; published packages declare `>=22.0.0`, except `plugin-gateway` `>=24.17.0`, `plugin-opentelemetry` `>=22.15.0` (the OpenTelemetry SDK packages) and `plugin-i18next` `>=22.22.0` (`chokidar` 6)). `mise.toml` pins Node 24 + pnpm 12 (matches CI).
 - **Package manager:** `pnpm` (corepack-pinned via `packageManager` in root `package.json`; Renovate bumps it often — check that field for the exact pin, don't hardcode it here; if `pnpm` is ever missing, run `corepack enable`). Workspaces via `pnpm-workspace.yaml`.
 - **Monorepo runner:** `turbo` (`turbo run build`; `test` `dependsOn: ["^build"]`, so a build is triggered as needed).
 - **Bundler:** `tsdown` per package (→ `dist/esm/`, shared options in `scripts/tsdown.config.ts`).
