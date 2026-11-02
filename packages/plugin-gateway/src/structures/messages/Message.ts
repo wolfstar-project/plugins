@@ -178,7 +178,11 @@ export type MessageSnapshot = Partialize<
  * the checks answer a promise read from the cache, typed as one once `GatewayCacheConfig` declares the cache
  * asynchronous. The `fetch*able()` twins also ask the API for what is not cached.
  */
-export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> {
+// The IDs `@discordjs/structures` reads as `undefined` when the message has none, where discord.js gives `null`: omitted
+// from its data type so `Message` can override them.
+type NullableMessageKeys = "webhook_id" | "application_id" | "nonce" | "position";
+
+export class Message<InGuild extends boolean = boolean> extends BaseMessage<NullableMessageKeys> {
   /**
    * Keeps the raw `timestamp` and `edited_timestamp`, which `@discordjs/structures` strips and re-serializes in its own
    * format, so that {@link Message.toJSON} returns the message as received.
@@ -488,6 +492,34 @@ export class Message<InGuild extends boolean = boolean> extends BaseMessage<""> 
    */
   public override get editedTimestamp(): number | null {
     return this.optimizedTimestamp("edited_timestamp");
+  }
+
+  /**
+   * The ID of the webhook that sent the message, `null` when no webhook did, like discord.js's `Message#webhookId`.
+   */
+  public override get webhookId(): string | null {
+    return this[kData].webhook_id ?? null;
+  }
+
+  /**
+   * The ID of the application of an interaction or of a Rich Presence-related chat embed, `null` without one.
+   */
+  public override get applicationId(): string | null {
+    return this[kData].application_id ?? null;
+  }
+
+  /**
+   * The nonce the message was sent with, to check that it was sent, `null` without one.
+   */
+  public override get nonce(): string | number | null {
+    return this[kData].nonce ?? null;
+  }
+
+  /**
+   * The approximate position of the message in a thread, `null` outside of one.
+   */
+  public override get position(): number | null {
+    return this[kData].position ?? null;
   }
 
   public get editedAt(): Date | null {
