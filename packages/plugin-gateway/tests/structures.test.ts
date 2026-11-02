@@ -342,6 +342,32 @@ describe("optimized structures", () => {
     expect(clone.toJSON().joined_at).toBe("2026-01-01T00:00:00.000Z");
   });
 
+  test("GIVEN a message without a webhook, an application, a nonce or a position THEN they are null like discord.js", () => {
+    const message = new Message({ id: "1", channel_id: "2", author: data } as never);
+
+    expect(message.webhookId).toBeNull();
+    expect(message.applicationId).toBeNull();
+    expect(message.nonce).toBeNull();
+    expect(message.position).toBeNull();
+  });
+
+  test("GIVEN a message with a webhook, an application, a nonce and a position THEN they are read from it", () => {
+    const message = new Message({
+      id: "1",
+      channel_id: "2",
+      author: data,
+      webhook_id: "3",
+      application_id: "4",
+      nonce: "5",
+      position: 0,
+    } as never);
+
+    expect(message.webhookId).toBe("3");
+    expect(message.applicationId).toBe("4");
+    expect(message.nonce).toBe("5");
+    expect(message.position).toBe(0);
+  });
+
   test("GIVEN a message edit and permission overwrite THEN optimized values follow patches", () => {
     const message = new Message({
       id: "1",
