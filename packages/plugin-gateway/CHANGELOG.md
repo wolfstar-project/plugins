@@ -1,5 +1,13 @@
 # @wolfstar/plugin-gateway
 
+## 0.16.3
+
+### Patch Changes
+
+- [#272](https://github.com/wolfstar-project/plugins/pull/272) [`c31b79b`](https://github.com/wolfstar-project/plugins/commit/c31b79b66d24aee42deac92159a2a5cfd38b8ca4) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+- Updated dependencies [[`c31b79b`](https://github.com/wolfstar-project/plugins/commit/c31b79b66d24aee42deac92159a2a5cfd38b8ca4)]:
+  - @wolfstar/plugin-cache@0.9.1
+
 ## 0.16.2
 
 ### Patch Changes
