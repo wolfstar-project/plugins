@@ -35,7 +35,7 @@ AI agents that open or edit pull requests in this repository on their own must a
 
 ## Secrets and private data
 
-Do not paste secrets, tokens, `.env` files, private user data, or unreported security vulnerabilities into third-party AI services. Report vulnerabilities privately, as described in [`SECURITY.md`](.github/SECURITY.md), not through an AI service or a public issue.
+Do not paste secrets, tokens, `.env` files, private user data, or unreported security vulnerabilities into third-party AI services. Report vulnerabilities as described in [`SECURITY.md`](.github/SECURITY.md), never through an AI service.
 
 ## Spam and abuse
 
