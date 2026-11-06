@@ -133,3 +133,19 @@ jobs:
           publish-script: pnpm run publish
           pr-title: "chore: update changelog and release"
           commit-message: "chore: update changelog and release"
+
+      # Sapphire-style package notes from the changelogs, no AI. The action lives
+      # in stars-components so every package repository posts the same format.
+      # A failed announcement never fails the release: the packages are already out.
+      - name: Announce published packages
+        if: steps.changesets.outputs.published == 'true'
+        continue-on-error: true
+        uses: wolfstar-project/stars-components/.github/actions/announce@main
+        with:
+          mode: packages
+          published-packages: ${{ steps.changesets.outputs.publishedPackages }}
+          github-token: ${{ secrets.WOLFSTAR_TOKEN }}
+          webhook-url: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
+          role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
+          callback-url: ${{ secrets.RELEASE_WEBHOOK_URL }}
+          callback-secret: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
