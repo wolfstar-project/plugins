@@ -103,6 +103,9 @@ jobs:
       contents: write
       pull-requests: write
       id-token: write
+    outputs:
+      published: ${{ steps.changesets.outputs.published }}
+      publishedPackages: ${{ steps.changesets.outputs.publishedPackages }}
     steps:
       - name: Checkout Project
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -134,18 +137,20 @@ jobs:
           pr-title: "chore: update changelog and release"
           commit-message: "chore: update changelog and release"
 
-      # Sapphire-style package notes from the changelogs, no AI. The action lives
-      # in stars-components so every package repository posts the same format.
-      # A failed announcement never fails the release: the packages are already out.
-      - name: Announce published packages
-        if: steps.changesets.outputs.published == 'true'
-        continue-on-error: true
-        uses: wolfstar-project/stars-components/.github/actions/announce@main
-        with:
-          mode: packages
-          published-packages: ${{ steps.changesets.outputs.publishedPackages }}
-          github-token: ${{ secrets.WOLFSTAR_TOKEN }}
-          webhook-url: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
-          role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
-          callback-url: ${{ secrets.RELEASE_WEBHOOK_URL }}
-          callback-secret: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
+  announce:
+    name: 📣 Announce published packages
+    needs: release
+    if: needs.release.outputs.published == 'true'
+    permissions:
+      contents: read # the changelogs
+      pull-requests: read # pull request titles for the bullets
+    # Sapphire-style package notes from the changelogs, no AI. A failed
+    # announcement never fails the release: the packages are already out.
+    uses: wolfstar-project/.github/.github/workflows/reusable-announce-packages.yml@main
+    with:
+      published-packages: ${{ needs.release.outputs.publishedPackages }}
+      role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET }}

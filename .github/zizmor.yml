@@ -17,11 +17,11 @@ rules:
   use-trusted-publishing:
     ignore:
       - pkg-pr-new.yml
-  # The shared announce action follows the default branch of stars-components
-  # on purpose, so a fix to it reaches every repository that posts announcements.
-  # Everything else stays pinned to a commit.
+  # The shared announce workflows follow the default branch of the org's
+  # .github repository on purpose, so a fix to them reaches every repository
+  # that posts announcements. Everything else stays pinned to a commit.
   unpinned-uses:
     config:
       policies:
-        "wolfstar-project/stars-components/*": ref-pin
+        "wolfstar-project/.github/*": ref-pin
         "*": hash-pin

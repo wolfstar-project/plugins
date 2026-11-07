@@ -23,25 +23,16 @@ concurrency:
 jobs:
   announce:
     name: 📣 Announce packages
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
     if: github.repository_owner == 'wolfstar-project'
     permissions:
       contents: read # the changelogs
       pull-requests: read # pull request titles for the bullets
-    steps:
-      - name: Checkout Project
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Announce
-        uses: wolfstar-project/stars-components/.github/actions/announce@main
-        with:
-          mode: packages
-          published-packages: ${{ inputs.packages }}
-          dry-run: ${{ inputs.dry-run }}
-          webhook-url: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
-          role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
-          callback-url: ${{ secrets.RELEASE_WEBHOOK_URL }}
-          callback-secret: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
+    uses: wolfstar-project/.github/.github/workflows/reusable-announce-packages.yml@main
+    with:
+      published-packages: ${{ inputs.packages }}
+      dry-run: ${{ inputs.dry-run }}
+      role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
