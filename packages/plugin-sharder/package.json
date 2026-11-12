@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-sharder",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "Multi-process sharding for @wolfstar/plugin-gateway: spawn shards as processes, cluster workers, or worker threads, and message between them",
   "keywords": [
     "cluster",
@@ -65,8 +65,8 @@
     "@sapphire/result": "^2.8.0"
   },
   "devDependencies": {
-    "@wolfstar/kit": "^0.2.0",
-    "@wolfstar/schema": "^0.9.0"
+    "@wolfstar/kit": "^0.3.1",
+    "@wolfstar/schema": "^0.12.0"
   },
   "peerDependencies": {
     "@wolfstar/kit": "^0.2.0 || ^0.3.0",

@@ -1,5 +1,11 @@
 # @wolfstar/plugin-scheduled-tasks
 
+## 0.4.1
+
+### Patch Changes
+
+- [#272](https://github.com/wolfstar-project/plugins/pull/272) [`c31b79b`](https://github.com/wolfstar-project/plugins/commit/c31b79b66d24aee42deac92159a2a5cfd38b8ca4) - fix(deps): update all non-major dependencies Thanks [@renovate](https://github.com/apps/renovate)!
+
 ## 0.4.0
 
 ### Minor Changes

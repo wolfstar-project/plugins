@@ -1,6 +1,6 @@
 {
   "name": "@wolfstar/plugin-opentelemetry",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Plugin for @wolfstar/http-framework that traces the bot with OpenTelemetry: a preload starting the SDK and a plugin opening one span per interaction",
   "keywords": [
     "http-framework",
@@ -87,9 +87,9 @@
     "@opentelemetry/context-async-hooks": "^3.0.0",
     "@opentelemetry/instrumentation-undici": "^0.34.0",
     "@types/node": "22.15.21",
-    "@wolfstar/http-framework": "^6.2.2",
-    "@wolfstar/kit": "^0.2.0",
-    "@wolfstar/schema": "^0.9.0"
+    "@wolfstar/http-framework": "^6.5.1",
+    "@wolfstar/kit": "^0.3.1",
+    "@wolfstar/schema": "^0.12.0"
   },
   "peerDependencies": {
     "@opentelemetry/api": "^1.10.0",

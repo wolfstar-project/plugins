@@ -85,7 +85,7 @@ Use the `/create-pull-request` skill if available, otherwise `gh pr create`. Eit
   - Linked issue: `Resolves #<n>` (or `Refs #<n>`, see step 5).
   - Mention in Description where you departed from the Pullfrog plan and why, in one or two lines. Reviewers who read the plan will otherwise wonder.
   - Add a Verification line with the gate results you actually saw.
-- **AI disclosure:** end the body with the single disclosure line defined in AGENTS.md / CONTRIBUTING.md, with the tool name and the exact model ids you ran on (never guessed). That line is the only AI attribution the body may carry: no `Generated with Claude Code` footer, no `claude.ai/code/session_` link, no second attribution line. The repo rule overrides default tool footers. After creating or editing, re-read the body and confirm there is exactly one disclosure line.
+- **AI disclosure:** end the body with the single disclosure line defined in AGENTS.md / AI_POLICY.md, with the tool name and the exact model ids you ran on (never guessed). That line is the only AI attribution the body may carry: no `Generated with Claude Code` footer, no `claude.ai/code/session_` link, no second attribution line. The repo rule overrides default tool footers. After creating or editing, re-read the body and confirm there is exactly one disclosure line.
 
 ## 9. Report back
 
