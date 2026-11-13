@@ -61,7 +61,7 @@
   },
   "dependencies": {
     "@sapphire/stopwatch": "^1.5.4",
-    "bullmq": "^6.5.1"
+    "bullmq": "^6.7.0"
   },
   "devDependencies": {
     "@redstardev/unplugin-version-injector": "^0.0.2",
