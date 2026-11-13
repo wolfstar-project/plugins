@@ -326,6 +326,37 @@ export interface GatewayClientDestroyOptions {
 }
 
 /**
+ * The dispatch a {@link DispatchWrapper} wraps.
+ */
+export interface WrappedDispatch {
+  /** The payload Discord sent. */
+  payload: GatewayDispatchPayload;
+  /** The gateway shard it came from. */
+  shardId: number;
+  /** The partition it is ordered in (`guild:<id>`, `channel:<id>`...), or `null` for one ordered by shard only. */
+  partition: string | null;
+}
+
+/**
+ * Wraps the processing of each dispatch, for code that has to run around it rather than react to an event: a tracing
+ * span the cache and listener work becomes the child of, a timer, an `AsyncLocalStorage` store.
+ *
+ * @param dispatch The dispatch being processed.
+ * @param run Processes it: writes it into the cache and emits its events. Call it exactly once and return (or await)
+ * its promise. It rejects when the processing fails, which the client then reports as for any dispatch.
+ */
+export type DispatchWrapper = (
+  dispatch: WrappedDispatch,
+  run: () => Promise<void>,
+) => Promise<void>;
+
+/**
+ * Runs at the end of {@link GatewayClient.destroy}, once the shards are disconnected and every dispatch is processed:
+ * flushing what is left to export, such as traces, before the process exits.
+ */
+export type GatewayClientDestroyHook = () => unknown;
+
+/**
  * A {@link Client} that, on top of serving HTTP interactions, connects to the Discord gateway, writes every dispatch
  * into its cache, and emits {@link GatewayEventMap} events carrying structures.
  *
@@ -508,6 +539,11 @@ export class GatewayClient extends Client {
   // The `destroy` in progress, which a concurrent call joins instead of changing `#keepSessions` under it.
   #destroying: Promise<void> | null = null;
 
+  // See `addDispatchWrapper`: the first added is the outermost.
+  #dispatchWrappers: readonly DispatchWrapper[] = [];
+
+  readonly #destroyHooks = new Set<GatewayClientDestroyHook>();
+
   public constructor(options: GatewayClientOptions) {
     super(options);
     container.gatewayClient = this;
@@ -627,18 +663,70 @@ export class GatewayClient extends Client {
   }
 
   private async disconnect(resumable: boolean): Promise<void> {
-    this.#keepSessions = resumable;
     try {
-      // Discord invalidates the session of a connection closed with 1000 or 1001, the default is 1000.
-      await this.gateway.destroy(
-        this.#keepSessions ? { code: CloseCodes.Resuming, reason: "Resumable shutdown" } : {},
-      );
-    } finally {
-      this.#keepSessions = false;
-    }
+      this.#keepSessions = resumable;
+      try {
+        // Discord invalidates the session of a connection closed with 1000 or 1001, the default is 1000.
+        await this.gateway.destroy(
+          this.#keepSessions ? { code: CloseCodes.Resuming, reason: "Resumable shutdown" } : {},
+        );
+      } finally {
+        this.#keepSessions = false;
+      }
 
-    await this.#sessions?.flush();
-    await this.idle();
+      await this.#sessions?.flush();
+      await this.idle();
+    } finally {
+      // Even when disconnecting failed: the process is likely to exit next, and what is left should still go out.
+      await this.#runDestroyHooks();
+    }
+  }
+
+  /**
+   * Wraps the processing of every dispatch received from now on, see {@link DispatchWrapper}.
+   *
+   * @remarks
+   * Wrappers nest in the order they were added: the first one added is the outermost. The dispatch timeout and the
+   * error reporting of the client are outside of every wrapper.
+   *
+   * @param wrapper The wrapper.
+   * @returns A function that removes the wrapper, for the dispatches received after it is called.
+   */
+  public addDispatchWrapper(wrapper: DispatchWrapper): () => void {
+    this.#dispatchWrappers = [...this.#dispatchWrappers, wrapper];
+    return () => {
+      this.#dispatchWrappers = this.#dispatchWrappers.filter((entry) => entry !== wrapper);
+    };
+  }
+
+  /**
+   * Runs a hook at the end of every {@link GatewayClient.destroy}, see {@link GatewayClientDestroyHook}.
+   *
+   * @remarks
+   * The hooks run one after the other, in the order they were added, even when disconnecting the shards failed. A hook
+   * that throws is reported through the `error` event (or logged when nothing listens) and does not stop the others.
+   * Adding the same function twice adds it once.
+   *
+   * @param hook The hook.
+   * @returns A function that removes the hook.
+   */
+  public addDestroyHook(hook: GatewayClientDestroyHook): () => void {
+    this.#destroyHooks.add(hook);
+    return () => {
+      this.#destroyHooks.delete(hook);
+    };
+  }
+
+  async #runDestroyHooks(): Promise<void> {
+    // A copy: a hook added while the hooks run waits for the next destroy.
+    for (const hook of Array.from(this.#destroyHooks)) {
+      try {
+        await hook();
+      } catch (error) {
+        if (this.listenerCount("error") > 0) this.emit("error", error);
+        else this.logger.error("[Gateway] A destroy hook failed:", error);
+      }
+    }
   }
 
   /**
@@ -1262,12 +1350,25 @@ export class GatewayClient extends Client {
     timer?.unref?.();
 
     try {
-      await this.handleDispatch(payload, shardId);
+      await this.#wrapDispatch({ payload, shardId, partition });
     } catch (error) {
       this.reportError(error, payload.t, shardId);
     } finally {
       if (timer) clearTimeout(timer);
     }
+  }
+
+  #wrapDispatch(dispatch: WrappedDispatch): Promise<void> {
+    let run = () => this.handleDispatch(dispatch.payload, dispatch.shardId);
+    // Read once, so a wrapper added or removed meanwhile only changes the next dispatches.
+    const wrappers = this.#dispatchWrappers;
+    for (let index = wrappers.length - 1; index >= 0; index--) {
+      const wrapper = wrappers[index]!;
+      const inner = run;
+      run = () => wrapper(dispatch, inner);
+    }
+
+    return run();
   }
 
   private sessionCallbacks(
