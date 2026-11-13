@@ -58,3 +58,41 @@ export interface OpenTelemetryInteractionsOptions {
    */
   handlers?: boolean;
 }
+
+/**
+ * The attributes of the span of a gateway dispatch.
+ */
+export const DispatchAttributes = {
+  /**
+   * The type of the dispatch (`MESSAGE_CREATE`, `GUILD_MEMBER_UPDATE`, ...).
+   */
+  Type: "discord.dispatch.type",
+  /**
+   * The gateway shard the dispatch came from.
+   */
+  ShardId: "discord.shard.id",
+  /**
+   * The partition the dispatch is ordered in (`guild:<id>`, `channel:<id>`...), when it has one.
+   */
+  Partition: "discord.dispatch.partition",
+  /**
+   * The guild of the dispatch, when it belongs to one.
+   */
+  GuildId: "discord.guild.id",
+  /**
+   * `success` or `error`, set when the processing ends.
+   */
+  Outcome: "dispatch.outcome",
+} as const;
+
+/**
+ * Which gateway dispatches get a span.
+ */
+export interface OpenTelemetryDispatchesOptions {
+  /**
+   * The dispatch types that get no span, such as `PRESENCE_UPDATE` or `TYPING_START` on a busy bot.
+   *
+   * @default []
+   */
+  ignore?: readonly string[];
+}

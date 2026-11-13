@@ -89,6 +89,7 @@
     "@types/node": "22.15.21",
     "@wolfstar/http-framework": "^6.5.1",
     "@wolfstar/kit": "^0.3.1",
+    "@wolfstar/plugin-gateway": "workspace:^",
     "@wolfstar/schema": "^0.12.0"
   },
   "peerDependencies": {
