@@ -246,6 +246,31 @@ transport.receive(async ({ payload, shardId, state }) => {
 [`@wolfstar/plugin-broker`](https://www.npmjs.com/package/@wolfstar/plugin-broker) wires this up over Redis Streams with
 `forwardGatewayDispatches` and `replayGatewayDispatches`.
 
+### Wrapping dispatches and shutting down
+
+`client.addDispatchWrapper(wrapper)` runs code around the processing of each dispatch received from Discord, for what
+an event cannot do: a tracing span that the cache writes and listeners become children of, or an `AsyncLocalStorage`
+store they can read. The wrapper gets `{ payload, shardId, partition }` and a `run` function, which it must call once
+and return or await. `run` rejects when the processing fails, and the client still reports the failure through `error`.
+Wrappers nest in the order they were added, the first one outermost. Dispatches replayed with `replayDispatch` are not
+wrapped.
+
+`client.addDestroyHook(hook)` runs a hook at the end of every `client.destroy()`, once the shards are disconnected and
+every dispatch is processed, even when disconnecting failed: the place to flush what is left to export before the
+process exits. A hook that throws is reported through `error` and does not stop the next ones.
+
+Both return a function that removes what they added.
+
+```ts
+import { AsyncLocalStorage } from "node:async_hooks";
+
+const dispatchContext = new AsyncLocalStorage<{ type: string; shardId: number }>();
+client.addDispatchWrapper(({ payload, shardId }, run) =>
+  dispatchContext.run({ type: payload.t, shardId }, run),
+);
+client.addDestroyHook(() => metrics.flush());
+```
+
 ## Listeners
 
 Since `GatewayClient` emits on the client itself, gateway events are handled by regular listener
