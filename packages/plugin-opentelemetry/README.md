@@ -139,13 +139,13 @@ A failing run records the exception and sets the span status to `ERROR`.
 A gateway dispatch gets a span named `dispatch <type>` (`dispatch MESSAGE_CREATE`) around its cache writes and its
 listeners, so what they start has it as a parent. It carries:
 
-| Attribute                    | Value                                            |
-| ---------------------------- | ------------------------------------------------ |
-| `discord.dispatch.type`      | The type of the dispatch.                        |
-| `discord.shard.id`           | The gateway shard it came from.                  |
-| `discord.dispatch.partition` | The partition it is ordered in, when it has one. |
-| `discord.guild.id`           | The guild, when the dispatch belongs to one.     |
-| `dispatch.outcome`           | `success` or `error`.                            |
+| Attribute                    | Value                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `discord.dispatch.type`      | The type of the dispatch.                                                                                     |
+| `discord.shard.id`           | The gateway shard it came from.                                                                               |
+| `discord.dispatch.partition` | The partition it is ordered in, when it has one.                                                              |
+| `discord.guild.id`           | The guild, when the dispatch belongs to one (its `id` for `GUILD_CREATE`, `GUILD_UPDATE` and `GUILD_DELETE`). |
+| `dispatch.outcome`           | `success` or `error`.                                                                                         |
 
 Each dispatch span is the root of a trace of its own: `@discordjs/ws` receives every dispatch in the context of the
 request that opened the WebSocket, and a span started there would put all of the gateway's work in one trace that never
