@@ -1,0 +1,38 @@
+name: announce
+
+# Re-sends, or previews, the Discord announcement of packages that are already
+# published. The release workflow announces new releases on its own.
+on:
+  workflow_dispatch:
+    inputs:
+      packages:
+        description: "Published packages, as name@version separated by commas (e.g. @wolfstar/plugin-api@3.1.0,@wolfstar/plugin-cache@0.4.0)"
+        type: string
+        required: true
+      dry-run:
+        description: Render into the job summary without sending anything
+        type: boolean
+        default: true
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  announce:
+    name: 📣 Announce packages
+    if: github.repository_owner == 'wolfstar-project'
+    permissions:
+      contents: read # the changelogs
+      pull-requests: read # pull request titles for the bullets
+    uses: wolfstar-project/.github/.github/workflows/reusable-announce-packages.yml@main
+    with:
+      published-packages: ${{ inputs.packages }}
+      dry-run: ${{ inputs.dry-run }}
+      role-id: ${{ vars.DISCORD_PACKAGES_ROLE_ID }}
+    secrets:
+      DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_PACKAGES_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_URL: ${{ secrets.RELEASE_WEBHOOK_URL }}
+      RELEASE_WEBHOOK_SECRET: ${{ secrets.RELEASE_WEBHOOK_SECRET }}
