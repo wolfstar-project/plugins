@@ -63,7 +63,7 @@ export function attachDispatchTracing(
     const type = dispatch.payload.t;
     if (ignored.has(type)) return run();
 
-    const guildId = guildOf(dispatch.payload.d);
+    const guildId = guildOf(dispatch.payload.d) ?? guildOfPartition(dispatch.partition);
     const span = tracer.startSpan(
       `dispatch ${type}`,
       {
@@ -105,4 +105,10 @@ function guildOf(data: unknown): string | null {
   if (typeof data !== "object" || data === null) return null;
   const { guild_id: guildId } = data as { guild_id?: unknown };
   return typeof guildId === "string" ? guildId : null;
+}
+
+// `GUILD_CREATE`, `GUILD_UPDATE` and `GUILD_DELETE` carry the guild in `id`, which the gateway already turned into the
+// `guild:<id>` partition, as it does for every other dispatch of a guild.
+function guildOfPartition(partition: string | null): string | null {
+  return partition?.startsWith("guild:") ? partition.slice("guild:".length) : null;
 }

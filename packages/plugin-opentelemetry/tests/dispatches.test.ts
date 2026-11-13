@@ -85,6 +85,20 @@ describe("dispatch spans", () => {
     });
   });
 
+  test.each(["GUILD_CREATE", "GUILD_UPDATE", "GUILD_DELETE"])(
+    "GIVEN a %s dispatch, whose guild is its id THEN the span carries the guild",
+    async (type) => {
+      const client = createClient();
+      client.on("error", () => undefined);
+
+      send(client, type, { id: "10", unavailable: true });
+      await client.idle();
+
+      const [dispatch] = dispatchSpans();
+      expect(dispatch!.attributes[DispatchAttributes.GuildId]).toBe("10");
+    },
+  );
+
   test("GIVEN a failing listener THEN the span records the error and the client still reports it", async () => {
     const client = createClient();
     const errors: unknown[] = [];
