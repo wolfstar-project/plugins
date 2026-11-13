@@ -1,5 +1,15 @@
 # @wolfstar/plugin-gateway
 
+## 0.17.0
+
+### Minor Changes
+
+- [#285](https://github.com/wolfstar-project/plugins/pull/285) [`54dbd76`](https://github.com/wolfstar-project/plugins/commit/54dbd7678542cdaff7cd97b076d11271755f6bc8) - `GatewayClient#addDispatchWrapper` runs code around the processing of each dispatch received from Discord, such as a tracing span or an `AsyncLocalStorage` store that the cache writes and listeners run in, and `GatewayClient#addDestroyHook` runs a hook at the end of every `destroy()`, once the shards are disconnected and the dispatches processed, to flush what is left before the process exits.
+
+### Patch Changes
+
+- [#288](https://github.com/wolfstar-project/plugins/pull/288) [`73195fd`](https://github.com/wolfstar-project/plugins/commit/73195fd3f934cdd1c52617becc4ac8c30349dee6) - `addDispatchWrapper` and `addDestroyHook` work when a plugin calls them from `postInitialization`, which runs before the fields of `GatewayClient` are initialized; they threw a `TypeError` about a private member there.
+
 ## 0.16.3
 
 ### Patch Changes

@@ -1,5 +1,11 @@
 # @wolfstar/plugin-sharder
 
+## 0.5.0
+
+### Minor Changes
+
+- [#287](https://github.com/wolfstar-project/plugins/pull/287) [`4de0802`](https://github.com/wolfstar-project/plugins/commit/4de08022de7562872513050f46d9955d878f8135) - `ShardClient#addExitHook` runs a hook before the shard stops with `process.exit` (on `exit()`, `restart()`, a close from the manager, or the manager going away), which skips `beforeExit`, so traces or metrics can be flushed first. `ShardManager#addDestroyHook` runs a hook at the end of `destroy()`, once the shards are closed.
+
 ## 0.4.1
 
 ### Patch Changes

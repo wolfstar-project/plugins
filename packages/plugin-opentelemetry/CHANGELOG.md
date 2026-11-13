@@ -1,5 +1,11 @@
 # @wolfstar/plugin-opentelemetry
 
+## 0.3.0
+
+### Minor Changes
+
+- [#288](https://github.com/wolfstar-project/plugins/pull/288) [`73195fd`](https://github.com/wolfstar-project/plugins/commit/73195fd3f934cdd1c52617becc4ac8c30349dee6) - On a `GatewayClient` of `@wolfstar/plugin-gateway` 0.17 or later, the plugin opens one span per gateway dispatch, the root of a trace of its own, around its cache writes and listeners (`dispatches`, on by default, with `dispatches.ignore` for noisy types), and calls `flushTraces()` at the end of `GatewayClient#destroy` (`flushOnDestroy`, on by default). The README shows how to wire `flushTraces()` into the exit hooks of `@wolfstar/plugin-sharder`.
+
 ## 0.2.2
 
 ### Patch Changes
