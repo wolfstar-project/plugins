@@ -1,3 +1,4 @@
+import * as framework from "@wolfstar/http-framework";
 import { applicationCommandRegistry, CommandRouter, type Command } from "@wolfstar/http-framework";
 import {
   ApplicationCommandOptionType,
@@ -133,16 +134,39 @@ function installDelegate(
     configurable: true,
     enumerable: false,
     writable: true,
-    value(this: Command, interaction: Command.ApplicationCommandInteraction, args: object) {
+    async value(this: Command, interaction: Command.ApplicationCommandInteraction, args: object) {
       const resolved = lookupEntry(parentName, methodName);
       if (!resolved) {
         throw new Error(
           `[plugin-subcommands-advanced]: No child command registered for parent "${parentName}" method "${methodName}".`,
         );
       }
-      return resolved.commandPiece.chatInputRun(interaction, args);
+
+      const child = resolved.commandPiece;
+      const run = getRunPreconditions();
+      if (run) {
+        // The framework has run the parent's preconditions; the subcommand piece is a command of its own, so its
+        // `preconditions` option is checked here. A thrown `UserError` makes the command store emit
+        // `chatInputCommandDenied` and reply as for any denied command.
+        const result = await run(child, "chatInput", interaction);
+        if (result.isErr()) throw result.unwrapErr();
+      }
+
+      return child.chatInputRun(interaction, args);
     },
   });
+}
+
+type RunPreconditions = typeof framework.runPreconditions;
+
+/**
+ * `runPreconditions` exists since `@wolfstar/http-framework` 6.3.0, the release that added the `preconditions` option.
+ * It is read from the namespace at call time, so the plugin still loads on the older majors of its peer range, where a
+ * named import of a missing export would fail at link time.
+ */
+function getRunPreconditions(): RunPreconditions | undefined {
+  const run = (framework as Record<string, unknown>)["runPreconditions"];
+  return typeof run === "function" ? (run as RunPreconditions) : undefined;
 }
 
 function lookupEntry(
