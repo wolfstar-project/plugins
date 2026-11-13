@@ -113,6 +113,46 @@ describe("ShardClient#addExitHook", () => {
   });
 });
 
+describe("overlapping stops", () => {
+  test("GIVEN the manager going away during exit() THEN the hooks run once and the shard exits after them", async () => {
+    const { manager, strategy } = createManager(readyScript, { shards: 1 });
+    await manager.spawn();
+    const { context } = strategy.spawned[0]!;
+
+    const order: string[] = [];
+    let disconnect: () => void = () => undefined;
+    const transport: ClientTransport = {
+      send: async () => undefined,
+      onMessage: () => undefined,
+      onDisconnect: (listener) => {
+        disconnect = listener;
+      },
+      exit: (code) => order.push(`exit ${code}`),
+    };
+    const client = new ShardClient({ context, transport });
+    let release: () => void = () => undefined;
+    const hook = vi.fn(async () => {
+      order.push("flush start");
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      order.push("flush end");
+    });
+    client.addExitHook(hook);
+
+    const exiting = client.exit();
+    disconnect();
+    await Promise.resolve();
+    expect(order).toEqual(["flush start"]);
+    release();
+    await exiting;
+
+    await expect.poll(() => order).toEqual(["flush start", "flush end", "exit 0", "exit 0"]);
+    expect(hook).toHaveBeenCalledTimes(1);
+    await manager.destroy();
+  });
+});
+
 describe("ShardManager#addDestroyHook", () => {
   test("GIVEN hooks THEN they run in order once the shards are closed", async () => {
     const { manager } = createManager(readyScript, { shards: 1 });
@@ -139,6 +179,25 @@ describe("ShardManager#addDestroyHook", () => {
 
     await expect(manager.destroy()).rejects.toBe(failure);
     expect(hook).toHaveBeenCalledTimes(1);
+  });
+
+  test("GIVEN one shard failing to close THEN the hooks wait for the others to close", async () => {
+    const { manager } = createManager(readyScript, { shards: 2 });
+    await manager.spawn();
+    const [first, second] = manager.channels;
+    const failure = new Error("close failed");
+    const order: string[] = [];
+    vi.spyOn(first!, "close").mockRejectedValue(failure);
+    const close = second!.close.bind(second);
+    vi.spyOn(second!, "close").mockImplementation(async (...args) => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      await close(...args);
+      order.push("second closed");
+    });
+    manager.addDestroyHook(() => order.push("hook"));
+
+    await expect(manager.destroy()).rejects.toBe(failure);
+    expect(order).toEqual(["second closed", "hook"]);
   });
 
   test("GIVEN a failing hook THEN it is reported and the next hooks still run", async () => {
