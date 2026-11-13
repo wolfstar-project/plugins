@@ -80,13 +80,13 @@ export interface ShardLayoutOptions {
 }
 
 /**
- * The options of a {@link ShardManager}.
- */
-/**
  * Runs at the end of {@link ShardManager.destroy}, see {@link ShardManager.addDestroyHook}.
  */
 export type ShardManagerDestroyHook = () => unknown;
 
+/**
+ * The options of a {@link ShardManager}.
+ */
 export interface ShardManagerOptions extends ShardLayoutOptions {
   /**
    * How to spawn the shards: a {@link ChannelStrategy}, or the name of a registered one (`"fork"`, `"cluster"`,
@@ -629,7 +629,10 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
    */
   public async destroy(): Promise<void> {
     try {
-      await Promise.all(this.channels.map((channel) => channel.close()));
+      // Every close settles before the hooks run, so a shard still stopping does not emit after them.
+      const closed = await Promise.allSettled(this.channels.map((channel) => channel.close()));
+      const failed = closed.find((result) => result.status === "rejected");
+      if (failed) throw failed.reason;
       if (this.#initialized) await this.strategy.destroy?.();
       this.#initialized = false;
     } finally {

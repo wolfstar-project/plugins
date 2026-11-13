@@ -213,6 +213,8 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
   #requestHandler: RequestHandler<{ from: number | null }> | null = null;
   #closeHandler: (() => unknown) | null = null;
   readonly #exitHooks = new Set<ShardExitHook>();
+  // The hooks in progress, shared by the paths that stop the shard, so none exits before the first run is done.
+  #exiting: Promise<void> | null = null;
   #shardHandler: ShardHandler | null = null;
 
   public constructor(options: ShardClientOptions = {}) {
@@ -470,7 +472,8 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
    * @remarks
    * The hooks run one after the other, in the order they were added, before the shard tells the manager it stops. A
    * hook that throws is reported through the `error` event (or logged when nothing listens) and does not stop the
-   * others, nor the shard. Adding the same function twice adds it once.
+   * others, nor the shard. They run once: a path that stops the shard while they run (the manager going away during
+   * `exit()`) waits for them. Adding the same function twice adds it once.
    *
    * @param hook The hook.
    * @returns A function that removes the hook.
@@ -518,15 +521,18 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
     this.#transport.exit(code);
   }
 
-  async #runExitHooks(): Promise<void> {
-    // A copy: a hook added while the hooks run is not run this time.
-    for (const hook of Array.from(this.#exitHooks)) {
-      try {
-        await hook();
-      } catch (error) {
-        this.#report(error);
+  #runExitHooks(): Promise<void> {
+    this.#exiting ??= (async () => {
+      // A copy: a hook added while the hooks run is not run this time.
+      for (const hook of Array.from(this.#exitHooks)) {
+        try {
+          await hook();
+        } catch (error) {
+          this.#report(error);
+        }
       }
-    }
+    })();
+    return this.#exiting;
   }
 
   async #write(packet: Packet): Promise<void> {
