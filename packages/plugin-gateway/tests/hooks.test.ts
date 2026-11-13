@@ -1,5 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { WebSocketShardEvents } from "@discordjs/ws";
+import { definePlugin } from "@wolfstar/http-framework";
 import { createInMemoryCache } from "@wolfstar/plugin-cache";
 import {
   GatewayDispatchEvents,
@@ -18,13 +19,14 @@ const user: APIUser = {
   avatar: null,
 };
 
-function createClient() {
+function createClient(plugins: ReturnType<ReturnType<typeof definePlugin>>[] = []) {
   return new GatewayClient({
     discordPublicKey: "0".repeat(64),
     discordToken: "test-token",
     clientId: "266624760782258186",
     intents: 0,
     cache: createInMemoryCache(),
+    plugins,
   });
 }
 
@@ -205,5 +207,31 @@ describe("GatewayClient#addDestroyHook", () => {
     await client.destroy();
 
     expect(hook).not.toHaveBeenCalled();
+  });
+});
+
+describe("hooks added by a plugin", () => {
+  // `postInitialization` runs from the constructor of the base `Client`, before the fields of `GatewayClient` exist.
+  test("GIVEN a plugin that adds a wrapper and a destroy hook in postInitialization THEN both run", async () => {
+    const calls: string[] = [];
+    const plugin = definePlugin(() => ({
+      name: "test-hooks",
+      postInitialization(client) {
+        const gateway = client as GatewayClient;
+        gateway.addDispatchWrapper(async (_dispatch, run) => {
+          calls.push("wrapper");
+          await run();
+        });
+        gateway.addDestroyHook(() => calls.push("destroy hook"));
+      },
+    }));
+    const client = createClient([plugin()]);
+    vi.spyOn(client.gateway, "destroy").mockResolvedValue();
+
+    send(client, "1");
+    await client.idle();
+    await client.destroy();
+
+    expect(calls).toEqual(["wrapper", "destroy hook"]);
   });
 });

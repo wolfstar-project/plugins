@@ -356,6 +356,11 @@ export type DispatchWrapper = (
  */
 export type GatewayClientDestroyHook = () => unknown;
 
+// Outside of the instance: plugins add them from `postInitialization`, which the base `Client` constructor runs before
+// the fields of `GatewayClient` exist. See `addDispatchWrapper`: the first added is the outermost.
+const dispatchWrappers = new WeakMap<GatewayClient, readonly DispatchWrapper[]>();
+const destroyHooks = new WeakMap<GatewayClient, Set<GatewayClientDestroyHook>>();
+
 /**
  * A {@link Client} that, on top of serving HTTP interactions, connects to the Discord gateway, writes every dispatch
  * into its cache, and emits {@link GatewayEventMap} events carrying structures.
@@ -539,11 +544,6 @@ export class GatewayClient extends Client {
   // The `destroy` in progress, which a concurrent call joins instead of changing `#keepSessions` under it.
   #destroying: Promise<void> | null = null;
 
-  // See `addDispatchWrapper`: the first added is the outermost.
-  #dispatchWrappers: readonly DispatchWrapper[] = [];
-
-  readonly #destroyHooks = new Set<GatewayClientDestroyHook>();
-
   public constructor(options: GatewayClientOptions) {
     super(options);
     container.gatewayClient = this;
@@ -693,9 +693,13 @@ export class GatewayClient extends Client {
    * @returns A function that removes the wrapper, for the dispatches received after it is called.
    */
   public addDispatchWrapper(wrapper: DispatchWrapper): () => void {
-    this.#dispatchWrappers = [...this.#dispatchWrappers, wrapper];
+    dispatchWrappers.set(this, [...(dispatchWrappers.get(this) ?? []), wrapper]);
     return () => {
-      this.#dispatchWrappers = this.#dispatchWrappers.filter((entry) => entry !== wrapper);
+      const wrappers = dispatchWrappers.get(this) ?? [];
+      dispatchWrappers.set(
+        this,
+        wrappers.filter((entry) => entry !== wrapper),
+      );
     };
   }
 
@@ -711,15 +715,17 @@ export class GatewayClient extends Client {
    * @returns A function that removes the hook.
    */
   public addDestroyHook(hook: GatewayClientDestroyHook): () => void {
-    this.#destroyHooks.add(hook);
+    let hooks = destroyHooks.get(this);
+    if (!hooks) destroyHooks.set(this, (hooks = new Set()));
+    hooks.add(hook);
     return () => {
-      this.#destroyHooks.delete(hook);
+      hooks.delete(hook);
     };
   }
 
   async #runDestroyHooks(): Promise<void> {
     // A copy: a hook added while the hooks run waits for the next destroy.
-    for (const hook of Array.from(this.#destroyHooks)) {
+    for (const hook of Array.from(destroyHooks.get(this) ?? [])) {
       try {
         await hook();
       } catch (error) {
@@ -1361,7 +1367,7 @@ export class GatewayClient extends Client {
   #wrapDispatch(dispatch: WrappedDispatch): Promise<void> {
     let run = () => this.handleDispatch(dispatch.payload, dispatch.shardId);
     // Read once, so a wrapper added or removed meanwhile only changes the next dispatches.
-    const wrappers = this.#dispatchWrappers;
+    const wrappers = dispatchWrappers.get(this) ?? [];
     for (let index = wrappers.length - 1; index >= 0; index--) {
       const wrapper = wrappers[index]!;
       const inner = run;

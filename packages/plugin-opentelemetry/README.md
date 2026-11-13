@@ -112,6 +112,15 @@ Without an SDK running, `@opentelemetry/api` hands out no-op spans and the plugi
 
 `interactions: false` turns them all off, `true` takes the defaults.
 
+| Option              | Default | What it does                                                                    |
+| ------------------- | ------- | ------------------------------------------------------------------------------- |
+| `dispatches`        | `true`  | A span per gateway dispatch, on a `GatewayClient` (`@wolfstar/plugin-gateway`). |
+| `dispatches.ignore` | `[]`    | Dispatch types that get no span, such as `PRESENCE_UPDATE` or `TYPING_START`.   |
+| `flushOnDestroy`    | `true`  | Calls `flushTraces()` at the end of `GatewayClient#destroy`.                    |
+
+`dispatches` and `flushOnDestroy` need `@wolfstar/plugin-gateway` 0.17 or later, and are ignored on a client that does
+not connect to the gateway.
+
 #### The spans
 
 A span is named `<kind> <name>` (`command ping`, `component confirm`) and carries:
@@ -127,6 +136,21 @@ A span is named `<kind> <name>` (`command ping`, `component confirm`) and carrie
 
 A failing run records the exception and sets the span status to `ERROR`.
 
+A gateway dispatch gets a span named `dispatch <type>` (`dispatch MESSAGE_CREATE`) around its cache writes and its
+listeners, so what they start has it as a parent. It carries:
+
+| Attribute                    | Value                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `discord.dispatch.type`      | The type of the dispatch.                                                                                     |
+| `discord.shard.id`           | The gateway shard it came from.                                                                               |
+| `discord.dispatch.partition` | The partition it is ordered in, when it has one.                                                              |
+| `discord.guild.id`           | The guild, when the dispatch belongs to one (its `id` for `GUILD_CREATE`, `GUILD_UPDATE` and `GUILD_DELETE`). |
+| `dispatch.outcome`           | `success` or `error`.                                                                                         |
+
+Each dispatch span is the root of a trace of its own: `@discordjs/ws` receives every dispatch in the context of the
+request that opened the WebSocket, and a span started there would put all of the gateway's work in one trace that never
+ends. Dispatches replayed with `replayDispatch` (as by `@wolfstar/plugin-broker`) get no span.
+
 The framework's events do not wrap the run of a command, so the span is made the active one with
 `context.attach` from the
 `*Run` event, and the previous context is restored on `*Finish`. That needs a context manager that implements `attach`,
@@ -137,6 +161,19 @@ spans are still created, but what a command starts is not attached to them.
 
 Exports the spans waiting in the batch. Call it from a shutdown path before the process exits; it never rejects, and does
 nothing when no SDK is running.
+
+The plugin already calls it at the end of `GatewayClient#destroy`. The preload calls it on `SIGTERM` and `beforeExit`,
+but `process.exit` skips `beforeExit`, which is how the shards of `@wolfstar/plugin-sharder` stop. Wire it into the
+sharder (0.5 or later) yourself, since the plugin cannot see those objects:
+
+```ts
+import { flushTraces } from "@wolfstar/plugin-opentelemetry";
+
+shard.addExitHook(flushTraces); // in a shard: before exit(), restart(), or a close from the manager
+manager.addDestroyHook(flushTraces); // in the manager: at the end of manager.destroy()
+```
+
+For any other path that ends the process:
 
 ```ts
 import { flushTraces } from "@wolfstar/plugin-opentelemetry";
