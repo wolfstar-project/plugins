@@ -197,6 +197,19 @@ first and closes the old one once the new one is ready, for close to no downtime
 `manager.reshard(layout)` does the same for a whole new layout. When the manager dies, a process
 shard emits `disconnect` and exits when nothing listens to it; a worker thread stops with it.
 
+A shard stops with `process.exit`, which skips `beforeExit`, so whatever a library flushes there
+(traces, metrics) is lost. `shard.addExitHook(hook)` runs a hook first: on `shard.exit()` and
+`shard.restart()`, after the close handler when the manager closes the shard, and when the manager
+is gone and nothing listens to `disconnect`. The hooks count towards the close timeout.
+`manager.addDestroyHook(hook)` runs a hook at the end of `manager.destroy()`, once the shards are
+closed, even when closing one failed. In both, a hook that throws is reported through `error` and
+the next ones still run, and the call returns a function that removes the hook.
+
+```ts
+shard.addExitHook(() => metrics.flush());
+manager.addDestroyHook(() => metrics.flush());
+```
+
 ### Gateway shards
 
 The manager paces identifies across every process: `shard.identifyThrottler` is `@discordjs/ws`'s

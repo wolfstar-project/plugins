@@ -82,6 +82,11 @@ export interface ShardLayoutOptions {
 /**
  * The options of a {@link ShardManager}.
  */
+/**
+ * Runs at the end of {@link ShardManager.destroy}, see {@link ShardManager.addDestroyHook}.
+ */
+export type ShardManagerDestroyHook = () => unknown;
+
 export interface ShardManagerOptions extends ShardLayoutOptions {
   /**
    * How to spawn the shards: a {@link ChannelStrategy}, or the name of a registered one (`"fork"`, `"cluster"`,
@@ -314,6 +319,7 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
   readonly #readyTimes: number[] = [];
   #queue: Promise<void> = Promise.resolve();
   #initialized = false;
+  readonly #destroyHooks = new Set<ShardManagerDestroyHook>();
 
   public constructor(options: ShardManagerOptions = {}) {
     super();
@@ -622,9 +628,39 @@ export class ShardManager extends EventEmitter<ShardManagerEvents> {
    * Closes every shard for good, and releases the strategy.
    */
   public async destroy(): Promise<void> {
-    await Promise.all(this.channels.map((channel) => channel.close()));
-    if (this.#initialized) await this.strategy.destroy?.();
-    this.#initialized = false;
+    try {
+      await Promise.all(this.channels.map((channel) => channel.close()));
+      if (this.#initialized) await this.strategy.destroy?.();
+      this.#initialized = false;
+    } finally {
+      // Even when closing failed: the process is likely to exit next, and what is left should still go out.
+      for (const hook of Array.from(this.#destroyHooks)) {
+        try {
+          await hook();
+        } catch (error) {
+          this.reportError(error);
+        }
+      }
+    }
+  }
+
+  /**
+   * Runs a hook at the end of every {@link ShardManager.destroy}, once the shards are closed: the place to flush what
+   * is left to export, such as traces, before the manager's process exits.
+   *
+   * @remarks
+   * The hooks run one after the other, in the order they were added, even when closing the shards failed. A hook that
+   * throws is reported through the `error` event (or logged when nothing listens) and does not stop the others. Adding
+   * the same function twice adds it once.
+   *
+   * @param hook The hook.
+   * @returns A function that removes the hook.
+   */
+  public addDestroyHook(hook: ShardManagerDestroyHook): () => void {
+    this.#destroyHooks.add(hook);
+    return () => {
+      this.#destroyHooks.delete(hook);
+    };
   }
 
   /**
