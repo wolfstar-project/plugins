@@ -55,6 +55,11 @@ export interface ClientTransport {
 }
 
 /**
+ * Runs before a shard's process or thread stops, see {@link ShardClient.addExitHook}.
+ */
+export type ShardExitHook = () => unknown;
+
+/**
  * The options of a {@link ShardClient}.
  */
 export interface ShardClientOptions {
@@ -207,6 +212,9 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
   #watchdog: NodeJS.Timeout | null = null;
   #requestHandler: RequestHandler<{ from: number | null }> | null = null;
   #closeHandler: (() => unknown) | null = null;
+  readonly #exitHooks = new Set<ShardExitHook>();
+  // The hooks in progress, shared by the paths that stop the shard, so none exits before the first run is done.
+  #exiting: Promise<void> | null = null;
   #shardHandler: ShardHandler | null = null;
 
   public constructor(options: ShardClientOptions = {}) {
@@ -227,7 +235,7 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
     this.#transport.onDisconnect(() => {
       this.#stopWatchdog();
       if (this.listenerCount("disconnect") > 0) this.emit("disconnect");
-      else this.#transport.exit(0);
+      else void this.#runExitHooks().finally(() => this.#transport.exit(0));
     });
 
     this.#pingTimeout = context.pingTimeout;
@@ -456,6 +464,28 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
   }
 
   /**
+   * Runs a hook before the shard stops: on {@link ShardClient.exit}, on {@link ShardClient.restart}, once the close
+   * handler of a close from the manager resolved, and when the manager is gone and nothing listens to `disconnect`.
+   * The place to flush what is left to export, such as traces: the shard stops with `process.exit`, which skips
+   * `beforeExit`.
+   *
+   * @remarks
+   * The hooks run one after the other, in the order they were added, before the shard tells the manager it stops. A
+   * hook that throws is reported through the `error` event (or logged when nothing listens) and does not stop the
+   * others, nor the shard. They run once: a path that stops the shard while they run (the manager going away during
+   * `exit()`) waits for them. Adding the same function twice adds it once.
+   *
+   * @param hook The hook.
+   * @returns A function that removes the hook.
+   */
+  public addExitHook(hook: ShardExitHook): () => void {
+    this.#exitHooks.add(hook);
+    return () => {
+      this.#exitHooks.delete(hook);
+    };
+  }
+
+  /**
    * Sets how the manager starts and closes the gateway shards of this shard, for `manager.startShard` & co.
    *
    * @param handler Starts or closes a gateway shard, resolving once done.
@@ -486,8 +516,23 @@ export class ShardClient extends EventEmitter<ShardClientEvents> {
 
   async #stop(status: ShardStatus, code: number): Promise<void> {
     this.#stopWatchdog();
+    await this.#runExitHooks();
     await this.#signal(status).catch(() => undefined);
     this.#transport.exit(code);
+  }
+
+  #runExitHooks(): Promise<void> {
+    this.#exiting ??= (async () => {
+      // A copy: a hook added while the hooks run is not run this time.
+      for (const hook of Array.from(this.#exitHooks)) {
+        try {
+          await hook();
+        } catch (error) {
+          this.#report(error);
+        }
+      }
+    })();
+    return this.#exiting;
   }
 
   async #write(packet: Packet): Promise<void> {
