@@ -1,7 +1,7 @@
 name: Bug Report
 description: File a bug report here
 title: "bug: "
-labels: ["Bug: Unverified"]
+type: Bug
 body:
   - type: markdown
     attributes:
@@ -54,3 +54,15 @@ body:
       label: Additional context
       description: Do you want to share any additional context about this bug?
       placeholder: Add any other context about the problem here.
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: Select the impact on your work. Maintainers can change it during triage.
+      options:
+        - Urgent
+        - High
+        - Medium
+        - Low
+    validations:
+      required: false
