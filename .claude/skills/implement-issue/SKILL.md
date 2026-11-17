@@ -1,23 +1,30 @@
 ---
 name: implement-issue
-description: Implement a GitHub issue labelled `feature` in wolfstar-project/stars-components or wolfstar-project/plugins, starting from the implementation plan that Pullfrog posted on the issue, and end with a PR that follows the repo's conventions. Use whenever the user types /implement-issue, gives an issue number or link and says implement, build, work on or pick up a feature or request, asks to "take the next feature issue", or wants the Pullfrog proposal turned into code, even if they never name Pullfrog or the label.
+description: Implement a GitHub issue of type `Feature` (or, for older issues, labelled `feature`) in wolfstar-project/stars-components or wolfstar-project/plugins, starting from the implementation plan that Pullfrog posted on the issue, and end with a PR that follows the repo's conventions. Use whenever the user types /implement-issue, gives an issue number or link and says implement, build, work on or pick up a feature or request, asks to "take the next feature issue", or wants the Pullfrog proposal turned into code, even if they never name Pullfrog or the label.
 ---
 
 # implement-issue
 
-Turn a `feature` issue into a reviewed-quality PR. Pullfrog (the `pullfrog[bot]` GitHub app) comments on new issues with a duplicate check and an implementation plan based on the current code. That plan is the starting point, not the contract: it is written fast, can be stale, and sometimes corrects the issue's own assumptions. The job is to read it critically, check it against the code, then build it.
+Turn a `Feature` issue (issue type `Feature`; legacy issues: label `feature`) into a reviewed-quality PR. Pullfrog (the `pullfrog[bot]` GitHub app) comments on new issues with a duplicate check and an implementation plan based on the current code. That plan is the starting point, not the contract: it is written fast, can be stale, and sometimes corrects the issue's own assumptions. The job is to read it critically, check it against the code, then build it.
 
 Applies to both repos. Where they differ it is noted.
 
 ## 1. Find the issue
 
 - User gave a number or URL: use it. Detect the repo from the working directory (`git remote get-url origin`) or the URL.
-- No issue given: list open issues with the label and pick candidates that have no linked PR, then ask which one.
+- No issue given: list open `Feature` issues and pick candidates that have no linked PR, then ask which one.
   ```bash
-  gh api "repos/wolfstar-project/<repo>/issues?labels=feature&state=open&per_page=30" \
+  gh api "repos/wolfstar-project/<repo>/issues?type=Feature&state=open&per_page=30" \
     -q '.[] | select(.pull_request==null) | "\(.number)\t\(.comments)\t\(.title)"'
   ```
-  The live label is `feature`; the issue template still says `Meta: Feature`. Try both before concluding there are none.
+  The issue **type** is the source of truth: the issue template sets `type: Feature`. Older issues were not typed and only carry a label, so fall back to the labels when the type query finds nothing, or to catch the untyped ones. Try `feature` first, then the legacy `Meta: Feature`:
+  ```bash
+  for label in feature "Meta: Feature"; do
+    gh api -X GET "repos/wolfstar-project/<repo>/issues" -f labels="$label" -f state=open -f per_page=30 \
+      -q '.[] | select(.pull_request==null and .type==null) | "\(.number)\t\(.comments)\t\(.title)"'
+  done
+  ```
+  `.type==null` keeps only the untyped issues, so nothing is listed twice. Do not conclude there are none until the type and both labels came back empty.
 - Use REST (`gh api repos/...`). `gh issue list` and other GraphQL-backed commands are blocked in some sessions.
 - Check nothing already covers it: search open PRs for `#<n>`. Stacked work (see step 5) shows up as several PRs referencing one issue.
 
