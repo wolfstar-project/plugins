@@ -62,7 +62,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@sapphire/result": "^2.8.0"
+    "@sapphire/result": "^3.0.0"
   },
   "devDependencies": {
     "@wolfstar/kit": "^0.3.1",
