@@ -485,8 +485,8 @@ importers:
   packages/plugin-scheduled-tasks:
     dependencies:
       '@sapphire/stopwatch':
-        specifier: ^1.5.4
-        version: 1.5.4
+        specifier: ^2.0.0
+        version: 2.0.0
       bullmq:
         specifier: ^6.5.1
         version: 6.5.2(ioredis@6.0.0(supports-color@7.2.0))
@@ -2213,14 +2213,15 @@ packages:
   '@sapphire/shapeshift@4.0.0':
     resolution: {integrity: sha512-d9dUmWVA7MMiKobL3VpLF8P2aeanRTu6ypG2OIaEv/ZHH/SUQ2iHOVyi5wAPjQ+HmnMuL0whK9ez8I/raWbtIg==}
     engines: {node: '>=v16'}
+    deprecated: Shapeshift was created when other validation libraries had significant limitations in performance and error reporting. Those advantages have diminished as libraries such as Zod have become faster and improved their error messages, while also gaining broader environment support, a larger community, and custom error printers.
 
   '@sapphire/snowflake@3.5.5':
     resolution: {integrity: sha512-xzvBr1Q1c4lCe7i6sRnrofxeO1QTP/LKQ6A6qy0iB4x5yfiSfARMEQEghojzTNALDTcv8En04qYNIco9/K9eZQ==}
     engines: {node: '>=v14.0.0', npm: '>=7.0.0'}
 
-  '@sapphire/stopwatch@1.5.4':
-    resolution: {integrity: sha512-IVI48D2yAz411bSttXyTkBH0p2vhrXoqWLn5loDDSAAEUGkM1r5KNCX2027ifQ8svdoMkUfIGjFueR+satLeWw==}
-    engines: {node: '>=v14.0.0', npm: '>=7.0.0'}
+  '@sapphire/stopwatch@2.0.0':
+    resolution: {integrity: sha512-G2HoCni1jSgCieyzfGbo/ExgzJGZ/mw5M40PzRaHah/r9J65oMJ1D6mpoTAPalcqXvJ1Kj5b0Q3gJFyrl54+MA==}
+    engines: {node: '>=v24.0.0', npm: '>=11.0.0'}
 
   '@sapphire/ts-config@5.0.3':
     resolution: {integrity: sha512-bFyGYHFT3TpOf5Sg2P+zY2ad0t5IA2epc5HtewlghhL7MYvbZvxtKsdaNaMwAdNObBx7hpiQm5OcOhyzEwQvbQ==}
@@ -3871,6 +3872,7 @@ packages:
 
   node-abort-controller@3.1.1:
     resolution: {integrity: sha512-AGK2yQKIjRuqnc6VkX2Xj5d+QW8xZ87pa1UK6yA6ouUyuxfHuMP6umE5QK7UmTeOAymo+Zx1Fxiuw9rVx8taHQ==}
+    deprecated: This package is no longer needed on supported Node.js versions. Node.js 16+ includes AbortController and AbortSignal as built-in globals. All Node.js versions requiring this polyfill are end-of-life. Use the built-in globals instead.
 
   node-domexception@1.0.0:
     resolution: {integrity: sha512-/jKZoMpw0F8GRwl4/eLROPA3cfcXtLApP0QzLmUT/HuPCZWyB7IY9ZrMeKw2O/nFIqPQB3PVM9aYm0F312AXDQ==}
@@ -4388,6 +4390,7 @@ packages:
 
   tldts-core@7.4.20:
     resolution: {integrity: sha512-C630TWXZCZmLq0F2bW4QqwnaaxCQ/svpAqvJwnC4JvgEM5ohhBnGsEzTLSOXcN+xjz+kEaHS5uoWIw2klnqd0A==}
+    deprecated: Partial release, see https://github.com/remusao/tldts/issues/2735. Use >=7.4.22.
 
   tldts@7.4.19:
     resolution: {integrity: sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q==}
@@ -6424,9 +6427,7 @@ snapshots:
 
   '@sapphire/snowflake@3.5.5': {}
 
-  '@sapphire/stopwatch@1.5.4':
-    dependencies:
-      tslib: 2.8.1
+  '@sapphire/stopwatch@2.0.0': {}
 
   '@sapphire/ts-config@5.0.3':
     dependencies:
