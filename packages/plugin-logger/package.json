@@ -94,7 +94,7 @@
     "@wolfstar/kit": "^0.3.1",
     "@wolfstar/schema": "^0.12.0",
     "consola": "^3.4.2",
-    "evlog": "^2.34.0",
+    "evlog": "^2.35.0",
     "winston": "^3.19.0"
   },
   "peerDependencies": {
