@@ -60,7 +60,7 @@
     "prepack": "pnpm build"
   },
   "dependencies": {
-    "@sapphire/stopwatch": "^1.5.4",
+    "@sapphire/stopwatch": "^2.0.0",
     "bullmq": "^6.5.1"
   },
   "devDependencies": {
