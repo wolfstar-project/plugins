@@ -76,7 +76,7 @@ pnpm add @wolfstar/http-framework @wolfstar/plugin-logger
 
 ## Sponsors
 
-WolfStar is free, open-source and self-hosted, but the servers, database and CI/CD it runs on have real costs. Sponsorships go directly to hosting, tooling and maintenance. Plugins is part of the WolfStar ecosystem.
+WolfStar is free and open-source, but the servers, database and CI/CD it runs on have real costs. Sponsorships go directly to hosting, tooling and maintenance. Plugins is part of the WolfStar ecosystem.
 
 ### How to sponsor
 
