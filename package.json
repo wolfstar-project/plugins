@@ -27,7 +27,7 @@
     "@commitlint/cli": "^21.2.4",
     "@commitlint/config-conventional": "^21.2.4",
     "@favware/npm-deprecate": "^2.0.0",
-    "@sapphire/ts-config": "^5.0.3",
+    "@sapphire/ts-config": "^6.0.0",
     "@swc/core": "^1.16.20",
     "@types/node": "22.15.21",
     "@types/semver": "^7.8.0",
