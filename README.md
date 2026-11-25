@@ -81,7 +81,7 @@ WolfStar is free, open-source and self-hosted, but the servers, database and CI/
 ### How to sponsor
 
 - [GitHub Sponsors](https://github.com/sponsors/RedStar071)
-- [Open Collective](https://opencollective.com/wolfstar)
+- [Open Collective](https://opencollective.com/wolfstar-project)
 - [Ko-fi](https://ko-fi.com/redstar071)
 - [Patreon](https://www.patreon.com/RedStar071)
 
