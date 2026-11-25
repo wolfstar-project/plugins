@@ -74,6 +74,23 @@ pnpm add @wolfstar/http-framework @wolfstar/plugin-logger
 
 ---
 
+## Sponsors
+
+WolfStar is free, open-source and self-hosted, but the servers, database and CI/CD it runs on have real costs. Sponsorships go directly to hosting, tooling and maintenance. Plugins is part of the WolfStar ecosystem.
+
+### How to sponsor
+
+- [GitHub Sponsors](https://github.com/sponsors/RedStar071)
+- [Open Collective](https://opencollective.com/wolfstar)
+- [Ko-fi](https://ko-fi.com/redstar071)
+- [Patreon](https://www.patreon.com/RedStar071)
+
+### Current Sponsors
+
+<!-- sponsors:start --><!-- sponsors:end -->
+
+---
+
 ## Development
 
 ### Contributing
